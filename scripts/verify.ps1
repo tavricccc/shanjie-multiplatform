@@ -46,7 +46,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     $previousLocalAppData = $env:LOCALAPPDATA
     try {
         $env:LOCALAPPDATA = $profileRoot
+        $env:SHANJIE_HEADLESS = '1'
         & ./build/tsf-smoke.exe @arguments
-    } finally { $env:LOCALAPPDATA = $previousLocalAppData }
+    } finally { $env:LOCALAPPDATA = $previousLocalAppData; Remove-Item Env:SHANJIE_HEADLESS }
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
 } finally { Pop-Location }

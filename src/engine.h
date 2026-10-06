@@ -17,10 +17,14 @@ std::wstring wide(const char* text);
 std::string utf8(const std::wstring& text);
 class Engine {
     ShanjieEngine* handle_ = nullptr;
+    HANDLE learningMutex_ = nullptr;
+    std::filesystem::path learningPath_;
+    bool beginLearning();
+    void endLearning();
     Snapshot copy(ShanjieOutput* output);
 public:
     ~Engine();
-    bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0, bool rightAnchor = false);
+    bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0, bool rightAnchor = false, bool learning = false);
     bool key(ShanjieKey key, Snapshot& output);
     bool pick(unsigned index, Snapshot& output);
     bool reset(bool discard, Snapshot& output);

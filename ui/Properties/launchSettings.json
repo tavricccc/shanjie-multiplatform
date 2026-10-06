@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Shanjie.UI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Shanjie.UI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

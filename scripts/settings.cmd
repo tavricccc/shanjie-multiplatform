@@ -1,2 +1,2 @@
 @echo off
-start "" "%~dp0settings.exe"
+start "" "%~dp0ui\Shanjie.UI.exe"

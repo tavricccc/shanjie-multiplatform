@@ -2,7 +2,6 @@
 #include <windows.h>
 #include <filesystem>
 #include <string>
-#include <fstream>
 namespace {
 std::filesystem::path profilePath() {
     DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA",nullptr,0);
@@ -29,21 +28,16 @@ Preferences loadPreferences() {
     out.ctrlPunctuation = GetPrivateProfileIntW(L"shortcuts",L"ctrl_punctuation",1,path.c_str()) != 0;
     GetPrivateProfileStringW(L"engine",L"ranking",L"chat",value,32,path.c_str());
     out.ranking = std::wstring(value) == L"formal" ? 1 : 0;
+    out.initialChinese = GetPrivateProfileIntW(L"input",L"chinese",1,path.c_str()) != 0;
+    out.initialFullWidth = GetPrivateProfileIntW(L"input",L"full_width",0,path.c_str()) != 0;
+    out.shiftSide = GetPrivateProfileIntW(L"shortcuts",L"shift_side",0,path.c_str());
+    out.capsLockEnglish = GetPrivateProfileIntW(L"input",L"caps_lock_english",1,path.c_str()) != 0;
+    out.escapeClears = GetPrivateProfileIntW(L"input",L"escape_clears",1,path.c_str()) != 0;
+    out.spacePages = GetPrivateProfileIntW(L"candidates",L"space_pages",1,path.c_str()) != 0;
+    out.backquoteSymbols = GetPrivateProfileIntW(L"shortcuts",L"backquote_symbols",1,path.c_str()) != 0;
+    out.codeInput = GetPrivateProfileIntW(L"shortcuts",L"code_input",1,path.c_str()) != 0;
+    out.learning = GetPrivateProfileIntW(L"input",L"learning",0,path.c_str()) != 0;
+    out.theme = GetPrivateProfileIntW(L"appearance",L"theme",0,path.c_str());
+    out.fontSize = GetPrivateProfileIntW(L"appearance",L"font_size",18,path.c_str());
     return out;
-}
-bool savePreferences(const Preferences& value) {
-    auto path = profilePath(); if (path.empty()) return false;
-    std::error_code error; std::filesystem::create_directories(path.parent_path(),error);
-    if (error) return false;
-    auto temporary = path; temporary += L".tmp";
-    std::ofstream file(temporary,std::ios::binary | std::ios::trunc);
-    file << "[profile]\r\nschema=1\r\ninteraction=" << (value.windowsKeys ? "windows" : "shanjie")
-        << "\r\n\r\n[engine]\r\nranking=" << (value.ranking ? "formal" : "chat")
-        << "\r\n\r\n[candidates]\r\nlayout=" << (value.layout == CandidateLayout::Grid ? "grid" : value.layout == CandidateLayout::Horizontal ? "horizontal" : "vertical")
-        << "\r\nanchor=" << (value.rightAnchor ? "right" : "left")
-        << "\r\nopen=" << (value.trigger == CandidateTrigger::Both ? "both" : value.trigger == CandidateTrigger::Space ? "space" : "down")
-        << "\r\n\r\n[shortcuts]\r\nshift_toggle=" << value.shiftToggle
-        << "\r\nctrl_space_toggle=" << value.ctrlSpaceToggle << "\r\nshift_space_toggle=" << value.widthToggle << "\r\nctrl_punctuation=" << value.ctrlPunctuation << "\r\n";
-    file.close(); if (!file) return false;
-    return MoveFileExW(temporary.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
 }

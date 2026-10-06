@@ -4,6 +4,7 @@
 #include <functional>
 #include "engine.h"
 #include "preferences.h"
+#include "candidate_host.h"
 class Candidates final : public ITfCandidateListUIElementBehavior {
     long refs_ = 1;
     HWND window_ = nullptr;
@@ -12,16 +13,16 @@ class Candidates final : public ITfCandidateListUIElementBehavior {
     Microsoft::WRL::ComPtr<ITfDocumentMgr> document_;
     shanjie::Snapshot state_;
     bool native_ = true;
-    CandidateLayout layout_ = CandidateLayout::Vertical;
-    int cell_ = 100, row_ = 36, pad_ = 8, columns_ = 9;
-    HFONT font_ = nullptr;
+    Preferences preferences_;
+    CandidateHost host_;
+    RECT caret_{};
+    UINT dpi_ = 96;
     std::function<void(unsigned)> pick_;
     static LRESULT CALLBACK procedure(HWND, UINT, WPARAM, LPARAM);
-    void paint();
 public:
     Candidates();
     ~Candidates();
-    void initialize(ITfThreadMgr*, CandidateLayout, std::function<void(unsigned)>);
+    void initialize(ITfThreadMgr*, const Preferences&, std::function<void(unsigned)>);
     void update(ITfContext*, TfEditCookie, ITfRange*, const shanjie::Snapshot&);
     void close();
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override;

@@ -4,6 +4,7 @@
 #include "candidates.h"
 #include "preferences.h"
 #include "mode_button.h"
+#include "special_input.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink, public ITfTextEditSink {
     long refs_ = 1;
@@ -18,6 +19,7 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     Microsoft::WRL::ComPtr<ModeButton> modeButton_;
     Microsoft::WRL::ComPtr<ITfLangBarItemMgr> languageBar_;
     shanjie::Engine engine_;
+    SpecialInput special_;
     shanjie::Snapshot state_;
     Preferences preferences_;
     bool ending_ = false;

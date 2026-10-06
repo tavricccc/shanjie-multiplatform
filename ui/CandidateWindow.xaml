@@ -1,0 +1,21 @@
+<Window x:Class="Shanjie_UI.CandidateWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Shanjie_UI" Title="善解候選">
+    <Border x:Name="Surface" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8">
+        <Border.Resources>
+            <DataTemplate x:Key="CandidateTemplate" x:DataType="local:CandidateItem">
+                <Grid Padding="8,4" ColumnSpacing="12" MinHeight="36">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock FontFamily="Microsoft JhengHei UI" Text="{x:Bind Label, Mode=OneWay}" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock FontFamily="Microsoft JhengHei UI" Grid.Column="1" Text="{x:Bind Text, Mode=OneWay}" FontSize="{x:Bind FontSize, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </Grid>
+            </DataTemplate>
+        </Border.Resources>
+        <Grid RowSpacing="8">
+            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <ListView x:Name="VerticalList" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" IsTabStop="False"/>
+            <GridView x:Name="TableList" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" Visibility="Collapsed" IsTabStop="False">
+                <GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="9"/></ItemsPanelTemplate></GridView.ItemsPanel>
+            </GridView>
+            <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="PageStatus" Grid.Row="1" Margin="8,0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </Grid>
+    </Border>
+</Window>

@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "windows_core.h"
 #include <memory>
+#include <algorithm>
 namespace shanjie {
 std::wstring wide(const char* text) {
     int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, nullptr, 0);
@@ -16,8 +17,16 @@ std::string utf8(const std::wstring& text) {
     WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), (int)text.size(), value.data(), size, nullptr, nullptr);
     return value;
 }
-Engine::~Engine() { shanjie_engine_free(handle_); }
-bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor) {
+Engine::~Engine() { shanjie_engine_free(handle_); if (learningMutex_) CloseHandle(learningMutex_); }
+bool Engine::beginLearning() {
+    if (!learningMutex_) return true;
+    DWORD result = WaitForSingleObject(learningMutex_,250);
+    if (result != WAIT_OBJECT_0 && result != WAIT_ABANDONED) return false;
+    if (shanjie_engine_learning_open(handle_,utf8(learningPath_.wstring()).c_str()) == 0) return true;
+    ReleaseMutex(learningMutex_); return false;
+}
+void Engine::endLearning() { if (learningMutex_) ReleaseMutex(learningMutex_); }
+bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning) {
     shanjie_engine_free(handle_); handle_ = nullptr;
     if (shanjie_engine_new(utf8(data.wstring()).c_str(), layout, &handle_) != 0) return false;
     if (shanjie_engine_load_lm(handle_, utf8((data / L"bigram.winmap").wstring()).c_str()) != 0) {
@@ -26,7 +35,19 @@ bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned r
     ShanjieOutput* output = nullptr;
     auto result = shanjie_engine_set_profile(handle_,ranking,&output);
     if (output) shanjie_output_free(output);
-    return result == 0 && shanjie_windows_set_candidate_anchor(handle_,rightAnchor ? 1 : 0) == 0;
+    if (result != 0 || shanjie_windows_set_candidate_anchor(handle_,rightAnchor ? 1 : 0) != 0) return false;
+    if (learningMutex_) { CloseHandle(learningMutex_); learningMutex_ = nullptr; }
+    if (learning) {
+        wchar_t local[32768]; DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+        if (!length || length >= 32768) return false;
+        learningPath_ = std::filesystem::path(local) / L"Shanjie";
+        auto name = learningPath_.wstring(); CharUpperBuffW(name.data(),(DWORD)name.size());
+        std::replace(name.begin(),name.end(),L'\\',L'_');
+        learningMutex_ = CreateMutexW(nullptr,FALSE,(L"Local\\ShanjieLearning-" + name).c_str());
+        if (!learningMutex_ || !beginLearning()) return false;
+        result = shanjie_engine_set_learning(handle_,1); endLearning();
+    }
+    return result == 0;
 }
 Snapshot Engine::copy(ShanjieOutput* raw) {
     std::unique_ptr<ShanjieOutput, decltype(&shanjie_output_free)> owner(raw, shanjie_output_free);
@@ -40,17 +61,23 @@ Snapshot Engine::copy(ShanjieOutput* raw) {
 }
 bool Engine::key(ShanjieKey key, Snapshot& output) {
     ShanjieOutput* raw = nullptr;
-    if (!handle_ || shanjie_engine_key(handle_, key, &raw) != 0) return false;
+    if (!handle_ || !beginLearning()) return false;
+    auto result = shanjie_engine_key(handle_, key, &raw); endLearning();
+    if (result != 0) return false;
     output = copy(raw); return true;
 }
 bool Engine::pick(unsigned index, Snapshot& output) {
     ShanjieOutput* raw = nullptr;
-    if (!handle_ || shanjie_engine_pick(handle_, index, &raw) != 0) return false;
+    if (!handle_ || !beginLearning()) return false;
+    auto result = shanjie_engine_pick(handle_, index, &raw); endLearning();
+    if (result != 0) return false;
     output = copy(raw); return true;
 }
 bool Engine::reset(bool discard, Snapshot& output) {
     ShanjieOutput* raw = nullptr;
-    if (!handle_ || shanjie_engine_reset(handle_, discard ? 1 : 0, &raw) != 0) return false;
+    if (!handle_ || !beginLearning()) return false;
+    auto result = shanjie_engine_reset(handle_, discard ? 1 : 0, &raw); endLearning();
+    if (result != 0) return false;
     output = copy(raw); return true;
 }
 void Engine::context(const std::wstring& text) {
