@@ -1,0 +1,3 @@
+[submodule "upstream/shanjie"]
+	path = upstream/shanjie
+	url = https://github.com/Nanako0129/shanjie.git
