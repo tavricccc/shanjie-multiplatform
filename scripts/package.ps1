@@ -29,6 +29,7 @@ try {
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/settings.exe","$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
+    Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)
         "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $relative"

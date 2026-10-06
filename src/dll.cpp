@@ -22,7 +22,7 @@ HRESULT setValue(const std::wstring& key, const wchar_t* name, const std::wstrin
     error = RegSetValueExW(handle,name,0,REG_SZ,(const BYTE*)value.c_str(),(DWORD)((value.size()+1)*sizeof(wchar_t)));
     RegCloseKey(handle); return HRESULT_FROM_WIN32(error);
 }
-const GUID* categories[] = { &GUID_TFCAT_TIP_KEYBOARD, &GUID_TFCAT_TIPCAP_UIELEMENTENABLED, &GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT };
+const GUID* categories[] = { &GUID_TFCAT_TIP_KEYBOARD, &GUID_TFCAT_TIPCAP_UIELEMENTENABLED, &GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT, &GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT };
 }
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) { if (reason == DLL_PROCESS_ATTACH) { module = instance; DisableThreadLibraryCalls(instance); } return TRUE; }
 STDAPI DllCanUnloadNow() { return objects == 0 ? S_OK : S_FALSE; }

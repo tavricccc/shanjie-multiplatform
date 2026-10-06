@@ -29,6 +29,8 @@
 | 個人 INI 讀寫與原生設定窗 | `src/preferences.*`、`src/settings.cpp` | 否 |
 | 註冊、套用輸入法清單、版本目錄安裝與乾淨移除 | `scripts/install.ps1`、`profiles.ps1`、`uninstall.ps1` | 否 |
 
+`src/dll.cpp` 的 category 註冊包含 `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`，讓 Windows 將模式按鈕納入系統匣。這是 Windows 註冊差異，不是 Rust 核心修改。
+
 上游 `Chat`／`Formal` 是既有 LM 權重模式。Windows 設定窗只是呼叫上游 `shanjie_engine_set_profile`，沒有新增或修改其 scoring 權重。詞庫、beam decoder、bigram scorer 與詞頻資料不因操作 profile 改寫。
 
 ## 設定檔能改什麼
