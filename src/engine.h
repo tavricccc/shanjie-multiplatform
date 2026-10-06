@@ -20,7 +20,7 @@ class Engine {
     Snapshot copy(ShanjieOutput* output);
 public:
     ~Engine();
-    bool open(const std::filesystem::path& data, unsigned layout);
+    bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0);
     bool key(ShanjieKey key, Snapshot& output);
     bool pick(unsigned index, Snapshot& output);
     bool reset(bool discard, Snapshot& output);

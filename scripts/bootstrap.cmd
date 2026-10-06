@@ -21,11 +21,15 @@ if not defined PWSH (
     exit /b 1
 )
 :run
+if /i "%~1"=="apply" goto apply
 rem Parse this block before uninstall deletes its own launcher files.
 (
     start "" /b /wait "%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0elevate.ps1" -Action "%~1"
     if errorlevel 1 (exit /b 1) else (exit /b 0)
 )
+:apply
+start "" /b /wait "%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0apply-profile.ps1" -ProfileFile "%~2"
+exit /b %errorlevel%
 :findRuntime
 set "PWSH="
 if exist "%ProgramW6432%\PowerShell\7\pwsh.exe" set "PWSH=%ProgramW6432%\PowerShell\7\pwsh.exe"

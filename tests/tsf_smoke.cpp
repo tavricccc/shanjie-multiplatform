@@ -91,8 +91,9 @@ LRESULT CALLBACK testProcedure(HWND window, UINT message, WPARAM key, LPARAM fla
 }
 void require(bool condition, int check) { if (!condition) { std::printf("TSF check %d failed\n",check); std::fflush(stdout); ExitProcess(check); } }
 int wmain(int argc, wchar_t** argv) {
-    require(argc == 2 || (argc == 3 && std::wstring(argv[2]) == L"--visual"),1);
-    bool visual = argc == 3;
+    require(argc == 2 || (argc == 3 && (std::wstring(argv[2]) == L"--visual" || std::wstring(argv[2]) == L"--shanjie")),1);
+    bool visual = argc == 3 && std::wstring(argv[2]) == L"--visual";
+    bool original = argc == 3 && std::wstring(argv[2]) == L"--shanjie";
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
     HMODULE dll = LoadLibraryW(argv[1]); require(dll != nullptr,3);
     auto factoryFn = (HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(factoryFn != nullptr,4);
@@ -138,7 +139,7 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<ITfUIElement> element; ULONG fetched = 0; require(elements->Next(1,&element,&fetched) == S_OK && fetched,50);
     ComPtr<ITfCandidateListUIElement> candidates; require(SUCCEEDED(element.As(&candidates)),51);
     UINT count = 0; candidates->GetCount(&count); require(count > 0 && count <= 9,52);
-    if (!visual) {
+    if (!visual && !original) {
         press(VK_DOWN,70); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,72);
         press(VK_RETURN,73); require(store->text == L"你好妳",75);
         press(VK_RETURN,76);
@@ -149,6 +150,12 @@ int wmain(int argc, wchar_t** argv) {
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),'S',0,&test); require(!test,94);
         press(VK_SHIFT,95); require(SUCCEEDED(keys->OnKeyUp(context.Get(),VK_SHIFT,0,&eaten)) && eaten,97);
         press('S',98); press(VK_ESCAPE,100);
+    }
+    if (original) {
+        press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);
+        press(VK_ESCAPE,113); press(VK_ESCAPE,115);
+        BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
+        std::puts("Original Shanjie profile: horizontal navigation and unchanged Shift passed");
     }
     if (visual) {
         BOOL shown = TRUE; candidates->IsShown(&shown); require(!shown,61);

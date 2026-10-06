@@ -14,11 +14,25 @@ if ((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]:
 & (Join-Path $PSScriptRoot 'profiles.ps1') -Remove
 foreach ($arch in @('x64','x86')) {
     $system = if ($arch -eq 'x64') { 'System32' } else { 'SysWOW64' }
-    $dll = Join-Path $target "$arch/Shanjie.dll"
+    $view = if ($arch -eq 'x64') { [Microsoft.Win32.RegistryView]::Registry64 } else { [Microsoft.Win32.RegistryView]::Registry32 }
+    $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,$view)
+    $key = $registry.OpenSubKey('SOFTWARE\Classes\CLSID\{8912696E-8A31-4DF3-A7BC-0261F3B6A147}\InprocServer32')
+    if (!$key) { $registry.Dispose(); continue }
+    $dll = [IO.Path]::GetFullPath($key.GetValue(''))
+    $key.Dispose(); $registry.Dispose()
+    if (!$dll.StartsWith($target + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "註冊的 DLL 路徑超出安裝目錄：$dll" }
     $registration = Start-Process "$env:WINDIR/$system/regsvr32.exe" -ArgumentList '/s','/u',('"' + $dll + '"') -Wait -PassThru -WindowStyle Hidden
     if ($registration.ExitCode) { $failures += $arch }
 }
 if ($failures.Count) { throw "TSF unregistration failed: $($failures -join ', ')" }
+$preferences = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Shanjie'))
+if (Test-Path -LiteralPath $preferences) {
+    if ((Get-Item -LiteralPath $preferences -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw '個人設定目錄是連結，未刪除設定；請確認實際位置。'
+    }
+    Remove-Item -LiteralPath (Join-Path $preferences 'profile.ini') -Force -ErrorAction SilentlyContinue
+    if (!(Get-ChildItem -LiteralPath $preferences -Force)) { [IO.Directory]::Delete($preferences,$false) }
+}
 foreach ($languageKey in Get-ChildItem 'HKCU:/Control Panel/International/User Profile') {
     foreach ($name in $languageKey.GetValueNames()) {
         if ($name -like '*:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}*') {

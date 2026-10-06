@@ -31,6 +31,30 @@ pwsh -File ./install.ps1
 
 開發 DLL 尚未簽章。正式發佈需簽章與 Windows App 容器相容性驗證。安裝腳本使用對應架構的 regsvr32 分別註冊 x64 與 x86 DLL；目標作業系統為 x64 Windows，ARM64 尚未支援。
 
+## 操作 profile
+
+Windows 預設使用微軟注音的常用操作。包內有兩份設定，可雙擊 `apply-windows.cmd` 或 `apply-shanjie.cmd` 套用，不需要管理員權限。
+
+| 設定 | Windows profile | Shanjie profile |
+| --- | --- | --- |
+| 初始候選排列 | 直列 | 橫列，每列 9 個 |
+| 開啟候選 | ↓（也接受空白） | 上游 ↓／空白 |
+| 候選移動 | ↑／↓；→／Tab 展開格狀列表 | 上游 ←／→；↓ 展開 |
+| 選字 | 數字或 Enter | 上游數字或 Enter |
+| 單按 Shift | 中英切換 | 保留上游行為 |
+| Shift＋空白 | 全半形切換（英文 ASCII 輸出） | 保留上游行為 |
+| Ctrl＋標點 | 對應全形標點 | 保留上游行為 |
+
+個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`，切換到其他輸入法再切回善解時讀取；仍使用舊設定的程式需重新開啟。也可以編輯 INI 或套用自己的檔案：
+
+```powershell
+pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini
+```
+
+`[profile] interaction` 可填 `windows` 或 `shanjie`；`[candidates] layout` 可填 `vertical` 或 `horizontal`；`[shortcuts]` 的三個開關使用 `1`／`0`。`[engine] ranking` 可填 `chat` 或 `formal`，這是上游已有的語言模型權重選擇，與操作 profile 分開。未設定個人檔案時使用 Windows 預設。
+
+安裝會呼叫 Windows `InstallLayoutOrTip` 套用目前工作階段的輸入法清單，不重寫整份語言設定。DLL 放在 `versions/<binary-hash>/`，兩架構共用根目錄的詞庫與模型；更新後已開啟的程式可能仍使用舊 DLL，需重新開啟。解除安裝會清除所有版本及本帳號的 `profile.ini`。
+
 ## 架構與資源
 
 `src/` 只使用 `shanjie.h`。TSF 編輯只能在 edit session 中執行；候選資料複製完成即釋放 ABI output。

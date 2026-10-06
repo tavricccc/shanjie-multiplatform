@@ -2,6 +2,7 @@
 #include <msctf.h>
 #include <wrl/client.h>
 #include "candidates.h"
+#include "preferences.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink {
     long refs_ = 1;
@@ -14,6 +15,7 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     Microsoft::WRL::ComPtr<Candidates> candidates_;
     shanjie::Engine engine_;
     shanjie::Snapshot state_;
+    Preferences preferences_;
     bool ending_ = false;
     bool shiftTap_ = false, shiftUsed_ = false, fullWidth_ = false;
     bool writable(ITfContext*);

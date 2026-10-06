@@ -38,19 +38,22 @@ ULONG Service::Release() { auto n = InterlockedDecrement(&refs_); if (!n) delete
 HRESULT Service::Activate(ITfThreadMgr* thread, TfClientId client) { return ActivateEx(thread,client,0); }
 HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     thread_ = thread; client_ = client;
+    preferences_ = loadPreferences();
     wchar_t path[32768]; auto length = GetModuleFileNameW(module,path,32768);
     if (!length || length == 32768) { Deactivate(); return E_FAIL; }
     unsigned layout = 0;
     ComPtr<ITfInputProcessorProfileMgr> profiles;
     TF_INPUTPROCESSORPROFILE active{};
     if (SUCCEEDED(CoCreateInstance(CLSID_TF_InputProcessorProfiles,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&profiles))) && SUCCEEDED(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD,&active)) && active.guidProfile == EtenProfile) layout = 1;
-    if (!engine_.open(std::filesystem::path(path).parent_path().parent_path() / L"data",layout)) { Deactivate(); return E_FAIL; }
+    auto root = std::filesystem::path(path).parent_path().parent_path();
+    if (root.parent_path().filename() == L"versions") root = root.parent_path().parent_path();
+    if (!engine_.open(root / L"data",layout,preferences_.ranking)) { Deactivate(); return E_FAIL; }
     ComPtr<ITfCompartmentMgr> compartments; ComPtr<ITfCompartment> open;
     if (SUCCEEDED(thread->QueryInterface(IID_PPV_ARGS(&compartments))) && SUCCEEDED(compartments->GetCompartment(GUID_COMPARTMENT_KEYBOARD_OPENCLOSE,&open))) {
         VARIANT value; VariantInit(&value); value.vt = VT_I4; value.lVal = 1; open->SetValue(client,&value);
     }
     candidates_.Attach(new Candidates);
-    candidates_->initialize(thread,[this](unsigned index) {
+    candidates_->initialize(thread,preferences_.vertical,[this](unsigned index) {
         if (!context_) return;
         ComPtr<ITfContext> context = context_;
         request(context.Get(),[this,context,index](TfEditCookie cookie) {
@@ -122,8 +125,8 @@ bool Service::enabled(ITfContext* context) {
 }
 bool Service::wants(ITfContext* context, WPARAM vk, LPARAM flags) {
     if (!writable(context)) return false;
-    if (vk == VK_SHIFT && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) return true;
-    if (vk == VK_SPACE && (GetKeyState(VK_SHIFT) & 0x8000)
+    if (preferences_.shiftToggle && vk == VK_SHIFT && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) return true;
+    if (preferences_.widthToggle && vk == VK_SPACE && (GetKeyState(VK_SHIFT) & 0x8000)
         && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) return true;
     if (fullWidth_ && !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE)
         && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
@@ -133,7 +136,7 @@ bool Service::wants(ITfContext* context, WPARAM vk, LPARAM flags) {
     if (!enabled(context)) return false;
     ShanjieKey key{}; if (!shanjie::translate(vk,flags,key)) return false;
     if (!state_.preedit.empty()) return true;
-    return key.kind == 1 && (!(key.modifiers & 30) || shanjie::windowsPunctuation(key));
+    return key.kind == 1 && (!(key.modifiers & 30) || (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)));
 }
 HRESULT Service::toggleMode(ITfContext* context) {
     HRESULT hr = watch(context); if (FAILED(hr)) return hr;
@@ -185,16 +188,18 @@ HRESULT Service::apply(ITfContext* context, TfEditCookie cookie, const shanjie::
 HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* eaten) {
     if (vk != VK_SHIFT && shiftTap_) shiftUsed_ = true;
     *eaten = FALSE; if (!wants(context,vk,flags)) return S_OK;
-    if (vk == VK_SHIFT) {
+    if (preferences_.shiftToggle && vk == VK_SHIFT) {
         if (!(flags & (1L << 30))) { shiftTap_ = true; shiftUsed_ = false; }
         *eaten = TRUE; return S_OK;
     }
-    if (vk == VK_SPACE && GetKeyState(VK_SHIFT) & 0x8000) {
+    if (preferences_.widthToggle && vk == VK_SPACE && (GetKeyState(VK_SHIFT) & 0x8000)
+        && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
         fullWidth_ = !fullWidth_; *eaten = TRUE; return S_OK;
     }
     if (FAILED(watch(context))) return S_OK;
     ShanjieKey key{}; shanjie::translate(vk,flags,key);
-    key = shanjie::windowsKey(key,state_);
+    if (preferences_.windowsKeys && (!shanjie::windowsPunctuation(key) || preferences_.ctrlPunctuation)) key = shanjie::windowsKey(key,state_);
+    else if (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)) key.modifiers = 1;
     if (fullWidth_ && !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE)) {
         BYTE keyboard[256]; GetKeyboardState(keyboard); WCHAR text[4]{};
         int length = ToUnicodeEx((UINT)vk,(UINT)((flags >> 16) & 255),keyboard,text,4,4,GetKeyboardLayout(0));
@@ -205,7 +210,7 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
         *eaten = SUCCEEDED(hr); return S_OK;
     }
     bool handled = false;
-    bool cycle = key.kind == 9 && key.modifiers == 0 && state_.candidates.empty() && !state_.preedit.empty();
+    bool cycle = preferences_.windowsKeys && key.kind == 9 && key.modifiers == 0 && state_.candidates.empty() && !state_.preedit.empty();
     HRESULT hr = request(context,[this,context,key,cycle,&handled](TfEditCookie cookie) {
         if (state_.preedit.empty()) {
             TF_SELECTION selection{}; ULONG fetched = 0;

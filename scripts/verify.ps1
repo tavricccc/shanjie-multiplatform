@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([switch]$NativeOnly, [switch]$Visual)
+param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -39,6 +39,14 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     if ($LASTEXITCODE) { throw 'TSF smoke harness build failed.' }
     $arguments = @("$root/dist/x64/Shanjie.dll")
     if ($Visual) { $arguments += '--visual' }
-    & ./build/tsf-smoke.exe @arguments
+    elseif ($Interaction -eq 'shanjie') { $arguments += '--shanjie' }
+    $profileRoot = Join-Path $root "build/profile-tests/$Interaction"
+    New-Item -ItemType Directory -Path "$profileRoot/Shanjie" -Force | Out-Null
+    Copy-Item "profiles/$Interaction.ini" "$profileRoot/Shanjie/profile.ini" -Force
+    $previousLocalAppData = $env:LOCALAPPDATA
+    try {
+        $env:LOCALAPPDATA = $profileRoot
+        & ./build/tsf-smoke.exe @arguments
+    } finally { $env:LOCALAPPDATA = $previousLocalAppData }
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
 } finally { Pop-Location }
