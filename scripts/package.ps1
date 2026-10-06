@@ -24,7 +24,7 @@ try {
         Copy-Item "$root/dist/$arch/Shanjie.dll" "$output/$arch" -Force
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/elevate.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md" $output -Force
+    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/bootstrap.cmd","$PSScriptRoot/elevate.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)
         "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $relative"

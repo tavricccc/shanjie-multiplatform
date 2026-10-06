@@ -1,12 +1,7 @@
 @echo off
 setlocal
-set "PWSH=%ProgramW6432%\PowerShell\7\pwsh.exe"
-if not exist "%PWSH%" set "PWSH=%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe"
-if not exist "%PWSH%" (
-    echo PowerShell 7 x64 is required. Install it from https://aka.ms/powershell-release
+(
+    call "%~dp0bootstrap.cmd" install
+    if errorlevel 1 echo Installation failed. See the error above.
     pause
-    exit /b 1
 )
-"%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0elevate.ps1" -Action install
-if errorlevel 1 echo Installation failed. See the error above.
-pause
