@@ -20,6 +20,7 @@ public:
     HWND window = nullptr;
     bool layoutReady = false;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
+    void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
     TS_SELECTION_ACP selection{0,0,{TS_AE_NONE,FALSE}};
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** out) override { *out = nullptr; if (iid != IID_IUnknown && iid != IID_ITextStoreACP) return E_NOINTERFACE; *out = this; AddRef(); return S_OK; }
     ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&refs_); }
@@ -135,6 +136,10 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_HOME,120); press(VK_RIGHT,122); press(VK_DOWN,124);
         require(store->selection.acpStart == 1 && store->selection.acpEnd == 1,126);
         press(VK_ESCAPE,127); press(VK_END,129);
+        store->externalCaret(0);
+        MSG pending{}; while (PeekMessageW(&pending,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&pending); DispatchMessageW(&pending); }
+        press(VK_DOWN,132); require(store->selection.acpStart == 0,134);
+        press(VK_ESCAPE,135); press(VK_END,137);
     }
     press(VK_RETURN,32); require(store->text == L"你好",34);
     press('S',35); press(VK_ESCAPE,37); require(store->text == L"你好",39);
@@ -155,6 +160,10 @@ int wmain(int argc, wchar_t** argv) {
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),'S',0,&test); require(!test,94);
         press(VK_SHIFT,95); require(SUCCEEDED(keys->OnKeyUp(context.Get(),VK_SHIFT,0,&eaten)) && eaten,97);
         press('S',98); press(VK_ESCAPE,100);
+        press(VK_LSHIFT,140); require(SUCCEEDED(keys->OnKeyUp(context.Get(),VK_LSHIFT,0,&eaten)) && eaten,142);
+        keys->OnTestKeyDown(context.Get(),'S',0,&test); require(!test,143);
+        press(VK_RSHIFT,144); require(SUCCEEDED(keys->OnKeyUp(context.Get(),VK_RSHIFT,0,&eaten)) && eaten,146);
+        keys->OnTestKeyDown(context.Get(),'S',0,&test); require(test,147);
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

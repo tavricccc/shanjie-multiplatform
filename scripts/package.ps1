@@ -28,6 +28,7 @@ try {
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/settings.exe","$PSScriptRoot/settings.cmd" $output -Force
+    Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)
         "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $relative"
