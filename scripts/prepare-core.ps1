@@ -33,3 +33,23 @@ $content = Get-Content $learn -Raw
 $content = $content.Replace('pub fn local_day() -> i64 {', "#[cfg(not(windows))]`npub fn local_day() -> i64 {")
 $content += "`n#[cfg(windows)]`n" + (Get-Content (Join-Path $root 'platform/clock_windows.rs') -Raw)
 Set-Content $learn $content -Encoding utf8NoBOM
+Copy-Item (Join-Path $root 'platform/mapped_array.rs') (Join-Path $output 'src/mapped_array.rs') -Force
+Add-Content $lib "`nmod mapped_array;`n"
+$lm = Join-Path $output 'src/lm.rs'
+$content = Get-Content $lm -Raw
+$fields = @('pool','voff','uni','ctx_id','ctx_total','ctx_back','off','nxt','cnt')
+foreach ($field in $fields) {
+    $pattern = "(?m)^    ${field}: Vec<([^>]+)>,"
+    if ([regex]::Matches($content,$pattern).Count -ne 1) { throw "LM field contract changed: $field" }
+    $content = [regex]::Replace($content,$pattern,"    ${field}: crate::mapped_array::Array<`$1>,")
+    $pattern = "(?m)^            $field,"
+    if ([regex]::Matches($content,$pattern).Count -ne 1) { throw "LM parser contract changed: $field" }
+    $content = [regex]::Replace($content,$pattern,"            ${field}: $field.into(),")
+}
+$signature = 'pub fn load(path: &Path) -> Result<Lm, LmError> {'
+if (!$content.Contains($signature)) { throw 'LM load contract changed.' }
+$content = $content.Replace($signature,$signature + "`n        if path.extension().is_some_and(|ext| ext == `"winmap`") { return Self::load_windows_map(path); }")
+$content += "`n" + (Get-Content (Join-Path $root 'platform/mapped_lm.rs') -Raw)
+Set-Content $lm $content -Encoding utf8NoBOM
+Copy-Item (Join-Path $root 'platform/map_model.rs') (Join-Path $output 'src/map_model.rs') -Force
+Add-Content (Join-Path $output 'Cargo.toml') "`n[[bin]]`nname = `"map-model`"`npath = `"src/map_model.rs`"`n"

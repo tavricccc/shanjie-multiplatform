@@ -30,9 +30,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     Set-Content $cmdFile $command -Encoding utf8NoBOM
     & cmd.exe /d /c $cmdFile
     if ($LASTEXITCODE) { throw 'TSF DLL build failed.' }
-    New-Item -ItemType Directory -Path "$output/data","$output/LICENSES" -Force | Out-Null
-    Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$output/data" -Force
-    Copy-Item "$root/upstream/shanjie/LICENSE" "$output/LICENSES" -Force
-    Copy-Item "$root/upstream/shanjie/LICENSES/*" "$output/LICENSES" -Force
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1" "$output" -Force
+    New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
+    Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
+    Copy-Item "$root/upstream/shanjie/LICENSE" "$root/dist/LICENSES" -Force
+    Copy-Item "$root/upstream/shanjie/LICENSES/*" "$root/dist/LICENSES" -Force
 } finally { Pop-Location }

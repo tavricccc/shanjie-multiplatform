@@ -42,7 +42,7 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     ComPtr<ITfInputProcessorProfileMgr> profiles;
     TF_INPUTPROCESSORPROFILE active{};
     if (SUCCEEDED(CoCreateInstance(CLSID_TF_InputProcessorProfiles,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&profiles))) && SUCCEEDED(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD,&active)) && active.guidProfile == EtenProfile) layout = 1;
-    if (!engine_.open(std::filesystem::path(path).parent_path() / L"data",layout)) { Deactivate(); return E_FAIL; }
+    if (!engine_.open(std::filesystem::path(path).parent_path().parent_path() / L"data",layout)) { Deactivate(); return E_FAIL; }
     ComPtr<ITfCompartmentMgr> compartments; ComPtr<ITfCompartment> open;
     if (SUCCEEDED(thread->QueryInterface(IID_PPV_ARGS(&compartments))) && SUCCEEDED(compartments->GetCompartment(GUID_COMPARTMENT_KEYBOARD_OPENCLOSE,&open))) {
         VARIANT value; VariantInit(&value); value.vt = VT_I4; value.lVal = 1; open->SetValue(client,&value);
@@ -82,12 +82,22 @@ HRESULT Service::request(ITfContext* context, std::function<HRESULT(TfEditCookie
 void Service::cancel() {
     if (composition_ && context_ && client_ != TF_CLIENTID_NULL) {
         ComPtr<ITfComposition> composition = composition_; ComPtr<ITfContext> context = context_;
-        request(context.Get(),[composition](TfEditCookie cookie) { return composition->EndComposition(cookie); },TF_ES_READWRITE | TF_ES_ASYNCDONTCARE);
+        shanjie::Snapshot final;
+        engine_.reset(false,final);
+        request(context.Get(),[composition,text = final.commit](TfEditCookie cookie) {
+            ComPtr<ITfRange> range;
+            HRESULT hr = composition->GetRange(&range);
+            if (SUCCEEDED(hr)) hr = range->SetText(cookie,0,text.data(),(LONG)text.size());
+            if (FAILED(hr)) return hr;
+            return composition->EndComposition(cookie);
+        },TF_ES_READWRITE | TF_ES_ASYNCDONTCARE);
     }
     composition_.Reset(); context_.Reset(); if (candidates_) candidates_->close();
     shanjie::Snapshot discarded; engine_.reset(true,discarded); state_ = {};
 }
 bool Service::enabled(ITfContext* context) {
+    TF_STATUS status{};
+    if (FAILED(context->GetStatus(&status)) || status.dwStaticFlags & TF_SD_READONLY) return false;
     if (compartment(context,GUID_COMPARTMENT_KEYBOARD_DISABLED) || compartment(context,GUID_COMPARTMENT_EMPTYCONTEXT)) return false;
     return !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE) ? false : true;
 }

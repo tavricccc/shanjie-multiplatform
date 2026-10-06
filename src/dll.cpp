@@ -47,8 +47,8 @@ STDAPI DllRegisterServer() {
     Microsoft::WRL::ComPtr<ITfInputProcessorProfiles> profiles;
     hr = CoCreateInstance(CLSID_TF_InputProcessorProfiles,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&profiles));
     if (SUCCEEDED(hr)) hr = profiles->Register(ServiceId);
-    if (SUCCEEDED(hr)) hr = profiles->AddLanguageProfile(ServiceId,Language,StandardProfile,L"善解注音（標準）",10,path,length,0);
-    if (SUCCEEDED(hr)) hr = profiles->AddLanguageProfile(ServiceId,Language,EtenProfile,L"善解注音（倚天）",10,path,length,0);
+    if (SUCCEEDED(hr)) hr = profiles->AddLanguageProfile(ServiceId,Language,StandardProfile,L"善解注音（標準）",(ULONG)wcslen(L"善解注音（標準）"),path,length,0);
+    if (SUCCEEDED(hr)) hr = profiles->AddLanguageProfile(ServiceId,Language,EtenProfile,L"善解注音（倚天）",(ULONG)wcslen(L"善解注音（倚天）"),path,length,0);
     if (SUCCEEDED(hr)) hr = profiles->EnableLanguageProfile(ServiceId,Language,StandardProfile,TRUE);
     if (SUCCEEDED(hr)) hr = profiles->EnableLanguageProfile(ServiceId,Language,EtenProfile,TRUE);
     Microsoft::WRL::ComPtr<ITfCategoryMgr> manager;

@@ -19,7 +19,7 @@ Engine::~Engine() { shanjie_engine_free(handle_); }
 bool Engine::open(const std::filesystem::path& data, unsigned layout) {
     shanjie_engine_free(handle_); handle_ = nullptr;
     if (shanjie_engine_new(utf8(data.wstring()).c_str(), layout, &handle_) != 0) return false;
-    if (shanjie_engine_load_lm(handle_, utf8((data / L"bigram.sjlm").wstring()).c_str()) != 0) {
+    if (shanjie_engine_load_lm(handle_, utf8((data / L"bigram.winmap").wstring()).c_str()) != 0) {
         shanjie_engine_free(handle_); handle_ = nullptr; return false;
     }
     return true;
