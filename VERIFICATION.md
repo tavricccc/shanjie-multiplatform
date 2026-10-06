@@ -10,6 +10,7 @@
 - 109 個上游 core、engine、learning、replay 測試通過。標準與倚天各回放 302 句。
 - x64 背景 TSF harness：真正 Windows context、edit session、composition、caret、commit、Esc、候選 element 與 COM lifetime 通過；不開視窗、不註冊系統輸入法。
 - impeccable 對候選原生介面原始碼的機械檢查未回報問題。未做螢幕視覺驗收。
+- 右鍵管理員安裝／移除入口已納入安裝包；PowerShell 腳本語法與包內 SHA-256 校驗通過。未實際觸發 UAC、系統註冊或重新啟動後刪除。
 
 背景 harness 在引擎啟用後量到整個程序 Private Bytes 41.3 MiB、Working Set 95.4 MiB。Working Set 包含模型映射頁面；此測量不能當作多 App 總耗用、閒置 CPU、輸入延遲或真實 App RAM 的實測。
 

@@ -18,14 +18,16 @@ pwsh -File scripts/package.ps1
 
 ## 安裝與移除
 
-完整解壓安裝包，以系統管理員 PowerShell 7 執行：
+完整解壓安裝包，右鍵 `install.cmd` →「以系統管理員身分執行」。移除時右鍵安裝目錄（或解壓目錄）的 `uninstall.cmd`，選同一個選項。雙擊也會要求 UAC 提升權限。需要預設位置的 64 位元 PowerShell 7。
+
+也可以從系統管理員 PowerShell 7 執行：
 
 ```powershell
 pwsh -File ./install.ps1
 ```
 
 安裝到 `%ProgramFiles%/Shanjie` 並註冊兩個繁體中文 profile。登出再登入後於 Windows 輸入法清單選擇「善解注音（標準）」或「善解注音（倚天）」。不更動系統預設輸入法。
-移除時先執行安裝目錄內的 `uninstall.ps1`，登出再登入後刪除該目錄。
+解除安裝會取消 x64 / x86 TSF profile、category 與 COM 註冊，並刪除 `%ProgramFiles%/Shanjie` 整個目錄。DLL 或模型若仍被應用程式使用，會安排在 Windows 重新啟動時刪除，腳本會顯示是否需要重新啟動；不必手動刪除。目前學習功能關閉，沒有額外寫入使用者資料。解壓下載的安裝包由你自行保留或刪除。
 
 開發 DLL 尚未簽章。正式發佈需簽章與 Windows App 容器相容性驗證。安裝腳本使用對應架構的 regsvr32 分別註冊 x64 與 x86 DLL；目標作業系統為 x64 Windows，ARM64 尚未支援。
 
