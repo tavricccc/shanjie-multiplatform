@@ -53,3 +53,4 @@ $content += "`n" + (Get-Content (Join-Path $root 'platform/mapped_lm.rs') -Raw)
 Set-Content $lm $content -Encoding utf8NoBOM
 Copy-Item (Join-Path $root 'platform/map_model.rs') (Join-Path $output 'src/map_model.rs') -Force
 Add-Content (Join-Path $output 'Cargo.toml') "`n[[bin]]`nname = `"map-model`"`npath = `"src/map_model.rs`"`n"
+& "$PSScriptRoot/prepare-candidates.ps1" -CorePath $output

@@ -3,16 +3,20 @@
 #include <wrl/client.h>
 #include "candidates.h"
 #include "preferences.h"
+#include "mode_button.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
-    public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink {
+    public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink, public ITfTextEditSink {
     long refs_ = 1;
     TfClientId client_ = TF_CLIENTID_NULL;
     DWORD threadSink_ = TF_INVALID_COOKIE;
     DWORD layoutSink_ = TF_INVALID_COOKIE;
+    DWORD textSink_ = TF_INVALID_COOKIE;
     Microsoft::WRL::ComPtr<ITfThreadMgr> thread_;
     Microsoft::WRL::ComPtr<ITfContext> context_;
     Microsoft::WRL::ComPtr<ITfComposition> composition_;
     Microsoft::WRL::ComPtr<Candidates> candidates_;
+    Microsoft::WRL::ComPtr<ModeButton> modeButton_;
+    Microsoft::WRL::ComPtr<ITfLangBarItemMgr> languageBar_;
     shanjie::Engine engine_;
     shanjie::Snapshot state_;
     Preferences preferences_;
@@ -20,6 +24,7 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     bool shiftTap_ = false, shiftUsed_ = false, fullWidth_ = false;
     bool writable(ITfContext*);
     HRESULT toggleMode(ITfContext*);
+    HRESULT setInputMode(bool chinese);
     bool enabled(ITfContext*);
     bool wants(ITfContext*, WPARAM, LPARAM);
     HRESULT apply(ITfContext*, TfEditCookie, const shanjie::Snapshot&);
@@ -47,4 +52,5 @@ public:
     HRESULT STDMETHODCALLTYPE OnPushContext(ITfContext*) override;
     HRESULT STDMETHODCALLTYPE OnPopContext(ITfContext*) override;
     HRESULT STDMETHODCALLTYPE OnLayoutChange(ITfContext*, TfLayoutCode, ITfContextView*) override;
+    HRESULT STDMETHODCALLTYPE OnEndEdit(ITfContext*, TfEditCookie, ITfEditRecord*) override;
 };

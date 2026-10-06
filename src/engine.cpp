@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "windows_core.h"
 #include <memory>
 namespace shanjie {
 std::wstring wide(const char* text) {
@@ -16,7 +17,7 @@ std::string utf8(const std::wstring& text) {
     return value;
 }
 Engine::~Engine() { shanjie_engine_free(handle_); }
-bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking) {
+bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor) {
     shanjie_engine_free(handle_); handle_ = nullptr;
     if (shanjie_engine_new(utf8(data.wstring()).c_str(), layout, &handle_) != 0) return false;
     if (shanjie_engine_load_lm(handle_, utf8((data / L"bigram.winmap").wstring()).c_str()) != 0) {
@@ -25,7 +26,7 @@ bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned r
     ShanjieOutput* output = nullptr;
     auto result = shanjie_engine_set_profile(handle_,ranking,&output);
     if (output) shanjie_output_free(output);
-    return result == 0;
+    return result == 0 && shanjie_windows_set_candidate_anchor(handle_,rightAnchor ? 1 : 0) == 0;
 }
 Snapshot Engine::copy(ShanjieOutput* raw) {
     std::unique_ptr<ShanjieOutput, decltype(&shanjie_output_free)> owner(raw, shanjie_output_free);

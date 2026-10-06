@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <functional>
 #include "engine.h"
+#include "preferences.h"
 class Candidates final : public ITfCandidateListUIElementBehavior {
     long refs_ = 1;
     HWND window_ = nullptr;
@@ -11,7 +12,7 @@ class Candidates final : public ITfCandidateListUIElementBehavior {
     Microsoft::WRL::ComPtr<ITfDocumentMgr> document_;
     shanjie::Snapshot state_;
     bool native_ = true;
-    bool vertical_ = true;
+    CandidateLayout layout_ = CandidateLayout::Vertical;
     int cell_ = 100, row_ = 36, pad_ = 8, columns_ = 9;
     HFONT font_ = nullptr;
     std::function<void(unsigned)> pick_;
@@ -20,7 +21,7 @@ class Candidates final : public ITfCandidateListUIElementBehavior {
 public:
     Candidates();
     ~Candidates();
-    void initialize(ITfThreadMgr*, bool vertical, std::function<void(unsigned)>);
+    void initialize(ITfThreadMgr*, CandidateLayout, std::function<void(unsigned)>);
     void update(ITfContext*, TfEditCookie, ITfRange*, const shanjie::Snapshot&);
     void close();
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override;

@@ -12,7 +12,7 @@ HRESULT Candidates::QueryInterface(REFIID iid, void** out) {
 }
 ULONG Candidates::AddRef() { return InterlockedIncrement(&refs_); }
 ULONG Candidates::Release() { auto n = InterlockedDecrement(&refs_); if (!n) delete this; return n; }
-void Candidates::initialize(ITfThreadMgr* thread, bool vertical, std::function<void(unsigned)> pick) { thread->QueryInterface(IID_PPV_ARGS(&manager_)); vertical_ = vertical; pick_ = std::move(pick); }
+void Candidates::initialize(ITfThreadMgr* thread, CandidateLayout layout, std::function<void(unsigned)> pick) { thread->QueryInterface(IID_PPV_ARGS(&manager_)); layout_ = layout; pick_ = std::move(pick); }
 void Candidates::close() {
     if (window_) ShowWindow(window_, SW_HIDE);
     if (manager_ && id_ != TF_INVALID_UIELEMENTID) { manager_->EndUIElement(id_); id_ = TF_INVALID_UIELEMENTID; }
@@ -38,7 +38,7 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
         window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, wc.lpszClassName, L"善解候選", WS_POPUP | WS_BORDER,0,0,0,0,owner,nullptr,module,this);
     }
     MONITORINFO info{sizeof(info)}; GetMonitorInfoW(MonitorFromRect(&caret, MONITOR_DEFAULTTONEAREST), &info);
-    columns_ = !vertical_ || state.columns ? std::min<int>(9, (int)state.candidates.size()) : 1;
+    columns_ = layout_ != CandidateLayout::Vertical || state.columns ? std::min<int>(9, (int)state.candidates.size()) : 1;
     HDC dc = GetDC(window_); auto old = SelectObject(dc, font_); cell_ = MulDiv(72, dpi, 96);
     for (auto& text : state.candidates) { SIZE size{}; GetTextExtentPoint32W(dc,text.data(),(int)text.size(),&size); cell_ = std::max<int>(cell_, size.cx + pad_ * 4); }
     SelectObject(dc, old); ReleaseDC(window_, dc);

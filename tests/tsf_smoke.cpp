@@ -131,6 +131,11 @@ int wmain(int argc, wchar_t** argv) {
     auto press = [&](WPARAM vk, int check) { BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1); };
     for (wchar_t key : std::wstring(L"SU3CL3")) press(key,20);
     require(store->text == L"你好",30); require(store->selection.acpStart == 2 && store->selection.acpEnd == 2,31);
+    if (!original && !visual) {
+        press(VK_HOME,120); press(VK_RIGHT,122); press(VK_DOWN,124);
+        require(store->selection.acpStart == 1 && store->selection.acpEnd == 1,126);
+        press(VK_ESCAPE,127); press(VK_END,129);
+    }
     press(VK_RETURN,32); require(store->text == L"你好",34);
     press('S',35); press(VK_ESCAPE,37); require(store->text == L"你好",39);
     press('S',40); press('U',42); press('3',44); press(VK_DOWN,46);
