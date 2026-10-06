@@ -18,6 +18,13 @@ foreach ($arch in @('x64','x86')) {
     if ($registration.ExitCode) { $failures += $arch }
 }
 if ($failures.Count) { throw "TSF unregistration failed: $($failures -join ', ')" }
+foreach ($languageKey in Get-ChildItem 'HKCU:/Control Panel/International/User Profile') {
+    foreach ($name in $languageKey.GetValueNames()) {
+        if ($name -like '*:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}*') {
+            Remove-ItemProperty -LiteralPath $languageKey.PSPath -Name $name
+        }
+    }
+}
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;

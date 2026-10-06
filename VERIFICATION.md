@@ -10,7 +10,7 @@
 - 109 個上游 core、engine、learning、replay 測試通過。標準與倚天各回放 302 句。
 - x64 背景 TSF harness：真正 Windows context、edit session、composition、caret、commit、Esc、候選 element 與 COM lifetime 通過；不開視窗、不註冊系統輸入法。
 - impeccable 對候選原生介面原始碼的機械檢查未回報問題。未做螢幕視覺驗收。
-- 右鍵管理員安裝／移除入口已納入安裝包；PowerShell 腳本語法與包內 SHA-256 校驗通過。未實際觸發 UAC、系統註冊或重新啟動後刪除。
+- 右鍵管理員安裝／移除入口已納入安裝包；PowerShell 腳本語法與包內 SHA-256 校驗通過。已透過 UAC 完成系統安裝註冊，未實際驗證右鍵入口互動與重新啟動後刪除。
 
 背景 harness 在引擎啟用後量到整個程序 Private Bytes 41.3 MiB、Working Set 95.4 MiB。Working Set 包含模型映射頁面；此測量不能當作多 App 總耗用、閒置 CPU、輸入延遲或真實 App RAM 的實測。
 
@@ -23,7 +23,9 @@ TSF harness 的文字儲存是記憶體中的 ITextStoreACP，TSF manager 和 co
 
 ## 尚待驗證
 
-管理員安裝／移除與兩架構系統註冊、數位簽章、Chrome/Edge/Office/Terminal 相容性、密碼與受保護欄位、焦點／滑鼠游標變更、實際多螢幕 DPI、觸控鍵盤遮擋、讀屏與 App 容器。
+管理員解除安裝與重新啟動後刪除、數位簽章、Chrome/Edge/Office/Terminal 相容性、密碼與受保護欄位、焦點／滑鼠游標變更、實際多螢幕 DPI、觸控鍵盤遮擋、讀屏與 App 容器。
+
+已在本機完成管理員安裝；核對 64 位元與 32 位元 COM DLL 路徑、兩個 TSF profile 註冊與全部安裝檔案 SHA-256。Microsoft Store 版 PowerShell 7.6.6 x64 已確認可用。使用者輸入法清單包含善解的兩個 profile，保留原本順序與既有項目；尚未在真實 App 打字驗收。
 
 學習 backend 測試通過不代表多程序學習可以啟用；frontend 仍維持學習關閉。
 

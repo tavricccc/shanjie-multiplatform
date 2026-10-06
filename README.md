@@ -18,7 +18,7 @@ pwsh -File scripts/package.ps1
 
 ## 安裝與移除
 
-完整解壓安裝包，右鍵 `install.cmd` →「以系統管理員身分執行」。移除時右鍵安裝目錄（或解壓目錄）的 `uninstall.cmd`，選同一個選項。雙擊也會要求 UAC 提升權限。需要預設位置的 64 位元 PowerShell 7。
+完整解壓安裝包，右鍵 `install.cmd` →「以系統管理員身分執行」。移除時右鍵安裝目錄（或解壓目錄）的 `uninstall.cmd`，選同一個選項。雙擊也會要求 UAC 提升權限。支援預設 MSI 安裝位置與 Microsoft Store 版的 64 位元 PowerShell 7。
 
 也可以從系統管理員 PowerShell 7 執行：
 
