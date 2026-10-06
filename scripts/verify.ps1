@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([switch]$NativeOnly)
+param([switch]$NativeOnly, [switch]$Visual)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -32,11 +32,13 @@ try {
 call "$vcvars" >nul
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-x64"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" "$root/tests/tsf_smoke.cpp" /link /OUT:"$root/build/tsf-smoke.exe" ole32.lib oleaut32.lib uuid.lib user32.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" "$root/tests/tsf_smoke.cpp" /link /OUT:"$root/build/tsf-smoke.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
     Set-Content build/native-x64/verify.cmd $command -Encoding utf8NoBOM
     & cmd.exe /d /c (Join-Path $root 'build/native-x64/verify.cmd')
     if ($LASTEXITCODE) { throw 'TSF smoke harness build failed.' }
-    & ./build/tsf-smoke.exe "$root/dist/x64/Shanjie.dll"
+    $arguments = @("$root/dist/x64/Shanjie.dll")
+    if ($Visual) { $arguments += '--visual' }
+    & ./build/tsf-smoke.exe @arguments
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
 } finally { Pop-Location }

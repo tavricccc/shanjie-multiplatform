@@ -17,7 +17,7 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','candidates','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $sources = @('engine','key_policy','candidates','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
     $library = Join-Path $root "build/core/target/$target/release/core.lib"
     $command = @"
 @echo off

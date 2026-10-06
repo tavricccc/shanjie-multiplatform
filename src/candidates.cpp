@@ -27,6 +27,7 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
     ComPtr<ITfContextView> view; RECT caret{}; BOOL clipped = FALSE; HWND owner = nullptr;
     if (FAILED(context->GetActiveView(&view)) || FAILED(view->GetTextExt(cookie, range, &caret, &clipped))) { Show(FALSE); return; }
     view->GetWnd(&owner);
+    if (owner) owner = GetAncestor(owner,GA_ROOT);
     int dpi = owner ? (int)GetDpiForWindow(owner) : 96;
     row_ = MulDiv(36, dpi, 96); pad_ = MulDiv(8, dpi, 96);
     if (font_) DeleteObject(font_);
@@ -37,7 +38,7 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
         window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, wc.lpszClassName, L"善解候選", WS_POPUP | WS_BORDER,0,0,0,0,owner,nullptr,module,this);
     }
     MONITORINFO info{sizeof(info)}; GetMonitorInfoW(MonitorFromRect(&caret, MONITOR_DEFAULTTONEAREST), &info);
-    columns_ = std::min<int>(9, (int)state.candidates.size());
+    columns_ = state.columns ? std::min<int>(9, (int)state.candidates.size()) : 1;
     HDC dc = GetDC(window_); auto old = SelectObject(dc, font_); cell_ = MulDiv(72, dpi, 96);
     for (auto& text : state.candidates) { SIZE size{}; GetTextExtentPoint32W(dc,text.data(),(int)text.size(),&size); cell_ = std::max<int>(cell_, size.cx + pad_ * 4); }
     SelectObject(dc, old); ReleaseDC(window_, dc);
@@ -48,7 +49,7 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
     int y = caret.bottom + 4;
     if (y + height > info.rcWork.bottom) y = caret.top - height - 4;
     y = std::max<int>(y, info.rcWork.top);
-    SetWindowPos(window_, HWND_TOP, x,y,width,height,SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(window_, HWND_TOPMOST, x,y,width,height,SWP_NOACTIVATE | SWP_SHOWWINDOW);
     InvalidateRect(window_,nullptr,FALSE);
 }
 void Candidates::paint() {

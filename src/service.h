@@ -3,10 +3,11 @@
 #include <wrl/client.h>
 #include "candidates.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
-    public ITfCompositionSink, public ITfThreadMgrEventSink {
+    public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink {
     long refs_ = 1;
     TfClientId client_ = TF_CLIENTID_NULL;
     DWORD threadSink_ = TF_INVALID_COOKIE;
+    DWORD layoutSink_ = TF_INVALID_COOKIE;
     Microsoft::WRL::ComPtr<ITfThreadMgr> thread_;
     Microsoft::WRL::ComPtr<ITfContext> context_;
     Microsoft::WRL::ComPtr<ITfComposition> composition_;
@@ -14,10 +15,14 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     shanjie::Engine engine_;
     shanjie::Snapshot state_;
     bool ending_ = false;
+    bool shiftTap_ = false, shiftUsed_ = false, fullWidth_ = false;
+    bool writable(ITfContext*);
+    HRESULT toggleMode(ITfContext*);
     bool enabled(ITfContext*);
     bool wants(ITfContext*, WPARAM, LPARAM);
     HRESULT apply(ITfContext*, TfEditCookie, const shanjie::Snapshot&);
     void cancel();
+    HRESULT watch(ITfContext*);
     HRESULT request(ITfContext*, std::function<HRESULT(TfEditCookie)>, DWORD);
 public:
     Service(); ~Service();
@@ -39,4 +44,5 @@ public:
     HRESULT STDMETHODCALLTYPE OnSetFocus(ITfDocumentMgr*, ITfDocumentMgr*) override;
     HRESULT STDMETHODCALLTYPE OnPushContext(ITfContext*) override;
     HRESULT STDMETHODCALLTYPE OnPopContext(ITfContext*) override;
+    HRESULT STDMETHODCALLTYPE OnLayoutChange(ITfContext*, TfLayoutCode, ITfContextView*) override;
 };

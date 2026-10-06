@@ -11,6 +11,7 @@ if (!(Test-Path -LiteralPath $target)) {
 if ((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
     throw '安裝目錄是連結或 junction，請先確認實際位置；未執行移除。'
 }
+& (Join-Path $PSScriptRoot 'profiles.ps1') -Remove
 foreach ($arch in @('x64','x86')) {
     $system = if ($arch -eq 'x64') { 'System32' } else { 'SysWOW64' }
     $dll = Join-Path $target "$arch/Shanjie.dll"
