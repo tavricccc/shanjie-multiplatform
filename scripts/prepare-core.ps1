@@ -28,3 +28,8 @@ $content = Get-Content $lib -Raw
 if (!$content.Contains('pub mod learn_store;')) { throw 'Upstream module contract changed.' }
 $content = $content.Replace('pub mod learn_store;', "#[cfg(not(windows))]`npub mod learn_store;`n#[cfg(windows)]`n#[path = `"learn_store_windows.rs`"]`npub mod learn_store;")
 Set-Content $lib $content -Encoding utf8NoBOM
+$learn = Join-Path $output 'src/learn.rs'
+$content = Get-Content $learn -Raw
+$content = $content.Replace('pub fn local_day() -> i64 {', "#[cfg(not(windows))]`npub fn local_day() -> i64 {")
+$content += "`n#[cfg(windows)]`n" + (Get-Content (Join-Path $root 'platform/clock_windows.rs') -Raw)
+Set-Content $learn $content -Encoding utf8NoBOM
