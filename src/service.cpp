@@ -230,7 +230,7 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
     }
     if (FAILED(watch(context))) return S_OK;
     ShanjieKey key{}; shanjie::translate(vk,flags,key);
-    if (preferences_.windowsKeys && (!shanjie::windowsPunctuation(key) || preferences_.ctrlPunctuation)) key = shanjie::windowsKey(key,state_,preferences_.layout == CandidateLayout::Vertical);
+    if (preferences_.windowsKeys && (!shanjie::windowsPunctuation(key) || preferences_.ctrlPunctuation)) key = shanjie::windowsKey(key,state_);
     else if (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)) key.modifiers = 1;
     if (fullWidth_ && !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE)) {
         BYTE keyboard[256]; GetKeyboardState(keyboard); WCHAR text[4]{};

@@ -9,11 +9,11 @@ bool hasPendingReading(const Snapshot& state) {
     for (auto ch : state.preedit) if (ch >= 0x3105 && ch <= 0x312f) return true;
     return false;
 }
-ShanjieKey windowsKey(ShanjieKey key, const Snapshot& state, bool vertical) {
+ShanjieKey windowsKey(ShanjieKey key, const Snapshot& state) {
     if (windowsPunctuation(key)) { key.modifiers = 1; return key; }
-    if (vertical && !state.candidates.empty() && state.columns == 0 && key.modifiers == 0) {
+    if (!state.candidates.empty() && state.columns == 0 && key.modifiers == 0) {
         switch (key.kind) {
-        case 10: key.kind = 8; break; // Down: next item in vertical list.
+        case 10: key.kind = 8; break; // Windows advances with Down in both list orientations.
         case 9: key.kind = 7; break;  // Up: previous item.
         case 8: case 13: key.kind = 10; break; // Right/Tab: expand grid.
         }
