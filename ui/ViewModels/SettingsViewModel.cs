@@ -28,7 +28,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial int Keyboard { get; set; }
     [ObservableProperty] public partial bool Big5 { get; set; }
-    [ObservableProperty] public partial bool ReadingCandidate { get; set; }
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
     [ObservableProperty] public partial double FontSize { get; set; }
@@ -53,7 +52,6 @@ public partial class SettingsViewModel : ObservableObject
         Alphanumeric = ProfileStore.Flag("input", "alphanumeric", Interaction == 0);
         Keyboard = ProfileStore.Number("input", "keyboard", 0);
         Big5 = ProfileStore.Flag("candidates", "big5", false);
-        ReadingCandidate = ProfileStore.Flag("candidates", "reading", Interaction == 0);
         var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, ProfileStore.Read("input", "dictionary", "dictionary.tsv"));
         DictionaryText = File.Exists(dictionary) ? File.ReadAllText(dictionary) : "";
         Status = "";
@@ -64,7 +62,6 @@ public partial class SettingsViewModel : ObservableObject
         ShiftToggle = CtrlSpaceToggle = WidthToggle = CtrlPunctuation = windows; InitialChinese = true; InitialFullWidth = false; CapsLockEnglish = windows;
         EscapeClears = SpacePages = true; BackquoteSymbols = CodeInput = windows; ShiftSide = Theme = Ranking = 0; FontSize = 18; Learning = false;
         Associations = Alphanumeric = windows; Keyboard = 0; Big5 = false;
-        ReadingCandidate = windows;
         Status = "已載入預設，按儲存後才會套用。";
     }
     public void Save()
@@ -108,7 +105,7 @@ public partial class SettingsViewModel : ObservableObject
             open={new[] { "down", "space", "both" }[Trigger]}
             space_pages={Flag(SpacePages)}
             big5={Flag(Big5)}
-            reading={Flag(ReadingCandidate)}
+            reading=0
             [shortcuts]
             shift_toggle={Flag(ShiftToggle)}
             shift_side={ShiftSide}

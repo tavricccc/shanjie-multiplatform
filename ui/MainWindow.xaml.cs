@@ -10,7 +10,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent(); Bindings.Initialize(); ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
         double scale = Interop.Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(960 * scale), (int)(760 * scale)));
+        AppWindow.Resize(new SizeInt32((int)(840 * scale), (int)(680 * scale)));
         Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
         Vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme(); };
         Differences.Text = "支援標準／倚天、漢語／臺灣拼音、聯想詞、選字學習、個人詞庫與字碼輸入。拼音以 1–5 輸入聲調；不帶聲調時按 Enter，空白可分隔音節，連按兩次空白轉換。\n善解使用自己的詞庫與語言模型，因此候選順序與微軟注音不同。微軟舊版相容模式與 IME 手寫／部首辨識屬於微軟的引擎功能。";
