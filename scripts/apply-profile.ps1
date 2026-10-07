@@ -9,6 +9,9 @@ $content = [IO.File]::ReadAllText($source)
 # A preset changes interaction settings, while retaining the user's saved dictionary.
 if (Test-Path -LiteralPath $destination) {
     $previous = [IO.File]::ReadAllText($destination)
+    $engineSection = [regex]::Match($previous, '(?ms)^\[engine\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value
+    $model = [regex]::Match($engineSection, '(?m)^model=([12])\r?$').Groups[1].Value
+    if ($model) { $content = [regex]::Replace($content, '(?m)^model=[12]\r?$', "model=$model") }
     $inputSection = [regex]::Match($previous, '(?ms)^\[input\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value
     $dictionary = [regex]::Match($inputSection, '(?m)^dictionary=(.+)\r?$').Groups[1].Value.Trim()
     $newInput = [regex]::Match($content, '(?ms)^\[input\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value

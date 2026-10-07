@@ -3,5 +3,7 @@
   "commit": "d1f32dac0b5dcea1c3a727c400ed748747021516",
   "release": "v0.2.1",
   "abi": "core/include/shanjie.h",
-  "modelRelease": "model-v1"
+  "modelRelease": "model-v1",
+  "modelReleases": ["model-v1", "model-v2"],
+  "modelSources": "MODEL-SOURCES.json"
 }

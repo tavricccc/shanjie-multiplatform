@@ -56,7 +56,7 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     profileLayout_ = layout; dataRoot_ = root / L"data";
     if (preferences_.keyboard) layout = preferences_.keyboard == 2 ? 1 : 0;
     engine_.setReadingCandidate(preferences_.readingCandidate);
-    if (!engine_.open(root / L"data",layout,preferences_.ranking,preferences_.rightAnchor,preferences_.learning,preferences_.big5,preferences_.dictionary)) { Deactivate(); return E_FAIL; }
+    if (!engine_.open(root / L"data",layout,preferences_.ranking,preferences_.rightAnchor,preferences_.learning,preferences_.big5,preferences_.dictionary,preferences_.model)) { Deactivate(); return E_FAIL; }
     if (preferences_.keyboard >= 3 && !pinyin_.load(root / L"data",preferences_.keyboard == 4)) { Deactivate(); return E_FAIL; }
     fullWidth_ = preferences_.initialFullWidth;
     setInputMode(preferences_.initialChinese);
@@ -165,7 +165,7 @@ void Service::refreshPreferences() {
     auto current = loadPreferences();
     bool rebuild = current.keyboard != preferences_.keyboard || current.ranking != preferences_.ranking
         || current.rightAnchor != preferences_.rightAnchor || current.learning != preferences_.learning
-        || current.big5 != preferences_.big5 || current.dictionary != preferences_.dictionary;
+        || current.big5 != preferences_.big5 || current.dictionary != preferences_.dictionary || current.model != preferences_.model;
     bool modeChanged = current.initialChinese != preferences_.initialChinese;
     bool widthChanged = current.initialFullWidth != preferences_.initialFullWidth;
     // Finish existing text before replacing its engine; cancel captures the commit for TSF.
@@ -174,7 +174,7 @@ void Service::refreshPreferences() {
     engine_.setReadingCandidate(current.readingCandidate);
     if (rebuild) {
         unsigned layout = current.keyboard ? (current.keyboard == 2 ? 1 : 0) : profileLayout_;
-        if (!engine_.open(dataRoot_,layout,current.ranking,current.rightAnchor,current.learning,current.big5,current.dictionary)) {
+        if (!engine_.open(dataRoot_,layout,current.ranking,current.rightAnchor,current.learning,current.big5,current.dictionary,current.model)) {
             setInputMode(false); return;
         }
         pinyin_ = {};
@@ -185,7 +185,8 @@ void Service::refreshPreferences() {
     if (candidates_) candidates_->configure(preferences_);
     if (!current.associations && associated_.active()) {
         associated_.clear(); associationCaret_.Reset();
-        state_.candidates.clear(); if (candidates_) candidates_->close();
+        state_.associated = false; state_.candidates.clear(); state_.selected = -1; state_.columns = state_.first = state_.total = 0;
+        if (candidates_) candidates_->close();
     }
     if (context_ && candidates_) OnLayoutChange(context_.Get(),TF_LC_CHANGE,nullptr);
 }
@@ -341,6 +342,10 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
     }
     bool selectedCandidate = !state_.candidates.empty() && key.modifiers == 0
         && (key.kind == 3 || (key.kind == 1 && key.ch >= '1' && key.ch <= '9'));
+    if (preferences_.windowsKeys && state_.columns && !state_.first && state_.selected < (int)state_.columns && key.kind == 9 && key.modifiers == 0) {
+        // Windows table navigation stops at the first row; upstream Up collapses the table.
+        *eaten = TRUE; return S_OK;
+    }
     if (preferences_.windowsKeys && (!shanjie::windowsPunctuation(key) || preferences_.ctrlPunctuation)) key = shanjie::windowsKey(key,state_);
     else if (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)) key.modifiers = 1;
     bool capsEnglish = preferences_.capsLockEnglish && (key.modifiers & 16) && !(key.modifiers & 14) && (key.kind == 1 || key.kind == 2);
@@ -399,7 +404,13 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
             ShanjieKey expand{}; expand.kind = 10;
             if (!engine_.key(expand,out)) return E_FAIL;
         }
-        HRESULT result = apply(context,cookie,out,selectedCandidate); handled = SUCCEEDED(result) && out.handled; return result;
+        if (preferences_.windowsKeys && key.kind == 3 && key.modifiers == 0 && out.candidates.empty() && !shanjie::hasPendingReading(out) && !out.preedit.empty()) {
+            auto committed = out.commit;
+            if (!engine_.key(key,out)) return E_FAIL;
+            out.commit = committed + out.commit;
+        }
+        // Enter finishes confirmed text; only number/mouse selection may prompt associated words.
+        HRESULT result = apply(context,cookie,out,selectedCandidate && key.kind != 3); handled = SUCCEEDED(result) && out.handled; return result;
     },TF_ES_SYNC | TF_ES_READWRITE);
     if (FAILED(hr)) { cancel(); return S_OK; }
     *eaten = handled; return S_OK;

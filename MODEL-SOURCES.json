@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/Nanako0129/shanjie",
+  "models": [
+    { "release": "model-v1", "source": "bigram.sjlm", "mapped": "bigram.winmap", "sha256": "9879fd8b264b1c1f4c083ccedf84dc5625cd8d2595bd2d13150eed5a0520a923" },
+    { "release": "model-v2", "source": "bigram-v2.sjlm", "mapped": "bigram-v2.winmap", "sha256": "8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240" }
+  ]
+}

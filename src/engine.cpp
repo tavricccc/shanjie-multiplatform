@@ -29,14 +29,15 @@ bool Engine::beginLearning() {
     ReleaseMutex(learningMutex_); return false;
 }
 void Engine::endLearning() { if (learningMutex_) ReleaseMutex(learningMutex_); }
-bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning, bool big5, const std::wstring& dictionaryName) {
+bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning, bool big5, const std::wstring& dictionaryName, unsigned model) {
+    if (model != 1 && model != 2) return false;
     shanjie_engine_free(handle_); handle_ = nullptr;
     wchar_t localDictionary[32768]; auto localLength = GetEnvironmentVariableW(L"LOCALAPPDATA",localDictionary,32768);
     auto personal = localLength && localLength < 32768 ? std::filesystem::path(localDictionary) / L"Shanjie" / dictionaryName : std::filesystem::path{};
     if (dictionaryName != L"dictionary.tsv" && !std::filesystem::exists(personal)) return false;
     std::string dictionary = !personal.empty() && std::filesystem::exists(personal) && std::filesystem::file_size(personal) ? utf8(personal.wstring()) : std::string{};
     if (shanjie_windows_engine_new(utf8(data.wstring()).c_str(),dictionary.empty() ? nullptr : dictionary.c_str(),layout,&handle_) != 0) return false;
-    if (shanjie_engine_load_lm(handle_, utf8((data / L"bigram.winmap").wstring()).c_str()) != 0) {
+    if (shanjie_engine_load_lm(handle_, utf8((data / (model == 1 ? L"bigram.winmap" : L"bigram-v2.winmap")).wstring()).c_str()) != 0) {
         shanjie_engine_free(handle_); handle_ = nullptr; return false;
     }
     ShanjieOutput* output = nullptr;

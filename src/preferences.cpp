@@ -34,6 +34,7 @@ Preferences loadPreferences() {
     out.ctrlPunctuation = GetPrivateProfileIntW(L"shortcuts",L"ctrl_punctuation",1,path.c_str()) != 0;
     GetPrivateProfileStringW(L"engine",L"ranking",L"chat",value,32,path.c_str());
     out.ranking = std::wstring(value) == L"formal" ? 1 : 0;
+    out.model = GetPrivateProfileIntW(L"engine",L"model",1,path.c_str());
     out.initialChinese = GetPrivateProfileIntW(L"input",L"chinese",1,path.c_str()) != 0;
     out.initialFullWidth = GetPrivateProfileIntW(L"input",L"full_width",0,path.c_str()) != 0;
     out.shiftSide = GetPrivateProfileIntW(L"shortcuts",L"shift_side",0,path.c_str());

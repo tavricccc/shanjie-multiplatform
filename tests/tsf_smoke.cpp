@@ -152,7 +152,10 @@ int wmain(int argc, wchar_t** argv) {
     if (!visual && !original) {
         press(VK_DOWN,70); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,72);
         press(VK_RETURN,73); require(store->text == L"你好妳",75);
-        press(VK_RETURN,76);
+        ComPtr<IEnumTfUIElements> afterEnter; ui->EnumUIElements(&afterEnter);
+        ComPtr<ITfUIElement> remaining; ULONG remainingCount = 0;
+        require(afterEnter->Next(1,&remaining,&remainingCount) == S_FALSE && !remainingCount,76);
+        BOOL enterAgain = TRUE; keys->OnTestKeyDown(context.Get(),VK_RETURN,0,&enterAgain); require(!enterAgain,77);
         press('S',78); press('U',80); press('3',82); press(VK_DOWN,84); press('2',86);
         require(store->text == L"你好妳妳",88); press(VK_RETURN,89);
         press(VK_SHIFT,91); BOOL eaten = FALSE;
@@ -193,6 +196,20 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"engine",L"ranking",L"formal",profile.c_str()),196);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         require(store->text == beforeReload && noCandidates(),197); // Engine replacement keeps pending text.
+        require(WritePrivateProfileStringW(L"engine",L"model",L"2",profile.c_str()),198);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',200); press('U',202); press('3',204); press(VK_DOWN,206); press(VK_RETURN,208);
+        require(noCandidates(),210);
+        require(WritePrivateProfileStringW(L"engine",L"model",L"1",profile.c_str()),211);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('G',212); press('4',214); press(VK_DOWN,216); press(VK_RIGHT,218);
+        UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 9,220);
+        press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
+        press(VK_ESCAPE,224); press(VK_RETURN,226);
+        require(WritePrivateProfileStringW(L"input",L"associations",L"0",profile.c_str()),228);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',230); press('U',232); press('3',234); press(VK_DOWN,236); press('1',238);
+        require(noCandidates(),240); press(VK_RETURN,241);
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

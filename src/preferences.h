@@ -12,6 +12,7 @@ struct Preferences {
     bool widthToggle = true;
     bool ctrlPunctuation = true;
     unsigned ranking = 0;
+    unsigned model = 1;
     bool initialChinese = true;
     bool initialFullWidth = false;
     unsigned shiftSide = 0; // 0: both, 1: left, 2: right.
