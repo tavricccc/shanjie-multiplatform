@@ -6,7 +6,7 @@
 
 最新增量：保留聯想功能，在設定用「預測尚未輸入的後續詞」開關關閉。Windows Enter 選定最後候選後，透過核心 Enter 正式提交（保留學習提交流程）並關窗，不接續開聯想。格狀第一列 ↑ 停留而不收回列表；TableList Loaded 只更新 panel 尺寸，不重新切換候選排列與視窗。
 
-安裝包提供 model-v1／model-v2，維持既有設定預設 v1。v2 的官方 SHA-256 `8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240` 核對通過；兩版 9 個映射陣列及標量等價檢查通過。新背景 TSF regression 通過 v1→v2→v1 即時重載、Enter 後沒有 UI element／不再攔截下一次 Enter、格狀第一列 ↑ 保持展開、聯想仍可開啟、關閉設定即清掉現有聯想且後续數字選字不再顯示。善解上游操作 profile 與兩架構 host checks 通過；WinUI 模型與預測開關保存／重讀、淺／深畫面通過獨立窄範圍審查。這些不包含前景 App 日常驗收；沒有將使用者現有模型改成 v2，也未自動安裝。
+安裝包提供 model-v1／model-v2，維持既有設定預設 v1。v2 的官方 SHA-256 `8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240` 核對通過；兩版 9 個映射陣列及標量等價檢查通過。新背景 TSF regression 通過 v1→v2→v1 即時重載、Enter 後沒有 UI element／不再攔截下一次 Enter、格狀第一列 ↑ 保持展開、聯想仍可開啟、關閉設定即清掉現有聯想且後續數字選字不再顯示。善解上游操作 profile 與兩架構 host checks 通過；WinUI 模型與預測開關保存／重讀、淺／深畫面通過獨立窄範圍審查。這些不包含前景 App 日常驗收；沒有將使用者現有模型改成 v2，也未自動安裝。
 
 後續候選介面修正：依使用者要求移除動畫與雙層外框。ListView／GridView 共用靜態 ContentControl template，只有立即套用的 VSM setters，ItemContainerTransitions 為空；不再使用預設 ListViewItemPresenter 轉場。取消原生 caption／resize frame 與 WinUI 非客戶區保留，WM_NCCALCSIZE 回傳完整客戶區；DWM 非客戶區繪製與視窗轉場均停用。兩架構 host harness 確認 client 尺寸等於 window 尺寸、DWM non-client rendering 關閉，NOACTIVATE／隱藏／重開／退出仍通過。淺／深與各排列 XAML captures 通過，獨立視覺審查 verdict 為 ship；保留原本 accent、字體與間距。此修正版尚未做前景 App 日常驗收，也未自動重新觸發先前已取消的安裝 UAC。
 
