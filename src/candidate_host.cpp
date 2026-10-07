@@ -56,6 +56,7 @@ void CandidateHost::hide() {
     if (!packet_) return;
     InterlockedIncrement(&packet_->sequence); packet_->visible = 0; InterlockedIncrement(&packet_->sequence);
     SetEvent(event_);
+    if (hostWindow_) ShowWindowAsync(hostWindow_,SW_HIDE);
 }
 void CandidateHost::ready(HWND window) {
     DWORD process = 0; GetWindowThreadProcessId(window,&process);

@@ -23,11 +23,23 @@ internal sealed class CandidateChannel : IDisposable
     public void Stop() { lock (lifetime) { if (stopping) return; stopping = true; Native.SetEvent(signal); } }
     public CandidateFrame? Read()
     {
-        int before = Marshal.ReadInt32(view);
-        if (before == sequence || (before & 1) != 0) return null;
-        var bytes = new byte[PacketSize]; Marshal.Copy(view, bytes, 0, bytes.Length);
-        Thread.MemoryBarrier();
-        if (before != Marshal.ReadInt32(view)) return null;
+        int before;
+        var bytes = new byte[PacketSize];
+        // The auto-reset event can arrive while the writer is replacing a frame.
+        // Retry that same notification rather than losing a hide until the next key.
+        while (true)
+        {
+            if (stopping || Native.WaitForSingleObject(parent, 0) == 0) return null;
+            before = Marshal.ReadInt32(view);
+            if (before == sequence) return null;
+            if ((before & 1) == 0)
+            {
+                Marshal.Copy(view, bytes, 0, bytes.Length);
+                Thread.MemoryBarrier();
+                if (before == Marshal.ReadInt32(view)) break;
+            }
+            Thread.Yield();
+        }
         sequence = before;
         int Get(int offset) => BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4));
         int count = Get(20); if (count is < 0 or > 81) throw new InvalidDataException("Invalid candidate count");
@@ -35,5 +47,6 @@ internal sealed class CandidateChannel : IDisposable
         for (int i = 0; i < count; i++) words[i] = Encoding.Unicode.GetString(bytes, 80 + i * 256, 256).TrimEnd('\0');
         return new(before, Get(8) != 0, Get(12), Get(16), Get(24), Get(28), Get(32), Get(36), Get(40), Get(44), Get(48), Get(52), Get(56), Get(60) != 0, (nint)BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(64, 8)), words, (Get(76) & 1) != 0, Encoding.Unicode.GetString(bytes, 80 + 81 * 256, 256).TrimEnd('\0'), (Get(76) & 2) != 0);
     }
+    public bool IsCurrent(int frameSequence) { lock (lifetime) { return !stopping && Marshal.ReadInt32(view) == frameSequence; } }
     public void Dispose() { lock (lifetime) { stopping = true; Native.UnmapViewOfFile(view); Native.CloseHandle(mapping); Native.CloseHandle(signal); if (parent != 0) Native.CloseHandle(parent); } }
 }

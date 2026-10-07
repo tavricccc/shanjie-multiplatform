@@ -10,6 +10,12 @@ std::filesystem::path profilePath() {
     return std::filesystem::path(folder) / L"Shanjie" / L"profile.ini";
 }
 }
+unsigned long long preferencesStamp() {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    auto path = profilePath();
+    if (!GetFileAttributesExW(path.c_str(),GetFileExInfoStandard,&data)) return 0;
+    return ((unsigned long long)data.ftLastWriteTime.dwHighDateTime << 32) | data.ftLastWriteTime.dwLowDateTime;
+}
 Preferences loadPreferences() {
     Preferences out;
     auto path = profilePath(); if (path.empty()) return out;

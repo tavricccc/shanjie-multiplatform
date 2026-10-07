@@ -6,6 +6,8 @@ public static class ProfileStore
     public static string Path => System.IO.Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA")!, "Shanjie", "profile.ini");
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern uint GetPrivateProfileString(string section, string key, string defaultValue, StringBuilder value, uint size, string path);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll")] private static extern bool SendNotifyMessage(nint window, uint message, nuint wp, nint lp);
     public static string Read(string section, string key, string defaultValue)
     {
         var value = new StringBuilder(256);
@@ -20,6 +22,7 @@ public static class ProfileStore
         var temporary = Path + ".tmp";
         File.WriteAllText(temporary, content.Replace("\r\n", "\n").Replace("\n", "\r\n"), new UTF8Encoding(false));
         File.Move(temporary, Path, true);
+        SendNotifyMessage((nint)0xffff, RegisterWindowMessage("Shanjie.ProfileChanged.v1"), 0, 0);
     }
     public static void ClearLearning()
     {

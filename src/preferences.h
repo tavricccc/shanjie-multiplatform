@@ -31,3 +31,4 @@ struct Preferences {
     unsigned fontSize = 18;
 };
 Preferences loadPreferences();
+unsigned long long preferencesStamp();

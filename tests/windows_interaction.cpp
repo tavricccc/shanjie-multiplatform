@@ -57,6 +57,11 @@ int wmain(int argc,wchar_t** argv) {
     shanjie::Snapshot suggestions; assert(first.associate(L"你",suggestions)); assert(!suggestions.candidates.empty());
     AssociatedCandidates associated; associated.open(suggestions); key.kind = 1; key.ch = '1'; key.modifiers = 1;
     assert(associated.handles(key)); assert(!associated.key(key).commit.empty());
+    shanjie::Snapshot composing; composing.preedit = L"你"; composing.cursor = 1;
+    associated.open(suggestions,composing);
+    assert(associated.view().preedit == L"你");
+    key.kind = 3; key.modifiers = 0; assert(!associated.handles(key));
+    key.kind = 6; assert(associated.key(key).preedit == L"你"); assert(!associated.active());
     auto dictionary = std::filesystem::path(local) / L"Shanjie" / L"dictionary.tsv";
     std::ofstream(dictionary) << "ㄋㄧˇ-ㄏㄠˇ\t妳郝\t-0.01\n";
     shanjie::Engine personal; assert(personal.open(argv[1],0,0,true));

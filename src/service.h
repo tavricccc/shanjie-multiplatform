@@ -7,13 +7,15 @@
 #include "special_input.h"
 #include "associated_candidates.h"
 #include "pinyin_input.h"
+#include "profile_watcher.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
-    public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink, public ITfTextEditSink {
+    public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink, public ITfTextEditSink, public ITfThreadFocusSink {
     long refs_ = 1;
     TfClientId client_ = TF_CLIENTID_NULL;
     DWORD threadSink_ = TF_INVALID_COOKIE;
     DWORD layoutSink_ = TF_INVALID_COOKIE;
     DWORD textSink_ = TF_INVALID_COOKIE;
+    DWORD focusSink_ = TF_INVALID_COOKIE;
     Microsoft::WRL::ComPtr<ITfThreadMgr> thread_;
     Microsoft::WRL::ComPtr<ITfContext> context_;
     Microsoft::WRL::ComPtr<ITfComposition> composition_;
@@ -23,10 +25,16 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     shanjie::Engine engine_;
     SpecialInput special_;
     AssociatedCandidates associated_;
+    Microsoft::WRL::ComPtr<ITfRange> associationCaret_;
     PinyinInput pinyin_;
     std::string rawReading_;
     shanjie::Snapshot state_;
     Preferences preferences_;
+    ProfileWatcher profileWatcher_;
+    std::filesystem::path dataRoot_;
+    unsigned profileLayout_ = 0;
+    unsigned long long preferencesStamp_ = 0;
+    void refreshPreferences();
     bool ending_ = false;
     bool shiftTap_ = false, shiftUsed_ = false, fullWidth_ = false;
     bool writable(ITfContext*);
@@ -34,7 +42,8 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     HRESULT setInputMode(bool chinese);
     bool enabled(ITfContext*);
     bool wants(ITfContext*, WPARAM, LPARAM);
-    HRESULT apply(ITfContext*, TfEditCookie, const shanjie::Snapshot&);
+    HRESULT apply(ITfContext*, TfEditCookie, const shanjie::Snapshot&, bool selectedCandidate = false);
+    bool pickAssociated(unsigned, shanjie::Snapshot&);
     void cancel();
     HRESULT watch(ITfContext*);
     HRESULT request(ITfContext*, std::function<HRESULT(TfEditCookie)>, DWORD);
@@ -47,6 +56,8 @@ public:
     HRESULT STDMETHODCALLTYPE ActivateEx(ITfThreadMgr*, TfClientId, DWORD) override;
     HRESULT STDMETHODCALLTYPE Deactivate() override;
     HRESULT STDMETHODCALLTYPE OnSetFocus(BOOL) override;
+    HRESULT STDMETHODCALLTYPE OnSetThreadFocus() override;
+    HRESULT STDMETHODCALLTYPE OnKillThreadFocus() override;
     HRESULT STDMETHODCALLTYPE OnTestKeyDown(ITfContext*, WPARAM, LPARAM, BOOL*) override;
     HRESULT STDMETHODCALLTYPE OnTestKeyUp(ITfContext*, WPARAM, LPARAM, BOOL*) override;
     HRESULT STDMETHODCALLTYPE OnKeyDown(ITfContext*, WPARAM, LPARAM, BOOL*) override;

@@ -26,6 +26,7 @@ public:
     void initialize(ITfThreadMgr*, const Preferences&, std::function<void(unsigned)>);
     void update(ITfContext*, TfEditCookie, ITfRange*, const shanjie::Snapshot&);
     void close();
+    void configure(const Preferences& preferences) { preferences_ = preferences; }
     unsigned long long revision() const { return revision_; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override;
     ULONG STDMETHODCALLTYPE AddRef() override;

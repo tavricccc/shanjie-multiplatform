@@ -164,6 +164,30 @@ int wmain(int argc, wchar_t** argv) {
         keys->OnTestKeyDown(context.Get(),'S',0,&test); require(!test,143);
         press(VK_RSHIFT,144); require(SUCCEEDED(keys->OnKeyUp(context.Get(),VK_RSHIFT,0,&eaten)) && eaten,146);
         keys->OnTestKeyDown(context.Get(),'S',0,&test); require(test,147);
+        auto noCandidates = [&] {
+            ComPtr<IEnumTfUIElements> active; ui->EnumUIElements(&active);
+            ComPtr<ITfUIElement> item; ULONG found = 0;
+            return active->Next(1,&item,&found) == S_FALSE && !found;
+        };
+        press('S',180); press('U',182); press(VK_SPACE,184);
+        require(noCandidates(),186); // First-tone space completes reading without opening a list.
+        press(VK_ESCAPE,187);
+        press('S',150); press('U',152); press('3',154);
+        BOOL passed = TRUE;
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_SPACE,0,&passed)) && !passed,156);
+        require(noCandidates(),157); // Space commits under Down; no unsolicited association.
+        wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+        auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
+        require(WritePrivateProfileStringW(L"candidates",L"open",L"space",profile.c_str()),158);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',159); press('U',161); press('3',163); press(VK_SPACE,165);
+        require(!noCandidates(),167); // The same service sees the saved trigger without reactivation.
+        press(VK_ESCAPE,168);
+        require(WritePrivateProfileStringW(L"candidates",L"open",L"down",profile.c_str()),170);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press(VK_DOWN,171); require(!noCandidates(),173);
+        ComPtr<ITfThreadFocusSink> focus; require(SUCCEEDED(service.As(&focus)),174);
+        require(SUCCEEDED(focus->OnKillThreadFocus()) && noCandidates(),175);
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

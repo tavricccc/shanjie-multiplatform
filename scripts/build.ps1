@@ -17,7 +17,7 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','mode_button','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
     $library = Join-Path $root "build/core/target/$target/release/core.lib"
     $command = @"
 @echo off
