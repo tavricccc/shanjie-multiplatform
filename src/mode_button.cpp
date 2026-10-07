@@ -25,20 +25,20 @@ HRESULT ModeButton::InitMenu(ITfMenu* menu) { return menu->AddMenuItem(1,0,nullp
 HRESULT ModeButton::OnMenuSelect(UINT item) { if (item == 1) settings_(); return S_OK; }
 HRESULT ModeButton::GetText(BSTR* out) { *out = SysAllocString(chinese_() ? L"中" : L"英"); return *out ? S_OK : E_OUTOFMEMORY; }
 HRESULT ModeButton::GetIcon(HICON* out) {
-    int size = GetSystemMetrics(SM_CXSMICON);
-    BITMAPINFO info{}; info.bmiHeader = {sizeof(BITMAPINFOHEADER),size,-size,1,32,BI_RGB};
-    DWORD* pixels = nullptr; HDC dc = CreateCompatibleDC(nullptr);
-    HBITMAP color = CreateDIBSection(dc,&info,DIB_RGB_COLORS,(void**)&pixels,nullptr,0);
-    auto old = SelectObject(dc,color);
-    for (int i = 0; i < size*size; ++i) pixels[i] = 0x00010101;
-    HFONT font = CreateFontW(-size+2,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,ANTIALIASED_QUALITY,0,L"Microsoft JhengHei UI");
-    auto oldFont = SelectObject(dc,font); SetBkMode(dc,TRANSPARENT); SetTextColor(dc,RGB(0,0,0)); RECT rect{0,0,size,size};
+    int width = GetSystemMetrics(SM_CXSMICON), height = GetSystemMetrics(SM_CYSMICON);
+    HDC dc = CreateCompatibleDC(nullptr);
+    // TEXTCOLORICON requires a monochrome AND/XOR mask so TSF can apply its theme text color.
+    HBITMAP mask = CreateBitmap(width,height*2,1,1,nullptr);
+    auto old = SelectObject(dc,mask);
+    PatBlt(dc,0,0,width,height,WHITENESS);
+    PatBlt(dc,0,height,width,height,BLACKNESS);
+    HFONT font = CreateFontW(-height+2,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,NONANTIALIASED_QUALITY,0,L"Microsoft JhengHei UI");
+    auto oldFont = SelectObject(dc,font); SetBkMode(dc,TRANSPARENT); SetTextColor(dc,RGB(0,0,0)); RECT rect{0,0,width,height};
     DrawTextW(dc,chinese_() ? L"中" : L"英",1,&rect,DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    GdiFlush(); for (int i = 0; i < size*size; ++i) pixels[i] = pixels[i] == 0x00010101 ? 0 : pixels[i] | 0xff000000;
+    GdiFlush();
     SelectObject(dc,oldFont); DeleteObject(font); SelectObject(dc,old);
-    HBITMAP mask = CreateBitmap(size,size,1,1,nullptr); old = SelectObject(dc,mask); PatBlt(dc,0,0,size,size,BLACKNESS); SelectObject(dc,old);
-    ICONINFO icon{TRUE,0,0,mask,color}; *out = CreateIconIndirect(&icon);
-    DeleteObject(mask); DeleteObject(color); DeleteDC(dc); return *out ? S_OK : E_FAIL;
+    ICONINFO icon{TRUE,0,0,mask,nullptr}; *out = CreateIconIndirect(&icon);
+    DeleteObject(mask); DeleteDC(dc); return *out ? S_OK : E_FAIL;
 }
 HRESULT ModeButton::AdviseSink(REFIID id,IUnknown* sink,DWORD* cookie) {
     if (id != IID_ITfLangBarItemSink) return E_NOINTERFACE;

@@ -4,6 +4,10 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+記事本實際測試：透過 computer-use 插件在已安裝版本輸入 s、u、3，↓ 開啟 WinUI 候選，下一次 ↓ 反白第二項「妳」，Enter 選取後組字為「妳」。已看到實際候選文字，並非只確認 HWND 可見。Chrome 測試因 Computer Use 無法辨識新分頁 URL 的安全檢查而中止；Chrome 的使用者回報仍未驗證或排除。
+
+工作列中英圖示原先設定 TEXTCOLORICON，卻傳回固定黑色的 32-bit 彩色 icon。已改成真正 1-bit AND／XOR 單色遮罩，由 TSF 套用主題文字色；中／英兩狀態、x64／x86 的 GetIconInfo 格式契約測試通過。來源為 Microsoft 的 ITfLangBarItemButton::GetIcon 與 TF_LBI_STYLE_TEXTCOLORICON 文件。新圖示尚未做安裝後工作列的深色模式實際驗收。
+
 後續密度調整：依使用者照片移除注音按鈕與頁次 footer、取消 item container 預設留白、依實際文字測量候選大小、收緊五頁設定並把開關排成同列。驗證使用畫面外的真實 WinUI capture，包含 14／18／32 DIP 字級、長詞、聯想與三種排列；沒有改候選核心與方向鍵政策。
 
 密度複查發現 GridView 預設 item 尺寸仍沿用短詞配置，14 DIP 四字詞出現省略；已讓 container 與 ItemsWrapGrid 使用同一計算寬高並完成 layout 後更新 panel。候選仍保留九欄的上游格狀數字與方向鍵契約。
