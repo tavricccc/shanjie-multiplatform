@@ -1,6 +1,10 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游目前固定於 `a96f5c553f6ffcf9ac23670363451c49c9faf138`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游目前固定於 0.2.1 的 `d1f32dac0b5dcea1c3a727c400ed748747021516`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-07 更新 0.2.1
+
+使用正式 `v0.2.1` tag 的 peeled commit；不追蹤目前 main 或 model-v2。與舊 pin `a96f5c553f6ffcf9ac23670363451c49c9faf138` 比較，`core/`、`data/lexicon/`、`LICENSE` 與 `LICENSES/` 完全相同，差異為文件及評估資料。本次保留 model-v1 和既有 Windows 覆蓋；版本更新不代表換了評分模型。
 
 ## 哪些東西有改
 
