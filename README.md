@@ -59,7 +59,7 @@ pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini
 
 ## 架構與資源
 
-WinUI 移植來源、IPC 與打包決策見 [WINUI-MIGRATION.md](WINUI-MIGRATION.md)。微軟注音選項與實際差異見 [MICROSOFT-IME-DIFFS.md](MICROSOFT-IME-DIFFS.md)。目前設定包含漢語／臺灣拼音、Caps Lock 英文、左右 Shift、聯想詞、Unicode／Big5 字碼、Big5 候選、注音原文、個人詞庫與學習清除。
+WinUI 移植來源、IPC 與打包決策見 [WINUI-MIGRATION.md](WINUI-MIGRATION.md)。微軟注音選項與實際差異見 [MICROSOFT-IME-DIFFS.md](MICROSOFT-IME-DIFFS.md)。目前設定包含漢語／臺灣拼音、Caps Lock 英文、左右 Shift、聯想詞、Unicode／Big5 字碼、Big5 候選、個人詞庫與學習清除。依使用者要求，候選底部注音按鈕與頁次提示已移除。
 
 `src/` 使用上游 `shanjie.h` 與隔離於 `windows_core.h` 的候選方向擴充。TSF 編輯只能在 edit session 中執行；候選資料複製完成即釋放 ABI output。
 `upstream/shanjie` 是固定 commit 的 Git 子模組；`platform/` 包含 Windows 儲存、日期、唯讀 LM 映射及候選方向覆蓋層；`scripts/prepare-core.ps1` 組裝建置副本。

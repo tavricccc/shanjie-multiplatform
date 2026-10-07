@@ -24,6 +24,7 @@ public sealed partial class CandidateWindow : Window
     private string[] words = [];
     private int fontSize;
     private bool associated;
+    private double gridCellWidth, gridCellHeight;
     private readonly bool verification;
     public CandidateWindow(nint mapping, nint signal = 0)
     {
@@ -95,8 +96,23 @@ public sealed partial class CandidateWindow : Window
         double rowHeight = Math.Max(32, textSizes.Max(size => size.Height) + 4);
         double workWidth = (monitor.Work.Right - monitor.Work.Left) / scale;
         cell = Math.Min(cell, (workWidth - 10) / columns);
-        if (!vertical && TableList.ItemsPanelRoot is ItemsWrapGrid panel) { panel.ItemWidth = cell; panel.ItemHeight = rowHeight; }
-        int width = (int)Math.Ceiling((cell * columns + 10) * scale);
+        cell = Math.Ceiling(cell * scale) / scale;
+        if (!vertical && (gridCellWidth != cell || gridCellHeight != rowHeight))
+        {
+            gridCellWidth = cell; gridCellHeight = rowHeight;
+            var style = new Style(typeof(GridViewItem)) { BasedOn = (Style)Surface.Resources["CompactGridItem"] };
+            style.Setters.Add(new Setter(FrameworkElement.WidthProperty, cell));
+            style.Setters.Add(new Setter(FrameworkElement.HeightProperty, rowHeight));
+            TableList.ItemContainerStyle = style;
+        }
+        TableList.UpdateLayout();
+        if (!vertical && TableList.ItemsPanelRoot is ItemsWrapGrid panel)
+        {
+            panel.ItemWidth = cell; panel.ItemHeight = rowHeight;
+            // Keep the TSF nine-column contract independent of ScrollViewer's viewport rounding.
+            panel.Width = cell * columns + 1;
+        }
+        int width = (int)Math.Ceiling((cell * columns + 12) * scale);
         int height = (int)Math.Ceiling(((words.Length + columns - 1) / columns * rowHeight + 10) * scale);
         height = Math.Min(height, monitor.Work.Bottom - monitor.Work.Top);
         int x = Math.Clamp(next.Left, monitor.Work.Left, monitor.Work.Right - width);

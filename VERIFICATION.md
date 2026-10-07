@@ -4,6 +4,12 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+後續密度調整：依使用者照片移除注音按鈕與頁次 footer、取消 item container 預設留白、依實際文字測量候選大小、收緊五頁設定並把開關排成同列。驗證使用畫面外的真實 WinUI capture，包含 14／18／32 DIP 字級、長詞、聯想與三種排列；沒有改候選核心與方向鍵政策。
+
+密度複查發現 GridView 預設 item 尺寸仍沿用短詞配置，14 DIP 四字詞出現省略；已讓 container 與 ItemsWrapGrid 使用同一計算寬高並完成 layout 後更新 panel。候選仍保留九欄的上游格狀數字與方向鍵契約。
+
+另外以明確 panel 寬度隔離 ScrollViewer viewport 的像素取整，淺／深色最小字級圖均完整顯示同列 1–9。獨立複查 verdict 為 accept／ship。x64／x86 host harness、profile 保存與離屏 capture 通過；新版 ZIP 的 UI SHA-256 與最後建置一致。
+
 - x64／x86 TSF DLL 與 self-contained x64 WinUI 3 host 編譯成功；此次沒有更新系統安裝。
 - 核心測試共 112 個通過（lib 33、engine 32、learning 45、replay 2），標準／倚天各回放 302 句。Unix／macOS 排除與 global_eps_table 界線沿用下文。
 - 背景 TSF harness 通過。此回測量 Private Bytes 74.8 MiB、Working Set 164.3 MiB，僅代表該測試程序，未計入 WinUI host 或真實多 App 總量。

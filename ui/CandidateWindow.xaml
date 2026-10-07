@@ -13,8 +13,8 @@
         </Border.Resources>
         <Grid>
             <ListView x:Name="VerticalList" Padding="0" ItemContainerStyle="{StaticResource CompactListItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" IsTabStop="False"/>
-            <GridView x:Name="TableList" Padding="0" ItemContainerStyle="{StaticResource CompactGridItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" Visibility="Collapsed" IsTabStop="False">
-                <GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="9"/></ItemsPanelTemplate></GridView.ItemsPanel>
+            <GridView x:Name="TableList" Padding="0" ScrollViewer.VerticalScrollBarVisibility="Hidden" ScrollViewer.HorizontalScrollBarVisibility="Hidden" ItemContainerStyle="{StaticResource CompactGridItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" Visibility="Collapsed" IsTabStop="False">
+                <GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Margin="0" Orientation="Horizontal" MaximumRowsOrColumns="9"/></ItemsPanelTemplate></GridView.ItemsPanel>
             </GridView>
         </Grid>
     </Border>

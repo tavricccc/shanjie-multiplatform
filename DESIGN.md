@@ -5,9 +5,9 @@ typography:
   chinese:
     fontFamily: Microsoft JhengHei UI
 spacing:
-  form: 20 DIP
-  section: 24 DIP
-  content: 32 DIP
+  form: 12 DIP
+  section: 12 DIP
+  content: 20 DIP
 ---
 
 # Design System: 善解 Windows
@@ -26,7 +26,9 @@ spacing:
 
 ## Layout
 
-設定初始 960×760 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 32,24,32,32、MaxWidth 800、表單間距 20 DIP。內容可捲動；InfoBar 和儲存／取消列固定在內容外。候選大小由文字與工作區計算，顯示位置遵循 caret，底部不足時往上放。
+設定初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動；InfoBar 和儲存／取消列固定在內容外。候選外邊距 4 DIP，列高至少 32 DIP，依實際字體測量增高；直列最低寬 96 DIP、橫列／格狀每格最低 52 DIP，長詞依實際文字測量加寬，受工作區限制。候選沒有底部注音按鈕或頁次提示，底部不足時向上放。
+
+開關採同列左標籤、右原生 ToggleSwitch，MinHeight 40 DIP，標籤可換行並提供 AutomationProperties.Name。參考微軟[官方候選圖片](https://support.microsoft.com/en-us/windows/media/conversion-candidate-window-1.png)的緊密數字與字詞列；圖片是視覺參考，32 DIP 等數值是本專案設計決策，並非微軟公布規格。
 
 ## Elevation & Depth
 
@@ -38,7 +40,7 @@ spacing:
 
 ## Components
 
-NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選使用 ListView／GridView，原生 Button 提供注音原文。
+NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選使用 ListView／GridView，item container 的 padding／margin 歸零，避免原生預設再疊加一層留白。
 
 ## Do's and Don'ts
 
