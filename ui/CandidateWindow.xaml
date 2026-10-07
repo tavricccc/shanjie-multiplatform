@@ -8,42 +8,54 @@
                     <SolidColorBrush x:Key="CandidateBorder" Color="#D8DADD"/>
                     <SolidColorBrush x:Key="CandidateForeground" Color="#24272B"/>
                     <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColorDark1}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorDark1}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorDark1}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColorDark1}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorDark1}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorDark1}"/>
                     <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="White"/>
-                    <SolidColorBrush x:Key="GridViewItemForegroundSelected" Color="White"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="CandidateBackground" Color="#24272B"/>
                     <SolidColorBrush x:Key="CandidateBorder" Color="#4A4F55"/>
                     <SolidColorBrush x:Key="CandidateForeground" Color="#F5F6F7"/>
                     <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColorLight2}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorLight2}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorLight2}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColorLight2}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorLight2}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorLight2}"/>
                     <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="Black"/>
-                    <SolidColorBrush x:Key="GridViewItemForegroundSelected" Color="Black"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="CandidateBackground" Color="{ThemeResource SystemColorWindowColor}"/>
                     <SolidColorBrush x:Key="CandidateBorder" Color="{ThemeResource SystemColorWindowTextColor}"/>
                     <SolidColorBrush x:Key="CandidateForeground" Color="{ThemeResource SystemColorWindowTextColor}"/>
                     <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemColorHighlightColor}"/>
                     <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="{ThemeResource SystemColorHighlightTextColor}"/>
-                    <SolidColorBrush x:Key="GridViewItemForegroundSelected" Color="{ThemeResource SystemColorHighlightTextColor}"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
-            <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="Transparent"/>
+            <ControlTemplate x:Key="StaticCandidateItem" TargetType="ContentControl">
+                <Border x:Name="CandidateChrome" Background="Transparent" CornerRadius="4">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal"/>
+                            <VisualState x:Name="PointerOver"/>
+                            <VisualState x:Name="Pressed"/>
+                            <VisualState x:Name="Disabled"/>
+                            <VisualState x:Name="Selected">
+                                <VisualState.Setters>
+                                    <Setter Target="CandidateChrome.Background" Value="{ThemeResource ListViewItemBackgroundSelected}"/>
+                                    <Setter Target="CandidateContent.Foreground" Value="{ThemeResource ListViewItemForegroundSelected}"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="PointerOverSelected">
+                                <VisualState.Setters>
+                                    <Setter Target="CandidateChrome.Background" Value="{ThemeResource ListViewItemBackgroundSelected}"/>
+                                    <Setter Target="CandidateContent.Foreground" Value="{ThemeResource ListViewItemForegroundSelected}"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="PressedSelected">
+                                <VisualState.Setters>
+                                    <Setter Target="CandidateChrome.Background" Value="{ThemeResource ListViewItemBackgroundSelected}"/>
+                                    <Setter Target="CandidateContent.Foreground" Value="{ThemeResource ListViewItemForegroundSelected}"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                    <ContentPresenter x:Name="CandidateContent" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Foreground="{TemplateBinding Foreground}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="Center"/>
+                </Border>
+            </ControlTemplate>
             <DataTemplate x:Key="CandidateTemplate" x:DataType="local:CandidateItem">
                 <Grid Padding="4" ColumnSpacing="4" MinHeight="32">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -51,14 +63,17 @@
                     <TextBlock FontFamily="Microsoft JhengHei UI" Grid.Column="1" Text="{x:Bind Text, Mode=OneWay}" FontSize="{x:Bind FontSize, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 </Grid>
             </DataTemplate>
-            <Style x:Key="CompactListItem" TargetType="ListViewItem"><Setter Property="CornerRadius" Value="4"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
-            <Style x:Key="CompactGridItem" TargetType="GridViewItem"><Setter Property="CornerRadius" Value="4"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="MinWidth" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
+            <Style x:Key="CompactListItem" TargetType="ListViewItem"><Setter Property="Template" Value="{StaticResource StaticCandidateItem}"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
+            <Style x:Key="CompactGridItem" TargetType="GridViewItem"><Setter Property="Template" Value="{StaticResource StaticCandidateItem}"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="MinWidth" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
             </ResourceDictionary>
         </Grid.Resources>
         <Border x:Name="Surface" Background="{ThemeResource CandidateBackground}" BorderBrush="{ThemeResource CandidateBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6">
         <Grid>
-            <ListView x:Name="VerticalList" Foreground="{ThemeResource CandidateForeground}" Padding="0" ItemContainerStyle="{StaticResource CompactListItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" IsTabStop="False"/>
+            <ListView x:Name="VerticalList" Foreground="{ThemeResource CandidateForeground}" Padding="0" ItemContainerStyle="{StaticResource CompactListItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" IsTabStop="False">
+                <ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions>
+            </ListView>
             <GridView x:Name="TableList" Foreground="{ThemeResource CandidateForeground}" Padding="0" ScrollViewer.VerticalScrollBarVisibility="Hidden" ScrollViewer.HorizontalScrollBarVisibility="Hidden" ItemContainerStyle="{StaticResource CompactGridItem}" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" Visibility="Collapsed" IsTabStop="False">
+                <GridView.ItemContainerTransitions><TransitionCollection/></GridView.ItemContainerTransitions>
                 <GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Margin="0" Orientation="Horizontal" MaximumRowsOrColumns="9"/></ItemsPanelTemplate></GridView.ItemsPanel>
             </GridView>
         </Grid>

@@ -1,5 +1,6 @@
 #include "candidate_host.h"
 #include "identity.h"
+#include <dwmapi.h>
 #include <cassert>
 #include <cstdio>
 HINSTANCE module = nullptr;
@@ -38,6 +39,12 @@ int wmain(int argc,wchar_t** argv) {
         bool offscreen = wait([&] { RECT bounds{}; GetWindowRect(surface,&bounds); return bounds.right < -10000 && bounds.bottom < -10000; });
         if (!offscreen) { RECT bounds{}; GetWindowRect(surface,&bounds); std::fprintf(stderr,"UI bounds: %ld,%ld,%ld,%ld\n",bounds.left,bounds.top,bounds.right,bounds.bottom); }
         assert(offscreen);
+        BOOL nonClientRendering = TRUE;
+        assert(SUCCEEDED(DwmGetWindowAttribute(surface,DWMWA_NCRENDERING_ENABLED,&nonClientRendering,sizeof(nonClientRendering))) && !nonClientRendering);
+        RECT client{}, bounds{}; GetClientRect(surface,&client); GetWindowRect(surface,&bounds);
+        if (client.right != bounds.right - bounds.left || client.bottom != bounds.bottom - bounds.top)
+            std::fprintf(stderr,"Client %ldx%ld, window %ldx%ld, style %lx\n",client.right,client.bottom,bounds.right-bounds.left,bounds.bottom-bounds.top,GetWindowLongW(surface,GWL_STYLE));
+        assert(client.right == bounds.right - bounds.left && client.bottom == bounds.bottom - bounds.top);
         DWORD process = 0; GetWindowThreadProcessId(surface,&process); child = OpenProcess(SYNCHRONIZE,FALSE,process); assert(child);
         preferences.layout = CandidateLayout::Horizontal; presenter.publish(frame,preferences,caret,144,true);
         presenter.hide(); assert(wait([&] { return !IsWindowVisible(surface); }));
@@ -45,5 +52,5 @@ int wmain(int argc,wchar_t** argv) {
     }
     assert(WaitForSingleObject(child,5000) == WAIT_OBJECT_0); CloseHandle(child);
     DestroyWindow(callback); FreeLibrary(module);
-    std::puts("PASS: real WinUI host, inherited handle, no activation, hide/reopen and shutdown");
+    std::puts("PASS: real WinUI host, no native frame, inherited handle, no activation, hide/reopen and shutdown");
 }
