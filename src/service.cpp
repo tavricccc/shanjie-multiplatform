@@ -48,18 +48,26 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     ComPtr<ITfInputProcessorProfileMgr> profiles;
     TF_INPUTPROCESSORPROFILE active{};
     if (SUCCEEDED(CoCreateInstance(CLSID_TF_InputProcessorProfiles,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&profiles))) && SUCCEEDED(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD,&active)) && active.guidProfile == EtenProfile) layout = 1;
-    auto root = std::filesystem::path(path).parent_path().parent_path();
+    auto binaryRoot = std::filesystem::path(path).parent_path().parent_path();
+    auto root = binaryRoot;
     if (root.parent_path().filename() == L"versions") root = root.parent_path().parent_path();
-    if (!engine_.open(root / L"data",layout,preferences_.ranking,preferences_.rightAnchor,preferences_.learning)) { Deactivate(); return E_FAIL; }
+    if (preferences_.keyboard) layout = preferences_.keyboard == 2 ? 1 : 0;
+    engine_.setReadingCandidate(preferences_.readingCandidate);
+    if (!engine_.open(root / L"data",layout,preferences_.ranking,preferences_.rightAnchor,preferences_.learning,preferences_.big5,preferences_.dictionary)) { Deactivate(); return E_FAIL; }
+    if (preferences_.keyboard >= 3 && !pinyin_.load(root / L"data",preferences_.keyboard == 4)) { Deactivate(); return E_FAIL; }
     fullWidth_ = preferences_.initialFullWidth;
     setInputMode(preferences_.initialChinese);
     candidates_.Attach(new Candidates);
     candidates_->initialize(thread,preferences_,[this](unsigned index) {
         if (!context_) return;
+        auto revision = candidates_->revision();
         ComPtr<ITfContext> context = context_;
-        request(context.Get(),[this,context,index](TfEditCookie cookie) {
+        request(context.Get(),[this,context,index,revision](TfEditCookie cookie) {
+            if (!candidates_ || candidates_->revision() != revision || context_ != context) return S_FALSE;
             shanjie::Snapshot out;
-            if (special_.active()) out = special_.pick(index);
+            if (!state_.reading.empty() && index == state_.candidates.size()) { if (!engine_.commitReading(out)) return E_FAIL; }
+            else if (associated_.active()) out = associated_.pick(index);
+            else if (special_.active()) out = special_.pick(index);
             else if (!engine_.pick(index,out)) return E_FAIL;
             return apply(context.Get(),cookie,out);
         }, TF_ES_READWRITE | TF_ES_ASYNCDONTCARE);
@@ -71,7 +79,7 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     if (SUCCEEDED(hr)) hr = source->AdviseSink(IID_ITfThreadMgrEventSink,static_cast<ITfThreadMgrEventSink*>(this),&threadSink_);
     if (SUCCEEDED(hr) && SUCCEEDED(thread->QueryInterface(IID_PPV_ARGS(&languageBar_)))) {
         modeButton_.Attach(new ModeButton([this] { return compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE); },
-            [this] { return toggleMode(context_.Get()); },[root] { auto settings = root / L"ui" / L"Shanjie.UI.exe"; ShellExecuteW(nullptr,L"open",settings.c_str(),nullptr,root.c_str(),SW_SHOWNORMAL); }));
+            [this] { return toggleMode(context_.Get()); },[binaryRoot] { auto settings = binaryRoot / L"ui" / L"Shanjie.UI.exe"; ShellExecuteW(nullptr,L"open",settings.c_str(),nullptr,settings.parent_path().c_str(),SW_SHOWNORMAL); }));
         languageBar_->AddItem(modeButton_.Get());
     }
     if (FAILED(hr)) Deactivate();
@@ -117,6 +125,9 @@ void Service::cancel() {
     composition_.Reset(); context_.Reset(); if (candidates_) candidates_->close();
     shiftTap_ = shiftUsed_ = false;
     special_.clear();
+    associated_.clear();
+    pinyin_.clear();
+    rawReading_.clear();
     shanjie::Snapshot discarded; engine_.reset(true,discarded); state_ = {};
 }
 HRESULT Service::watch(ITfContext* context) {
@@ -155,17 +166,21 @@ bool Service::wants(ITfContext* context, WPARAM vk, LPARAM flags) {
     }
     if (!enabled(context)) return false;
     ShanjieKey key{}; if (!shanjie::translate(vk,flags,key)) return false;
+    if (associated_.handles(key)) return true;
+    if (pinyin_.handles(key)) return true;
     if (special_.active() || special_.starts(key,preferences_)) return true;
     if (!state_.preedit.empty()) return true;
-    return key.kind == 1 && (!(key.modifiers & 30) || (preferences_.capsLockEnglish && key.modifiers == 16) || (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)));
+    return key.kind == 1 && (!(key.modifiers & 30) || (preferences_.capsLockEnglish && (key.modifiers & 16) && !(key.modifiers & 14)) || (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)));
 }
 HRESULT Service::toggleMode(ITfContext*) {
+    associated_.clear(); if (candidates_) candidates_->close();
     bool chinese = !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE);
     // Chromium does not necessarily grant a synchronous write lock on key-up.
     // Empty compositions need no document edit; pending text commits asynchronously.
     if (!composition_) return setInputMode(chinese);
     ComPtr<ITfContext> current = context_;
     return request(current.Get(),[this,current,chinese](TfEditCookie cookie) {
+        special_.clear(); pinyin_.clear(); rawReading_.clear();
         shanjie::Snapshot out;
         if (!engine_.reset(false,out)) return E_FAIL;
         HRESULT hr = apply(current.Get(),cookie,out);
@@ -199,6 +214,7 @@ HRESULT Service::apply(ITfContext* context, TfEditCookie cookie, const shanjie::
     }
     if (!out.handled && out.commit.empty() && out.preedit.empty()) return S_OK;
     auto text = out.commit + out.preedit;
+    if (fullWidth_) for (size_t i = 0; i < out.commit.size(); ++i) if (text[i] >= L' ' && text[i] <= L'~') text[i] = text[i] == L' ' ? L'\u3000' : (wchar_t)(text[i] + 0xfee0);
     HRESULT hr = range->SetText(cookie,0,text.data(),(LONG)text.size()); if (FAILED(hr)) return hr;
     if (!out.commit.empty()) {
         LONG moved = 0; hr = range->ShiftStart(cookie,(LONG)out.commit.size(),&moved,nullptr); if (FAILED(hr)) return hr;
@@ -216,7 +232,14 @@ HRESULT Service::apply(ITfContext* context, TfEditCookie cookie, const shanjie::
     TF_SELECTION selection{caret.Get(),{TF_AE_NONE,FALSE}};
     hr = context->SetSelection(cookie,1,&selection); if (FAILED(hr)) return hr;
     state_ = out; context_ = context;
-    candidates_->update(context,cookie,caret.Get(),out);
+    if (preferences_.associations && out.preedit.empty() && !out.commit.empty() && out.commit.back() >= 0x4e00 && out.commit.back() <= 0x9fff) {
+        auto prefix = out.commit.substr(out.commit.size() > 1 ? out.commit.size()-2 : 0);
+        shanjie::Snapshot suggestions;
+        if (!engine_.associate(prefix,suggestions)) return E_FAIL;
+        if (suggestions.candidates.empty() && prefix.size() > 1 && !engine_.associate(prefix.substr(1),suggestions)) return E_FAIL;
+        associated_.open(suggestions); state_ = associated_.view();
+    }
+    candidates_->update(context,cookie,caret.Get(),state_);
     return S_OK;
 }
 HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* eaten) {
@@ -228,14 +251,30 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
     }
     if (preferences_.ctrlSpaceToggle && vk == VK_SPACE && (GetKeyState(VK_CONTROL) & 0x8000)
         && !(GetKeyState(VK_SHIFT) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
+        if (flags & (1L << 30)) { *eaten = TRUE; return S_OK; }
         HRESULT hr = toggleMode(context); *eaten = SUCCEEDED(hr); return hr;
     }
     if (preferences_.widthToggle && vk == VK_SPACE && (GetKeyState(VK_SHIFT) & 0x8000)
         && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
+        if (flags & (1L << 30)) { *eaten = TRUE; return S_OK; }
         fullWidth_ = !fullWidth_; setInputMode(compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE)); *eaten = TRUE; return S_OK;
     }
     if (FAILED(watch(context))) return S_OK;
     ShanjieKey key{}; shanjie::translate(vk,flags,key);
+    if (!preferences_.escapeClears && key.kind == 6 && state_.candidates.empty()) { *eaten = TRUE; return S_OK; }
+    if (associated_.handles(key)) {
+        HRESULT hr = request(context,[this,context,key](TfEditCookie cookie) { return apply(context,cookie,associated_.key(key)); },TF_ES_SYNC | TF_ES_READWRITE);
+        *eaten = SUCCEEDED(hr); return S_OK;
+    }
+    if (associated_.active()) { associated_.clear(); state_.candidates.clear(); candidates_->close(); }
+    if (pinyin_.handles(key)) {
+        HRESULT hr = request(context,[this,context,key](TfEditCookie cookie) {
+            shanjie::Snapshot out;
+            if (!pinyin_.key(key,engine_,state_,out,preferences_.alphanumeric)) return E_FAIL;
+            return apply(context,cookie,out);
+        },TF_ES_SYNC | TF_ES_READWRITE);
+        *eaten = SUCCEEDED(hr); return S_OK;
+    }
     if (special_.active() || special_.starts(key,preferences_)) {
         HRESULT hr = request(context,[this,context,key](TfEditCookie cookie) {
             shanjie::Snapshot pending;
@@ -252,13 +291,14 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
         BYTE keyboard[256]; GetKeyboardState(keyboard); WCHAR text[4]{};
         int length = ToUnicodeEx((UINT)vk,(UINT)((flags >> 16) & 255),keyboard,text,4,4,GetKeyboardLayout(0));
         if (length != 1 || text[0] < 0x20 || text[0] > 0x7e) return S_OK;
-        shanjie::Snapshot out; engine_.reset(false,out); out.handled = true;
-        out.commit += fullWidth_ ? (text[0] == L' ' ? L'\u3000' : wchar_t(text[0] + 0xfee0)) : text[0];
-        HRESULT hr = request(context,[this,context,out](TfEditCookie cookie) { return apply(context,cookie,out); },TF_ES_SYNC | TF_ES_READWRITE);
+        wchar_t character = text[0];
+        HRESULT hr = request(context,[this,context,character](TfEditCookie cookie) {
+            shanjie::Snapshot out; if (!engine_.reset(false,out)) return E_FAIL;
+            out.handled = true; out.commit += character; return apply(context,cookie,out);
+        },TF_ES_SYNC | TF_ES_READWRITE);
         *eaten = SUCCEEDED(hr); return S_OK;
     }
     bool handled = false;
-    if (!preferences_.escapeClears && key.kind == 6 && state_.candidates.empty()) { *eaten = TRUE; return S_OK; }
     if (!preferences_.spacePages && key.kind == 2 && !state_.candidates.empty()) { *eaten = TRUE; return S_OK; }
     bool bypassOpen = key.modifiers == 0 && state_.candidates.empty() && !state_.preedit.empty() && !shanjie::hasPendingReading(state_)
         && ((key.kind == 2 && preferences_.trigger == CandidateTrigger::Down) || (key.kind == 10 && preferences_.trigger == CandidateTrigger::Space));
@@ -284,7 +324,20 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
                 unsigned next = ((unsigned)std::max(0,out.selected) + 1) % (unsigned)out.candidates.size();
                 if (!engine_.pick(next,out)) return E_FAIL;
             }
-        } else if (!engine_.key(key,out)) return E_FAIL;
+        } else {
+            auto raw = rawReading_;
+            if (key.kind == 4 && !raw.empty()) raw.pop_back();
+            if (key.kind == 1 && key.modifiers == 0) raw += (char)key.ch;
+            else if (key.kind == 2 && key.modifiers == 0) raw += ' ';
+            if (!engine_.key(key,out)) {
+                if (!preferences_.alphanumeric || raw.empty() || !shanjie::hasPendingReading(state_)) return E_FAIL;
+                out.handled = true; out.commit = state_.preedit;
+                auto end = std::min<size_t>(state_.cursor,out.commit.size()), start = end;
+                while (start > 0 && ((out.commit[start-1] >= 0x3105 && out.commit[start-1] <= 0x312f) || out.commit[start-1] == L'ˊ' || out.commit[start-1] == L'ˇ' || out.commit[start-1] == L'ˋ' || out.commit[start-1] == L'˙')) --start;
+                out.commit.replace(start,end-start,shanjie::wide(raw.c_str()));
+            }
+            rawReading_ = shanjie::hasPendingReading(out) ? raw : std::string{};
+        }
         if (preferences_.layout == CandidateLayout::Grid && !out.candidates.empty() && out.columns == 0) {
             ShanjieKey expand{}; expand.kind = 10;
             if (!engine_.key(expand,out)) return E_FAIL;

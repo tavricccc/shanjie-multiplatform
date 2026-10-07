@@ -21,4 +21,20 @@ public static class ProfileStore
         File.WriteAllText(temporary, content.Replace("\r\n", "\n").Replace("\n", "\r\n"), new UTF8Encoding(false));
         File.Move(temporary, Path, true);
     }
+    public static void ClearLearning()
+    {
+        string folder = System.IO.Path.GetDirectoryName(Path)!;
+        using var gate = new Mutex(false, "Local\\ShanjieLearning-" + folder.ToUpperInvariant().Replace('\\', '_'));
+        bool acquired;
+        try { acquired = gate.WaitOne(TimeSpan.FromSeconds(2)); }
+        catch (AbandonedMutexException) { acquired = true; }
+        if (!acquired) throw new TimeoutException("其他程式正在更新選字學習，請稍後再試。");
+        try
+        {
+            Directory.CreateDirectory(folder);
+            foreach (string file in new[] { "learning.tsv", "learning.tsv.tmp", "learning.tsv.corrupt" }) File.Delete(System.IO.Path.Combine(folder, file));
+            File.WriteAllText(System.IO.Path.Combine(folder, "learning.epoch"), Guid.NewGuid().ToString());
+        }
+        finally { gate.ReleaseMutex(); }
+    }
 }

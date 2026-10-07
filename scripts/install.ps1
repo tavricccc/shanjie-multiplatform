@@ -10,11 +10,13 @@ foreach ($line in Get-Content (Join-Path $PSScriptRoot 'SHA256SUMS.txt')) {
 }
 $target = Join-Path $env:ProgramFiles 'Shanjie'
 New-Item -ItemType Directory -Path $target -Force | Out-Null
-$version = (Get-FileHash "$PSScriptRoot/x64/Shanjie.dll").Hash.Substring(0,8) + (Get-FileHash "$PSScriptRoot/x86/Shanjie.dll").Hash.Substring(0,8)
+$uiContract = @(Get-Content (Join-Path $PSScriptRoot 'SHA256SUMS.txt') | Where-Object { $_ -match '  ui[\\/]' }) -join "`n"
+$uiVersion = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($uiContract))).Substring(0,8)
+$version = (Get-FileHash "$PSScriptRoot/x64/Shanjie.dll").Hash.Substring(0,8) + (Get-FileHash "$PSScriptRoot/x86/Shanjie.dll").Hash.Substring(0,8) + $uiVersion
 $binaries = Join-Path $target "versions/$version"
 foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -File -Recurse) {
     $relative = [IO.Path]::GetRelativePath($PSScriptRoot,$file.FullName)
-    $destination = if ($relative -match '^(x64|x86)[\\/]') { Join-Path $binaries $relative } else { Join-Path $target $relative }
+    $destination = if ($relative -match '^(x64|x86|ui)[\\/]') { Join-Path $binaries $relative } else { Join-Path $target $relative }
     # Identical mapped data must not be overwritten while an application uses it.
     if ((Test-Path -LiteralPath $destination) -and (Get-FileHash -LiteralPath $destination).Hash -eq (Get-FileHash -LiteralPath $file.FullName).Hash) { continue }
     New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
@@ -30,4 +32,5 @@ foreach ($arch in @('x64','x86')) {
     }
 }
 & (Join-Path $target 'profiles.ps1')
+Set-Content (Join-Path $target 'ui-path.txt') "versions\$version\ui\Shanjie.UI.exe" -Encoding ascii
 Write-Host '已註冊善解。請登出再登入，於 Windows 輸入法清單選擇善解注音。'

@@ -18,7 +18,7 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString() + "\n" + string.Join("\n", error.Data.Keys.Cast<object>().Select(key => key + ": " + error.Data[key]))); }
             Exit();
         }
-        else if (arguments.Length == 3 && arguments[1] == "--candidates") window = new CandidateWindow(nint.Parse(arguments[2]));
+        else if (arguments.Length == 4 && arguments[1] == "--candidates") window = new CandidateWindow(nint.Parse(arguments[2]), nint.Parse(arguments[3]));
         else { window = new MainWindow(); window.Activate(); }
     }
 }

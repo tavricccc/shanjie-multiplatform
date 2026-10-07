@@ -13,7 +13,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new SizeInt32((int)(960 * scale), (int)(760 * scale)));
         Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
         Vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme(); };
-        Differences.Text = "標準／倚天、方向鍵選字、中英與全半形切換已接入。\n漢語／臺灣拼音、聯想詞、無效注音轉英數、使用者詞庫、IME 手寫／部首面板與舊版微軟相容模式仍需獨立引擎支援。";
+        Differences.Text = "支援標準／倚天、漢語／臺灣拼音、聯想詞、選字學習、個人詞庫與字碼輸入。拼音以 1–5 輸入聲調；不帶聲調時按 Enter，空白可分隔音節，連按兩次空白轉換。\n善解使用自己的詞庫與語言模型，因此候選順序與微軟注音不同。微軟舊版相容模式與 IME 手寫／部首辨識屬於微軟的引擎功能。";
     }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
         General.Visibility = tag == "general" ? Visibility.Visible : Visibility.Collapsed;
         Keys.Visibility = tag == "keys" ? Visibility.Visible : Visibility.Collapsed;
         Candidates.Visibility = tag == "candidates" ? Visibility.Visible : Visibility.Collapsed;
+        Dictionary.Visibility = tag == "dictionary" ? Visibility.Visible : Visibility.Collapsed;
         About.Visibility = tag == "about" ? Visibility.Visible : Visibility.Collapsed;
     }
     private void LoadPreset(object sender, SelectionChangedEventArgs args)
@@ -33,6 +34,14 @@ public sealed partial class MainWindow : Window
     }
     private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); Preset.SelectedIndex = 0; StatusBar.IsOpen = false; }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
+    private async void ClearLearning(object sender, RoutedEventArgs args)
+    {
+        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "清除選字學習？", Content = "會刪除本帳號已儲存的選字偏好，個人詞庫與設定會保留。", PrimaryButtonText = "清除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try { await Task.Run(Models.ProfileStore.ClearLearning); Vm.Status = "已清除選字學習。"; StatusBar.Severity = InfoBarSeverity.Success; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or TimeoutException) { Vm.Status = "無法清除學習：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        StatusBar.IsOpen = true;
+    }
     private void Save(object sender, RoutedEventArgs args)
     {
         try { Vm.Save(); StatusBar.Severity = InfoBarSeverity.Success; }

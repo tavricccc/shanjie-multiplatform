@@ -12,17 +12,19 @@ struct CandidatePacket {
     DWORD dpi, theme, fontSize, columns, shutdown;
     ULONGLONG callback;
     DWORD parent, reserved;
-    wchar_t words[81][128];
+    wchar_t words[82][128]; // Slot 81 is the optional reading action.
 };
 static_assert(offsetof(CandidatePacket,words) == 80);
 class CandidateHost {
-    HANDLE mapping_ = nullptr, process_ = nullptr;
+    HANDLE mapping_ = nullptr, event_ = nullptr, process_ = nullptr;
     CandidatePacket* packet_ = nullptr;
+    HWND hostWindow_ = nullptr;
 public:
     ~CandidateHost();
     bool start(HWND callback);
     void publish(const shanjie::Snapshot&, const Preferences&, const RECT&, UINT dpi, bool visible);
     void hide();
+    void ready(HWND window);
     LONG sequence() const { return packet_ ? packet_->sequence : 0; }
-    bool shown() const { return packet_ && packet_->visible && process_ && WaitForSingleObject(process_,0) == WAIT_TIMEOUT; }
+    bool shown() const { return packet_ && packet_->visible && process_ && WaitForSingleObject(process_,0) == WAIT_TIMEOUT && hostWindow_ && IsWindowVisible(hostWindow_); }
 };

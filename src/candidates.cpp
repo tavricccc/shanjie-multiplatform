@@ -16,19 +16,27 @@ void Candidates::initialize(ITfThreadMgr* thread, const Preferences& preferences
     thread->QueryInterface(IID_PPV_ARGS(&manager_)); preferences_ = preferences; pick_ = std::move(pick);
 }
 void Candidates::close() {
+    ++revision_;
     host_.hide();
     if (manager_ && id_ != TF_INVALID_UIELEMENTID) { manager_->EndUIElement(id_); id_ = TF_INVALID_UIELEMENTID; }
     document_.Reset(); state_ = {};
 }
 void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* range, const shanjie::Snapshot& state) {
     if (state.candidates.empty()) { close(); return; }
+    ++revision_;
     state_ = state; context->GetDocumentMgr(&document_);
     if (manager_ && id_ == TF_INVALID_UIELEMENTID) { BOOL show = TRUE; manager_->BeginUIElement(this,&show,&id_); native_ = show != FALSE; }
     if (manager_ && id_ != TF_INVALID_UIELEMENTID) manager_->UpdateUIElement(id_);
     if (!native_) { host_.hide(); return; }
     ComPtr<ITfContextView> view; BOOL clipped = FALSE; HWND owner = nullptr;
-    if (FAILED(context->GetActiveView(&view)) || FAILED(view->GetTextExt(cookie,range,&caret_,&clipped))) { Show(FALSE); return; }
+    if (FAILED(context->GetActiveView(&view)) || FAILED(view->GetTextExt(cookie,range,&caret_,&clipped)) || clipped) { Show(FALSE); return; }
     view->GetWnd(&owner); dpi_ = owner ? GetDpiForWindow(owner) : 96;
+    // WinUI runs in a per-monitor-aware process; legacy host apps may report virtualized coordinates.
+    if (owner && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner)) != DPI_AWARENESS_PER_MONITOR_AWARE) {
+        POINT start{caret_.left,caret_.top}, end{caret_.right,caret_.bottom};
+        if (!LogicalToPhysicalPointForPerMonitorDPI(owner,&start) || !LogicalToPhysicalPointForPerMonitorDPI(owner,&end)) { Show(FALSE); return; }
+        caret_ = {start.x,start.y,end.x,end.y};
+    }
     // Background TSF tests validate the UI-element contract without opening a desktop surface.
     if (GetEnvironmentVariableW(L"SHANJIE_HEADLESS",nullptr,0)) return;
     if (!window_) {
@@ -43,9 +51,10 @@ LRESULT Candidates::procedure(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (message == WM_NCCREATE) { self = (Candidates*)((CREATESTRUCTW*)lp)->lpCreateParams; SetWindowLongPtrW(window,GWLP_USERDATA,(LONG_PTR)self); }
     if (self && message == WM_APP + 42) {
         // Reject a click from a frame that was replaced or closed before the edit session.
-        if ((LONG)lp == self->host_.sequence() && wp < self->state_.candidates.size() && self->host_.shown()) self->pick_((unsigned)wp);
+        if ((LONG)lp == self->host_.sequence() && (wp < self->state_.candidates.size() || (wp == self->state_.candidates.size() && !self->state_.reading.empty())) && self->host_.shown()) self->pick_((unsigned)wp);
         return 0;
     }
+    if (self && message == WM_APP + 43) { self->host_.ready((HWND)wp); return 0; }
     return DefWindowProcW(window,message,wp,lp);
 }
 HRESULT Candidates::GetDescription(BSTR* out) { *out = SysAllocString(L"善解候選"); return *out ? S_OK : E_OUTOFMEMORY; }
@@ -60,6 +69,6 @@ HRESULT Candidates::GetString(UINT index, BSTR* out) { if (index >= state_.candi
 HRESULT Candidates::GetPageIndex(UINT* out, UINT size, UINT* count) { *count = ((UINT)state_.candidates.size() + 8) / 9; for (UINT i = 0; i < std::min(size,*count); ++i) out[i] = i * 9; return size < *count ? S_FALSE : S_OK; }
 HRESULT Candidates::SetPageIndex(UINT*, UINT) { return E_NOTIMPL; }
 HRESULT Candidates::GetCurrentPage(UINT* out) { *out = state_.selected < 0 ? 0 : (UINT)state_.selected / 9; return S_OK; }
-HRESULT Candidates::SetSelection(UINT index) { if (index >= state_.candidates.size()) return E_INVALIDARG; state_.selected = (int)index; host_.publish(state_,preferences_,caret_,dpi_,native_); return S_OK; }
+HRESULT Candidates::SetSelection(UINT index) { if (index >= state_.candidates.size()) return E_INVALIDARG; ++revision_; state_.selected = (int)index; host_.publish(state_,preferences_,caret_,dpi_,native_); return S_OK; }
 HRESULT Candidates::Finalize() { if (state_.selected >= 0) pick_((unsigned)state_.selected); return S_OK; }
 HRESULT Candidates::Abort() { close(); return S_OK; }

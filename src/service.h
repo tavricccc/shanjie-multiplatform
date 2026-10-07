@@ -5,6 +5,8 @@
 #include "preferences.h"
 #include "mode_button.h"
 #include "special_input.h"
+#include "associated_candidates.h"
+#include "pinyin_input.h"
 class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     public ITfCompositionSink, public ITfThreadMgrEventSink, public ITfTextLayoutSink, public ITfTextEditSink {
     long refs_ = 1;
@@ -20,6 +22,9 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     Microsoft::WRL::ComPtr<ITfLangBarItemMgr> languageBar_;
     shanjie::Engine engine_;
     SpecialInput special_;
+    AssociatedCandidates associated_;
+    PinyinInput pinyin_;
+    std::string rawReading_;
     shanjie::Snapshot state_;
     Preferences preferences_;
     bool ending_ = false;

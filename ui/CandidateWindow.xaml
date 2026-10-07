@@ -10,12 +10,13 @@
             </DataTemplate>
         </Border.Resources>
         <Grid RowSpacing="8">
-            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <ListView x:Name="VerticalList" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" IsTabStop="False"/>
             <GridView x:Name="TableList" ItemTemplate="{StaticResource CandidateTemplate}" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="Pick" Visibility="Collapsed" IsTabStop="False">
                 <GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="9"/></ItemsPanelTemplate></GridView.ItemsPanel>
             </GridView>
-            <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="PageStatus" Grid.Row="1" Margin="8,0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <Button x:Name="ReadingAction" Grid.Row="1" Click="PickReading" Visibility="Collapsed" HorizontalAlignment="Stretch"><TextBlock x:Name="ReadingText" FontFamily="Microsoft JhengHei UI" TextTrimming="CharacterEllipsis"/></Button>
+            <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="PageStatus" Grid.Row="2" Margin="8,0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
         </Grid>
     </Border>
 </Window>

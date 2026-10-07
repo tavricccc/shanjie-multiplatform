@@ -44,10 +44,11 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     New-Item -ItemType Directory -Path "$profileRoot/Shanjie" -Force | Out-Null
     Copy-Item "profiles/$Interaction.ini" "$profileRoot/Shanjie/profile.ini" -Force
     $previousLocalAppData = $env:LOCALAPPDATA
+    $previousHeadless = $env:SHANJIE_HEADLESS
     try {
         $env:LOCALAPPDATA = $profileRoot
-        $env:SHANJIE_HEADLESS = '1'
+        $env:SHANJIE_HEADLESS = if ($Visual) { $null } else { '1' }
         & ./build/tsf-smoke.exe @arguments
-    } finally { $env:LOCALAPPDATA = $previousLocalAppData; Remove-Item Env:SHANJIE_HEADLESS }
+    } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
 } finally { Pop-Location }

@@ -19,4 +19,6 @@ internal static class Native
     [DllImport("kernel32.dll")] internal static extern bool CloseHandle(nint handle);
     [DllImport("kernel32.dll")] internal static extern nint OpenProcess(uint access, bool inherit, uint process);
     [DllImport("kernel32.dll")] internal static extern uint WaitForSingleObject(nint handle, uint milliseconds);
+    [DllImport("kernel32.dll")] internal static extern uint WaitForMultipleObjects(uint count, nint[] handles, bool all, uint milliseconds);
+    [DllImport("kernel32.dll")] internal static extern bool SetEvent(nint handle);
 }

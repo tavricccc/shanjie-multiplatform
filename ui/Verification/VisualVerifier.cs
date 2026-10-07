@@ -32,7 +32,7 @@ internal static class VisualVerifier
         foreach (int theme in new[] { 1, 2 })
         {
             settings.Vm.Theme = theme;
-            for (int page = 0; page < 4; page++)
+            for (int page = 0; page < 5; page++)
             {
                 settings.ShowSection(page); await Task.Delay(120);
                 await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-{page}.png"));
@@ -45,7 +45,7 @@ internal static class VisualVerifier
             foreach (int layout in new[] { 0, 1, 2 })
             {
                 var items = layout == 2 ? words.Concat(words).ToArray() : words;
-                candidates.ShowFrame(new(2, true, layout, 1, 0, 38, -12000, -12000, -12000, 96, theme, 18, layout == 2 ? 9 : 0, false, 0, items));
+                candidates.ShowFrame(new(2, true, layout, 1, 0, 38, -12000, -12000, -12000, 96, theme, 18, layout == 2 ? 9 : 0, false, 0, items, false, "ㄋㄧˇ"));
                 // Render() positions at a real monitor; move off-screen immediately, without activation.
                 candidates.AppWindow.Move(new PointInt32(-12000, -12000));
                 await Task.Delay(150);

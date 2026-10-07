@@ -17,6 +17,7 @@ class Candidates final : public ITfCandidateListUIElementBehavior {
     CandidateHost host_;
     RECT caret_{};
     UINT dpi_ = 96;
+    unsigned long long revision_ = 0;
     std::function<void(unsigned)> pick_;
     static LRESULT CALLBACK procedure(HWND, UINT, WPARAM, LPARAM);
 public:
@@ -25,6 +26,7 @@ public:
     void initialize(ITfThreadMgr*, const Preferences&, std::function<void(unsigned)>);
     void update(ITfContext*, TfEditCookie, ITfRange*, const shanjie::Snapshot&);
     void close();
+    unsigned long long revision() const { return revision_; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override;
     ULONG STDMETHODCALLTYPE AddRef() override;
     ULONG STDMETHODCALLTYPE Release() override;

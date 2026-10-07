@@ -15,6 +15,8 @@ try {
     & "$PSScriptRoot/build.ps1" -Architecture x64
     & "$PSScriptRoot/build.ps1" -Architecture x86
     $output = Join-Path $root 'dist/package'
+    if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
+    if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     # Packaging conversion always runs in a native x64 process, including x86 packages.
     cargo run --release --manifest-path build/core/Cargo.toml --bin map-model -- $model "$root/dist/data/bigram.winmap"

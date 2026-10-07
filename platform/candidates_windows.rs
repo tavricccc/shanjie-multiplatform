@@ -30,7 +30,7 @@ impl Engine {
             let mut seen = HashSet::new();
             let list = std::iter::once(typed).chain(alternatives)
                 .filter(|word| seen.insert(word.clone())).map(|word| (word, 1)).collect();
-            self.cands = Some(Cands::new(list));
+            self.cands = self.make_candidates(list);
             return;
         }
         let available = (start..self.syls.len()).take_while(|&i| !self.is_punct(i)).count();
@@ -41,7 +41,7 @@ impl Engine {
                 if seen.insert(word) { list.push((word.to_string(), length)); }
             }
         }
-        if !list.is_empty() { self.cands = Some(Cands::new(list)); }
+        self.cands = self.make_candidates(list);
     }
 }
 

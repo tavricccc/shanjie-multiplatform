@@ -8,6 +8,7 @@
                 <NavigationViewItem Content="一般" Icon="Home" Tag="general"/>
                 <NavigationViewItem Content="按鍵" Icon="Keyboard" Tag="keys"/>
                 <NavigationViewItem Content="選字" Icon="Bullets" Tag="candidates"/>
+                <NavigationViewItem Content="詞庫與學習" Icon="Library" Tag="dictionary"/>
                 <NavigationViewItem Content="關於與相容性" Icon="Help" Tag="about"/>
             </NavigationView.MenuItems>
             <ScrollViewer>
@@ -21,9 +22,19 @@
                         <ToggleSwitch Header="預設輸入模式" OnContent="中文" OffContent="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/>
                         <ToggleSwitch Header="預設字元寬度" OnContent="全形" OffContent="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/>
                         <ToggleSwitch Header="Caps Lock 輸入英文" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
+                        <ComboBox Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows 標準／倚天 profile"/><ComboBoxItem Content="標準注音"/><ComboBoxItem Content="倚天注音"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
+                        <ToggleSwitch Header="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <ToggleSwitch Header="Esc 清除未提交的組字" IsOn="{x:Bind Vm.EscapeClears, Mode=TwoWay}"/>
-                        <ToggleSwitch Header="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="Dictionary" Spacing="20" Visibility="Collapsed">
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="詞庫與學習" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <ToggleSwitch Header="提示聯想詞" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="提交文字後提示後續詞；用 Shift＋數字、滑鼠或 Enter 選取。聯想詞取自本機詞庫。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ToggleSwitch Header="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
+                        <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>
+                        <TextBox Header="個人詞庫" AcceptsReturn="True" MinHeight="220" MaxHeight="380" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="每行填「注音 字詞」，多字注音以 - 分隔。例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後重新啟用輸入法即可載入。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
                     <StackPanel x:Name="Keys" Spacing="20" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="按鍵" Style="{ThemeResource TitleTextBlockStyle}"/>
@@ -44,6 +55,8 @@
                         <ComboBox Header="候選排列" SelectedIndex="{x:Bind Vm.Layout, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="直列"/><ComboBoxItem Content="橫列"/><ComboBoxItem Content="格狀"/></ComboBox>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字或 Enter 確認。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ToggleSwitch Header="空白鍵換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
+                        <ToggleSwitch Header="候選只顯示 Big5 字元集" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnContent="Big5" OffContent="Unicode"/>
+                        <ToggleSwitch Header="在候選框提供注音原文" IsOn="{x:Bind Vm.ReadingCandidate, Mode=TwoWay}"/>
                         <NumberBox Header="候選文字大小" Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/>
                         <ComboBox Header="介面主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
                     </StackPanel>

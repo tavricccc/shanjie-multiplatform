@@ -17,7 +17,7 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','mode_button','candidate_host','candidates','special_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $sources = @('engine','key_policy','preferences','mode_button','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
     $library = Join-Path $root "build/core/target/$target/release/core.lib"
     $command = @"
 @echo off
@@ -31,11 +31,16 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     & cmd.exe /d /c $cmdFile
     if ($LASTEXITCODE) { throw 'TSF DLL build failed.' }
     if ($Architecture -eq 'x64') {
+        $uiOutput = [IO.Path]::GetFullPath((Join-Path $root 'dist/ui'))
+        if ($uiOutput -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','ui')) { throw 'Unexpected UI output path.' }
+        if (Test-Path -LiteralPath $uiOutput) { Remove-Item -LiteralPath $uiOutput -Recurse -Force }
         dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o "$root/dist/ui" --nologo
         if ($LASTEXITCODE) { throw 'WinUI host build failed.' }
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
+    Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
     Copy-Item "$root/upstream/shanjie/LICENSE" "$root/dist/LICENSES" -Force
     Copy-Item "$root/upstream/shanjie/LICENSES/*" "$root/dist/LICENSES" -Force
+    Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
 } finally { Pop-Location }
