@@ -26,7 +26,7 @@
 | Shift／Ctrl＋空白中英切換、全半形、系統模式按鈕 | `src/service.cpp`、`src/mode_button.*` | 否 |
 | TSF 組字、提交、游標、排版通知、外部選取變更同步 | `src/service.*` | 否 |
 | 候選直列、橫列、格狀、滑鼠點選與 DPI 定位 | `src/candidates.*` | 否 |
-| 個人 INI 讀寫與原生設定窗 | `src/preferences.*`、`src/settings.cpp` | 否 |
+| 個人 INI 讀取與 WinUI 設定窗 | `src/preferences.*`、`ui/Models/`、`ui/ViewModels/`、`ui/MainWindow.*` | 否 |
 | 註冊、套用輸入法清單、版本目錄安裝與乾淨移除 | `scripts/install.ps1`、`profiles.ps1`、`uninstall.ps1` | 否 |
 
 `src/dll.cpp` 的 category 註冊包含 `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`，讓 Windows 將模式按鈕納入系統匣。這是 Windows 註冊差異，不是 Rust 核心修改。
@@ -34,6 +34,10 @@
 上游 `Chat`／`Formal` 是既有 LM 權重模式。Windows 設定窗只是呼叫上游 `shanjie_engine_set_profile`，沒有新增或修改其 scoring 權重。詞庫、beam decoder、bigram scorer 與詞頻資料不因操作 profile 改寫。
 
 ## 設定檔能改什麼
+
+2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
+
+`src/pinyin_input.*`、`special_input.*`、`associated_candidates.*` 處理 Windows 拼音、符號／字碼與聯想操作；`src/engine.*` 串行化選字學習及 epoch。實際 WinUI presentation 位於 `ui/`，`src/candidate_host.*` 用匿名 mapping/event 橋接兩架構 DLL。完整 schema 2 範本與差異見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 

@@ -1,6 +1,19 @@
 # Windows 移植驗證紀錄
 
-日期：2026-10-06。上游 pin：`a96f5c553f6ffcf9ac23670363451c49c9faf138`。
+最新日期：2026-10-07。上游 pin：`a96f5c553f6ffcf9ac23670363451c49c9faf138`。
+
+## 2026-10-07 WinUI 3 版本
+
+- x64／x86 TSF DLL 與 self-contained x64 WinUI 3 host 編譯成功；此次沒有更新系統安裝。
+- 核心測試共 112 個通過（lib 33、engine 32、learning 45、replay 2），標準／倚天各回放 302 句。Unix／macOS 排除與 global_eps_table 界線沿用下文。
+- 背景 TSF harness 通過。此回測量 Private Bytes 74.8 MiB、Working Set 164.3 MiB，僅代表該測試程序，未計入 WinUI host 或真實多 App 總量。
+- `verify-interaction.ps1`：排列與按鍵政策分離、Unicode／Big5／符號、個人詞庫、聯想詞、漢語／臺灣拼音、交錯引擎學習、注音提交與 epoch 清除通過。測試使用隔離的個人資料夾。
+- `verify-ui.ps1`：x64／x86 實際啟動 WinUI host、繼承 handle、NOACTIVATE、隱藏／重開、退出通過；真實 XAML 離屏 capture 包含淺／深色五頁、三種候選排列、儲存成功／錯誤、善解操作說明。
+- 獨立 impeccable 審查找到固定儲存列的回饋可見性、profile 說明及維護文件三處問題，已統一修正。Capture 位於 `build/ui-review-final/`。
+
+這些是背景整合與離屏視覺驗證，不代表新版本已在記事本、Chrome、Office、讀屏、高對比、多螢幕 DPI、App 容器通過日常驗收。下文的安裝／記事本記錄只適用於 10 月 6 日的舊 Win32 介面版本。
+
+## 2026-10-06 舊版本紀錄
 
 ## 已驗證
 
@@ -35,7 +48,7 @@ TSF harness 的文字儲存是記憶體中的 ITextStoreACP，TSF manager 和 co
 
 已在本機完成管理員安裝；核對 64 位元與 32 位元 COM DLL 路徑、兩個 TSF profile 註冊與全部安裝檔案 SHA-256。Microsoft Store 版 PowerShell 7.6.6 x64 已確認可用。使用者輸入法清單包含善解的兩個 profile，保留原本順序與既有項目；真實 App 驗證限於上述記事本操作。
 
-學習 backend 測試通過不代表多程序學習可以啟用；frontend 仍維持學習關閉。
+上述舊版本保持學習關閉。2026-10-07 已加入 Windows 多程序協調與可選學習功能，驗證範圍見本頁最新紀錄。
 
 本次完成可建置、可打包、已做背景整合驗證的開發版。日常可用與正式發佈仍需上述實際系統驗收。
 

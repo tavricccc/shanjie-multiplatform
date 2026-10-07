@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-07T00:00:00+08:00",
+  "title": "Design System: 善解 Windows",
+  "extensions": {},
+  "components": [],
+  "narrative": {
+    "northStar": "Windows 原生 WinUI 3",
+    "overview": "設定完成草稿編輯與儲存；候選讓位給文件輸入。",
+    "keyCharacteristics": ["系統主題與 accent", "原生控制項", "固定儲存回饋", "候選不取得焦點"],
+    "rules": [],
+    "dos": ["使用原生 XAML ThemeResource", "維持候選 NOACTIVATE"],
+    "donts": ["不以 HTML/CSS snippet 假冒 WinUI 控制項"]
+  }
+}

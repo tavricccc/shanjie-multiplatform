@@ -1,10 +1,51 @@
-# Windows 原生候選窗
+---
+name: 善解 Windows
+description: WinUI 3 原生設定與不搶焦點的注音候選
+typography:
+  chinese:
+    fontFamily: Microsoft JhengHei UI
+spacing:
+  form: 20 DIP
+  section: 24 DIP
+  content: 32 DIP
+---
 
-操作模式：Operate。使用者在各種應用程式輸入文字，候選介面應讓位給正在編輯的文件。
+# Design System: 善解 Windows
 
-遵循使用者選定的 Windows 原生方向。色彩來自 COLOR_WINDOW、COLOR_WINDOWTEXT、COLOR_HIGHLIGHT、COLOR_HIGHLIGHTTEXT，保留系統高對比設定。
-Microsoft JhengHei UI 16 DIP，行高 36 DIP，內距 8 DIP。選取以系統反白呈現，不使用透明玻璃與動畫。
-Windows profile 預設直列最多 9 個候選；→／Tab 展開為每列 9 個的格狀候選。Shanjie profile 保留上游橫列。使用數字、方向鍵與滑鼠操作。視窗不取得焦點，靠近組字游標，顯示器底部空間不足時移至游標上方。
-個人設定可直接選擇直列、橫列或預設格狀顯示。原生設定窗使用 Windows 下拉選單、核取方塊與儲存／取消按鈕；預設選擇只改畫面中的草稿，儲存才寫入個人 INI。
-依所在應用程式視窗 DPI 縮放，候選文字過長以省略號表示，完整文字仍由 TSF UI element 提供。
-已看到原生候選窗並保存截圖；排版通知後重新定位以處理 TS_E_NOLAYOUT。觸控鍵盤遮擋、跨 App 焦點與實際多 DPI 仍須驗證。
+## Overview
+
+使用者指定 Windows 原生 WinUI 3。設定與候選採 Operate 模式，以可辨讀、系統一致與文件輸入連續性為主。方向契約見 WINUI-MIGRATION.md。
+
+## Colors
+
+色彩以 XAML ThemeResource 為來源：SolidBackgroundFillColorBaseBrush、LayerFillColorDefaultBrush、TextFillColorSecondaryBrush。AccentButtonStyle 與 NavigationView 使用系統 accent，不固定 RGB。淺／深色切換與系統主題由原生資源解析，高對比尚未實際驗收。
+
+## Typography
+
+繁體中文 TextBlock 使用 Microsoft JhengHei UI；標題採 TitleTextBlockStyle／SubtitleTextBlockStyle，其餘採原生控制項字體階層。候選字級可調 14–32 DIP，預設 18 DIP。
+
+## Layout
+
+設定初始 960×760 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 32,24,32,32、MaxWidth 800、表單間距 20 DIP。內容可捲動；InfoBar 和儲存／取消列固定在內容外。候選大小由文字與工作區計算，顯示位置遵循 caret，底部不足時往上放。
+
+## Elevation & Depth
+
+設定使用 MicaBackdrop 與系統底色／操作列分層。候選為無標題工具視窗，使用原生 WinUI brush／border，不自行繪製陰影或 GDI 表面。
+
+## Shapes
+
+原生控制項採 Windows App SDK 預設圓角、focus、hover、pressed 行為，不另外發明網站樣式。
+
+## Components
+
+NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選使用 ListView／GridView，原生 Button 提供注音原文。
+
+## Do's and Don'ts
+
+- 使用 ThemeResource，保留鍵盤與滑鼠的原生控制項狀態。
+- 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交。
+- Windows 的橫列和直列都用 ↑／↓ 選字；善解操作說明隨 profile 更新。
+- 不將控制項以手繪 Win32／GDI 或 WebView 外觀替代。
+- 不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。
+
+審查：獨立 reviewer 確認固定回饋、profile 說明及來源界線已解決；確認圖另發現預設回饋沿用錯誤 severity，已重設為 Informational。驗證圖片均為本機真實 XAML render；範本 placeholder 來源記錄在 ui/Assets/PROVENANCE.md，介面未使用生成影像。
