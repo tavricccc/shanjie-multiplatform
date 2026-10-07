@@ -91,6 +91,8 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     return hr;
 }
 HRESULT Service::Deactivate() {
+    ++modeNotificationRevision_;
+    modeIndicator_.hide();
     profileWatcher_.stop();
     cancel();
     if (languageBar_ && modeButton_) languageBar_->RemoveItem(modeButton_.Get());
@@ -213,19 +215,44 @@ bool Service::wants(ITfContext* context, WPARAM vk, LPARAM flags) {
     if (!state_.preedit.empty()) return true;
     return key.kind == 1 && (!(key.modifiers & 30) || (preferences_.capsLockEnglish && (key.modifiers & 16) && !(key.modifiers & 14)) || (preferences_.ctrlPunctuation && shanjie::windowsPunctuation(key)));
 }
-HRESULT Service::toggleMode(ITfContext*) {
+void Service::notifyMode(ITfContext* input,bool chinese) {
+    auto revision = ++modeNotificationRevision_;
+    ComPtr<ITfContext> current = input;
+    if (!current && thread_) {
+        ComPtr<ITfDocumentMgr> document;
+        if (SUCCEEDED(thread_->GetFocus(&document)) && document) document->GetTop(&current);
+    }
+    if (!current) return;
+    request(current.Get(),[this,current,chinese,revision](TfEditCookie cookie) {
+        if (!thread_ || revision != modeNotificationRevision_ || compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE) != chinese) return S_FALSE;
+        TF_SELECTION selection{}; ULONG fetched = 0;
+        if (FAILED(current->GetSelection(cookie,TF_DEFAULT_SELECTION,1,&selection,&fetched)) || !fetched) return S_FALSE;
+        ComPtr<ITfRange> range; range.Attach(selection.range); range->Collapse(cookie,TF_ANCHOR_END);
+        ComPtr<ITfContextView> view; RECT caret{}; BOOL clipped = FALSE; HWND owner = nullptr;
+        if (FAILED(current->GetActiveView(&view)) || FAILED(view->GetTextExt(cookie,range.Get(),&caret,&clipped)) || clipped) return S_FALSE;
+        view->GetWnd(&owner);
+        if (owner && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner)) != DPI_AWARENESS_PER_MONITOR_AWARE) {
+            POINT start{caret.left,caret.top},end{caret.right,caret.bottom};
+            if (!LogicalToPhysicalPointForPerMonitorDPI(owner,&start) || !LogicalToPhysicalPointForPerMonitorDPI(owner,&end)) return S_FALSE;
+            caret = {start.x,start.y,end.x,end.y};
+        }
+        modeIndicator_.show(caret,owner ? GetDpiForWindow(owner) : 96,chinese); return S_OK;
+    },TF_ES_READ | TF_ES_ASYNCDONTCARE);
+}
+HRESULT Service::toggleMode(ITfContext* input) {
     associated_.clear(); if (candidates_) candidates_->close();
     bool chinese = !compartment(thread_.Get(),GUID_COMPARTMENT_KEYBOARD_OPENCLOSE);
     // Chromium does not necessarily grant a synchronous write lock on key-up.
     // Empty compositions need no document edit; pending text commits asynchronously.
-    if (!composition_) return setInputMode(chinese);
+    if (!composition_) { auto hr = setInputMode(chinese); if (SUCCEEDED(hr)) notifyMode(input,chinese); return hr; }
     ComPtr<ITfContext> current = context_;
     return request(current.Get(),[this,current,chinese](TfEditCookie cookie) {
         special_.clear(); pinyin_.clear(); rawReading_.clear();
         shanjie::Snapshot out;
         if (!engine_.reset(false,out)) return E_FAIL;
         HRESULT hr = apply(current.Get(),cookie,out);
-        return FAILED(hr) ? hr : setInputMode(chinese);
+        if (FAILED(hr)) return hr;
+        hr = setInputMode(chinese); if (SUCCEEDED(hr)) notifyMode(current.Get(),chinese); return hr;
     },TF_ES_ASYNCDONTCARE | TF_ES_READWRITE);
 }
 HRESULT Service::setInputMode(bool chinese) {
@@ -293,6 +320,7 @@ HRESULT Service::apply(ITfContext* context, TfEditCookie cookie, const shanjie::
     return S_OK;
 }
 HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* eaten) {
+    if (!shiftKey(vk)) { ++modeNotificationRevision_; modeIndicator_.hide(); }
     if (!shiftKey(vk) && shiftTap_) shiftUsed_ = true;
     *eaten = FALSE; if (!wants(context,vk,flags)) return S_OK;
     if (preferences_.shiftToggle && shiftKey(vk)) {
@@ -432,7 +460,7 @@ HRESULT Service::OnCompositionTerminated(TfEditCookie, ITfComposition* ended) {
 }
 HRESULT Service::OnSetFocus(BOOL focused) { if (!focused) cancel(); return S_OK; }
 HRESULT Service::OnSetThreadFocus() { return S_OK; }
-HRESULT Service::OnKillThreadFocus() { cancel(); return S_OK; }
+HRESULT Service::OnKillThreadFocus() { ++modeNotificationRevision_; modeIndicator_.hide(); cancel(); return S_OK; }
 HRESULT Service::OnInitDocumentMgr(ITfDocumentMgr*) { return S_OK; }
 HRESULT Service::OnUninitDocumentMgr(ITfDocumentMgr*) { return S_OK; }
 HRESULT Service::OnSetFocus(ITfDocumentMgr* current, ITfDocumentMgr* previous) { if (current != previous) cancel(); return S_OK; }

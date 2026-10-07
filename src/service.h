@@ -4,6 +4,7 @@
 #include "candidates.h"
 #include "preferences.h"
 #include "mode_button.h"
+#include "mode_indicator.h"
 #include "special_input.h"
 #include "associated_candidates.h"
 #include "pinyin_input.h"
@@ -21,6 +22,9 @@ class Service final : public ITfTextInputProcessorEx, public ITfKeyEventSink,
     Microsoft::WRL::ComPtr<ITfComposition> composition_;
     Microsoft::WRL::ComPtr<Candidates> candidates_;
     Microsoft::WRL::ComPtr<ModeButton> modeButton_;
+    ModeIndicator modeIndicator_;
+    unsigned long long modeNotificationRevision_ = 0;
+    void notifyMode(ITfContext*, bool);
     Microsoft::WRL::ComPtr<ITfLangBarItemMgr> languageBar_;
     shanjie::Engine engine_;
     SpecialInput special_;

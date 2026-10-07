@@ -17,14 +17,16 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
     $library = Join-Path $root "build/core/target/$target/release/core.lib"
     $command = @"
 @echo off
 call "$vcvars" $Architecture >nul
 if errorlevel 1 exit /b 1
 cd /d "$objects"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /D_WIN32_WINNT=0x0A00 /LD /I"$root/upstream/shanjie/core/include" $($sources -join ' ') "$library" /link /OUT:"$output/Shanjie.dll" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib shell32.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib /DEF:"$root/src/exports.def"
+rc /nologo /I"$root/assets/mode" /fo mode_icons.res "$root/src/mode_icons.rc"
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /D_WIN32_WINNT=0x0A00 /LD /I"$root/upstream/shanjie/core/include" $($sources -join ' ') "$library" mode_icons.res /link /OUT:"$output/Shanjie.dll" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib shell32.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib /DEF:"$root/src/exports.def"
 "@
     $cmdFile = Join-Path $objects 'compile.cmd'
     Set-Content $cmdFile $command -Encoding utf8NoBOM
