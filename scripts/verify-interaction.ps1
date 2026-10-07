@@ -19,5 +19,5 @@ $previous = $env:LOCALAPPDATA
 try {
     $env:LOCALAPPDATA = $testRoot
     & "$root/build/windows-interaction.exe" "$root/dist/data"
-    if ($LASTEXITCODE) { throw 'Interaction checks failed.' }
+    if ($LASTEXITCODE) { throw "Interaction checks failed: $LASTEXITCODE" }
 } finally { $env:LOCALAPPDATA = $previous }

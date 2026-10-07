@@ -43,8 +43,11 @@ public sealed partial class MainWindow : Window
         StatusBar.IsOpen = true;
     }
     private void Save(object sender, RoutedEventArgs args)
+        => SaveDraft();
+    internal void SaveDraft()
     {
         try { Vm.Save(); StatusBar.Severity = InfoBarSeverity.Success; }
+        catch (InvalidDataException error) { Vm.Status = error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         catch (IOException error) { Vm.Status = "無法儲存設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         catch (UnauthorizedAccessException error) { Vm.Status = "無法寫入個人設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         StatusBar.IsOpen = true;

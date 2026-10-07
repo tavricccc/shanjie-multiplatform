@@ -3,7 +3,10 @@ using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
-    [ObservableProperty] public partial int Interaction { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
+    public string CandidateHelp => Interaction == 0
+        ? "Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字或 Enter 確認。"
+        : "善解上游操作：←／→ 選字，↓ 展開格狀列表。數字或 Enter 確認。";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int Layout { get; set; }

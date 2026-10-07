@@ -16,7 +16,7 @@ bool PinyinInput::load(const std::filesystem::path& data,bool taiwan) {
         spellings[sound] = roman;
     }
     const std::wstring symbols = L"ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ";
-    const std::string keys = "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/";
+    const std::string keys = "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-";
     auto add = [&](const std::string& roman,const std::string& sequence,double score) {
         auto [entry,inserted] = index_.try_emplace(roman,Entry{sequence,score});
         if (!inserted && score > entry->second.score) entry->second = {sequence,score};

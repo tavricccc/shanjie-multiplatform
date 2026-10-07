@@ -37,6 +37,13 @@ internal static class VisualVerifier
                 settings.ShowSection(page); await Task.Delay(120);
                 await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-{page}.png"));
             }
+            settings.ShowSection(0); settings.SaveDraft(); await Task.Delay(120);
+            await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-saved.png"));
+            settings.ShowSection(3); settings.Vm.DictionaryText = "invalid"; settings.SaveDraft(); await Task.Delay(120);
+            await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error.png"));
+            settings.Vm.DictionaryText = ""; settings.Vm.Interaction = 1; settings.ShowSection(2); await Task.Delay(120);
+            await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-shanjie.png"));
+            settings.Vm.Preset(true);
         }
         var candidates = new CandidateWindow(0);
         string[] words = ["你", "妳", "擬", "禰", "妮", "尼", "倪", "泥", "逆"];

@@ -1,7 +1,7 @@
 <Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="善解設定">
     <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
     <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TitleBar x:Name="AppTitleBar" Title="善解設定" />
         <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Left" OpenPaneLength="208" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="Navigate">
             <NavigationView.MenuItems>
@@ -46,14 +46,14 @@
                         <ToggleSwitch Header="Ctrl＋標點輸入全形標點" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/>
                         <ToggleSwitch Header="反引號＋標點輸入全形標點" IsOn="{x:Bind Vm.BackquoteSymbols, Mode=TwoWay}"/>
                         <ToggleSwitch Header="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="鍵盤配置沿用 Windows 輸入法清單中的善解標準／倚天 profile。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="鍵盤配置可在一般頁指定，或跟隨 Windows 輸入法清單中的善解標準／倚天 profile。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
                     <StackPanel x:Name="Candidates" Spacing="20" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="選字" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <ComboBox Header="開啟選字" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
                         <ComboBox Header="選字位置" SelectedIndex="{x:Bind Vm.Anchor, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="游標右側的字／詞"/><ComboBoxItem Content="游標左側的字／詞"/></ComboBox>
                         <ComboBox Header="候選排列" SelectedIndex="{x:Bind Vm.Layout, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="直列"/><ComboBoxItem Content="橫列"/><ComboBoxItem Content="格狀"/></ComboBox>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字或 Enter 確認。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ToggleSwitch Header="空白鍵換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
                         <ToggleSwitch Header="候選只顯示 Big5 字元集" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnContent="Big5" OffContent="Unicode"/>
                         <ToggleSwitch Header="在候選框提供注音原文" IsOn="{x:Bind Vm.ReadingCandidate, Mode=TwoWay}"/>
@@ -68,11 +68,11 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="Differences" TextWrapping="Wrap"/>
                         <HyperlinkButton Content="微軟注音官方操作說明" NavigateUri="https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime" HorizontalAlignment="Left"/>
                     </StackPanel>
-                    <InfoBar x:Name="StatusBar" IsOpen="False" IsClosable="True" Severity="Success" Message="{x:Bind Vm.Status, Mode=OneWay}"/>
                 </StackPanel>
             </ScrollViewer>
         </NavigationView>
-        <Grid Grid.Row="2" Padding="24,16" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <InfoBar x:Name="StatusBar" Grid.Row="2" Margin="24,8,24,0" IsOpen="False" IsClosable="True" Severity="Success" Message="{x:Bind Vm.Status, Mode=OneWay}"/>
+        <Grid Grid.Row="3" Padding="24,16" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Button Content="重新載入已儲存設定" Click="Reload" HorizontalAlignment="Left"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"><Button Content="取消" Click="Cancel"/><Button Content="儲存" Style="{ThemeResource AccentButtonStyle}" Click="Save"/></StackPanel>

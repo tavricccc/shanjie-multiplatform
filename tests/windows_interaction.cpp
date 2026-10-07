@@ -44,10 +44,16 @@ int wmain(int argc,wchar_t** argv) {
     wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
     auto path = std::filesystem::path(local) / L"Shanjie" / L"learning.tsv";
     std::ifstream input(path); std::string text((std::istreambuf_iterator<char>(input)),{});
+    input.close();
     assert(text.find("ㄋㄧˇ") != std::string::npos); assert(text.find("ㄏㄠˇ") != std::string::npos);
+    shanjie::Snapshot pending; key.kind = 1; key.modifiers = 0;
+    for (auto ch : std::string("su3")) { key.ch = ch; assert(first.key(key,pending)); }
+    key.kind = 10; assert(first.key(key,pending));
+    auto different = std::find_if(pending.candidates.begin(),pending.candidates.end(),[&pending](const auto& word) { return word != pending.preedit; });
+    assert(different != pending.candidates.end()); assert(first.pick((unsigned)(different - pending.candidates.begin()),pending));
     std::ofstream(path.parent_path() / L"learning.epoch") << "cleared";
     std::filesystem::remove(path);
-    shanjie::Snapshot clearOutput; assert(first.reset(false,clearOutput)); assert(!std::filesystem::exists(path));
+    shanjie::Snapshot clearOutput; key.kind = 3; assert(first.key(key,clearOutput)); assert(!clearOutput.commit.empty()); assert(!std::filesystem::exists(path));
     shanjie::Snapshot suggestions; assert(first.associate(L"你",suggestions)); assert(!suggestions.candidates.empty());
     AssociatedCandidates associated; associated.open(suggestions); key.kind = 1; key.ch = '1'; key.modifiers = 1;
     assert(associated.handles(key)); assert(!associated.key(key).commit.empty());
