@@ -10,6 +10,8 @@
 - `verify-interaction.ps1`：排列與按鍵政策分離、Unicode／Big5／符號、個人詞庫、聯想詞、漢語／臺灣拼音、交錯引擎學習、注音提交與 epoch 清除通過。測試使用隔離的個人資料夾。
 - `verify-ui.ps1`：x64／x86 實際啟動 WinUI host、繼承 handle、NOACTIVATE、隱藏／重開、退出通過；真實 XAML 離屏 capture 包含淺／深色五頁、三種候選排列、儲存成功／錯誤、善解操作說明。
 - 獨立 impeccable 審查找到固定儲存列的回饋可見性、profile 說明及維護文件三處問題，已統一修正。Capture 位於 `build/ui-review-final/`。
+- 複查修正後的 preset severity 殘留也已解決，獨立 verdict 為 accept／ship。兩張 error-then-preset 跟隨系統淺色，不算深色證據。
+- 新 ZIP 103.4 MiB，包內所有 SHA-256 核對通過，最終 UI／腳本／文件與來源一致，所有 PowerShell 腳本解析通過。命令列預設保留個人詞庫指向的隔離驗證通過。
 
 這些是背景整合與離屏視覺驗證，不代表新版本已在記事本、Chrome、Office、讀屏、高對比、多螢幕 DPI、App 容器通過日常驗收。下文的安裝／記事本記錄只適用於 10 月 6 日的舊 Win32 介面版本。
 

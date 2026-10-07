@@ -48,4 +48,4 @@ NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用�
 - 不將控制項以手繪 Win32／GDI 或 WebView 外觀替代。
 - 不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。
 
-審查：獨立 reviewer 確認固定回饋、profile 說明及來源界線已解決；確認圖另發現預設回饋沿用錯誤 severity，已重設為 Informational。驗證圖片均為本機真實 XAML render；範本 placeholder 來源記錄在 ui/Assets/PROVENANCE.md，介面未使用生成影像。
+審查：獨立 reviewer 確認固定回饋、profile 說明及來源界線已解決；確認圖另發現預設回饋沿用錯誤 severity，已重設為 Informational，最後限定確認 verdict 為 accept／ship。驗證圖片均為本機真實 XAML render；範本 placeholder 來源記錄在 ui/Assets/PROVENANCE.md，介面未使用生成影像。
