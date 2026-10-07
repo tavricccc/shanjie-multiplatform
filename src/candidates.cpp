@@ -32,7 +32,7 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
     ComPtr<ITfContextView> view; BOOL clipped = FALSE; HWND owner = nullptr;
     if (FAILED(context->GetActiveView(&view)) || FAILED(view->GetTextExt(cookie,range,&caret_,&clipped)) || clipped) { Show(FALSE); return; }
     view->GetWnd(&owner); dpi_ = owner ? GetDpiForWindow(owner) : 96;
-    // WinUI runs in a per-monitor-aware process; legacy host apps may report virtualized coordinates.
+    // The native surface uses physical coordinates; legacy apps may report virtualized coordinates.
     if (owner && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner)) != DPI_AWARENESS_PER_MONITOR_AWARE) {
         POINT start{caret_.left,caret_.top}, end{caret_.right,caret_.bottom};
         if (!LogicalToPhysicalPointForPerMonitorDPI(owner,&start) || !LogicalToPhysicalPointForPerMonitorDPI(owner,&end)) { Show(FALSE); return; }
@@ -57,7 +57,6 @@ LRESULT Candidates::procedure(HWND window, UINT message, WPARAM wp, LPARAM lp) {
         if ((LONG)lp == self->host_.sequence() && (wp < self->state_.candidates.size() || (wp == self->state_.candidates.size() && !self->state_.reading.empty())) && self->host_.shown()) self->pick_((unsigned)wp);
         return 0;
     }
-    if (self && message == WM_APP + 43) { self->host_.ready((HWND)wp); return 0; }
     return DefWindowProcW(window,message,wp,lp);
 }
 HRESULT Candidates::GetDescription(BSTR* out) { *out = SysAllocString(L"善解候選"); return *out ? S_OK : E_OUTOFMEMORY; }

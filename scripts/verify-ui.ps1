@@ -10,13 +10,12 @@ foreach ($architecture in @('x64','x86')) {
 call "$vcvars" $architecture >nul
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$architecture"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" /I"$root/upstream/shanjie/core/include" "$root/tests/candidate_host_smoke.cpp" "$root/src/candidate_host.cpp" /link /OUT:"$root/build/candidate-host-$architecture.exe" user32.lib dwmapi.lib psapi.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" /I"$root/upstream/shanjie/core/include" "$root/tests/candidate_host_smoke.cpp" "$root/src/candidate_host.cpp" "$root/src/candidate_palette.cpp" /link /OUT:"$root/build/candidate-host-$architecture.exe" ole32.lib user32.lib gdi32.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib psapi.lib
 "@
     Set-Content "$root/build/native-$architecture/ui-smoke.cmd" $command -Encoding utf8NoBOM
     & cmd.exe /d /c "$root/build/native-$architecture/ui-smoke.cmd"
     if ($LASTEXITCODE) { throw 'Candidate host harness build failed.' }
-    if ($Benchmark) { & "$root/build/candidate-host-$architecture.exe" "$root/dist/$architecture/Shanjie.dll" '--benchmark' }
-    else { & "$root/build/candidate-host-$architecture.exe" "$root/dist/$architecture/Shanjie.dll" }
+    & "$root/build/candidate-host-$architecture.exe" "$root/dist/$architecture/Shanjie.dll" "$root/build/native-review/$architecture"
     if ($LASTEXITCODE) { throw "$architecture WinUI IPC failed." }
 }
 $output = Join-Path $root 'build/ui-review-final'

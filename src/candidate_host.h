@@ -1,30 +1,37 @@
 #pragma once
 #include <windows.h>
+#include <d2d1.h>
+#include <dwrite.h>
+#include <wrl/client.h>
 #include "engine.h"
 #include "preferences.h"
-// Shared with ui/Interop/CandidateChannel.cs; fixed-width layout works from x86 and x64.
-struct CandidatePacket {
-    LONG sequence;
-    DWORD version, visible, layout;
-    LONG selected;
-    DWORD count, first, total;
-    LONG left, bottom, top;
-    DWORD dpi, theme, fontSize, columns, shutdown;
-    ULONGLONG callback;
-    DWORD parent, reserved;
-    wchar_t words[82][128]; // Slot 81 is the optional reading action.
-};
-static_assert(offsetof(CandidatePacket,words) == 80);
+#include "candidate_palette.h"
 class CandidateHost {
-    HANDLE mapping_ = nullptr, event_ = nullptr, process_ = nullptr;
-    CandidatePacket* packet_ = nullptr;
-    HWND hostWindow_ = nullptr;
+    HWND window_ = nullptr, callback_ = nullptr;
+    LONG sequence_ = 0;
+    shanjie::Snapshot state_;
+    Preferences preferences_;
+    float scale_ = 1, cell_ = 0, row_ = 0;
+    unsigned columns_ = 1;
+    float textWidth_ = 0, textHeight_ = 0;
+    bool paletteReady_ = false;
+    CandidatePalette palette_{};
+    Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
+    Microsoft::WRL::ComPtr<IDWriteFactory> textFactory_;
+    Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> target_;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
+    std::vector<Microsoft::WRL::ComPtr<IDWriteTextLayout>> words_, labels_;
+    Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis_;
+    static LRESULT CALLBACK procedure(HWND,UINT,WPARAM,LPARAM);
+    bool measure(float);
+    void fit(float);
+    HRESULT paint(HDC);
 public:
     ~CandidateHost();
-    bool start(HWND callback);
-    void publish(const shanjie::Snapshot&, const Preferences&, const RECT&, UINT dpi, bool visible);
+    bool start(HWND);
+    void publish(const shanjie::Snapshot&, const Preferences&, const RECT&, UINT, bool);
     void hide();
-    void ready(HWND window);
-    LONG sequence() const { return packet_ ? packet_->sequence : 0; }
-    bool shown() const { return packet_ && packet_->visible && process_ && WaitForSingleObject(process_,0) == WAIT_TIMEOUT && hostWindow_ && IsWindowVisible(hostWindow_); }
+    LONG sequence() const { return sequence_; }
+    bool shown() const { return window_ && IsWindowVisible(window_); }
+    HWND window() const { return window_; }
 };

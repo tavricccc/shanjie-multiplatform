@@ -1,82 +1,65 @@
 #include "candidate_host.h"
 #include "identity.h"
-#include <dwmapi.h>
-#include <cassert>
-#include <cstdio>
+#include "native_capture.h"
 #include <psapi.h>
 #include <algorithm>
-#include <vector>
-HINSTANCE module = nullptr;
+#include <cassert>
+#include <cstdio>
+HMODULE module = nullptr;
 long objects = 0;
-CandidateHost* host = nullptr;
-HWND surface = nullptr;
-unsigned acknowledgements = 0;
-double clockMs() { LARGE_INTEGER value{}, frequency{}; QueryPerformanceCounter(&value); QueryPerformanceFrequency(&frequency); return value.QuadPart * 1000.0 / frequency.QuadPart; }
-LRESULT CALLBACK receive(HWND window,UINT message,WPARAM wp,LPARAM lp) {
-    if (message == WM_APP + 43) { surface = (HWND)wp; host->ready(surface); ++acknowledgements; return 0; }
-    return DefWindowProcW(window,message,wp,lp);
+unsigned picks = 0;
+LONG pickedSequence = 0;
+LRESULT CALLBACK receive(HWND window,UINT message,WPARAM,LPARAM lp) {
+    if (message == WM_APP+42) { ++picks; pickedSequence = (LONG)lp; return 0; }
+    return DefWindowProcW(window,message,0,lp);
 }
-template<class Predicate> bool wait(Predicate predicate) {
-    auto deadline = GetTickCount64() + 10000;
-    while (GetTickCount64() < deadline) {
-        MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
-        if (predicate()) return true;
-        MsgWaitForMultipleObjects(0,nullptr,FALSE,1,QS_ALLINPUT);
-    }
-    return false;
-}
+double clockMs() { LARGE_INTEGER value{},frequency{}; QueryPerformanceCounter(&value); QueryPerformanceFrequency(&frequency); return value.QuadPart*1000.0/frequency.QuadPart; }
+PROCESS_MEMORY_COUNTERS_EX memory() { PROCESS_MEMORY_COUNTERS_EX m{}; m.cb = sizeof(m); assert(GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&m,sizeof(m))); return m; }
 int wmain(int argc,wchar_t** argv) {
+    assert(argc >= 2); assert(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)));
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    assert(argc == 2 || argc == 3); bool benchmark = argc == 3; module = LoadLibraryW(argv[1]); assert(module);
-    SetEnvironmentVariableW(L"SHANJIE_VERIFY_UI",L"1");
-    WNDCLASSW wc{}; wc.lpfnWndProc = receive; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"ShanjieChannelSmoke"; RegisterClassW(&wc);
+    module = LoadLibraryW(argv[1]); assert(module); SetEnvironmentVariableW(L"SHANJIE_VERIFY_UI",L"1");
+    WNDCLASSW wc{}; wc.lpfnWndProc = receive; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"ShanjieSurfaceSmoke"; RegisterClassW(&wc);
     auto callback = CreateWindowW(wc.lpszClassName,L"",0,0,0,0,0,HWND_MESSAGE,nullptr,wc.hInstance,nullptr);
-    HANDLE child = nullptr;
+    auto foreground = GetForegroundWindow(); auto before = memory(); double start = clockMs();
     {
-        CandidateHost presenter; host = &presenter; double coldStart = clockMs(); assert(presenter.start(callback));
-        shanjie::Snapshot frame; frame.candidates = {L"你",L"妳",L"擬"}; frame.selected = 1; frame.total = 3;
-        Preferences preferences; RECT caret{-12000,-12040,-11999,-12000};
-        presenter.hide();
-        assert(wait([&] { return surface != nullptr; }));
-        assert(!IsWindowVisible(surface));
-        double preloadMs = clockMs() - coldStart;
-        coldStart = clockMs();
-        presenter.publish(frame,preferences,caret,96,true);
-        assert(wait([&] { return surface && presenter.shown(); }));
-        assert(wait([&] { return IsWindowVisible(surface); }));
-        double coldMs = clockMs() - coldStart;
-        assert(GetWindowLongPtrW(surface,GWL_EXSTYLE) & WS_EX_NOACTIVATE);
-        assert(SendMessageW(surface,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
-        assert(GetForegroundWindow() != surface);
-        bool offscreen = wait([&] { RECT bounds{}; GetWindowRect(surface,&bounds); return bounds.right < -10000 && bounds.bottom < -10000; });
-        if (!offscreen) { RECT bounds{}; GetWindowRect(surface,&bounds); std::fprintf(stderr,"UI bounds: %ld,%ld,%ld,%ld\n",bounds.left,bounds.top,bounds.right,bounds.bottom); }
-        assert(offscreen);
-        BOOL nonClientRendering = TRUE;
-        assert(SUCCEEDED(DwmGetWindowAttribute(surface,DWMWA_NCRENDERING_ENABLED,&nonClientRendering,sizeof(nonClientRendering))) && !nonClientRendering);
-        RECT client{}, bounds{}; GetClientRect(surface,&client); GetWindowRect(surface,&bounds);
-        if (client.right != bounds.right - bounds.left || client.bottom != bounds.bottom - bounds.top)
-            std::fprintf(stderr,"Client %ldx%ld, window %ldx%ld, style %lx\n",client.right,client.bottom,bounds.right-bounds.left,bounds.bottom-bounds.top,GetWindowLongW(surface,GWL_STYLE));
-        assert(client.right == bounds.right - bounds.left && client.bottom == bounds.bottom - bounds.top);
-        DWORD process = 0; GetWindowThreadProcessId(surface,&process); child = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,FALSE,process); assert(child);
-        preferences.layout = CandidateLayout::Horizontal; presenter.publish(frame,preferences,caret,144,true);
-        presenter.hide(); assert(wait([&] { return !IsWindowVisible(surface); }));
-        presenter.publish(frame,preferences,caret,96,true); assert(wait([&] { return IsWindowVisible(surface); }));
-        if (benchmark) {
-            std::vector<double> samples;
-            for (int i = 0; i < 30; ++i) {
-                presenter.hide(); assert(wait([&] { return !IsWindowVisible(surface); }));
-                auto previous = acknowledgements; double start = clockMs();
+        CandidateHost presenter; assert(presenter.start(callback)); double initialization = clockMs()-start;
+        assert(!presenter.shown()); DWORD process = 0; GetWindowThreadProcessId(presenter.window(),&process); assert(process == GetCurrentProcessId());
+        shanjie::Snapshot frame; frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"}; frame.selected = 1; frame.total = 9;
+        Preferences preferences; preferences.theme = 1; RECT caret{100,100,101,140}; start = clockMs(); presenter.publish(frame,preferences,caret,96,true); double first = clockMs()-start;
+        assert(presenter.shown()); assert(GetForegroundWindow() == foreground); assert(SendMessageW(presenter.window(),WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
+        RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
+        assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(15,15)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+        assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
+        std::vector<double> samples;
+        for (int i=0;i<30;++i) { presenter.hide(); start = clockMs(); presenter.publish(frame,preferences,caret,96,true); samples.push_back(clockMs()-start); }
+        std::sort(samples.begin(),samples.end()); auto after = memory();
+        std::printf("PERF native_init_ms=%.3f first_draw_ms=%.3f warm_median_ms=%.3f warm_p95_ms=%.3f private_delta_mib=%.2f working_set_delta_mib=%.2f process_private_mib=%.2f samples=30\n",initialization,first,samples[15],samples[28],(after.PrivateUsage-before.PrivateUsage)/1048576.0,(after.WorkingSetSize-before.WorkingSetSize)/1048576.0,after.PrivateUsage/1048576.0);
+        if (argc >= 3) {
+            std::filesystem::path output(argv[2]); std::filesystem::create_directories(output);
+            for (auto theme : {1u,2u}) {
+                preferences.theme = theme;
+                for (auto layout : {CandidateLayout::Vertical,CandidateLayout::Horizontal,CandidateLayout::Grid}) {
+                    preferences.layout = layout; frame.columns = layout == CandidateLayout::Grid ? 9 : 0;
+                    presenter.publish(frame,preferences,caret,96,true);
+                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-"+std::to_wstring((int)layout)+L".bmp"));
+                }
+                frame.candidates = {L"輸入法",L"候選視窗",L"善解注音",L"微軟注音",L"個人詞庫",L"全形標點",L"倚天鍵盤",L"使用者",L"設定"};
+                for (auto size : {14u,32u}) {
+                    preferences.fontSize = size; presenter.publish(frame,preferences,caret,96,true);
+                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-grid-"+std::to_wstring(size)+L".bmp"));
+                }
+                SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",L"720");
                 presenter.publish(frame,preferences,caret,96,true);
-                assert(wait([&] { return acknowledgements > previous && IsWindowVisible(surface); }));
-                samples.push_back(clockMs() - start);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-narrow-grid.bmp"));
+                SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",nullptr);
+                preferences.fontSize = 18; preferences.layout = CandidateLayout::Vertical; frame.columns = 0; frame.associated = true;
+                presenter.publish(frame,preferences,caret,96,true); captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-associated.bmp")); frame.associated = false;
             }
-            std::sort(samples.begin(),samples.end());
-            PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
-            assert(GetProcessMemoryInfo(child,reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory),sizeof(memory)));
-            std::printf("PERF preload_ms=%.3f first_visible_ms=%.3f warm_median_ms=%.3f warm_p95_ms=%.3f host_private_mib=%.2f host_working_set_mib=%.2f samples=30\n",preloadMs,coldMs,samples[15],samples[28],memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
         }
+        presenter.hide(); assert(!presenter.shown());
     }
-    assert(WaitForSingleObject(child,5000) == WAIT_OBJECT_0); CloseHandle(child);
-    DestroyWindow(callback); FreeLibrary(module);
-    std::puts("PASS: real WinUI host, no native frame, inherited handle, no activation, hide/reopen and shutdown");
+    DestroyWindow(callback); FreeLibrary(module); CoUninitialize();
+    std::puts("PASS: in-process native candidates, mouse selection, stale click sequence, no activation, no frame, hide/reopen");
 }

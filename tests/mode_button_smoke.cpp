@@ -3,19 +3,7 @@
 #include "mode_indicator.h"
 #include <cassert>
 #include <cstdio>
-#include <filesystem>
-void capture(HWND window,const std::filesystem::path& path) {
-    RECT bounds{}; GetClientRect(window,&bounds); int width = bounds.right, height = bounds.bottom;
-    BITMAPINFO bitmap{}; bitmap.bmiHeader = {sizeof(BITMAPINFOHEADER),width,-height,1,32,BI_RGB};
-    void* pixels = nullptr; auto dc = CreateCompatibleDC(nullptr);
-    auto image = CreateDIBSection(dc,&bitmap,DIB_RGB_COLORS,&pixels,nullptr,0); auto old = SelectObject(dc,image);
-    SendMessageW(window,WM_PRINTCLIENT,(WPARAM)dc,PRF_CLIENT); GdiFlush();
-    for (int i=0;i<width*height;++i) ((DWORD*)pixels)[i] |= 0xff000000;
-    BITMAPFILEHEADER header{}; header.bfType = 0x4d42; header.bfOffBits = sizeof(header)+sizeof(BITMAPINFOHEADER); header.bfSize = header.bfOffBits+width*height*4;
-    auto file = CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,0,nullptr); assert(file != INVALID_HANDLE_VALUE); DWORD written;
-    WriteFile(file,&header,sizeof(header),&written,nullptr); WriteFile(file,&bitmap.bmiHeader,sizeof(BITMAPINFOHEADER),&written,nullptr); WriteFile(file,pixels,width*height*4,&written,nullptr); CloseHandle(file);
-    SelectObject(dc,old); DeleteObject(image); DeleteDC(dc);
-}
+#include "native_capture.h"
 HMODULE module = nullptr;
 long objects = 0;
 int wmain(int argc,wchar_t** argv) {
@@ -39,9 +27,9 @@ int wmain(int argc,wchar_t** argv) {
         auto window = FindWindowW(L"ShanjieModeIndicator",nullptr); assert(window && IsWindowVisible(window));
         RECT bounds{}; GetWindowRect(window,&bounds); assert(bounds.right < -10000 && bounds.bottom < -10000);
         assert(GetForegroundWindow() == foreground && SendMessageW(window,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
-        if (argc == 3) capture(window,std::filesystem::path(argv[2])/L"mode-chinese.bmp");
+        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-chinese.bmp");
         indicator.hide(); assert(!IsWindowVisible(window)); indicator.show(caret,144,false);
-        if (argc == 3) capture(window,std::filesystem::path(argv[2])/L"mode-english-144.bmp");
+        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-english-144.bmp");
         GetWindowRect(window,&bounds); assert(bounds.right-bounds.left == 60);
         auto deadline = GetTickCount64()+2500;
         while (IsWindowVisible(window) && GetTickCount64() < deadline) {
