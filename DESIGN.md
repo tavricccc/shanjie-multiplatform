@@ -72,24 +72,25 @@ components:
 
 設定使用 MicaBackdrop 與系統底色／操作列分層。候選為無標題工具視窗，使用原生 WinUI brush／border，不自行繪製陰影或 GDI 表面。
 
-候選採單層不透明中性色外框，不加陰影；選取面由系統 accent 與外框底色形成層次。
+候選只由 XAML `Surface` 提供單一不透明中性色外框，不加陰影；移除原生 caption／resize frame 並停用 DWM 非客戶區繪製，整個視窗都作為 client content，避免再包一層原生框。選取面由系統 accent 與外框底色形成層次。
 
 ## Shapes
 
 原生控制項採 Windows App SDK 預設圓角、focus、hover、pressed 行為，不另外發明網站樣式。
 
-候選外框與選取 presenter 的圓角依 frontmatter，外框線寬為 1 DIP。`ListViewItemPresenter` 明確設定選取圓角，並關閉原生左側 selection indicator，維持整塊反白。
+候選外框與選取面的圓角依 frontmatter，外框線寬為 1 DIP。共用 `StaticCandidateItem` 範本內的 `CandidateChrome` 提供整塊反白，不包含原生左側 selection indicator，也不使用 `ListViewItemPresenter`。
 
 ## Components
 
 NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選使用 ListView／GridView，item container 的 padding／margin 歸零，避免原生預設再疊加一層留白。
 
-候選 Surface 使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`，內距只由資料範本提供。反白、邊框及高對比資源契約以 `ui/CandidateWindow.xaml` 為準；presenter、量測與定位以同名 `.xaml.cs` 為準。這是原生 XAML 元件，sidecar 記錄資源與行為，不提供模擬 WinUI 的 HTML/CSS 範例。
+候選 Surface 使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`，內距只由資料範本提供。ListView／GridView 共用 `StaticCandidateItem`：CommonStates 僅使用靜態 setters，沒有 VisualTransitions 或 storyboard，ItemContainerTransitions 為空；顯示、隱藏與選取立即切換，DWM 視窗轉場也停用。反白、邊框及高對比資源契約以 `ui/CandidateWindow.xaml` 為準；非客戶區處理、量測與定位以同名 `.xaml.cs` 為準。這是原生 XAML 元件，sidecar 記錄資源與行為，不提供模擬 WinUI 的 HTML/CSS 範例。
 
 ## Do's and Don'ts
 
 - 使用 ThemeResource，保留鍵盤與滑鼠的原生控制項狀態。
 - 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交。
+- 候選只保留單一 XAML 外框，且顯示、隱藏與選取不加動畫；此契約不改變設定窗原生控制項行為。
 - Windows 的橫列和直列都用 ↑／↓ 選字；善解操作說明隨 profile 更新。
 - 不將控制項以手繪 Win32／GDI 或 WebView 外觀替代。
 - 不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。
@@ -97,3 +98,5 @@ NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用�
 審查：獨立 reviewer 確認固定回饋、profile 說明及來源界線已解決；確認圖另發現預設回饋沿用錯誤 severity，已重設為 Informational，最後限定確認 verdict 為 accept／ship。驗證圖片均為本機真實 XAML render；範本 placeholder 來源記錄在 ui/Assets/PROVENANCE.md，介面未使用生成影像。
 
 本次候選外觀證據為 `build/ui-review-final/candidates-1-0.png`（淺色直列）與 `candidates-2-2.png`（深色九欄格狀）。圖片是背景離屏 XAML render，呈現目前主機 accent；它們驗證候選密度、字體、反白與外框，不能視為真實文件操作、多 DPI、讀屏或高對比驗收。沒有新增 raster 資產；設定窗本次維持原樣。
+
+單框與無動畫另由實作及 native harness 驗證：兩架構已核對 client 與 window 尺寸相等、DWM 非客戶區繪製停用、NOACTIVATE 與隱藏後重開。靜態圖片本身無法證明轉場行為。

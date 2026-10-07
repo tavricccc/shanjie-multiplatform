@@ -10,6 +10,6 @@ STORY：先完成組字，再用所選開啟鍵進入候選；選字後可顯示
 
 FIRST VIEWPORT：外框圓角 6 DIP、1 DIP 邊框、內距 8×6 DIP；數字與字詞同列，間距 4 DIP、候選內距 4 DIP。保留直列、橫列與九欄格狀；18 DIP 候選字級仍由個人設定控制。
 
-FORM：使用者指定參考，無隨機概念選擇；沿用原生 ListView／GridView、NOACTIVATE 與系統高對比色。
+FORM：使用者指定參考，無隨機概念選擇；沿用原生 ListView／GridView、NOACTIVATE 與系統高對比色。候選共用靜態範本，顯示／隱藏、換頁及反白均無動畫。整個 HWND 為客戶區，只由 Surface 繪製單一 XAML 外框，不保留原生視窗外框。
 
 FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

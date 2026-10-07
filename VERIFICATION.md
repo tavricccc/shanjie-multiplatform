@@ -4,6 +4,8 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+後續候選介面修正：依使用者要求移除動畫與雙層外框。ListView／GridView 共用靜態 ContentControl template，只有立即套用的 VSM setters，ItemContainerTransitions 為空；不再使用預設 ListViewItemPresenter 轉場。取消原生 caption／resize frame 與 WinUI 非客戶區保留，WM_NCCALCSIZE 回傳完整客戶區；DWM 非客戶區繪製與視窗轉場均停用。兩架構 host harness 確認 client 尺寸等於 window 尺寸、DWM non-client rendering 關閉，NOACTIVATE／隱藏／重開／退出仍通過。淺／深與各排列 XAML captures 通過，獨立視覺審查 verdict 為 ship；保留原本 accent、字體與間距。此修正版尚未做前景 App 日常驗收，也未自動重新觸發先前已取消的安裝 UAC。
+
 本次候選修正版：上游更新至正式 0.2.1；與舊 pin 比較 core、詞庫及授權沒有差異。112 個核心／學習／回放測試通過，標準／倚天各 302 句；排除界線維持下文。
 
 - 設定窗及套用 profile 通知已啟用的 TSF 實例立即重讀；直接改 INI 在下一鍵讀取。核心設定變更先提交組字再重建。

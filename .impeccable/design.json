@@ -24,7 +24,8 @@
         "dark": { "backgroundResource": "SystemAccentColorLight2", "foreground": "Black" },
         "highContrast": { "backgroundResource": "SystemColorHighlightColor", "foregroundResource": "SystemColorHighlightTextColor" },
         "selectedPointerOverAndPressed": "與各主題 selected 背景一致，跟隨 Windows 設定 accent。",
-        "selectionIndicatorVisualEnabled": false
+        "selectionIndicator": "StaticCandidateItem 範本不包含左側 indicator。",
+        "template": "StaticCandidateItem"
       },
       "highContrastSurface": {
         "backgroundResource": "SystemColorWindowColor",
@@ -40,9 +41,15 @@
       },
       "shapes": {
         "surface": "{rounded.candidate-surface}",
-        "selectedPresenter": "{rounded.candidate-selected}"
+        "selectedSurface": "{rounded.candidate-selected}"
       },
-      "depth": "單層不透明外框，無自繪陰影。",
+      "depth": "僅 XAML Surface 提供單一不透明外框，無陰影；移除 caption／resize frame，停用 DWM 非客戶區繪製，整個視窗作為 client content。",
+      "motion": {
+        "template": "StaticCandidateItem 的 CommonStates 僅靜態 setters，沒有 VisualTransitions 或 storyboard。",
+        "itemContainerTransitions": "ListView／GridView 均為空 TransitionCollection。",
+        "window": "DWM TRANSITIONS_FORCEDISABLED；顯示、隱藏與選取立即切換。"
+      },
+      "nativeVerification": "兩架構 native harness 已核對 client 與 window 尺寸相等、DWM 非客戶區繪製停用、NOACTIVATE 與隱藏後重開；靜態 capture 無法證明轉場。",
       "layouts": ["直列", "橫列", "九欄格狀"],
       "captures": ["build/ui-review-final/candidates-1-0.png", "build/ui-review-final/candidates-2-2.png"],
       "verificationLimit": "背景離屏真實 XAML render；呈現目前主機 accent，未驗收真實文件操作、多 DPI、讀屏或高對比。無新增 raster 資產；非 web 介面，無 HTML detector。"
@@ -53,7 +60,7 @@
       "name": "候選淺色外框",
       "kind": "custom",
       "refersTo": "candidate-surface-light",
-      "description": "原生 XAML Border 使用 CandidateBackground／CandidateBorder／CandidateForeground；單層外框，不提供 HTML/CSS 模擬。"
+      "description": "原生 XAML Surface Border 使用 CandidateBackground／CandidateBorder／CandidateForeground；唯一外框，無 DWM 非客戶區框或視窗動畫，不提供 HTML/CSS 模擬。"
     },
     {
       "name": "候選深色外框",
@@ -65,7 +72,7 @@
       "name": "候選數字與字詞列",
       "kind": "custom",
       "refersTo": "candidate-item",
-      "description": "ListView／GridView 共用資料範本；數字 Segoe UI、字詞 Microsoft JhengHei UI，container 不疊加內距。選取 presenter 使用 Windows accent，關閉左側 indicator；保留排列與候選字級設定。"
+      "description": "ListView／GridView 共用 StaticCandidateItem 靜態範本與資料範本；數字 Segoe UI、字詞 Microsoft JhengHei UI，container 不疊加內距。CandidateChrome 選取面使用 Windows accent，不含左側 indicator 或 ListViewItemPresenter，不使用動畫；保留排列與候選字級設定。"
     }
   ],
   "narrative": {
