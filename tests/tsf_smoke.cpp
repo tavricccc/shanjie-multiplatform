@@ -188,6 +188,11 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_DOWN,171); require(!noCandidates(),173);
         ComPtr<ITfThreadFocusSink> focus; require(SUCCEEDED(service.As(&focus)),174);
         require(SUCCEEDED(focus->OnKillThreadFocus()) && noCandidates(),175);
+        press('S',190); press('U',192); press('3',194);
+        auto beforeReload = store->text;
+        require(WritePrivateProfileStringW(L"engine",L"ranking",L"formal",profile.c_str()),196);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        require(store->text == beforeReload && noCandidates(),197); // Engine replacement keeps pending text.
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

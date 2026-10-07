@@ -14,7 +14,7 @@ THESIS：設定用 Windows 11 的操作慣例，候選讓位給正在編輯的�
 
 OWN-WORLD：系統 accent、Light／Dark／HighContrast theme resources，繁體中文採 Microsoft JhengHei UI。設定使用 NavigationView、ComboBox、ToggleSwitch、NumberBox、InfoBar；候選使用 ListView／GridView。
 
-STORY：載入 profile → 修改草稿 → 儲存 → 重新啟用輸入法。鍵盤配置與操作政策分開。候選不取得鍵盤焦點，滑鼠結果經 TSF edit session 提交。
+STORY：載入 profile → 修改草稿 → 儲存 → 通知已啟用的善解立即套用。鍵盤配置與操作政策分開；需要換引擎的設定先提交目前組字。候選不取得鍵盤焦點，滑鼠結果經 TSF edit session 提交。
 
 FIRST VIEWPORT：設定 840×680 DIP，208 DIP 側欄，內容 20 DIP 留白、原生表單標題與 12 DIP 群組間隔，底部固定儲存／取消。候選依實際文字測量與顯示器工作區 sizing，螢幕底部不足時向上移。依使用者圈選移除底部注音按鈕與頁次提示。
 

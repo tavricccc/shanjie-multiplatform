@@ -34,7 +34,7 @@
                         <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="學習我的選字偏好" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/></Grid>
                         <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>
                         <TextBox Header="個人詞庫" AcceptsReturn="True" MinHeight="160" MaxHeight="300" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="每行填「注音 字詞」，多字注音以 - 分隔。例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後重新啟用輸入法即可載入。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="每行填「注音 字詞」，多字注音以 - 分隔。例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後立即載入，並先提交目前組字。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
                     <StackPanel x:Name="Keys" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="按鍵" Style="{ThemeResource TitleTextBlockStyle}"/>

@@ -31,6 +31,7 @@
 | TSF 組字、提交、游標、排版通知、外部選取變更同步 | `src/service.*` | 否 |
 | 候選直列、橫列、格狀、滑鼠點選與 DPI 定位 | `src/candidates.*` | 否 |
 | 個人 INI 讀取與 WinUI 設定窗 | `src/preferences.*`、`ui/Models/`、`ui/ViewModels/`、`ui/MainWindow.*` | 否 |
+| 設定儲存跨實例通知與重載 | `src/profile_watcher.*`、`Service::refreshPreferences`、`ProfileStore.Save`、`apply-profile.ps1` | 否 |
 | 註冊、套用輸入法清單、版本目錄安裝與乾淨移除 | `scripts/install.ps1`、`profiles.ps1`、`uninstall.ps1` | 否 |
 
 `src/dll.cpp` 的 category 註冊包含 `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`，讓 Windows 將模式按鈕納入系統匣。這是 Windows 註冊差異，不是 Rust 核心修改。

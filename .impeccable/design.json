@@ -2,8 +2,72 @@
   "schemaVersion": 2,
   "generatedAt": "2026-10-07T00:00:00+08:00",
   "title": "Design System: 善解 Windows",
-  "extensions": {},
-  "components": [],
+  "extensions": {
+    "colorMeta": {
+      "candidate-light-background": { "role": "neutral", "displayName": "候選淺色底面" },
+      "candidate-light-border": { "role": "neutral", "displayName": "候選淺色外框" },
+      "candidate-light-foreground": { "role": "neutral", "displayName": "候選淺色文字" },
+      "candidate-dark-background": { "role": "neutral", "displayName": "候選深色底面" },
+      "candidate-dark-border": { "role": "neutral", "displayName": "候選深色外框" },
+      "candidate-dark-foreground": { "role": "neutral", "displayName": "候選深色文字" }
+    },
+    "typographyMeta": {
+      "candidate": { "displayName": "候選字詞", "purpose": "Microsoft JhengHei UI；字級由個人設定控制，預設 18 DIP、範圍 14–32 DIP；量測與呈現共用字體。" },
+      "candidate-label": { "displayName": "候選數字與聯想標記", "purpose": "Segoe UI；與候選字詞同列。" }
+    },
+    "nativeCandidate": {
+      "platform": "WinUI 3 XAML",
+      "source": ["ui/CandidateWindow.xaml", "ui/CandidateWindow.xaml.cs"],
+      "reference": "local-ime-reranker-public/rime/weasel.custom.yaml",
+      "selection": {
+        "light": { "backgroundResource": "SystemAccentColorDark1", "foreground": "White" },
+        "dark": { "backgroundResource": "SystemAccentColorLight2", "foreground": "Black" },
+        "highContrast": { "backgroundResource": "SystemColorHighlightColor", "foregroundResource": "SystemColorHighlightTextColor" },
+        "selectedPointerOverAndPressed": "與各主題 selected 背景一致，跟隨 Windows 設定 accent。",
+        "selectionIndicatorVisualEnabled": false
+      },
+      "highContrastSurface": {
+        "backgroundResource": "SystemColorWindowColor",
+        "borderResource": "SystemColorWindowTextColor",
+        "foregroundResource": "SystemColorWindowTextColor"
+      },
+      "borderThickness": "1 DIP",
+      "spacing": {
+        "surface": "{spacing.candidate-surface}",
+        "item": "{spacing.candidate-item}",
+        "labelGap": "{spacing.candidate-label-gap}",
+        "containerPaddingAndMargin": "0 DIP"
+      },
+      "shapes": {
+        "surface": "{rounded.candidate-surface}",
+        "selectedPresenter": "{rounded.candidate-selected}"
+      },
+      "depth": "單層不透明外框，無自繪陰影。",
+      "layouts": ["直列", "橫列", "九欄格狀"],
+      "captures": ["build/ui-review-final/candidates-1-0.png", "build/ui-review-final/candidates-2-2.png"],
+      "verificationLimit": "背景離屏真實 XAML render；呈現目前主機 accent，未驗收真實文件操作、多 DPI、讀屏或高對比。無新增 raster 資產；非 web 介面，無 HTML detector。"
+    }
+  },
+  "components": [
+    {
+      "name": "候選淺色外框",
+      "kind": "custom",
+      "refersTo": "candidate-surface-light",
+      "description": "原生 XAML Border 使用 CandidateBackground／CandidateBorder／CandidateForeground；單層外框，不提供 HTML/CSS 模擬。"
+    },
+    {
+      "name": "候選深色外框",
+      "kind": "custom",
+      "refersTo": "candidate-surface-dark",
+      "description": "深色主題使用原生候選中性色資源，高對比改用系統 window／window text 資源。"
+    },
+    {
+      "name": "候選數字與字詞列",
+      "kind": "custom",
+      "refersTo": "candidate-item",
+      "description": "ListView／GridView 共用資料範本；數字 Segoe UI、字詞 Microsoft JhengHei UI，container 不疊加內距。選取 presenter 使用 Windows accent，關閉左側 indicator；保留排列與候選字級設定。"
+    }
+  ],
   "narrative": {
     "northStar": "Windows 原生 WinUI 3",
     "overview": "設定完成草稿編輯與儲存；候選讓位給文件輸入。",

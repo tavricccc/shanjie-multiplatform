@@ -47,7 +47,7 @@ pwsh -File ./install.ps1
 | Shift＋空白 | 全半形切換（英文 ASCII 輸出） | 保留上游行為 |
 | Ctrl＋標點 | 對應全形標點 | 保留上游行為 |
 
-個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`，切換到其他輸入法再切回善解時讀取；仍使用舊設定的程式需重新開啟。也可以編輯 INI 或套用自己的檔案：
+個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`。設定窗儲存或套用 profile 會通知已啟用的善解立即更新；直接編輯 INI 會在下一次按鍵讀取。切換鍵盤、詞庫、排名、學習或候選核心設定時會先提交目前組字，再重建引擎；單純調整外觀與開啟鍵不需重建。也可以編輯 INI 或套用自己的檔案：
 
 ```powershell
 pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini

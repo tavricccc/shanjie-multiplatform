@@ -118,6 +118,6 @@ public partial class SettingsViewModel : ObservableObject
             theme={Theme}
             font_size={(int)FontSize}
             """);
-        Status = "已儲存。請切換到其他輸入法再切回善解；仍使用舊設定的程式需重新開啟。";
+        Status = "已儲存並通知善解立即套用。切換鍵盤或詞庫時會先提交目前組字。";
     }
 }

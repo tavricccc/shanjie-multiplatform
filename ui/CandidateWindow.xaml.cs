@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Windowing;
 using Shanjie_UI.Interop;
@@ -29,6 +31,8 @@ public sealed partial class CandidateWindow : Window
     public CandidateWindow(nint mapping, nint signal = 0)
     {
         InitializeComponent();
+        VerticalList.ContainerContentChanging += StyleContainer;
+        TableList.ContainerContentChanging += StyleContainer;
         verification = mapping == 0 || Environment.GetEnvironmentVariable("SHANJIE_VERIFY_UI") == "1";
         if (mapping != 0) channel = new(mapping, signal);
         hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -54,10 +58,27 @@ public sealed partial class CandidateWindow : Window
         });
         Closed += (_, _) => { closing = true; channel?.Stop(); };
     }
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+    private static void StyleContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.InRecycleQueue) return;
+        args.ItemContainer.ApplyTemplate();
+        var presenter = Descendants(args.ItemContainer).OfType<ListViewItemPresenter>().First();
+        presenter.CornerRadius = new CornerRadius(4);
+        presenter.SelectionIndicatorVisualEnabled = false;
+    }
     private nint WindowProcedure(nint window, uint message, nuint wp, nint lp) => message == 0x21 ? 3 : Native.CallWindowProc(previousProcedure, window, message, wp, lp);
     private void Receive(CandidateFrame next)
     {
-        if (closing) return;
+        if (closing || (channel != null && !channel.IsCurrent(next.Sequence))) return;
         if (next.Shutdown) { Close(); return; }
         frame = next;
         Native.PostMessage(next.Callback, 0x8000 + 43, (nuint)hwnd, 0);
@@ -66,7 +87,7 @@ public sealed partial class CandidateWindow : Window
     }
     private void Render(CandidateFrame next)
     {
-        Surface.RequestedTheme = (ElementTheme)next.Theme;
+        PaletteRoot.RequestedTheme = (ElementTheme)next.Theme;
         bool vertical = next.Layout == 0 && next.Columns == 0;
         VerticalList.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
         TableList.Visibility = vertical ? Visibility.Collapsed : Visibility.Visible;
@@ -92,15 +113,15 @@ public sealed partial class CandidateWindow : Window
             return label.DesiredSize;
         }).ToArray();
         double textWidth = textSizes.Max(size => size.Width);
-        double cell = Math.Max(vertical ? 96 : 52, textWidth + (associated ? 52 : 40));
-        double rowHeight = Math.Max(32, textSizes.Max(size => size.Height) + 4);
+        double cell = Math.Max(vertical ? 96 : 52, textWidth + (associated ? 44 : 32));
+        double rowHeight = Math.Max(32, textSizes.Max(size => size.Height) + 8);
         double workWidth = (monitor.Work.Right - monitor.Work.Left) / scale;
-        cell = Math.Min(cell, (workWidth - 10) / columns);
+        cell = Math.Min(cell, (workWidth - 20) / columns);
         cell = Math.Ceiling(cell * scale) / scale;
         if (!vertical && (gridCellWidth != cell || gridCellHeight != rowHeight))
         {
             gridCellWidth = cell; gridCellHeight = rowHeight;
-            var style = new Style(typeof(GridViewItem)) { BasedOn = (Style)Surface.Resources["CompactGridItem"] };
+            var style = new Style(typeof(GridViewItem)) { BasedOn = (Style)PaletteRoot.Resources["CompactGridItem"] };
             style.Setters.Add(new Setter(FrameworkElement.WidthProperty, cell));
             style.Setters.Add(new Setter(FrameworkElement.HeightProperty, rowHeight));
             TableList.ItemContainerStyle = style;
@@ -112,14 +133,14 @@ public sealed partial class CandidateWindow : Window
             // Keep the TSF nine-column contract independent of ScrollViewer's viewport rounding.
             panel.Width = cell * columns + 1;
         }
-        int width = (int)Math.Ceiling((cell * columns + 12) * scale);
-        int height = (int)Math.Ceiling(((words.Length + columns - 1) / columns * rowHeight + 10) * scale);
+        int width = (int)Math.Ceiling((cell * columns + 20) * scale);
+        int height = (int)Math.Ceiling(((words.Length + columns - 1) / columns * rowHeight + 14) * scale);
         height = Math.Min(height, monitor.Work.Bottom - monitor.Work.Top);
         int x = Math.Clamp(next.Left, monitor.Work.Left, monitor.Work.Right - width);
         int y = next.Bottom + 4; if (y + height > monitor.Work.Bottom) y = next.Top - height - 4;
         y = Math.Max(y, monitor.Work.Top);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(verification ? -12000 : x, verification ? -12000 : y, width, height));
-        AppWindow.Show(false);
+        if (channel == null || channel.IsCurrent(next.Sequence)) AppWindow.Show(false);
     }
     internal FrameworkElement CaptureElement => Surface;
     internal void ShowFrame(CandidateFrame next) { frame = next; Render(next); }

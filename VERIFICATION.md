@@ -4,6 +4,16 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+本次候選修正版：上游更新至正式 0.2.1；與舊 pin 比較 core、詞庫及授權沒有差異。112 個核心／學習／回放測試通過，標準／倚天各 302 句；排除界線維持下文。
+
+- 設定窗及套用 profile 通知已啟用的 TSF 實例立即重讀；直接改 INI 在下一鍵讀取。核心設定變更先提交組字再重建。
+- Windows Down 開啟政策不再由一般提交觸發聯想；聯想移至選定候選後，保留原組字，Enter 關閉聯想並提交。聯想選取會提交組字與後續詞，和微軟私有引擎仍有差異。
+- 新增背景 TSF regression：第一聲空白不開候選、完整組字空白不彈聯想、同一服務 live trigger 更新、thread focus 結束候選、核心重載保留文字。此 harness 仍使用 keyboard-sink 代理，不代表新安裝 App 的日常驗收。
+- IPC 不再因 writer 正在換 frame 而丟失自動重設 event；過期 dispatcher frame 不可重開，已知 HWND 立即隱藏。兩架構 WinUI host harness 通過。
+- 真實 XAML captures 覆蓋淺／深、三種排列、14／18／32 DIP、長詞及聯想。反白使用 Windows accent，外框參考 Syllune；獨立 reviewer 修正 presenter 反白圓角後 verdict 為 ship。圖片位於 build/ui-review-final；沒有新生成素材。
+
+尚未驗證修正版在記事本、Chrome、Office 的註冊 TIP 日常操作、多螢幕 DPI、讀屏或高對比。UI 畫面外驗證不會啟用使用者視窗；上述行為通過不構成真實應用程式驗收。
+
 記事本實際測試：透過 computer-use 插件在已安裝版本輸入 s、u、3，↓ 開啟 WinUI 候選，下一次 ↓ 反白第二項「妳」，Enter 選取後組字為「妳」。已看到實際候選文字，並非只確認 HWND 可見。Chrome 測試因 Computer Use 無法辨識新分頁 URL 的安全檢查而中止；Chrome 的使用者回報仍未驗證或排除。
 
 使用者遠端畫面回報看不到候選；重測時記事本前景啟動兩次失敗，Computer Use 回報 `failed to activate captured window`，停止輸入操作。保存 `build/notepad-test-result.png`（選取「妳」後的畫面）；此前工具擷取有完整候選文字。此差異不能證明遠端軟體是根因，也不能據此宣稱 Chrome 問題修好。
