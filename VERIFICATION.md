@@ -14,6 +14,8 @@
 
 尚未驗證修正版在記事本、Chrome、Office 的註冊 TIP 日常操作、多螢幕 DPI、讀屏或高對比。UI 畫面外驗證不會啟用使用者視窗；上述行為通過不構成真實應用程式驗收。
 
+最終 x64／x86 建置、兩種操作 profile 與核心重載保留文字檢查通過；103.4 MiB ZIP 的 484 個檔案 SHA-256 核對通過。本次安裝 UAC 回傳「操作被使用者取消」，兩架構 COM 路徑仍指向舊版本 `2000710DDE0EC67B2DC7D1EC`，DLL hash 均不等於新建置；因此修正版尚未安裝。換版需要一次重新開啟原本載有舊 DLL 的程式，這與新版設定的即時套用是不同階段。
+
 記事本實際測試：透過 computer-use 插件在已安裝版本輸入 s、u、3，↓ 開啟 WinUI 候選，下一次 ↓ 反白第二項「妳」，Enter 選取後組字為「妳」。已看到實際候選文字，並非只確認 HWND 可見。Chrome 測試因 Computer Use 無法辨識新分頁 URL 的安全檢查而中止；Chrome 的使用者回報仍未驗證或排除。
 
 使用者遠端畫面回報看不到候選；重測時記事本前景啟動兩次失敗，Computer Use 回報 `failed to activate captured window`，停止輸入操作。保存 `build/notepad-test-result.png`（選取「妳」後的畫面）；此前工具擷取有完整候選文字。此差異不能證明遠端軟體是根因，也不能據此宣稱 Chrome 問題修好。
