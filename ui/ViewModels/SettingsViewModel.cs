@@ -5,12 +5,13 @@ public partial class SettingsViewModel : ObservableObject
 {
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
     public string CandidateHelp => Interaction == 0
-        ? "Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字或 Enter 確認。"
+        ? "Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字選字，Enter 選字並提交。"
         : "善解上游操作：←／→ 選字，↓ 展開格狀列表。數字或 Enter 確認。";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int Layout { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
+    [ObservableProperty] public partial int Model { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
     [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
@@ -40,6 +41,7 @@ public partial class SettingsViewModel : ObservableObject
         Anchor = ProfileStore.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
         Layout = Array.IndexOf(new[] { "vertical", "horizontal", "grid" }, ProfileStore.Read("candidates", "layout", "vertical"));
         Ranking = ProfileStore.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
+        Model = ProfileStore.Number("engine", "model", 1) - 1;
         ShiftToggle = ProfileStore.Flag("shortcuts", "shift_toggle", true); ShiftSide = ProfileStore.Number("shortcuts", "shift_side", 0);
         CtrlSpaceToggle = ProfileStore.Flag("shortcuts", "ctrl_space_toggle", true); WidthToggle = ProfileStore.Flag("shortcuts", "shift_space_toggle", true);
         CtrlPunctuation = ProfileStore.Flag("shortcuts", "ctrl_punctuation", true);
@@ -89,6 +91,7 @@ public partial class SettingsViewModel : ObservableObject
             interaction={(Interaction == 0 ? "windows" : "shanjie")}
             [engine]
             ranking={(Ranking == 0 ? "chat" : "formal")}
+            model={Model + 1}
             [input]
             chinese={Flag(InitialChinese)}
             full_width={Flag(InitialFullWidth)}

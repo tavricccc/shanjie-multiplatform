@@ -29,6 +29,8 @@ internal static class VisualVerifier
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || settings.Vm.Layout != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
+        settings.Vm.Model = 1; settings.Vm.Associations = false; settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.Model != 1 || settings.Vm.Associations) throw new InvalidDataException("Model-v2 and prediction toggle round-trip failed");
         foreach (int theme in new[] { 1, 2 })
         {
             settings.Vm.Theme = theme;
@@ -45,6 +47,8 @@ internal static class VisualVerifier
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-shanjie.png"));
             settings.LoadProfile(true); await Task.Delay(120);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error-then-preset.png"));
+            settings.Vm.Theme = theme; settings.ShowModelOptions(); await Task.Delay(120);
+            await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-models.png"));
         }
         var candidates = new CandidateWindow(0);
         string[] words = ["你", "妳", "擬", "禰", "妮", "尼", "倪", "泥", "逆"];

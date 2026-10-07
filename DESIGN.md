@@ -84,6 +84,10 @@ components:
 
 NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選使用 ListView／GridView，item container 的 padding／margin 歸零，避免原生預設再疊加一層留白。
 
+一般頁的「語言模型」沿用全寬原生 ComboBox，提供 `model-v1（原版）` 與 `model-v2（上游新版）`，預設 v1，不自動改用另一版。其下以可換行的次要文字說明兩版均在本機、儲存後先提交目前組字再切換，以及保留個人詞庫與選字學習；模型來源與 hash 以 `MODEL-SOURCES.json` 為準。變更仍在共用草稿內，按儲存才套用。
+
+詞庫與學習頁保留聯想開關，名稱及 AutomationProperties.Name 都為「預測尚未輸入的後續詞」，沿用左標籤、右原生 ToggleSwitch。次要文字明確區分關閉時只顯示已輸入讀音的候選字、開啟時數字或滑鼠選字後提示聯想詞；聯想可用 Shift＋數字或滑鼠選取，Enter 提交並關閉候選。學習偏好開關、清除學習與個人詞庫輸入維持原有原生控制項。
+
 候選 Surface 使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`，內距只由資料範本提供。ListView／GridView 共用 `StaticCandidateItem`：CommonStates 僅使用靜態 setters，沒有 VisualTransitions 或 storyboard，ItemContainerTransitions 為空；顯示、隱藏與選取立即切換，DWM 視窗轉場也停用。反白、邊框及高對比資源契約以 `ui/CandidateWindow.xaml` 為準；非客戶區處理、量測與定位以同名 `.xaml.cs` 為準。這是原生 XAML 元件，sidecar 記錄資源與行為，不提供模擬 WinUI 的 HTML/CSS 範例。
 
 ## Do's and Don'ts
@@ -100,3 +104,5 @@ NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用�
 本次候選外觀證據為 `build/ui-review-final/candidates-1-0.png`（淺色直列）與 `candidates-2-2.png`（深色九欄格狀）。圖片是背景離屏 XAML render，呈現目前主機 accent；它們驗證候選密度、字體、反白與外框，不能視為真實文件操作、多 DPI、讀屏或高對比驗收。沒有新增 raster 資產；設定窗本次維持原樣。
 
 單框與無動畫另由實作及 native harness 驗證：兩架構已核對 client 與 window 尺寸相等、DWM 非客戶區繪製停用、NOACTIVATE 與隱藏後重開。靜態圖片本身無法證明轉場行為。
+
+後續模型與聯想設定的外觀證據為 `build/ui-review-final/settings-1-models.png`／`settings-2-models.png` 與 `settings-1-3.png`／`settings-2-3.png`，分別呈現淺／深色的一般頁模型控制項與詞庫學習開關。圖片為背景 XAML render；文案與資料繫結另核對 `ui/MainWindow.xaml`、同名 `.xaml.cs` 與 `ui/ViewModels/SettingsViewModel.cs`。此輪沿用既有設定控制項，候選 tokens、外觀與內距維持原樣；背景證據不等同前景應用程式中的實際提交與模型切換驗收。

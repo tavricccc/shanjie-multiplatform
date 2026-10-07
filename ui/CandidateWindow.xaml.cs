@@ -40,7 +40,7 @@ public sealed partial class CandidateWindow : Window
         int disabled = 1;
         Marshal.ThrowExceptionForHR(Native.DwmSetWindowAttribute(hwnd, 2, ref disabled, sizeof(int))); // DWMNCRP_DISABLED
         Marshal.ThrowExceptionForHR(Native.DwmSetWindowAttribute(hwnd, 3, ref disabled, sizeof(int))); // TRANSITIONS_FORCEDISABLED
-        TableList.Loaded += (_, _) => { if (frame is { Visible: true }) Render(frame); };
+        TableList.Loaded += (_, _) => ApplyGridMetrics();
         Native.SetWindowLongPtr(hwnd, -20, Native.GetWindowLongPtr(hwnd, -20) | 0x08000080);
         procedure = WindowProcedure;
         previousProcedure = Native.SetWindowLongPtr(hwnd, -4, Marshal.GetFunctionPointerForDelegate(procedure));
@@ -117,12 +117,7 @@ public sealed partial class CandidateWindow : Window
             TableList.ItemContainerStyle = style;
         }
         TableList.UpdateLayout();
-        if (!vertical && TableList.ItemsPanelRoot is ItemsWrapGrid panel)
-        {
-            panel.ItemWidth = cell; panel.ItemHeight = rowHeight;
-            // Keep the TSF nine-column contract independent of ScrollViewer's viewport rounding.
-            panel.Width = cell * columns + 1;
-        }
+        if (!vertical) ApplyGridMetrics();
         int width = (int)Math.Ceiling((cell * columns + 20) * scale);
         int height = (int)Math.Ceiling(((words.Length + columns - 1) / columns * rowHeight + 14) * scale);
         height = Math.Min(height, monitor.Work.Bottom - monitor.Work.Top);
@@ -131,6 +126,15 @@ public sealed partial class CandidateWindow : Window
         y = Math.Max(y, monitor.Work.Top);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(verification ? -12000 : x, verification ? -12000 : y, width, height));
         if (channel == null || channel.IsCurrent(next.Sequence)) AppWindow.Show(false);
+    }
+    private void ApplyGridMetrics()
+    {
+        if (TableList.Visibility != Visibility.Visible) return;
+        if (TableList.ItemsPanelRoot is ItemsWrapGrid panel)
+        {
+            panel.ItemWidth = gridCellWidth; panel.ItemHeight = gridCellHeight;
+            panel.Width = gridCellWidth * Math.Min(9, words.Length) + 1;
+        }
     }
     internal FrameworkElement CaptureElement => Surface;
     internal void ShowFrame(CandidateFrame next) { frame = next; Render(next); }

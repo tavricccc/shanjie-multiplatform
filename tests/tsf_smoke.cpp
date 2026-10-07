@@ -206,8 +206,11 @@ int wmain(int argc, wchar_t** argv) {
         UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 9,220);
         press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
         press(VK_ESCAPE,224); press(VK_RETURN,226);
+        press('S',244); press('U',246); press('3',248); press(VK_DOWN,250); press('1',252);
+        require(!noCandidates(),254); // Prediction stays available until explicitly disabled.
         require(WritePrivateProfileStringW(L"input",L"associations",L"0",profile.c_str()),228);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        require(noCandidates(),255); press(VK_RETURN,256);
         press('S',230); press('U',232); press('3',234); press(VK_DOWN,236); press('1',238);
         require(noCandidates(),240); press(VK_RETURN,241);
     }

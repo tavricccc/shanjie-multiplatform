@@ -18,6 +18,7 @@ public sealed partial class MainWindow : Window
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void ShowSection(int index) => Navigation.SelectedItem = Navigation.MenuItems[index];
+    internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false }); }
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;

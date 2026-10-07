@@ -8,6 +8,8 @@
 
 ## 哪些東西有改
 
+後續模型擴充：Windows 安裝包提供 model-v1／model-v2，選擇由 `[engine] model=1|2` 控制；兩版來源、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 分別核對與轉換，並非更新子模組 main 或把 model-v2 當輸入法版本。模型切換不改 Rust 演算法、詞庫或學習格式。
+
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次將上游 core 複製到 `build/core`，再套用以下程式變更。**子模組沒有被改，不代表建置出的核心完全等於上游。**
 
 | 上游來源 | Windows 建置副本的變更 | 維護來源 |

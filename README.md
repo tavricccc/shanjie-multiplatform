@@ -49,6 +49,10 @@ pwsh -File ./install.ps1
 
 個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`。設定窗儲存或套用 profile 會通知已啟用的善解立即更新；直接編輯 INI 會在下一次按鍵讀取。切換鍵盤、詞庫、排名、學習或候選核心設定時會先提交目前組字，再重建引擎；單純調整外觀與開啟鍵不需重建。也可以編輯 INI 或套用自己的檔案：
 
+「一般 → 語言模型」可選 model-v1 或 model-v2，兩版都隨安裝包提供且離線運作。儲存後先提交目前組字，再載入所選模型；既有設定未指定模型時使用 v1。INI 對應 `[engine] model=1|2`，切換操作 profile 不更改模型選擇。來源與官方 SHA-256 見 `MODEL-SOURCES.json`；選取的模型缺失或損壞會載入失敗，不自動換成另一版。
+
+「詞庫與學習 → 預測尚未輸入的後續詞」可關閉聯想預測，保留已輸入讀音的正常候選。Windows 操作下，Enter 選定最後候選即提交組字並關窗；數字或滑鼠選字仍可在開關開啟時顯示聯想。
+
 ```powershell
 pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini
 ```
