@@ -28,7 +28,7 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle) throw new InvalidDataException("Windows profile round-trip failed");
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || settings.Vm.Layout != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
-        settings.Vm.Preset(true);
+        settings.LoadProfile(true);
         foreach (int theme in new[] { 1, 2 })
         {
             settings.Vm.Theme = theme;
@@ -43,7 +43,8 @@ internal static class VisualVerifier
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error.png"));
             settings.Vm.DictionaryText = ""; settings.Vm.Interaction = 1; settings.ShowSection(2); await Task.Delay(120);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-shanjie.png"));
-            settings.Vm.Preset(true);
+            settings.LoadProfile(true); await Task.Delay(120);
+            await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error-then-preset.png"));
         }
         var candidates = new CandidateWindow(0);
         string[] words = ["你", "妳", "擬", "禰", "妮", "尼", "倪", "泥", "逆"];

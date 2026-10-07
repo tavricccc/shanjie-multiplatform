@@ -30,7 +30,11 @@ public sealed partial class MainWindow : Window
     private void LoadPreset(object sender, SelectionChangedEventArgs args)
     {
         int index = ((ComboBox)sender).SelectedIndex;
-        if (index > 0) { Vm.Preset(index == 1); StatusBar.IsOpen = true; }
+        if (index > 0) LoadProfile(index == 1);
+    }
+    internal void LoadProfile(bool windows)
+    {
+        Vm.Preset(windows); StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = true;
     }
     private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); Preset.SelectedIndex = 0; StatusBar.IsOpen = false; }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
