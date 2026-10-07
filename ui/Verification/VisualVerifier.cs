@@ -59,6 +59,13 @@ internal static class VisualVerifier
                 await Task.Delay(150);
                 await Capture(candidates.CaptureElement, Path.Combine(output, $"candidates-{theme}-{layout}.png"));
             }
+            foreach (var (name, layout, size, associated) in new[] { ("large", 0, 32, false), ("associated", 0, 18, true), ("small-grid", 2, 14, false) })
+            {
+                string[] longWords = ["輸入法", "候選視窗", "善解注音", "微軟注音", "個人詞庫", "全形標點", "倚天鍵盤", "使用者", "設定"];
+                candidates.ShowFrame(new(4, true, layout, 1, 0, 29, -12000, -12000, -12000, 96, theme, size, layout == 2 ? 9 : 0, false, 0, longWords, associated));
+                await Task.Delay(150);
+                await Capture(candidates.CaptureElement, Path.Combine(output, $"candidates-{theme}-{name}.png"));
+            }
         }
         candidates.Close();
         settings.Close();
