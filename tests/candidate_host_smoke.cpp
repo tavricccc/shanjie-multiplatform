@@ -57,6 +57,9 @@ int wmain(int argc,wchar_t** argv) {
                 SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",nullptr);
                 preferences.fontSize = 18; preferences.layout = CandidateLayout::Vertical; frame.columns = 0; frame.associated = true;
                 presenter.publish(frame,preferences,caret,96,true); captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-associated.bmp")); frame.associated = false;
+                frame.candidates = {L"😀",L"👍🏽",L"👩‍💻",L"🇹🇼",L"❤️",L"文字😀"};
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-emoji.bmp"));
             }
         }
         presenter.hide(); assert(!presenter.shown());

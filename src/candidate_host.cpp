@@ -82,7 +82,7 @@ HRESULT CandidateHost::paint(HDC dc) {
         target_->PushAxisAlignedClip(D2D1::RectF(x,y,x+cell_,y+row_),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         DWRITE_TEXT_METRICS word{},number{}; words_[i]->GetMetrics(&word); labels_[i]->GetMetrics(&number);
         target_->DrawTextLayout(D2D1::Point2F(x+4,y+(row_-number.height)/2),labels_[i].Get(),brush_.Get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
-        target_->DrawTextLayout(D2D1::Point2F(x+(state_.associated ? 36 : 24),y+(row_-word.height)/2),words_[i].Get(),brush_.Get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        target_->DrawTextLayout(D2D1::Point2F(x+(state_.associated ? 36 : 24),y+(row_-word.height)/2),words_[i].Get(),brush_.Get(),(D2D1_DRAW_TEXT_OPTIONS)(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT));
         target_->PopAxisAlignedClip();
     }
     return target_->EndDraw();
