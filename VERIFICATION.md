@@ -4,6 +4,12 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+最新架構：依使用者確認，候選改為 DLL 內 Win32／Direct2D software DC／DirectWrite；WinUI 只保留設定頁。移除匿名 mapping/event、候選 IPC、XAML 候選與其 interop，啟用時建立隱藏原生視窗。保持原密度、系統 AccentDark1／AccentLight2、字體、字級與三排列；受限工作區逐格裁切，不會畫入下一個候選。彩色中／A ICO 嵌入兩架構 DLL，來源見 `assets/mode/README.md`；游標旁提示不搶焦點，1400 ms、開始打字或失去焦點後隱藏。
+
+量測與方法界線見 `PERFORMANCE.md`：新候選介面增加約 11.6–11.8 MiB Private Bytes，原生資源初始化約 13 ms，初始化後首繪約 7–9 ms；舊獨立 WinUI host 約 96 MiB。這些不是完整 App 或整個輸入法記憶體，也不是螢幕刷新延遲。本次尚未自動安裝、未終止既有 App；下方舊 WinUI 候選／IPC 驗證記錄保留為歷史，不能當作新版原生實作的證據。
+
+最終 x64／x86 建置通過；兩架構原生候選 harness 通過同程序、滑鼠 sequence、NOACTIVATE、單框、隱藏／重開。Windows／Shanjie 兩種背景 TSF 操作回歸通過。兩架構中英圖示與 96／144 DPI 提示大小、手動隱藏／1400 ms 自動隱藏通過。獨立 impeccable reviewer 逐張核對 24 張一般、4 張 720 px 窄工作區候選與模式提示 BMP；跨格修正及文件來源兩項均 resolved，最後 disposition 為 ship，限定該 fix list。窄畫面只證明每格裁切，不宣稱省略號可見。WinUI 設定離屏保存／重讀與五頁 captures 通過。
+
 最新增量：保留聯想功能，在設定用「預測尚未輸入的後續詞」開關關閉。Windows Enter 選定最後候選後，透過核心 Enter 正式提交（保留學習提交流程）並關窗，不接續開聯想。格狀第一列 ↑ 停留而不收回列表；TableList Loaded 只更新 panel 尺寸，不重新切換候選排列與視窗。
 
 安裝包提供 model-v1／model-v2，維持既有設定預設 v1。v2 的官方 SHA-256 `8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240` 核對通過；兩版 9 個映射陣列及標量等價檢查通過。新背景 TSF regression 通過 v1→v2→v1 即時重載、Enter 後沒有 UI element／不再攔截下一次 Enter、格狀第一列 ↑ 保持展開、聯想仍可開啟、關閉設定即清掉現有聯想且後續數字選字不再顯示。善解上游操作 profile 與兩架構 host checks 通過；WinUI 模型與預測開關保存／重讀、淺／深畫面通過獨立窄範圍審查。這些不包含前景 App 日常驗收；沒有將使用者現有模型改成 v2，也未自動安裝。

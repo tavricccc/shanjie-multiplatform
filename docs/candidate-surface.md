@@ -10,6 +10,14 @@ STORY：先完成組字，再用所選開啟鍵進入候選；選字後可顯示
 
 FIRST VIEWPORT：外框圓角 6 DIP、1 DIP 邊框、內距 8×6 DIP；數字與字詞同列，間距 4 DIP、候選內距 4 DIP。保留直列、橫列與九欄格狀；18 DIP 候選字級仍由個人設定控制。
 
-FORM：使用者指定參考，無隨機概念選擇；沿用原生 ListView／GridView、NOACTIVATE 與系統高對比色。候選共用靜態範本，顯示／隱藏、換頁及反白均無動畫。整個 HWND 為客戶區，只由 Surface 繪製單一 XAML 外框，不保留原生視窗外框。
+FORM：使用者指定參考，無隨機概念選擇；已核准候選改為 TSF 同程序 Win32 popup，設定保留 WinUI 3。Direct2D software DC render target 與 DirectWrite 繪製，實際 layout metrics 決定欄寬與列高；沒有獨立候選 host 或 IPC。保留 NOACTIVATE，顯示／隱藏、換頁及反白均無動畫。整個 HWND 為客戶區，只繪製單一不透明外框，不保留原生 caption／resize frame；選取圓角 4 DIP。
+
+COLOR：`UISettings` 讀取淺色 `AccentDark1`／深色 `AccentLight2`，分別配白／黑字。高對比讀系統 window、window text、highlight 與 highlight text 色；來源已核對，尚未實際驗收。
+
+FIT：字級 14–32 DIP，保留三種排列。長詞依實際量測加寬；窄工作區每格獨立 clip；來源設定 character ellipsis，本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見，空間足夠時小字級長詞完整顯示。
+
+MODE：工作列與游標旁中英提示共用使用者指定參考專案的彩色「中」／「A」ICO，直接引用 `C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。來源見 `assets/mode/README.md`。游標旁提示為 40 DIP、內距 6 DIP，1400 ms 後或下一次輸入／失焦時隱藏；同 TSF 程序，不使用額外 host。
+
+EVIDENCE：背景原生 BMP 在 `build/native-review/x64`／`x86`，模式圖示 capture 在 `build/mode-review`；無 HTML detector。來源為 `src/candidate_host.h`／`.cpp`、`candidate_palette.h`／`.cpp`、`mode_indicator.cpp` 與 `mode_button.cpp`。窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list；高對比、實際深色工作列、前景應用程式及多螢幕尚未驗收。背景圖片不等同日常使用驗收。
 
 FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

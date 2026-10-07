@@ -44,7 +44,7 @@
 
 2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
 
-`src/pinyin_input.*`、`special_input.*`、`associated_candidates.*` 處理 Windows 拼音、符號／字碼與聯想操作；`src/engine.*` 串行化選字學習及 epoch。實際 WinUI presentation 位於 `ui/`，`src/candidate_host.*` 用匿名 mapping/event 橋接兩架構 DLL。完整 schema 2 範本與差異見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。
+`src/pinyin_input.*`、`special_input.*`、`associated_candidates.*` 處理 Windows 拼音、符號／字碼與聯想操作；`src/engine.*` 串行化選字學習及 epoch。WinUI 設定位於 `ui/`；`src/candidate_host.*` 在兩架構 DLL 內直接建立 Win32 候選視窗，`candidate_palette.*` 取得 Windows accent，高對比採系統色。候選不再使用匿名 mapping/event 或子程序。完整 schema 2 範本與差異見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 

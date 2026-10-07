@@ -1,6 +1,6 @@
-# WinUI 3 移植與維護
+# 原生候選與 WinUI 3 設定維護
 
-本次方向由使用者指定：全部自有介面採 WinUI 3，包含候選與設定；沿用 Windows／善解操作 profile，Windows 模式的直列、橫列都以 ↓ 逐項選字。
+2026-10-07 使用者確認：設定頁保留 WinUI 3，候選移回 DLL 內的 Win32 視窗，降低資源與首次啟動成本。沿用 Windows／善解操作 profile，Windows 模式的直列、橫列都以 ↓ 逐項選字。
 
 ## 來源
 
@@ -10,23 +10,23 @@
 
 ## Direction contract
 
-THESIS：設定用 Windows 11 的操作慣例，候選讓位給正在編輯的文件。兩者都使用實際 WinUI 控制項。
+THESIS：設定用 Windows 11 的操作慣例，候選讓位給正在編輯的文件；只有開設定才啟動 WinUI 程式。
 
-OWN-WORLD：系統 accent、Light／Dark／HighContrast theme resources，繁體中文採 Microsoft JhengHei UI。設定使用 NavigationView、ComboBox、ToggleSwitch、NumberBox、InfoBar；候選使用 ListView／GridView。
+OWN-WORLD：Windows accent 與淺／深中性色，繁體中文採 Microsoft JhengHei UI。設定使用 NavigationView、ComboBox、ToggleSwitch、NumberBox、InfoBar；候選由 Direct2D／DirectWrite 繪製，保留既有密度与單框。
 
 STORY：載入 profile → 修改草稿 → 儲存 → 通知已啟用的善解立即套用。鍵盤配置與操作政策分開；需要換引擎的設定先提交目前組字。候選不取得鍵盤焦點，滑鼠結果經 TSF edit session 提交。
 
 FIRST VIEWPORT：設定 840×680 DIP，208 DIP 側欄，內容 20 DIP 留白、原生表單標題與 12 DIP 群組間隔，底部固定儲存／取消。候選依實際文字測量與顯示器工作區 sizing，螢幕底部不足時向上移。依使用者圈選移除底部注音按鈕與頁次提示。
 
-FORM：使用者指定的 Windows／WinUI 原生方向；code-led，沒有影像 mockup 或概念抽籤。表單可捲動，候選支援直列、橫列與格狀。
+FORM：使用者指定的 Windows 原生方向；code-led，沒有影像 mockup 或概念抽籤。表單可捲動，候選支援直列、橫列與格狀。
 
 FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
 
 ## 架構
 
-TSF DLL 仍是 C++，負責 composition、edit session、按鍵與 TSF UI element。舊 GDI 候選繪製與 Win32 設定表單已移除。WinUI 是獨立 x64 程序；x86／x64 TIP 都使用相同 host，不將 WinUI runtime 載入文件 App。
+TSF DLL 是 C++，負責 composition、edit session、按鍵與 TSF UI element。候選是同程序 Win32 popup：Direct2D software DC target 與 DirectWrite 量測／繪字；開啟輸入法時初始化隱藏視窗，不啟動候選子程序。WinUI 設定是獨立 x64 程序，不將 WinUI runtime 載入文件 App。
 
-`src/candidate_host.*` 建立匿名 file mapping 與 event，只讓這兩個 handle 被子程序繼承。`ui/Interop/CandidateChannel.cs` 消費固定欄位協定 v2，透過 event 等待更新，不做定時輪詢。程序退出／父程序消失時關閉 UI。候選文字不經網路、剪貼簿、公共命名 pipe 或磁碟檔傳遞。
+`src/candidate_host.*` 直接持有候選視窗與文字 layouts，`candidate_palette.*` 取得系統 accent 與高對比色；舊 mapping/event、候選協定與 XAML 候選已刪除。更新與隱藏在 TSF 執行緒同步完成，沒有跨程序 dispatcher 的過期更新。候選文字不經網路、剪貼簿或磁碟檔傳遞。長詞受每格 clipping 限制，不會畫入相鄰候選。
 
 滑鼠 callback 帶畫面 sequence；收到 callback 與非同步 edit session 執行時分別核對版本。Windows 的系統輸入法清單與系統匣由 TSF／Windows 提供，不重畫成自有 WinUI shell。
 
@@ -52,4 +52,4 @@ pwsh -File scripts/verify-ui.ps1
 pwsh -File scripts/package.ps1
 ```
 
-UI 驗證建立畫面外、不 activate 的真實 WinUI 視窗，保存 XAML render PNG 到 `build/ui-review-final/`；沒有變更真實個人 INI。IPC harness 測試實際子程序、x86／x64 handle 傳遞、NOACTIVATE、隱藏／重開及退出。這不等同已完成 Chrome、Office、讀屏、高對比與多螢幕日常驗收。
+設定驗證建立畫面外、不 activate 的真實 WinUI 視窗，保存 XAML render PNG 到 `build/ui-review-final/`；沒有變更真實個人 INI。原生候選 harness 驗證同程序、NOACTIVATE、單框、滑鼠 sequence、隱藏／重開，透過真實 WM_PRINTCLIENT 繪製保存 BMP 到 `build/native-review/x64` 與 `x86`。模式圖示與提示檢查用 `verify-mode.ps1`；量測用 `measure-engine.ps1`。這不等同已完成 Chrome、Office、工作列、讀屏、高對比與多螢幕日常驗收。測量界線與結果見 `PERFORMANCE.md`。

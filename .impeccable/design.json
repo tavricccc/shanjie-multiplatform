@@ -4,25 +4,56 @@
   "title": "Design System: 善解 Windows",
   "extensions": {
     "colorMeta": {
-      "candidate-light-background": { "role": "neutral", "displayName": "候選淺色底面" },
-      "candidate-light-border": { "role": "neutral", "displayName": "候選淺色外框" },
-      "candidate-light-foreground": { "role": "neutral", "displayName": "候選淺色文字" },
-      "candidate-dark-background": { "role": "neutral", "displayName": "候選深色底面" },
-      "candidate-dark-border": { "role": "neutral", "displayName": "候選深色外框" },
-      "candidate-dark-foreground": { "role": "neutral", "displayName": "候選深色文字" }
+      "candidate-light-background": {
+        "role": "neutral",
+        "displayName": "候選淺色底面"
+      },
+      "candidate-light-border": {
+        "role": "neutral",
+        "displayName": "候選淺色外框"
+      },
+      "candidate-light-foreground": {
+        "role": "neutral",
+        "displayName": "候選淺色文字"
+      },
+      "candidate-dark-background": {
+        "role": "neutral",
+        "displayName": "候選深色底面"
+      },
+      "candidate-dark-border": {
+        "role": "neutral",
+        "displayName": "候選深色外框"
+      },
+      "candidate-dark-foreground": {
+        "role": "neutral",
+        "displayName": "候選深色文字"
+      }
     },
     "typographyMeta": {
-      "candidate": { "displayName": "候選字詞", "purpose": "Microsoft JhengHei UI；字級由個人設定控制，預設 18 DIP、範圍 14–32 DIP；量測與呈現共用字體。" },
-      "candidate-label": { "displayName": "候選數字與聯想標記", "purpose": "Segoe UI；與候選字詞同列。" }
+      "candidate": {
+        "displayName": "候選字詞",
+        "purpose": "Microsoft JhengHei UI；字級由個人設定控制，預設 18 DIP、範圍 14–32 DIP；量測與呈現共用字體。"
+      },
+      "candidate-label": {
+        "displayName": "候選數字與聯想標記",
+        "purpose": "Segoe UI；與候選字詞同列。"
+      }
     },
     "nativeSettings": {
       "platform": "WinUI 3 XAML",
-      "source": ["ui/MainWindow.xaml", "ui/MainWindow.xaml.cs", "ui/ViewModels/SettingsViewModel.cs"],
+      "source": [
+        "ui/MainWindow.xaml",
+        "ui/MainWindow.xaml.cs",
+        "ui/ViewModels/SettingsViewModel.cs"
+      ],
       "modelSelector": {
         "section": "一般",
         "control": "原生全寬 ComboBox",
         "header": "語言模型",
-        "options": ["model-v1（原版）", "model-v2（上游新版）"],
+        "options": [
+          "model-v1（原版）",
+          "model-v2（上游新版）"
+        ],
         "default": "model-v1",
         "sources": "MODEL-SOURCES.json 的官方來源與 hash 契約",
         "automaticFallback": false,
@@ -36,47 +67,95 @@
       },
       "draft": "與其他頁共用草稿，按儲存後才套用；沿用固定 InfoBar 與儲存／取消列。",
       "helpStyle": "Microsoft JhengHei UI、可換行 TextBlock、TextFillColorSecondaryBrush；沿用既有表單間距與原生控制項狀態。",
-      "captures": ["build/ui-review-final/settings-1-models.png", "build/ui-review-final/settings-2-models.png", "build/ui-review-final/settings-1-3.png", "build/ui-review-final/settings-2-3.png"],
+      "captures": [
+        "build/ui-review-final/settings-1-models.png",
+        "build/ui-review-final/settings-2-models.png",
+        "build/ui-review-final/settings-1-3.png",
+        "build/ui-review-final/settings-2-3.png"
+      ],
       "verificationLimit": "背景真實 XAML render 與設定來源核對；未以此宣稱前景應用程式中的實際提交或模型切換驗收。候選 tokens、style 與 padding 保持原樣。"
     },
     "nativeCandidate": {
-      "platform": "WinUI 3 XAML",
-      "source": ["ui/CandidateWindow.xaml", "ui/CandidateWindow.xaml.cs"],
+      "platform": "TSF 同程序 Win32 popup；Direct2D software DC render target／DirectWrite",
+      "source": [
+        "src/candidate_host.h",
+        "src/candidate_host.cpp",
+        "src/candidate_palette.h",
+        "src/candidate_palette.cpp"
+      ],
       "reference": "local-ime-reranker-public/rime/weasel.custom.yaml",
       "selection": {
-        "light": { "backgroundResource": "SystemAccentColorDark1", "foreground": "White" },
-        "dark": { "backgroundResource": "SystemAccentColorLight2", "foreground": "Black" },
-        "highContrast": { "backgroundResource": "SystemColorHighlightColor", "foregroundResource": "SystemColorHighlightTextColor" },
+        "light": {
+          "backgroundResource": "UISettings UIColorType::AccentDark1",
+          "foreground": "White"
+        },
+        "dark": {
+          "backgroundResource": "UISettings UIColorType::AccentLight2",
+          "foreground": "Black"
+        },
+        "highContrast": {
+          "backgroundResource": "GetSysColor(COLOR_HIGHLIGHT)",
+          "foregroundResource": "GetSysColor(COLOR_HIGHLIGHTTEXT)"
+        },
         "selectedPointerOverAndPressed": "與各主題 selected 背景一致，跟隨 Windows 設定 accent。",
-        "selectionIndicator": "StaticCandidateItem 範本不包含左側 indicator。",
-        "template": "StaticCandidateItem"
+        "selectionIndicator": "Direct2D 整塊反白；不包含左側 indicator。"
       },
       "highContrastSurface": {
-        "backgroundResource": "SystemColorWindowColor",
-        "borderResource": "SystemColorWindowTextColor",
-        "foregroundResource": "SystemColorWindowTextColor"
+        "backgroundResource": "GetSysColor(COLOR_WINDOW)",
+        "borderResource": "GetSysColor(COLOR_WINDOWTEXT)",
+        "foregroundResource": "GetSysColor(COLOR_WINDOWTEXT)"
       },
       "borderThickness": "1 DIP",
       "spacing": {
         "surface": "{spacing.candidate-surface}",
         "item": "{spacing.candidate-item}",
         "labelGap": "{spacing.candidate-label-gap}",
-        "containerPaddingAndMargin": "0 DIP"
+        "owner": "Win32 每格直接使用既有 spacing，無 XAML item container。"
       },
       "shapes": {
         "surface": "{rounded.candidate-surface}",
         "selectedSurface": "{rounded.candidate-selected}"
       },
-      "depth": "僅 XAML Surface 提供單一不透明外框，無陰影；移除 caption／resize frame，停用 DWM 非客戶區繪製，整個視窗作為 client content。",
+      "depth": "Direct2D 提供單一不透明外框，無陰影；WS_POPUP 不包含 caption／resize frame，整個視窗作為 client content。",
       "motion": {
-        "template": "StaticCandidateItem 的 CommonStates 僅靜態 setters，沒有 VisualTransitions 或 storyboard。",
-        "itemContainerTransitions": "ListView／GridView 均為空 TransitionCollection。",
-        "window": "DWM TRANSITIONS_FORCEDISABLED；顯示、隱藏與選取立即切換。"
+        "selection": "顯示、隱藏、換頁與選取立即切換，沒有動畫。",
+        "window": "DWM TRANSITIONS_FORCEDISABLED；WS_EX_NOACTIVATE。"
       },
-      "nativeVerification": "兩架構 native harness 已核對 client 與 window 尺寸相等、DWM 非客戶區繪製停用、NOACTIVATE 與隱藏後重開；靜態 capture 無法證明轉場。",
-      "layouts": ["直列", "橫列", "九欄格狀"],
-      "captures": ["build/ui-review-final/candidates-1-0.png", "build/ui-review-final/candidates-2-2.png"],
-      "verificationLimit": "背景離屏真實 XAML render；呈現目前主機 accent，未驗收真實文件操作、多 DPI、讀屏或高對比。無新增 raster 資產；非 web 介面，無 HTML detector。"
+      "nativeVerification": "原生背景 HWND capture；來源核對單框、無動畫、NOACTIVATE 與滑鼠 sequence；靜態 capture 無法證明轉場與真實提交。",
+      "layouts": [
+        "直列",
+        "橫列",
+        "九欄格狀"
+      ],
+      "captures": [
+        "build/native-review/x64/*.bmp",
+        "build/native-review/x86/*.bmp"
+      ],
+      "verificationLimit": "原生背景 capture，無 HTML detector；窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list。高對比僅核對來源，實際深色工作列、前景應用程式及多螢幕尚未驗收；沒有獨立候選 host 或 IPC。",
+      "measurement": "DirectWrite text layout metrics，量測與繪製共用 Microsoft JhengHei UI／Segoe UI；候選字級由個人設定控制。",
+      "workAreaFit": "窄工作區每格獨立 clip，來源設定 DirectWrite character ellipsis；本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見。空間足夠時小字級長詞完整呈現。"
+    },
+    "nativeMode": {
+      "transient": "40 DIP popup，6 DIP 內距；1400 ms 後、下一次輸入或失焦時隱藏；NOACTIVATE。",
+      "appearance": "原有彩色中／A ICO，工作列模式按鈕與游標旁提示共用。",
+      "verificationLimit": "背景原生 capture；實際深色工作列、前景應用程式與多螢幕尚未驗收。",
+      "provenance": "assets/mode/README.md",
+      "captures": [
+        "build/mode-review"
+      ],
+      "resources": [
+        101,
+        102
+      ],
+      "platform": "TSF 同程序 Win32；沒有額外 host。",
+      "icons": [
+        "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/chinese.ico",
+        "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/english.ico"
+      ],
+      "source": [
+        "src/mode_indicator.cpp",
+        "src/mode_button.cpp"
+      ]
     }
   },
   "components": [
@@ -94,27 +173,40 @@
       "name": "候選淺色外框",
       "kind": "custom",
       "refersTo": "candidate-surface-light",
-      "description": "原生 XAML Surface Border 使用 CandidateBackground／CandidateBorder／CandidateForeground；唯一外框，無 DWM 非客戶區框或視窗動畫，不提供 HTML/CSS 模擬。"
+      "description": "同程序 Win32 popup 使用候選淺色中性色；Direct2D 唯一不透明外框，無陰影、caption／resize frame 或動畫，不提供 HTML/CSS 模擬。"
     },
     {
       "name": "候選深色外框",
       "kind": "custom",
       "refersTo": "candidate-surface-dark",
-      "description": "深色主題使用原生候選中性色資源，高對比改用系統 window／window text 資源。"
+      "description": "深色主題使用既有候選中性色，高對比透過 GetSysColor 讀系統 window／window text 色。"
     },
     {
       "name": "候選數字與字詞列",
       "kind": "custom",
       "refersTo": "candidate-item",
-      "description": "ListView／GridView 共用 StaticCandidateItem 靜態範本與資料範本；數字 Segoe UI、字詞 Microsoft JhengHei UI，container 不疊加內距。CandidateChrome 選取面使用 Windows accent，不含左側 indicator 或 ListViewItemPresenter，不使用動畫；保留排列與候選字級設定。"
+      "description": "DirectWrite 數字 Segoe UI、字詞 Microsoft JhengHei UI；以實際 layout metrics 量測與置中，Direct2D 選取面使用 UISettings accent，不含左側 indicator，不使用動畫；保留三排列與字級設定，窄工作區每格 clip 與 character ellipsis。"
     }
   ],
   "narrative": {
-    "northStar": "Windows 原生 WinUI 3",
-    "overview": "設定完成草稿編輯與儲存；候選讓位給文件輸入。",
-    "keyCharacteristics": ["系統主題與 accent", "原生控制項", "固定儲存回饋", "候選不取得焦點"],
+    "northStar": "Windows 原生風格：WinUI 3 設定與同程序 Win32 候選",
+    "overview": "使用者指定 Windows 原生風格；設定保留 WinUI 3，候選依已核准的實作變更改為 TSF 同程序的 Win32 popup。兩者採 Operate 模式，以可辨讀、系統一致與文件輸入連續性為主。候選方向契約見 docs/candidate-surface.md；既有外觀 tokens 保留。",
+    "keyCharacteristics": [
+      "系統主題與 accent",
+      "原生控制項",
+      "固定儲存回饋",
+      "候選不取得焦點"
+    ],
     "rules": [],
-    "dos": ["使用原生 XAML ThemeResource", "維持候選 NOACTIVATE"],
-    "donts": ["不以 HTML/CSS snippet 假冒 WinUI 控制項"]
+    "dos": [
+      "設定使用 ThemeResource，保留鍵盤與滑鼠的原生控制項狀態；候選讀取 UISettings accent 與系統高對比色。",
+      "候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交。",
+      "候選只保留單一外框，且顯示、隱藏與選取不加動畫；此契約不改變設定窗原生控制項行為。",
+      "Windows 的橫列和直列都用 ↑／↓ 選字；善解操作說明隨 profile 更新。"
+    ],
+    "donts": [
+      "設定保留 WinUI 3 原生控制項；候選與模式提示依已核准契約使用 Win32，不新增 WebView。",
+      "不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。"
+    ]
   }
 }
