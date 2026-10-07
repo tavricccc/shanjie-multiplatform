@@ -16,8 +16,12 @@ COLOR：`UISettings` 讀取淺色 `AccentDark1`／深色 `AccentLight2`，分別
 
 FIT：字級 14–32 DIP，保留三種排列。長詞依實際量測加寬；窄工作區每格獨立 clip；來源設定 character ellipsis，本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見，空間足夠時小字級長詞完整顯示。
 
-MODE：工作列與游標旁中英提示共用使用者指定參考專案的彩色「中」／「A」ICO，直接引用 `C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。來源見 `assets/mode/README.md`。游標旁提示為 40 DIP、內距 6 DIP，1400 ms 後或下一次輸入／失焦時隱藏；同 TSF 程序，不使用額外 host。
+EMOJI：候選字詞 `DrawTextLayout` 啟用 `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`，數字標記保持原文字繪製。支援目前 Windows 字型已有的彩色 emoji、膚色與 ZWJ 序列；實際字形取決於已安裝字型，Windows 的旗幟目前呈現 TW 字母，不宣稱支援所有 emoji。其餘候選字體、量測、內距與排列維持原契約。
+
+MODE：工作列保留使用者指定參考專案的 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示使用 `assets/mode/chinese.svg`／`english.svg` 的 24×24 原始幾何，由 GDI+ 依實際螢幕 DPI 即時繪製 28 DIP 圖示，不縮放 ICO。SVG 同樣來自 `C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons`，MIT 授權全文保留於 `assets/mode/LICENSE`。視窗使用 `WS_EX_LAYERED`、`UpdateLayeredWindow` 與 32-bit premultiplied alpha，無 `COLOR_WINDOW` 白底與外圈內距；6 DIP 只作 caret 間距。1400 ms 後或下一次輸入／失焦時隱藏，維持 NOACTIVATE；同 TSF 程序，不使用額外 host。
 
 EVIDENCE：背景原生 BMP 在 `build/native-review/x64`／`x86`，模式圖示 capture 在 `build/mode-review`；無 HTML detector。來源為 `src/candidate_host.h`／`.cpp`、`candidate_palette.h`／`.cpp`、`mode_indicator.cpp` 與 `mode_button.cpp`。窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list；高對比、實際深色工作列、前景應用程式及多螢幕尚未驗收。背景圖片不等同日常使用驗收。
+
+本次修正證據：`build/native-review/{x64,x86}/candidates-{1,2}-emoji.bmp` 呈現彩色 emoji 字詞；`build/mode-review/{chinese,english}-{96,120,144,192}.bmp` 保留 alpha，呈現指定 DPI 下的透明模式圖示。實際螢幕 DPI 來源已核對，圖片不等同多螢幕實際操作驗收；本次 emoji／透明提示的獨立 finish reviewer disposition 為 ship：😀／👍🏽／👩‍💻／❤️ 與混排彩色呈現、四種指定 DPI 的中／A 清楚、alpha 透明且白框消失均符合契約；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。前述窄工作區修正已完成狀態保持不變。
 
 FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

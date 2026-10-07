@@ -4,6 +4,10 @@
 
 ## 2026-10-07 WinUI 3 版本
 
+後續 emoji／中英提示修正：候選 DrawTextLayout 啟用 Windows 彩色字型；x64／x86 淺深 captures 包含表情、膚色、ZWJ、愛心與中英混合內容。Windows 原生 emoji 字型目前將臺灣旗幟顯示為 TW，沒有宣稱所有旗幟圖樣可用。游標提示移除白色底板與外圈留白，改成 28 DIP 透明 layered window；依原 SVG 幾何以 GDI+ 在實際 monitor DPI 繪製，工作列仍使用 ICO。96／120／144／192 DPI 兩種圖示 capture 保留 alpha，角落透明像素與 NOACTIVATE／自動隱藏檢查通過。新畫面尚未安裝後日常驗收。
+
+此輪 x64／x86 建置、原生候選／模式提示 harness 及背景 TSF 回歸通過。獨立 impeccable reviewer 的 disposition 為 ship，範圍限於彩色 emoji 與透明矢量提示的背景 captures／来源，未包含真實桌面合成、多螢幕或更新後前景日常操作。
+
 最新架構：依使用者確認，候選改為 DLL 內 Win32／Direct2D software DC／DirectWrite；WinUI 只保留設定頁。移除匿名 mapping/event、候選 IPC、XAML 候選與其 interop，啟用時建立隱藏原生視窗。保持原密度、系統 AccentDark1／AccentLight2、字體、字級與三排列；受限工作區逐格裁切，不會畫入下一個候選。彩色中／A ICO 嵌入兩架構 DLL，來源見 `assets/mode/README.md`；游標旁提示不搶焦點，1400 ms、開始打字或失去焦點後隱藏。
 
 量測與方法界線見 `PERFORMANCE.md`：新候選介面增加約 11.6–11.8 MiB Private Bytes，原生資源初始化約 13 ms，初始化後首繪約 7–9 ms；舊獨立 WinUI host 約 96 MiB。這些不是完整 App 或整個輸入法記憶體，也不是螢幕刷新延遲。本次尚未自動安裝、未終止既有 App；下方舊 WinUI 候選／IPC 驗證記錄保留為歷史，不能當作新版原生實作的證據。

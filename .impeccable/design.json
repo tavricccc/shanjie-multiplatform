@@ -133,15 +133,28 @@
       ],
       "verificationLimit": "原生背景 capture，無 HTML detector；窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list。高對比僅核對來源，實際深色工作列、前景應用程式及多螢幕尚未驗收；沒有獨立候選 host 或 IPC。",
       "measurement": "DirectWrite text layout metrics，量測與繪製共用 Microsoft JhengHei UI／Segoe UI；候選字級由個人設定控制。",
+      "emoji": {
+        "drawOptions": "候選字詞 DrawTextLayout：D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT；數字標記維持 CLIP。",
+        "support": "目前 Windows 已安裝字型已有的彩色 emoji、膚色與 ZWJ 序列；旗幟目前呈現 TW 字母，不宣稱支援所有 emoji。",
+        "captures": [
+          "build/native-review/x64/candidates-1-emoji.bmp",
+          "build/native-review/x64/candidates-2-emoji.bmp",
+          "build/native-review/x86/candidates-1-emoji.bmp",
+          "build/native-review/x86/candidates-2-emoji.bmp"
+        ],
+        "verificationLimit": "本次彩色 emoji／透明模式提示的獨立 finish reviewer disposition 為 ship：😀／👍🏽／👩‍💻／❤️ 與混排彩色呈現符合契約；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。不更動先前窄工作區修正已完成 verdict。"
+      },
       "workAreaFit": "窄工作區每格獨立 clip，來源設定 DirectWrite character ellipsis；本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見。空間足夠時小字級長詞完整呈現。"
     },
     "nativeMode": {
-      "transient": "40 DIP popup，6 DIP 內距；1400 ms 後、下一次輸入或失焦時隱藏；NOACTIVATE。",
-      "appearance": "原有彩色中／A ICO，工作列模式按鈕與游標旁提示共用。",
-      "verificationLimit": "背景原生 capture；實際深色工作列、前景應用程式與多螢幕尚未驗收。",
-      "provenance": "assets/mode/README.md",
+      "transient": "{components.mode-indicator}：28 DIP 透明視窗、0 DIP 內距；{spacing.mode-caret-gap} 的 6 DIP 只作 caret 間距；1400 ms 後、下一次輸入或失焦時隱藏；NOACTIVATE。",
+      "appearance": "游標旁由 GDI+ 依 assets/mode/chinese.svg／english.svg 的 24×24 幾何，在所在螢幕實際 DPI 的目標像素尺寸即時繪製中／A；工作列保留原 ICO resource 101／102。",
+      "compositing": "WS_EX_LAYERED，UpdateLayeredWindow，32-bit premultiplied alpha；無 COLOR_WINDOW 白底與外圈留白，不縮放 ICO。",
+      "verificationLimit": "模式 BMP 保留 alpha，指定 96／120／144／192 DPI 的背景原生 capture；獨立 finish reviewer disposition 為 ship，確認四種指定 DPI 的中／A 清楚、alpha 透明且白框消失。實際深色工作列、前景應用程式、實際桌面與多螢幕尚未驗收，先前窄工作區修正已完成 verdict 保持不變。",
+      "provenance": "SVG 與 ICO 來自 C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons；assets/mode/chinese.svg／english.svg 保留幾何，assets/mode/LICENSE 保留原始 MIT 授權全文。",
       "captures": [
-        "build/mode-review"
+        "build/mode-review/chinese-{96,120,144,192}.bmp",
+        "build/mode-review/english-{96,120,144,192}.bmp"
       ],
       "resources": [
         101,
@@ -151,6 +164,10 @@
       "icons": [
         "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/chinese.ico",
         "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/english.ico"
+      ],
+      "caretIconGeometry": [
+        "assets/mode/chinese.svg",
+        "assets/mode/english.svg"
       ],
       "source": [
         "src/mode_indicator.cpp",
@@ -185,7 +202,13 @@
       "name": "候選數字與字詞列",
       "kind": "custom",
       "refersTo": "candidate-item",
-      "description": "DirectWrite 數字 Segoe UI、字詞 Microsoft JhengHei UI；以實際 layout metrics 量測與置中，Direct2D 選取面使用 UISettings accent，不含左側 indicator，不使用動畫；保留三排列與字級設定，窄工作區每格 clip 與 character ellipsis。"
+      "description": "DirectWrite 數字 Segoe UI、字詞 Microsoft JhengHei UI；以實際 layout metrics 量測與置中，字詞 DrawTextLayout 啟用 ENABLE_COLOR_FONT，呈現已安裝 Windows 字型支援的 emoji、膚色與 ZWJ；旗幟目前為 TW 字母。Direct2D 選取面使用 UISettings accent，不含左側 indicator，不使用動畫；保留三排列與字級設定，窄工作區每格 clip 與 character ellipsis。"
+    },
+    {
+      "name": "游標旁中英提示",
+      "kind": "custom",
+      "refersTo": "mode-indicator",
+      "description": "28 DIP 透明無內距 Win32 layered 視窗；GDI+ 依 MIT 原始 SVG 幾何按實際螢幕 DPI 繪製，premultiplied alpha 合成，與 caret 間隔 6 DIP。1400 ms、失焦與下一次輸入隱藏行為保持原樣。"
     }
   ],
   "narrative": {
