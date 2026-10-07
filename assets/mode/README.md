@@ -4,4 +4,4 @@
 
 參考專案採 MIT License；本目錄 `LICENSE` 保留原始版權與授權全文，打包至 `LICENSES/local-ime-icons-MIT.txt`。
 
-中：青綠底白字；英：灰藍底白色 A。以原有多尺寸 32-bit ICO 嵌入 x64／x86 DLL 的 101／102 resource，工作列與游標旁提示共用，避免依赖純文字的主題重新著色。
+中：青綠底白字；英：灰藍底白色 A。原有多尺寸 32-bit ICO 嵌入 x64／x86 DLL 的 101／102 resource，供工作列使用。游標旁提示依本目錄原始 SVG 幾何直接繪製到實際 DPI 的透明 bitmap，避免放大 ICO 造成模糊；只保留圖示本身，不加白色底板。

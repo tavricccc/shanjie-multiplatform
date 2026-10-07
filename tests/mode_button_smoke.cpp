@@ -28,10 +28,15 @@ int wmain(int argc,wchar_t** argv) {
         auto window = FindWindowW(L"ShanjieModeIndicator",nullptr); assert(window && IsWindowVisible(window));
         RECT bounds{}; GetWindowRect(window,&bounds); assert(bounds.right < -10000 && bounds.bottom < -10000);
         assert(GetForegroundWindow() == foreground && SendMessageW(window,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
-        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-chinese.bmp");
+        assert(GetWindowLongPtrW(window,GWL_EXSTYLE) & WS_EX_LAYERED);
+        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-chinese.bmp",true);
         indicator.hide(); assert(!IsWindowVisible(window)); indicator.show(caret,144,false);
-        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-english-144.bmp");
-        GetWindowRect(window,&bounds); assert(bounds.right-bounds.left == 60);
+        if (argc == 3) captureNative(window,std::filesystem::path(argv[2])/L"mode-english-144.bmp",true);
+        GetWindowRect(window,&bounds); assert(bounds.right-bounds.left == 42);
+        if (argc == 3) for (auto dpi : {96u,120u,144u,192u}) for (auto chineseMode : {true,false}) {
+            indicator.show(caret,dpi,chineseMode);
+            captureNative(window,std::filesystem::path(argv[2])/((chineseMode ? L"chinese-" : L"english-")+std::to_wstring(dpi)+L".bmp"),true);
+        }
         auto deadline = GetTickCount64()+2500;
         while (IsWindowVisible(window) && GetTickCount64() < deadline) {
             MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
