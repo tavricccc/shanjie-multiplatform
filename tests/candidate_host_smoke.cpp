@@ -39,6 +39,7 @@ int wmain(int argc,wchar_t** argv) {
         if (argc >= 3) {
             std::filesystem::path output(argv[2]); std::filesystem::create_directories(output);
             for (auto theme : {1u,2u}) {
+                frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"};
                 preferences.theme = theme;
                 for (auto layout : {CandidateLayout::Vertical,CandidateLayout::Horizontal,CandidateLayout::Grid}) {
                     preferences.layout = layout; frame.columns = layout == CandidateLayout::Grid ? 9 : 0;

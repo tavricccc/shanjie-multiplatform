@@ -45,4 +45,5 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     Copy-Item "$root/upstream/shanjie/LICENSE" "$root/dist/LICENSES" -Force
     Copy-Item "$root/upstream/shanjie/LICENSES/*" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
+    Copy-Item "$root/assets/mode/LICENSE" "$root/dist/LICENSES/local-ime-icons-MIT.txt" -Force
 } finally { Pop-Location }

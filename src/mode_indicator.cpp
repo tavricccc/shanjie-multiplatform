@@ -5,6 +5,7 @@ ModeIndicator::~ModeIndicator() { if (window_) DestroyWindow(window_); if (icon_
 void ModeIndicator::hide() { if (window_) { KillTimer(window_,1); ShowWindow(window_,SW_HIDE); } }
 void ModeIndicator::show(const RECT& caret,UINT dpi,bool chinese) {
     if (GetEnvironmentVariableW(L"SHANJIE_HEADLESS",nullptr,0)) return;
+    auto awareness = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     if (!window_) {
         WNDCLASSW wc{}; wc.lpfnWndProc = procedure; wc.hInstance = module; wc.lpszClassName = L"ShanjieModeIndicator";
         RegisterClassW(&wc);
@@ -21,6 +22,7 @@ void ModeIndicator::show(const RECT& caret,UINT dpi,bool chinese) {
     SetWindowRgn(window_,CreateRoundRectRgn(0,0,size+1,size+1,inset*2,inset*2),FALSE);
     SetWindowPos(window_,HWND_TOPMOST,x,y,size,size,SWP_NOACTIVATE | SWP_SHOWWINDOW);
     InvalidateRect(window_,nullptr,FALSE); SetTimer(window_,1,1400,nullptr);
+    SetThreadDpiAwarenessContext(awareness);
 }
 LRESULT CALLBACK ModeIndicator::procedure(HWND window,UINT message,WPARAM wp,LPARAM lp) {
     auto self = reinterpret_cast<ModeIndicator*>(GetWindowLongPtrW(window,GWLP_USERDATA));

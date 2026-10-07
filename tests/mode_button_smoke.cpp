@@ -7,6 +7,7 @@
 HMODULE module = nullptr;
 long objects = 0;
 int wmain(int argc,wchar_t** argv) {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     assert(argc == 2 || argc == 3); module = LoadLibraryW(argv[1]); assert(module);
     bool chinese = true;
     auto button = new ModeButton([&] { return chinese; },[] { return S_OK; },[] {});

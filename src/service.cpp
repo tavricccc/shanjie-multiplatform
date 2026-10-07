@@ -111,6 +111,7 @@ HRESULT Service::request(ITfContext* context, std::function<HRESULT(TfEditCookie
     return FAILED(hr) ? hr : result;
 }
 void Service::cancel() {
+    ++modeNotificationRevision_; modeIndicator_.hide();
     if (context_) {
         ComPtr<ITfSource> source;
         if (SUCCEEDED(context_.As(&source))) {
