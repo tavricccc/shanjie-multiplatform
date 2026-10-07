@@ -14,6 +14,7 @@ ULONG Candidates::AddRef() { return InterlockedIncrement(&refs_); }
 ULONG Candidates::Release() { auto n = InterlockedDecrement(&refs_); if (!n) delete this; return n; }
 void Candidates::initialize(ITfThreadMgr* thread, const Preferences& preferences, std::function<void(unsigned)> pick) {
     thread->QueryInterface(IID_PPV_ARGS(&manager_)); preferences_ = preferences; pick_ = std::move(pick);
+    if (prepareHost()) host_.hide();
 }
 void Candidates::close() {
     ++revision_;
@@ -37,14 +38,16 @@ void Candidates::update(ITfContext* context, TfEditCookie cookie, ITfRange* rang
         if (!LogicalToPhysicalPointForPerMonitorDPI(owner,&start) || !LogicalToPhysicalPointForPerMonitorDPI(owner,&end)) { Show(FALSE); return; }
         caret_ = {start.x,start.y,end.x,end.y};
     }
-    // Background TSF tests validate the UI-element contract without opening a desktop surface.
-    if (GetEnvironmentVariableW(L"SHANJIE_HEADLESS",nullptr,0)) return;
+    if (prepareHost()) host_.publish(state_,preferences_,caret_,dpi_,true);
+}
+bool Candidates::prepareHost() {
+    if (GetEnvironmentVariableW(L"SHANJIE_HEADLESS",nullptr,0)) return false;
     if (!window_) {
         WNDCLASSW wc{}; wc.lpfnWndProc = procedure; wc.hInstance = module; wc.lpszClassName = L"ShanjieCandidateChannel";
         RegisterClassW(&wc);
         window_ = CreateWindowExW(0,wc.lpszClassName,L"",0,0,0,0,0,HWND_MESSAGE,nullptr,module,this);
     }
-    if (host_.start(window_)) host_.publish(state_,preferences_,caret_,dpi_,true);
+    return window_ && host_.start(window_);
 }
 LRESULT Candidates::procedure(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     auto self = reinterpret_cast<Candidates*>(GetWindowLongPtrW(window,GWLP_USERDATA));

@@ -20,6 +20,7 @@ class Candidates final : public ITfCandidateListUIElementBehavior {
     unsigned long long revision_ = 0;
     std::function<void(unsigned)> pick_;
     static LRESULT CALLBACK procedure(HWND, UINT, WPARAM, LPARAM);
+    bool prepareHost();
 public:
     Candidates();
     ~Candidates();

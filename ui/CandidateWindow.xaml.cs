@@ -71,9 +71,9 @@ public sealed partial class CandidateWindow : Window
         if (closing || (channel != null && !channel.IsCurrent(next.Sequence))) return;
         if (next.Shutdown) { Close(); return; }
         frame = next;
-        Native.PostMessage(next.Callback, 0x8000 + 43, (nuint)hwnd, 0);
-        if (!next.Visible || next.Words.Length == 0) { Native.ShowWindow(hwnd, 0); return; }
+        if (!next.Visible || next.Words.Length == 0) { Native.ShowWindow(hwnd, 0); Native.PostMessage(next.Callback, 0x8000 + 43, (nuint)hwnd, 0); return; }
         Render(next);
+        Native.PostMessage(next.Callback, 0x8000 + 43, (nuint)hwnd, 0);
     }
     private void Render(CandidateFrame next)
     {
