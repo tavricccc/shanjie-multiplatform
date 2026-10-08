@@ -31,7 +31,7 @@ bool CandidateHost::measure(float workWidth) {
     words_.clear(); labels_.clear(); float width = 0, height = 0;
     for (size_t i=0;i<state_.candidates.size();++i) {
         ComPtr<IDWriteTextLayout> word, number;
-        auto& value = state_.candidates[i]; auto tag = (state_.associated ? L"⇧" : L"") + std::to_wstring(i%9+1);
+        auto& value = state_.candidates[i]; auto tag = state_.selected < 0 ? std::wstring{} : (state_.associated ? L"⇧" : L"") + std::to_wstring(i%9+1);
         if (FAILED(textFactory_->CreateTextLayout(value.data(),(UINT32)value.size(),text.Get(),10000,1000,&word)) || FAILED(textFactory_->CreateTextLayout(tag.data(),(UINT32)tag.size(),label.Get(),100,1000,&number))) return false;
         DWRITE_TEXT_METRICS metrics{}; word->GetMetrics(&metrics); width = std::max(width,metrics.widthIncludingTrailingWhitespace); height = std::max(height,metrics.height);
         words_.push_back(word); labels_.push_back(number);
@@ -40,18 +40,19 @@ bool CandidateHost::measure(float workWidth) {
     fit(workWidth); return true;
 }
 void CandidateHost::fit(float workWidth) {
-    cell_ = std::min(std::max(columns_ == 1 ? 96.0f : 52.0f,textWidth_+(state_.associated ? 44 : 32)),(workWidth-20)/columns_);
+    float inset = state_.selected < 0 ? 8.0f : state_.associated ? 44.0f : 32.0f;
+    cell_ = std::min(std::max(columns_ == 1 ? 96.0f : 52.0f,textWidth_+inset),(workWidth-20)/columns_);
     cell_ = std::ceil(cell_*scale_)/scale_; row_ = std::max(32.0f,textHeight_+8);
     DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER,0,0};
-    for (auto& word : words_) { word->SetMaxWidth(std::max(1.0f,cell_-(state_.associated ? 40 : 28))); word->SetTrimming(&trimming,ellipsis_.Get()); }
+    for (auto& word : words_) { word->SetMaxWidth(std::max(1.0f,cell_-inset+4)); word->SetTrimming(&trimming,ellipsis_.Get()); }
 }
 void CandidateHost::publish(const shanjie::Snapshot& state,const Preferences& preferences,const RECT& caret,UINT,bool visible) {
     if (!window_) return;
     ++sequence_; if (!visible || state.candidates.empty()) { hide(); return; }
-    if (state_.candidates != state.candidates || state_.associated != state.associated || preferences_.fontSize != preferences.fontSize) { words_.clear(); labels_.clear(); }
+    if (state_.candidates != state.candidates || state_.associated != state.associated || (state_.selected < 0) != (state.selected < 0) || preferences_.fontSize != preferences.fontSize) { words_.clear(); labels_.clear(); }
     if (!paletteReady_ || preferences_.theme != preferences.theme) { palette_ = candidatePalette(preferences.theme); paletteReady_ = true; }
     state_ = state; preferences_ = preferences;
-    columns_ = preferences.layout == CandidateLayout::Vertical && !state.columns ? 1 : (unsigned)std::min<size_t>(9,state.candidates.size());
+    columns_ = !state.prediction && preferences.layout == CandidateLayout::Vertical && !state.columns ? 1 : (unsigned)std::min<size_t>(9,state.candidates.size());
     MONITORINFO monitor{sizeof(monitor)}; GetMonitorInfoW(MonitorFromRect(&caret,MONITOR_DEFAULTTONEAREST),&monitor);
     if (GetEnvironmentVariableW(L"SHANJIE_VERIFY_UI",nullptr,0)) {
         wchar_t width[16]{};
@@ -82,7 +83,7 @@ HRESULT CandidateHost::paint(HDC dc) {
         target_->PushAxisAlignedClip(D2D1::RectF(x,y,x+cell_,y+row_),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         DWRITE_TEXT_METRICS word{},number{}; words_[i]->GetMetrics(&word); labels_[i]->GetMetrics(&number);
         target_->DrawTextLayout(D2D1::Point2F(x+4,y+(row_-number.height)/2),labels_[i].Get(),brush_.Get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
-        target_->DrawTextLayout(D2D1::Point2F(x+(state_.associated ? 36 : 24),y+(row_-word.height)/2),words_[i].Get(),brush_.Get(),(D2D1_DRAW_TEXT_OPTIONS)(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT));
+        target_->DrawTextLayout(D2D1::Point2F(x+(state_.selected < 0 ? 4 : state_.associated ? 36 : 24),y+(row_-word.height)/2),words_[i].Get(),brush_.Get(),(D2D1_DRAW_TEXT_OPTIONS)(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT));
         target_->PopAxisAlignedClip();
     }
     return target_->EndDraw();

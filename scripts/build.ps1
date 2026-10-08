@@ -17,7 +17,7 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidate_palette','candidates','special_input','associated_candidates','pinyin_input','service','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidate_palette','candidates','special_input','associated_candidates','pinyin_input','service','service_keys','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
     $library = Join-Path $root "build/core/target/$target/release/core.lib"
     $command = @"
 @echo off
@@ -44,6 +44,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
     Copy-Item "$root/upstream/shanjie/LICENSE" "$root/dist/LICENSES" -Force
     Copy-Item "$root/upstream/shanjie/LICENSES/*" "$root/dist/LICENSES" -Force
+    Copy-Item "$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
     Copy-Item "$root/assets/mode/LICENSE" "$root/dist/LICENSES/local-ime-icons-MIT.txt" -Force
 } finally { Pop-Location }

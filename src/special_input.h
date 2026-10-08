@@ -9,6 +9,7 @@ class SpecialInput {
     shanjie::Snapshot view() const;
 public:
     bool active() const { return mode_ != Mode::None; }
+    bool textInput() const { return active() && mode_ != Mode::Symbols; }
     bool starts(const ShanjieKey&, const Preferences&) const;
     shanjie::Snapshot key(const ShanjieKey&, const Preferences&);
     shanjie::Snapshot pick(unsigned index);

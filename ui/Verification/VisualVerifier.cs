@@ -24,31 +24,46 @@ internal static class VisualVerifier
         // Keep verification away from the user's windows and never activate the test surfaces.
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false);
         await Task.Delay(500);
+        Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
+        string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
+        File.Delete(Models.ProfileStore.Path + ".schema2.bak"); File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
+        if (settings.Vm.Model != 1 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path + ".schema2.bak") != legacy)
+            throw new InvalidDataException("Schema 2 migration did not preserve settings or original backup");
         settings.Vm.Preset(true); settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle) throw new InvalidDataException("Windows profile round-trip failed");
+        if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle || settings.Vm.CtrlSpaceToggle || settings.Vm.Model != 1 || !settings.Vm.Learning || settings.Vm.FontSize != 22 || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.ShiftPunctuation)
+            throw new InvalidDataException("Windows preset/retained data round-trip failed");
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || settings.Vm.Layout != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
-        settings.Vm.Model = 1; settings.Vm.Associations = false; settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.Model != 1 || settings.Vm.Associations) throw new InvalidDataException("Model-v2 and prediction toggle round-trip failed");
+        foreach (int model in new[] { 0, 1, 2, 3 }) { settings.Vm.Model = model; settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != model) throw new InvalidDataException("Model selection round-trip failed"); }
+        settings.ShowSection(4); settings.SetPredictionForVerification(true); await Task.Delay(60);
+        if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
+        settings.SetPredictionForVerification(false); await Task.Delay(60);
+        if (settings.Vm.Prediction) throw new InvalidDataException("Native toggle off did not update the shared draft");
+        settings.Vm.Ranking = 0; settings.Vm.Learning = false; settings.Vm.FontSize = 18; settings.Vm.DictionaryText = "";
+        settings.LoadProfile(true); settings.SaveDraft();
         foreach (int theme in new[] { 1, 2 })
         {
             settings.Vm.Theme = theme;
-            for (int page = 0; page < 5; page++)
+            for (int page = 0; page < 6; page++)
             {
-                settings.ShowSection(page); await Task.Delay(120);
+                settings.ShowSection(page); await Task.Delay(350);
                 await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-{page}.png"));
             }
-            settings.ShowSection(0); settings.SaveDraft(); await Task.Delay(120);
+            settings.ShowSection(0); settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-saved.png"));
-            settings.ShowSection(3); settings.Vm.DictionaryText = "invalid"; settings.SaveDraft(); await Task.Delay(120);
+            settings.ShowSection(4); settings.Vm.DictionaryText = "invalid"; settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error.png"));
-            settings.Vm.DictionaryText = ""; settings.Vm.Interaction = 1; settings.ShowSection(2); await Task.Delay(120);
+            settings.Vm.DictionaryText = ""; settings.LoadProfile(false); settings.ShowSection(3); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-shanjie.png"));
-            settings.LoadProfile(true); await Task.Delay(120);
+            settings.LoadProfile(true); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error-then-preset.png"));
-            settings.Vm.Theme = theme; settings.ShowModelOptions(); await Task.Delay(120);
+            settings.Vm.Theme = theme; settings.ShowModelOptions(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-models.png"));
+            settings.ShowAdvancedKeys(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-advanced-keys.png"));
+            settings.ShowCandidateKeys(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-candidate-keys.png"));
+            settings.ShowAppearance(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-appearance.png"));
+            settings.ShowDictionary(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-dictionary.png"));
         }
         settings.Close();
     }

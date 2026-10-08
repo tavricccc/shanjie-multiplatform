@@ -35,3 +35,4 @@ $content += "`n#[cfg(windows)]`n" + (Get-Content (Join-Path $root 'platform/cloc
 Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-lm.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-candidates.ps1" -CorePath $output
+& "$PSScriptRoot/prepare-keys.ps1" -CorePath $output

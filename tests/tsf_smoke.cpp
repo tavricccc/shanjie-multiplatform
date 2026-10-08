@@ -207,12 +207,44 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
         press(VK_ESCAPE,224); press(VK_RETURN,226);
         press('S',244); press('U',246); press('3',248); press(VK_DOWN,250); press('1',252);
-        require(!noCandidates(),254); // Prediction stays available until explicitly disabled.
+        require(noCandidates(),254); // Windows defaults do not prompt associated phrases.
+        press(VK_RETURN,258);
+        require(WritePrivateProfileStringW(L"input",L"associations",L"1",profile.c_str()),260);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',262); press('U',264); press('3',266); press(VK_DOWN,268); press('1',270);
+        require(!noCandidates(),272);
         require(WritePrivateProfileStringW(L"input",L"associations",L"0",profile.c_str()),228);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         require(noCandidates(),255); press(VK_RETURN,256);
         press('S',230); press('U',232); press('3',234); press(VK_DOWN,236); press('1',238);
         require(noCandidates(),240); press(VK_RETURN,241);
+        for (const auto* model : {L"3",L"4"}) {
+            require(WritePrivateProfileStringW(L"engine",L"model",model,profile.c_str()),280);
+            SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+            press('S',282); require(noCandidates(),284);
+            require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),285);
+            SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+            require(!noCandidates(),286); press(VK_TAB,287);
+            require(WritePrivateProfileStringW(L"engine",L"prediction",L"0",profile.c_str()),289);
+            SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+            require(noCandidates(),290); press(VK_ESCAPE,291);
+            press('S',293); press('U',295); press('3',297); press(VK_DOWN,299); press(VK_RETURN,301);
+            require(noCandidates(),303);
+        }
+        require(WritePrivateProfileStringW(L"candidates",L"enter_commits",L"0",profile.c_str()),310);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',311); press('U',313); press('3',315); press(VK_DOWN,317); press(VK_RETURN,319);
+        BOOL enterReady = FALSE; keys->OnTestKeyDown(context.Get(),VK_RETURN,0,&enterReady); require(enterReady,321);
+        press(VK_RETURN,322);
+        require(WritePrivateProfileStringW(L"input",L"space_after_commit",L"0",profile.c_str()),324);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('S',325); press('U',327); press('3',329); press(VK_SPACE,331); require(noCandidates(),333);
+        require(WritePrivateProfileStringW(L"input",L"keyboard",L"3",profile.c_str()),334);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        press('Z',335); press('H',337); press('U',339); auto beforePinyinReload = store->text;
+        require(WritePrivateProfileStringW(L"engine",L"model",L"3",profile.c_str()),341);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        require(store->text == beforePinyinReload && noCandidates(),342);
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

@@ -12,26 +12,36 @@ public sealed partial class MainWindow : Window
         double scale = Interop.Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)(840 * scale), (int)(680 * scale)));
         Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
-        Vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme(); };
-        Differences.Text = "支援標準／倚天、漢語／臺灣拼音、聯想詞、選字學習、個人詞庫與字碼輸入。拼音以 1–5 輸入聲調；不帶聲調時按 Enter，空白可分隔音節，連按兩次空白轉換。\n善解使用自己的詞庫與語言模型，因此候選順序與微軟注音不同。微軟舊版相容模式與 IME 手寫／部首辨識屬於微軟的引擎功能。";
+        Vm.PropertyChanged += (_, e) => {
+            if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
+            if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
+        };
+        Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
     }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
-    internal void ShowSection(int index) => Navigation.SelectedItem = Navigation.MenuItems[index];
-    internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false }); }
+    internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
+    internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
+    internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowAdvancedKeys() { ShowSection(1); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowCandidateKeys() { ShowSection(3); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowAppearance() { ShowSection(3); Root.UpdateLayout(); AppearanceOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowDictionary() { ShowSection(4); Root.UpdateLayout(); PersonalDictionaryEditor.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
         General.Visibility = tag == "general" ? Visibility.Visible : Visibility.Collapsed;
+        Composition.Visibility = tag == "composition" ? Visibility.Visible : Visibility.Collapsed;
         Keys.Visibility = tag == "keys" ? Visibility.Visible : Visibility.Collapsed;
         Candidates.Visibility = tag == "candidates" ? Visibility.Visible : Visibility.Collapsed;
         Dictionary.Visibility = tag == "dictionary" ? Visibility.Visible : Visibility.Collapsed;
         About.Visibility = tag == "about" ? Visibility.Visible : Visibility.Collapsed;
+        ContentScroll.ChangeView(null, 0, null, true);
     }
     private void LoadPreset(object sender, SelectionChangedEventArgs args)
     {
         int index = ((ComboBox)sender).SelectedIndex;
-        if (index > 0) LoadProfile(index == 1);
+        if (index > 0) { LoadProfile(index == 1); ((ComboBox)sender).SelectedIndex = 0; }
     }
     internal void LoadProfile(bool windows)
     {

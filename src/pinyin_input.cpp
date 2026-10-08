@@ -93,7 +93,7 @@ bool PinyinInput::convert(shanjie::Engine& engine,shanjie::Snapshot& out,bool al
     out.commit = std::move(committed);
     pending_.clear(); base_ = out; return true;
 }
-bool PinyinInput::key(const ShanjieKey& key,shanjie::Engine& engine,const shanjie::Snapshot& current,shanjie::Snapshot& out,bool alphanumeric) {
+bool PinyinInput::key(const ShanjieKey& key,shanjie::Engine& engine,const shanjie::Snapshot& current,shanjie::Snapshot& out,bool alphanumeric,bool spaceConverts) {
     if (!active()) {
         base_ = current; base_.commit.clear();
         if (!base_.candidates.empty()) { ShanjieKey escape{}; escape.kind = 6; if (!engine.key(escape,base_)) return false; }
@@ -104,7 +104,7 @@ bool PinyinInput::key(const ShanjieKey& key,shanjie::Engine& engine,const shanji
     if (key.kind == 1 && key.ch >= '1' && key.ch <= '5' && key.modifiers == 0) { pending_ += (char)key.ch; return convert(engine,out,alphanumeric); }
     if (key.kind == 4) { if (!pending_.empty()) pending_.pop_back(); out = preview(); return true; }
     if (key.kind == 6) { pending_.clear(); out = base_; out.handled = true; return true; }
-    if (key.kind == 2 && !pending_.ends_with(' ')) { pending_ += ' '; out = preview(); return true; }
+    if (key.kind == 2 && !spaceConverts && !pending_.ends_with(' ')) { pending_ += ' '; out = preview(); return true; }
     if (!convert(engine,out,alphanumeric)) return false;
     if (active() || key.kind == 2) return true;
     auto committed = out.commit;

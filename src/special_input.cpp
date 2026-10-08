@@ -1,22 +1,12 @@
 #include "special_input.h"
+#include "key_policy.h"
 #include <algorithm>
 #include <cwctype>
 namespace {
 const std::wstring symbols = L"，。？！；：、（）「」『』【】《》〈〉—…～·「」＋－×÷＝≠≤≥±∞√％‰℃℉°′″→←↑↓★☆○●□■△▲◎※〒＄€£¥";
-std::wstring punctuation(const ShanjieKey& key) {
-    bool shift = key.modifiers & 1;
-    switch (key.ch) {
-    case ',': return shift ? L"〈" : L"，"; case '.': return shift ? L"〉" : L"。";
-    case '/': return shift ? L"？" : L"／"; case '1': return L"！";
-    case ';': return shift ? L"：" : L"；"; case '[': return shift ? L"『" : L"「";
-    case ']': return shift ? L"』" : L"」"; case '9': return L"（"; case '0': return L"）";
-    case '\\': return L"、"; case '\'': return shift ? L"＂" : L"＇"; case '=': return shift ? L"＋" : L"＝";
-    case '`': return L"｀"; default: return {};
-    }
-}
 }
 bool SpecialInput::starts(const ShanjieKey& key,const Preferences& p) const {
-    return key.kind == 1 && ((key.ch == '`' && key.modifiers == 0 && (p.backquoteSymbols || p.codeInput)) || (key.ch == ',' && key.modifiers == 6));
+    return key.kind == 1 && ((key.ch == '`' && key.modifiers == 0 && (p.backquoteSymbols || p.codeInput)) || (p.symbolKeyboard && key.ch == ',' && key.modifiers == 6));
 }
 shanjie::Snapshot SpecialInput::view() const {
     shanjie::Snapshot out; out.handled = true;
@@ -43,13 +33,22 @@ shanjie::Snapshot SpecialInput::key(const ShanjieKey& key,const Preferences& p) 
     if (!active()) { mode_ = key.ch == ',' ? Mode::Symbols : Mode::Prefix; return view(); }
     if (key.kind == 6) { clear(); return view(); }
     if (mode_ == Mode::Symbols) {
+        if (key.kind == 13 && key.modifiers == 0 && !p.tabExpands) { clear(); auto out = view(); out.handled = false; return out; }
         if (key.modifiers == 0) {
             if (key.kind == 1 && key.ch >= '1' && key.ch <= '9') return pick(selected_ / 9 * 9 - view().first + key.ch - '1');
             if (key.kind == 3) return pick(selected_ - view().first);
             if (key.kind == 10) selected_ = std::min<unsigned>((unsigned)symbols.size()-1,selected_ + (expanded_ ? 9 : 1));
-            if (key.kind == 9) selected_ = selected_ >= (expanded_ ? 9u : 1u) ? selected_ - (expanded_ ? 9 : 1) : 0;
-            if (key.kind == 2 && p.spacePages) selected_ = (selected_ / 9 * 9 + 9) % ((symbols.size() + 8) / 9 * 9);
-            if (key.kind == 13 || key.kind == 8) { if (!expanded_) expanded_ = true; else selected_ = std::min<unsigned>(selected_ + 1,(unsigned)symbols.size()-1); }
+            if (key.kind == 9) {
+                if (expanded_ && selected_ < 9 && p.gridUpCollapses) expanded_ = false;
+                else selected_ = selected_ >= (expanded_ ? 9u : 1u) ? selected_ - (expanded_ ? 9 : 1) : 0;
+            }
+            if (key.kind == 2 && p.spacePages) {
+                unsigned next = selected_ / 9 * 9 + 9;
+                if (next < symbols.size()) selected_ = next;
+                else if (p.wrapPages) selected_ = 0;
+            }
+            if ((key.kind == 13 && p.tabExpands) || (key.kind == 8 && p.rightExpands)) { if (!expanded_) expanded_ = true; else selected_ = std::min<unsigned>(selected_ + 1,(unsigned)symbols.size()-1); }
+            else if (key.kind == 8) selected_ = std::min<unsigned>(selected_ + 1,(unsigned)symbols.size()-1);
             if (key.kind == 7) selected_ = selected_ ? selected_-1 : 0;
             if (key.kind == 4) clear();
         }
@@ -60,7 +59,7 @@ shanjie::Snapshot SpecialInput::key(const ShanjieKey& key,const Preferences& p) 
         wchar_t ch = (wchar_t)towlower((wchar_t)key.ch);
         if (p.codeInput && (ch == L'u' || ch == L'b')) { mode_ = ch == L'u' ? Mode::Unicode : Mode::Big5; return view(); }
         if (p.backquoteSymbols) {
-            auto text = punctuation(key);
+            auto text = shanjie::windowsPunctuationText(key);
             if (!text.empty()) { clear(); auto out = view(); out.commit = text; return out; }
         }
     }

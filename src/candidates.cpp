@@ -54,7 +54,7 @@ LRESULT Candidates::procedure(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (message == WM_NCCREATE) { self = (Candidates*)((CREATESTRUCTW*)lp)->lpCreateParams; SetWindowLongPtrW(window,GWLP_USERDATA,(LONG_PTR)self); }
     if (self && message == WM_APP + 42) {
         // Reject a click from a frame that was replaced or closed before the edit session.
-        if ((LONG)lp == self->host_.sequence() && (wp < self->state_.candidates.size() || (wp == self->state_.candidates.size() && !self->state_.reading.empty())) && self->host_.shown()) self->pick_((unsigned)wp);
+        if ((LONG)lp == self->host_.sequence() && wp < self->state_.candidates.size() && self->host_.shown()) self->pick_((unsigned)wp);
         return 0;
     }
     return DefWindowProcW(window,message,wp,lp);

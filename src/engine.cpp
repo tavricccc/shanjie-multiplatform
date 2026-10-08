@@ -29,7 +29,7 @@ bool Engine::beginLearning() {
     ReleaseMutex(learningMutex_); return false;
 }
 void Engine::endLearning() { if (learningMutex_) ReleaseMutex(learningMutex_); }
-bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning, bool big5, const std::wstring& dictionaryName, unsigned model) {
+bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning, bool big5, const std::wstring& dictionaryName, unsigned model, bool predictionEnabled) {
     if (model < 1 || model > 4) return false;
     shanjie_engine_free(handle_); handle_ = nullptr;
     wchar_t localDictionary[32768]; auto localLength = GetEnvironmentVariableW(L"LOCALAPPDATA",localDictionary,32768);
@@ -39,7 +39,7 @@ bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned r
     if (shanjie_windows_engine_new(utf8(data.wstring()).c_str(),dictionary.empty() ? nullptr : dictionary.c_str(),layout,&handle_) != 0) return false;
     // Windows starts without passive prediction, so its index is not allocated.
     ShanjieOutput* output = nullptr;
-    auto result = shanjie_engine_set_prediction(handle_,0,&output);
+    auto result = shanjie_engine_set_prediction(handle_,predictionEnabled ? 1 : 0,&output);
     if (output) shanjie_output_free(output);
     if (result != 0) return false;
     auto modelPath = data / L"models" / (L"model-v" + std::to_wstring(model)) / L"bigram.winmap";
@@ -73,10 +73,6 @@ Snapshot Engine::copy(ShanjieOutput* raw) {
     out.prediction = shanjie_windows_is_prediction_row(handle_) != 0;
     out.columns = raw->candidate_columns; out.first = raw->candidate_first; out.total = raw->candidate_total;
     for (unsigned i = 0; i < raw->candidate_count; ++i) out.candidates.push_back(wide(raw->candidates[i]));
-    if (readingCandidate_ && raw->candidate_count) {
-        ShanjieOutput* reading = nullptr;
-        if (shanjie_windows_reading(handle_,0,&reading) == 0) { out.reading = wide(reading->preedit); shanjie_output_free(reading); }
-    }
     return out;
 }
 bool Engine::key(ShanjieKey key, Snapshot& output) {
@@ -121,6 +117,23 @@ bool Engine::prediction(bool enabled, Snapshot& output) {
 bool Engine::demote(bool enabled, Snapshot& output) {
     ShanjieOutput* raw = nullptr;
     if (!handle_ || shanjie_engine_set_demote(handle_,enabled ? 1 : 0,&raw) != 0) return false;
+    output = copy(raw); return true;
+}
+bool Engine::inputOptions(bool shift, bool plain, bool tones) {
+    return handle_ && shanjie_windows_set_input_options(handle_,(shift ? 1u : 0u) | (plain ? 2u : 0u) | (tones ? 4u : 0u)) == 0;
+}
+bool Engine::punctuation(const std::wstring& text, Snapshot& output) {
+    ShanjieOutput* raw = nullptr;
+    if (!handle_ || !beginLearning()) return false;
+    auto result = shanjie_windows_punctuation(handle_,utf8(text).c_str(),&raw); endLearning();
+    if (result != 0) return false;
+    output = copy(raw); return true;
+}
+bool Engine::cycleCandidate(Snapshot& output) {
+    ShanjieOutput* raw = nullptr;
+    if (!handle_ || !beginLearning()) return false;
+    auto result = shanjie_windows_cycle_candidate(handle_,&raw); endLearning();
+    if (result != 0) return false;
     output = copy(raw); return true;
 }
 bool translate(WPARAM vk, LPARAM flags, ShanjieKey& result) {

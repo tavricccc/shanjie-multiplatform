@@ -9,3 +9,14 @@ pub unsafe extern "C" fn shanjie_windows_set_candidate_anchor(engine: *mut Shanj
         SHANJIE_OK
     })
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_cycle_candidate(engine: *mut ShanjieEngine, out: *mut *mut ShanjieOutput) -> i32 {
+    guard(|| {
+        if !unsafe { clear_out(out) } || engine.is_null() { return SHANJIE_ERR_NULL; }
+        match unsafe { (*engine).0.cycle_windows_candidate() } {
+            Ok(value) => unsafe { emit(value,out) },
+            Err(_) => SHANJIE_ERR_INTERNAL,
+        }
+    })
+}

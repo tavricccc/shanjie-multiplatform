@@ -1,73 +1,105 @@
-<Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="善解設定">
+<Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls" Title="善解設定">
     <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
     <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+        <Grid.Resources>
+            <Style x:Key="HelpText" TargetType="TextBlock"><Setter Property="FontFamily" Value="Microsoft JhengHei UI"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
+        </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TitleBar x:Name="AppTitleBar" Title="善解設定" />
         <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Left" OpenPaneLength="208" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="Navigate">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="一般" Icon="Home" Tag="general"/>
                 <NavigationViewItem Content="按鍵" Icon="Keyboard" Tag="keys"/>
-                <NavigationViewItem Content="選字" Icon="Bullets" Tag="candidates"/>
-                <NavigationViewItem Content="詞庫與學習" Icon="Library" Tag="dictionary"/>
+                <NavigationViewItem Content="組字與提交" Icon="Edit" Tag="composition"/>
+                <NavigationViewItem Content="選字與外觀" Icon="Bullets" Tag="candidates"/>
+                <NavigationViewItem Content="預測、詞庫與學習" Icon="Library" Tag="dictionary"/>
                 <NavigationViewItem Content="關於與相容性" Icon="Help" Tag="about"/>
             </NavigationView.MenuItems>
-            <ScrollViewer>
+            <ScrollViewer x:Name="ContentScroll">
                 <StackPanel Padding="20,16,20,20" Spacing="12" MaxWidth="800" HorizontalAlignment="Stretch">
                     <StackPanel x:Name="General" Spacing="12">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="一般" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ComboBox Header="操作 profile" x:Name="Preset" HorizontalAlignment="Stretch" SelectionChanged="LoadPreset" SelectedIndex="0">
-                            <ComboBoxItem Content="目前個人設定"/><ComboBoxItem Content="載入 Windows 微軟注音預設"/><ComboBoxItem Content="載入善解上游預設"/>
+                        <ComboBox Header="載入操作預設" x:Name="Preset" HorizontalAlignment="Stretch" SelectionChanged="LoadPreset" SelectedIndex="0">
+                            <ComboBoxItem Content="選擇操作預設…"/><ComboBoxItem Content="Windows／微軟注音按鍵（預測關閉）"/><ComboBoxItem Content="善解上游操作"/>
                         </ComboBox>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="預設只載入草稿，你可以調整後再儲存。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="預設輸入模式" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="預設輸入模式" OnContent="中文" OffContent="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="預設字元寬度" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="預設字元寬度" OnContent="全形" OffContent="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="Caps Lock 輸入英文" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="Caps Lock 輸入英文" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/></Grid>
-                        <ComboBox Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows 標準／倚天 profile"/><ComboBoxItem Content="標準注音"/><ComboBoxItem Content="倚天注音"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="無法轉換的注音／拼音序列輸出英數" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="Esc 清除未提交的組字" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="Esc 清除未提交的組字" IsOn="{x:Bind Vm.EscapeClears, Mode=TwoWay}"/></Grid>
+                        <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。模型、詞句偏好、詞庫、學習與外觀會保留。"/>
+                        <ComboBox x:Name="ModelSelector" Header="語言模型" SelectedIndex="{x:Bind Vm.Model, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="model-v1（原始模型）"/><ComboBoxItem Content="model-v2（簡繁整理）"/><ComboBoxItem Content="model-v3＋classes-v1（臺灣常用字形）"/><ComboBoxItem Content="model-v4＋classes-v2（最新）"/>
+                        </ComboBox>
+                        <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="模型與配對詞類表一起切換。儲存後先提交目前組字；個人詞庫與選字學習會保留，所有模型都在本機。"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
-                        <ComboBox x:Name="ModelSelector" Header="語言模型" SelectedIndex="{x:Bind Vm.Model, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="model-v1（原版）"/><ComboBoxItem Content="model-v2（上游新版）"/></ComboBox>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="兩版模型都在本機。儲存後會先提交目前組字，再切換模型；個人詞庫與選字學習會保留。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </StackPanel>
-                    <StackPanel x:Name="Dictionary" Spacing="12" Visibility="Collapsed">
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="詞庫與學習" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="預測尚未輸入的後續詞" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="預測尚未輸入的後續詞" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/></Grid>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="關閉後只顯示已輸入讀音的候選字。開啟時可在數字或滑鼠選字後提示聯想詞，用 Shift＋數字或滑鼠選取；Enter 提交並關閉候選。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="學習我的選字偏好" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/></Grid>
-                        <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>
-                        <TextBox Header="個人詞庫" AcceptsReturn="True" MinHeight="160" MaxHeight="300" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="每行填「注音 字詞」，多字注音以 - 分隔。例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後立即載入，並先提交目前組字。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ComboBox Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows 標準／倚天 profile"/><ComboBoxItem Content="標準注音"/><ComboBoxItem Content="倚天注音"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
+                        <controls:SettingToggle Label="預設輸入模式" OnText="中文" OffText="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="預設字元寬度" OnText="全形" OffText="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Keys" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="按鍵" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ComboBox Header="方向鍵操作" SelectedIndex="{x:Bind Vm.Interaction, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="Windows 微軟注音"/><ComboBoxItem Content="善解上游"/></ComboBox>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="單按 Shift 切換中英" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="單按 Shift 切換中英" IsOn="{x:Bind Vm.ShiftToggle, Mode=TwoWay}"/></Grid>
+                        <controls:SettingToggle Label="單按 Shift 切換中英" IsOn="{x:Bind Vm.ShiftToggle, Mode=TwoWay}"/>
                         <ComboBox Header="切換用的 Shift 鍵" IsEnabled="{x:Bind Vm.ShiftToggle, Mode=OneWay}" SelectedIndex="{x:Bind Vm.ShiftSide, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="左右 Shift 都可"/><ComboBoxItem Content="僅左 Shift"/><ComboBoxItem Content="僅右 Shift"/></ComboBox>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="Ctrl＋空白切換中英" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="Ctrl＋空白切換中英" IsOn="{x:Bind Vm.CtrlSpaceToggle, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="Shift＋空白切換全半形" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="Shift＋空白切換全半形" IsOn="{x:Bind Vm.WidthToggle, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="Ctrl＋標點輸入全形標點" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="Ctrl＋標點輸入全形標點" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="反引號＋標點輸入全形標點" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="反引號＋標點輸入全形標點" IsOn="{x:Bind Vm.BackquoteSymbols, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="反引號＋U／B 輸入 Unicode／Big5" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/></Grid>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="鍵盤配置可在一般頁指定，或跟隨 Windows 輸入法清單中的善解標準／倚天 profile。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <controls:SettingToggle Label="Ctrl＋空白切換中英" Description="額外快捷鍵，Windows 預設關閉，保留給 App 的補全等操作。" IsOn="{x:Bind Vm.CtrlSpaceToggle, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="Shift＋空白切換全半形" IsOn="{x:Bind Vm.WidthToggle, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="Ctrl＋標點輸入全形標點" Description="例如 Ctrl＋逗號輸入 ，；需要 Shift 的符號，仍要一起按 Shift。" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="反引號＋標點輸入全形標點" IsOn="{x:Bind Vm.BackquoteSymbols, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="Ctrl＋Alt＋逗號開啟符號鍵盤" IsOn="{x:Bind Vm.SymbolKeyboard, Mode=TwoWay}"/>
+                        <TextBlock x:Name="AdvancedKeys" FontFamily="Microsoft JhengHei UI" Text="善解的額外標點操作" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <controls:SettingToggle Label="Shift＋符號直接輸入中文標點" Description="善解／Apple 式操作，例如 Shift＋逗號輸入 ，。Windows 預設關閉。" IsOn="{x:Bind Vm.ShiftPunctuation, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="直接按括號等鍵輸入中文標點" Description="不按 Ctrl，直接用 [、] 等鍵輸入「」。只影響不是注音鍵的按鍵。" IsOn="{x:Bind Vm.PlainPunctuation, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="Ctrl＋反斜線輸入頓號" Description="善解原有操作；Ctrl 標點開啟時也能輸入頓號。" IsOn="{x:Bind Vm.CtrlBackslash, Mode=TwoWay}"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="Windows 標誌鍵與一般 App 的 Ctrl／Alt 快捷鍵交由系統及 App 處理。"/>
+                    </StackPanel>
+                    <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <controls:SettingToggle Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
+                        <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="候選或已進入的預測列仍先關閉／退出，不會因這個選項立即刪除整句。"/>
+                        <controls:SettingToggle Label="空白提交完整組字後，再輸入空白" Description="只在空白沒有用來開候選時生效；第一聲的空白不受影響。" IsOn="{x:Bind Vm.SpaceAfterCommit, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="拼音按一次空白就轉換" Description="關閉時，第一次空白分隔音節，Enter 或連按兩次空白轉換。聲調鍵 1–5 皆可直接轉換。" IsOn="{x:Bind Vm.PinyinSpaceConverts, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Candidates" Spacing="12" Visibility="Collapsed">
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="選字" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ComboBox Header="開啟選字" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="選字與外觀" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <ComboBox Header="方向鍵操作" SelectedIndex="{x:Bind Vm.Interaction, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="Windows／微軟注音 ↑↓"/><ComboBoxItem Content="善解上游 ←→"/></ComboBox>
+                        <ComboBox Header="完整組字後開啟選字" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
                         <ComboBox Header="選字位置" SelectedIndex="{x:Bind Vm.Anchor, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="游標右側的字／詞"/><ComboBoxItem Content="游標左側的字／詞"/></ComboBox>
                         <ComboBox Header="候選排列" SelectedIndex="{x:Bind Vm.Layout, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="直列"/><ComboBoxItem Content="橫列"/><ComboBoxItem Content="格狀"/></ComboBox>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="空白鍵換下一頁候選" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="空白鍵換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/></Grid>
-                        <Grid ColumnSpacing="16" MinHeight="40"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock FontFamily="Microsoft JhengHei UI" Text="候選只顯示 Big5 字元集" TextWrapping="Wrap" VerticalAlignment="Center"/><ToggleSwitch Grid.Column="1" AutomationProperties.Name="候選只顯示 Big5 字元集" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnContent="Big5" OffContent="Unicode"/></Grid>
+                        <TextBlock Style="{StaticResource HelpText}" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}"/>
+                        <controls:SettingToggle x:Name="CandidateKeyOptions" Label="候選中 Enter 選字並提交整句" Description="關閉時只確認候選，繼續留在組字區。" IsOn="{x:Bind Vm.EnterCommits, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="未開候選時，↑ 直接換下一個候選" IsOn="{x:Bind Vm.UpCycles, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="候選中 Tab 展開格狀" IsOn="{x:Bind Vm.TabExpands, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="候選中 → 展開格狀" IsOn="{x:Bind Vm.RightExpands, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="格狀第一列 ↑ 收回列表" Description="Windows 預設關閉，↑ 停在第一列。" IsOn="{x:Bind Vm.GridUpCollapses, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="候選中 Backspace 同時刪除前一個字" Description="關閉時只收回候選，保留組字。" IsOn="{x:Bind Vm.BackspaceDeletes, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="空白換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="最後一頁再按空白回到第一頁" IsEnabled="{x:Bind Vm.SpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
+                        <TextBlock x:Name="AppearanceOptions" FontFamily="Microsoft JhengHei UI" Text="字元集與外觀" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
                         <NumberBox Header="候選文字大小" Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/>
                         <ComboBox Header="介面主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
+                        <controls:SettingToggle Label="切換中英時顯示游標旁提示" IsOn="{x:Bind Vm.ModeIndicator, Mode=TwoWay}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="Dictionary" Spacing="12" Visibility="Collapsed">
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="預測、詞庫與學習" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <controls:SettingToggle x:Name="PredictionToggle" Label="未完成讀音的即時預測" Description="第一個注音鍵就提示可能的完整詞。Tab 進入，數字／Enter 選詞；Shift＋Tab 或 Esc 退出。Windows 預設關閉。" IsOn="{x:Bind Vm.Prediction, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="選字後的聯想詞" Description="數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取。Windows 預設關閉。" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="使用游標前文改善選字" Description="只使用游標前的少量文字作為本機選字與學習的前文，不傳送到網路。" IsOn="{x:Bind Vm.UseContext, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="避免敏感詞排在第一名" Description="套用上游的特定詞降權表；詞仍可選取，並非刪除詞庫。" IsOn="{x:Bind Vm.Demote, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
+                        <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>
+                        <TextBox x:Name="PersonalDictionaryEditor" Header="個人詞庫" AcceptsReturn="True" MinHeight="160" MaxHeight="300" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="每行填「注音 字詞」，例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後先提交組字再載入。"/>
                     </StackPanel>
                     <StackPanel x:Name="About" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="善解 Windows" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="WinUI 3 設定與候選介面 · 本機注音引擎" TextWrapping="Wrap"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="所有輸入內容與設定都保留在電腦上。操作 profile 與鍵盤 profile 分開：前者調整操作，後者決定標準／倚天鍵盤。" TextWrapping="Wrap"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="與微軟注音的功能差異" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="WinUI 3 設定 · 原生 Windows 候選 · 本機注音引擎" TextWrapping="Wrap"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="輸入內容、詞庫、學習及設定都留在電腦上。操作預設調整按鍵與候選；鍵盤配置決定標準／倚天或拼音。" TextWrapping="Wrap"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="與微軟注音的差異" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="Differences" TextWrapping="Wrap"/>
                         <HyperlinkButton Content="微軟注音官方操作說明" NavigateUri="https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime" HorizontalAlignment="Left"/>
+                        <HyperlinkButton Content="上游 model-v4 與詞類表說明" NavigateUri="https://github.com/Nanako0129/shanjie/releases/tag/model-v4" HorizontalAlignment="Left"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
@@ -75,7 +107,7 @@
         <InfoBar x:Name="StatusBar" Grid.Row="2" Margin="16,4,16,0" IsOpen="False" IsClosable="True" Severity="Success" Message="{x:Bind Vm.Status, Mode=OneWay}"/>
         <Grid Grid.Row="3" Padding="16,8" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Button Content="重新載入已儲存設定" Click="Reload" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Spacing="12"><Button Content="重新載入已儲存設定" Click="Reload"/><TextBlock Text="{x:Bind Vm.DraftHelp, Mode=OneWay}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"><Button Content="取消" Click="Cancel"/><Button Content="儲存" Style="{ThemeResource AccentButtonStyle}" Click="Save"/></StackPanel>
         </Grid>
     </Grid>

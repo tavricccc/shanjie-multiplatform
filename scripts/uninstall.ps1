@@ -30,7 +30,9 @@ if (Test-Path -LiteralPath $preferences) {
     if ((Get-Item -LiteralPath $preferences -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw '個人設定目錄是連結，未刪除設定；請確認實際位置。'
     }
-    Remove-Item -LiteralPath (Join-Path $preferences 'profile.ini') -Force -ErrorAction SilentlyContinue
+    foreach ($name in @('profile.ini','profile.ini.schema1.bak','profile.ini.schema2.bak')) {
+        Remove-Item -LiteralPath (Join-Path $preferences $name) -Force -ErrorAction SilentlyContinue
+    }
     if (!(Get-ChildItem -LiteralPath $preferences -Force)) { [IO.Directory]::Delete($preferences,$false) }
 }
 foreach ($languageKey in Get-ChildItem 'HKCU:/Control Panel/International/User Profile') {

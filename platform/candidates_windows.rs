@@ -44,6 +44,21 @@ impl Engine {
         }
         self.cands = self.make_candidates(list);
     }
+
+    pub fn cycle_windows_candidate(&mut self) -> Result<Output,EngineError> {
+        let cursor = self.cursor; self.clear_pred(); self.open_candidates();
+        let Some(cands) = &self.cands else { self.cursor = cursor; return self.handled(); };
+        let shown: Vec<char> = self.display.chars().collect();
+        let current = cands.list.iter().position(|(word,length)| {
+            let (start,end) = self.candidate_span(*length);
+            let before = (0..start).map(|i| self.token_width(i)).sum::<usize>();
+            let after = (0..end).map(|i| self.token_width(i)).sum::<usize>();
+            shown[before..after].iter().collect::<String>() == *word
+        });
+        let next = current.map_or(0,|i| (i+1) % cands.list.len());
+        self.choose(next)?; self.cursor = cursor;
+        self.handled()
+    }
 }
 
 #[cfg(test)]

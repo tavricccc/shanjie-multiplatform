@@ -30,7 +30,8 @@ int wmain(int argc,wchar_t** argv) {
         assert(presenter.shown()); assert(GetForegroundWindow() == foreground); assert(SendMessageW(presenter.window(),WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
         RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
-        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(15,15)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+        std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/(frame.candidates.size()*2))); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
         assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
         std::vector<double> samples;
         for (int i=0;i<30;++i) { presenter.hide(); start = clockMs(); presenter.publish(frame,preferences,caret,96,true); samples.push_back(clockMs()-start); }
@@ -60,6 +61,12 @@ int wmain(int argc,wchar_t** argv) {
                 frame.candidates = {L"😀",L"👍🏽",L"👩‍💻",L"🇹🇼",L"❤️",L"文字😀"};
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-emoji.bmp"));
+                frame.prediction = true; frame.selected = -1; frame.candidates = {L"奶茶",L"拿鐵",L"檸檬茶"};
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"prediction-"+std::to_wstring(theme)+L"-passive.bmp"));
+                frame.selected = 0; presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"prediction-"+std::to_wstring(theme)+L"-entered.bmp"));
+                frame.prediction = false; frame.selected = 1;
             }
         }
         presenter.hide(); assert(!presenter.shown());

@@ -1,17 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
-    public string CandidateHelp => Interaction == 0
-        ? "Windows 操作：直列與橫列都用 ↑／↓ 選字，→／Tab 展開格狀。數字選字，Enter 選字並提交。"
-        : "善解上游操作：←／→ 選字，↓ 展開格狀列表。數字或 Enter 確認。";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int Layout { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
-    [ObservableProperty] public partial int Model { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int Model { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
     [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
@@ -20,107 +16,50 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool InitialChinese { get; set; }
     [ObservableProperty] public partial bool InitialFullWidth { get; set; }
     [ObservableProperty] public partial bool CapsLockEnglish { get; set; }
-    [ObservableProperty] public partial bool EscapeClears { get; set; }
+    [ObservableProperty] public partial int Escape { get; set; }
+    [ObservableProperty] public partial bool SpaceAfterCommit { get; set; }
+    [ObservableProperty] public partial bool PinyinSpaceConverts { get; set; }
     [ObservableProperty] public partial bool SpacePages { get; set; }
+    [ObservableProperty] public partial bool WrapPages { get; set; }
     [ObservableProperty] public partial bool BackquoteSymbols { get; set; }
     [ObservableProperty] public partial bool CodeInput { get; set; }
     [ObservableProperty] public partial bool Learning { get; set; }
     [ObservableProperty] public partial bool Associations { get; set; }
+    [ObservableProperty] public partial bool Prediction { get; set; }
+    [ObservableProperty] public partial bool Demote { get; set; }
+    [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial int Keyboard { get; set; }
     [ObservableProperty] public partial bool Big5 { get; set; }
+    [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
+    [ObservableProperty] public partial bool ShiftPunctuation { get; set; }
+    [ObservableProperty] public partial bool PlainPunctuation { get; set; }
+    [ObservableProperty] public partial bool StandaloneTones { get; set; }
+    [ObservableProperty] public partial bool CtrlBackslash { get; set; }
+    [ObservableProperty] public partial bool ForgetCandidate { get; set; }
+    [ObservableProperty] public partial bool ModeIndicator { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterCommits { get; set; }
+    [ObservableProperty] public partial bool UpCycles { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool TabExpands { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool RightExpands { get; set; }
+    [ObservableProperty] public partial bool GridUpCollapses { get; set; }
+    [ObservableProperty] public partial bool BackspaceDeletes { get; set; }
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
     [ObservableProperty] public partial double FontSize { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = "";
-    public SettingsViewModel() => Load();
-    public void Load()
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
+    public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
+    public string CandidateHelp => (Interaction == 0 ? "直列與橫列皆以 ↑／↓ 選字。" : "直列與橫列皆以 ←／→ 選字，↓ 展開格狀。")
+        + (TabExpands ? "Tab 可展開格狀。" : "Tab 不展開格狀。")
+        + (RightExpands ? "→ 可展開格狀。" : "→ 移到下一候選。")
+        + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
+    public string ModelHelp => Model switch
     {
-        Interaction = ProfileStore.Read("profile", "interaction", "windows") == "windows" ? 0 : 1;
-        Trigger = Array.IndexOf(new[] { "down", "space", "both" }, ProfileStore.Read("candidates", "open", "down"));
-        Anchor = ProfileStore.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
-        Layout = Array.IndexOf(new[] { "vertical", "horizontal", "grid" }, ProfileStore.Read("candidates", "layout", "vertical"));
-        Ranking = ProfileStore.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
-        Model = ProfileStore.Number("engine", "model", 1) - 1;
-        ShiftToggle = ProfileStore.Flag("shortcuts", "shift_toggle", true); ShiftSide = ProfileStore.Number("shortcuts", "shift_side", 0);
-        CtrlSpaceToggle = ProfileStore.Flag("shortcuts", "ctrl_space_toggle", true); WidthToggle = ProfileStore.Flag("shortcuts", "shift_space_toggle", true);
-        CtrlPunctuation = ProfileStore.Flag("shortcuts", "ctrl_punctuation", true);
-        InitialChinese = ProfileStore.Flag("input", "chinese", true); InitialFullWidth = ProfileStore.Flag("input", "full_width", false);
-        CapsLockEnglish = ProfileStore.Flag("input", "caps_lock_english", Interaction == 0); EscapeClears = ProfileStore.Flag("input", "escape_clears", true);
-        SpacePages = ProfileStore.Flag("candidates", "space_pages", true); BackquoteSymbols = ProfileStore.Flag("shortcuts", "backquote_symbols", Interaction == 0);
-        CodeInput = ProfileStore.Flag("shortcuts", "code_input", Interaction == 0); Theme = ProfileStore.Number("appearance", "theme", 0); FontSize = ProfileStore.Number("appearance", "font_size", 18);
-        Learning = ProfileStore.Flag("input", "learning", false);
-        Associations = ProfileStore.Flag("input", "associations", Interaction == 0);
-        Alphanumeric = ProfileStore.Flag("input", "alphanumeric", Interaction == 0);
-        Keyboard = ProfileStore.Number("input", "keyboard", 0);
-        Big5 = ProfileStore.Flag("candidates", "big5", false);
-        var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, ProfileStore.Read("input", "dictionary", "dictionary.tsv"));
-        DictionaryText = File.Exists(dictionary) ? File.ReadAllText(dictionary) : "";
-        Status = "";
-    }
-    public void Preset(bool windows)
-    {
-        Interaction = windows ? 0 : 1; Trigger = windows ? 0 : 2; Anchor = windows ? 0 : 1; Layout = windows ? 0 : 1;
-        ShiftToggle = CtrlSpaceToggle = WidthToggle = CtrlPunctuation = windows; InitialChinese = true; InitialFullWidth = false; CapsLockEnglish = windows;
-        EscapeClears = SpacePages = true; BackquoteSymbols = CodeInput = windows; ShiftSide = Theme = Ranking = 0; FontSize = 18; Learning = false;
-        Associations = Alphanumeric = windows; Keyboard = 0; Big5 = false;
-        Status = "已載入預設，按儲存後才會套用。";
-    }
-    public void Save()
-    {
-        static int Flag(bool value) => value ? 1 : 0;
-        var rows = new List<string>();
-        foreach (string line in DictionaryText.Split('\n').Select(row => row.Trim()).Where(row => row.Length > 0))
-        {
-            var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length is not (2 or 3) || !System.Text.RegularExpressions.Regex.IsMatch(fields[0], "^[ㄅ-ㄩˊˇˋ˙]+(-[ㄅ-ㄩˊˇˋ˙]+)*$") || fields[0].Split('-').Length != fields[1].EnumerateRunes().Count())
-                throw new InvalidDataException("個人詞庫格式有誤：每行填「注音 字詞」，每個字的注音以 - 分隔。");
-            string score = fields.Length == 3 ? fields[2] : "-0.01";
-            if (!double.TryParse(score, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value) || !double.IsFinite(value) || value > 0)
-                throw new InvalidDataException("詞庫分數必須是有限的非正數。");
-            rows.Add($"{fields[0]}\t{fields[1]}\t{score}");
-        }
-        Directory.CreateDirectory(Path.GetDirectoryName(ProfileStore.Path)!);
-        var dictionaryContent = string.Join("\n", rows) + (rows.Count > 0 ? "\n" : "");
-        string dictionaryName = "dictionary-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(dictionaryContent))).ToLowerInvariant() + ".tsv";
-        var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, dictionaryName);
-        if (!File.Exists(dictionary)) { File.WriteAllText(dictionary + ".tmp", dictionaryContent, new System.Text.UTF8Encoding(false)); File.Move(dictionary + ".tmp", dictionary); }
-        ProfileStore.Save($"""
-            [profile]
-            schema=2
-            interaction={(Interaction == 0 ? "windows" : "shanjie")}
-            [engine]
-            ranking={(Ranking == 0 ? "chat" : "formal")}
-            model={Model + 1}
-            [input]
-            chinese={Flag(InitialChinese)}
-            full_width={Flag(InitialFullWidth)}
-            caps_lock_english={Flag(CapsLockEnglish)}
-            escape_clears={Flag(EscapeClears)}
-            learning={Flag(Learning)}
-            associations={Flag(Associations)}
-            alphanumeric={Flag(Alphanumeric)}
-            keyboard={Keyboard}
-            dictionary={dictionaryName}
-            [candidates]
-            layout={new[] { "vertical", "horizontal", "grid" }[Layout]}
-            anchor={(Anchor == 0 ? "right" : "left")}
-            open={new[] { "down", "space", "both" }[Trigger]}
-            space_pages={Flag(SpacePages)}
-            big5={Flag(Big5)}
-            reading=0
-            [shortcuts]
-            shift_toggle={Flag(ShiftToggle)}
-            shift_side={ShiftSide}
-            ctrl_space_toggle={Flag(CtrlSpaceToggle)}
-            shift_space_toggle={Flag(WidthToggle)}
-            ctrl_punctuation={Flag(CtrlPunctuation)}
-            backquote_symbols={Flag(BackquoteSymbols)}
-            code_input={Flag(CodeInput)}
-            [appearance]
-            theme={Theme}
-            font_size={(int)FontSize}
-            """);
-        Status = "已儲存並通知善解立即套用。切換鍵盤或詞庫時會先提交目前組字。";
-    }
+        0 => "原始模型，未使用詞類表。",
+        1 => "整理簡繁轉換與詞頻計數，未使用詞類表。",
+        2 => "改善臺灣常用字形，與 classes-v1 詞類表一起使用。",
+        3 => "與 classes-v2 詞類表一起使用。上游量測 v3／v4 的選字與預測結果相同；v4 另含模型來源指紋。",
+        _ => "請選擇一個語言模型。"
+    };
 }

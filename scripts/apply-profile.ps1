@@ -1,24 +1,18 @@
 #Requires -Version 7
 param([Parameter(Mandatory)][string]$ProfileFile)
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/profile-ini.ps1"
 $source = (Resolve-Path -LiteralPath $ProfileFile).Path
 $target = Join-Path $env:LOCALAPPDATA 'Shanjie'
 New-Item -ItemType Directory -Path $target -Force | Out-Null
 $destination = Join-Path $target 'profile.ini'
-$content = [IO.File]::ReadAllText($source)
-# A preset changes interaction settings, while retaining the user's saved dictionary.
+$profile = Read-ProfileIni ([IO.File]::ReadAllText($source))
+# Presets share their files with WinUI; retain data, model and appearance choices.
 if (Test-Path -LiteralPath $destination) {
-    $previous = [IO.File]::ReadAllText($destination)
-    $engineSection = [regex]::Match($previous, '(?ms)^\[engine\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value
-    $model = [regex]::Match($engineSection, '(?m)^model=([12])\r?$').Groups[1].Value
-    if ($model) { $content = [regex]::Replace($content, '(?m)^model=[12]\r?$', "model=$model") }
-    $inputSection = [regex]::Match($previous, '(?ms)^\[input\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value
-    $dictionary = [regex]::Match($inputSection, '(?m)^dictionary=(.+)\r?$').Groups[1].Value.Trim()
-    $newInput = [regex]::Match($content, '(?ms)^\[input\]\r?\n(.*?)(?=^\[|\z)').Groups[1].Value
-    if ($dictionary -and $newInput -notmatch '(?m)^dictionary=') {
-        $content = $content.Replace('[input]', "[input]`ndictionary=$dictionary")
-    }
+    $previous = Read-ProfileIni ([IO.File]::ReadAllText($destination))
+    $profile = Preserve-ProfileData $profile $previous
 }
+$content = Write-ProfileIni $profile
 [IO.File]::WriteAllText("$destination.tmp", $content, [Text.UTF8Encoding]::new($false))
 [IO.File]::Move("$destination.tmp", $destination, $true)
 Add-Type -TypeDefinition @'
@@ -34,4 +28,4 @@ namespace Shanjie {
 '@
 [Shanjie.ProfileNotification]::Send()
 Write-Host "已套用：$source"
-Write-Host '已通知善解立即套用設定。切換鍵盤或詞庫時會先提交目前組字。'
+Write-Host '已通知善解立即套用操作設定。模型、詞庫、學習與外觀已保留。'

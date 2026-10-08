@@ -22,7 +22,10 @@ try {
     $learnTests = $learnTests.Replace('fn max_rss()', "#[cfg(unix)]`nfn max_rss()")
     $learnTests = $learnTests.Replace('fn perf_full_store_per_key_and_enter_with_write()', "#[cfg(unix)]`nfn perf_full_store_per_key_and_enter_with_write()")
     Set-Content build/core/tests/engine_learn.rs $learnTests -Encoding utf8NoBOM
-    cargo test --manifest-path build/core/Cargo.toml --test engine --test engine_learn --test engine_replay --test engine_lm --test engine_demote --test engine_predict -- --skip global_eps_table
+    $demoteTests = Get-Content build/core/tests/engine_demote.rs -Raw
+    $demoteTests = $demoteTests.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(')
+    Set-Content build/core/tests/engine_demote.rs $demoteTests -Encoding utf8NoBOM
+    cargo test --manifest-path build/core/Cargo.toml --test engine --test engine_learn --test engine_replay --test engine_lm --test engine_demote --test engine_predict -- --test-threads=4 --skip global_eps_table
     if ($LASTEXITCODE) { throw 'Engine behavior tests failed.' }
     }
     if (!(Test-Path dist/data/models/model-v4/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
