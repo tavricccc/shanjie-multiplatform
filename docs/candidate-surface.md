@@ -1,29 +1,19 @@
 # 候選窗方向契約
 
-用途：Operate。使用者在文件中快速選字，候選不得搶焦點。
+用途：Operate。輸入時快速辨識與選字，視窗不得取得焦點。
 
-THESIS：對照 local-ime-reranker-public 的 Syllune 候選設定，保持緊密、無陰影與單層外框。
+THESIS：依使用者提供的 macOS 善解截圖與上游 CandidateCells／InputController，使用單行膠囊、細邊框、小型序號與藍色選取膠囊。使用者已明確選擇「只保留橫向」；直向與九欄格狀均移除。
 
-OWN-WORLD：淺色 #F5F6F7／#D8DADD／#24272B；深色 #24272B／#4A4F55／#F5F6F7。依使用者後續指定，反白使用 Windows accent 系列主題色，不採來源的淡青色。
+OWN-WORLD：深色背景 #343443、邊框 #787884、文字 #F5F5F7、序號 #B9B9C5；淺色背景 #F2F2F5、邊框 #B5B5BD、文字 #222225、序號 #65656E；選取 #006EE6 搭白字。系統模式依 Windows 主題，高對比使用系統 window／highlight 色。
 
-STORY：先完成組字，再用所選開啟鍵進入轉換候選；未完成讀音的即時預測與選字後的聯想各自開關，Windows 操作預設兩者皆關閉，既有個人設定則保留。開啟聯想後，數字或滑鼠選字才提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取，Enter 提交並關閉；失焦或取消也會關閉。
+STORY：完成讀音後開啟候選，數字、滑鼠或 Enter 選詞，左右與 Tab 導覽；一般候選的上下移動映射至左右，不進入格狀。預測與聯想仍由個人設定控制；被動預測沒有序號或反白，Tab 進入選詞才顯示。聯想顯示 Shift＋序號。失焦、取消與選取後依原輸入規則關閉。
 
-FIRST VIEWPORT：外框圓角 6 DIP、1 DIP 邊框、內距 8×6 DIP；數字與字詞同列，間距 4 DIP、候選內距 4 DIP。保留直列、橫列與九欄格狀；18 DIP 候選字級仍由個人設定控制。
+FIRST VIEWPORT：預設字級 16 DIP、序號 9 DIP、選取膠囊高 24 DIP、外框高至少 30 DIP、外框內距 3 DIP、項間距 2 DIP；序號前 4 DIP、序號與文字間 6 DIP、尾端 7 DIP。依實際 DirectWrite metrics 加高，個人字級 14–32 DIP 按比例調整。caret 間距 6 DIP，工作區不足時移至上方並夾在工作區內。
 
-即時預測沿用同一外框、字體與內距，採橫列。被動狀態不顯示數字或反白，也不預留數字欄；普通數字仍作注音輸入。Tab 進入後才顯示數字及目前選取反白，以數字／Enter 選詞；Windows 的 ↑／↓ 在已進入列中移動，Tab／Shift＋Tab 保留預測列的進退操作，Esc 退出，不會展開九欄格狀。被動／進入外觀證據為 `build/native-review/{x64,x86}/prediction-{1,2}-{passive,entered}.bmp`；來源見 `src/candidate_host.cpp`，操作對照見 `MICROSOFT-IME-DIFFS.md`。背景 capture 不等同前景 App 的實際輸入驗收。
+FORM／FIT：Rust TSF 同程序 Win32 layered popup；Direct2D／DirectWrite，透明 alpha 圓角，沒有 caption、resize frame、動畫或候選 host。各詞按自然寬度量測；窄螢幕只顯示放得下的項目，兩端箭頭翻動可見範圍，鍵盤選取始終可見；單一超長詞才使用省略。滑鼠回傳原候選索引與序號，過期點擊不提交。彩色 emoji 使用 Windows 可用字型；旗幟字形取決於作業系統。
 
-FORM：使用者指定參考，無隨機概念選擇；已核准候選改為 TSF 同程序 Win32 popup，設定保留 WinUI 3。Direct2D software DC render target 與 DirectWrite 繪製，實際 layout metrics 決定欄寬與列高；沒有獨立候選 host 或 IPC。保留 NOACTIVATE，顯示／隱藏、換頁及反白均無動畫。整個 HWND 為客戶區，只繪製單一不透明外框，不保留原生 caption／resize frame；選取圓角 4 DIP。
+MODE：工作列 ICO 維持資源 101／102，caret 提示由 Rust tiny-skia 畫既有 SVG 幾何、28 DIP、1400 ms，透明與 NOACTIVATE。設定介面保留 WinUI 3，業務邏輯共用 Rust。
 
-COLOR：`UISettings` 讀取淺色 `AccentDark1`／深色 `AccentLight2`，分別配白／黑字。高對比讀系統 window、window text、highlight 與 highlight text 色；來源已核對，尚未實際驗收。
+EVIDENCE：來源 windows/src/candidate.rs、native.rs、tsf/；背景擷取 build/native-review/{x64,x86}，模式圖示 build/mode-review，WinUI build/ui-review-final。圖片來自實際原生繪製，無 HTML detector。背景擷取不等同前景 App、實際工作列、多螢幕或高對比實機驗收。最終審查與驗證結果記錄於 DESIGN.md、VERIFICATION.md。
 
-FIT：字級 14–32 DIP，保留三種排列。長詞依實際量測加寬；窄工作區每格獨立 clip；來源設定 character ellipsis，本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見，空間足夠時小字級長詞完整顯示。
-
-EMOJI：候選字詞 `DrawTextLayout` 啟用 `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`，數字標記保持原文字繪製。支援目前 Windows 字型已有的彩色 emoji、膚色與 ZWJ 序列；實際字形取決於已安裝字型，Windows 的旗幟目前呈現 TW 字母，不宣稱支援所有 emoji。其餘候選字體、量測、內距與排列維持原契約。
-
-MODE：工作列保留使用者指定參考專案的 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示使用 `assets/mode/chinese.svg`／`english.svg` 的 24×24 原始幾何，由 GDI+ 依實際螢幕 DPI 即時繪製 28 DIP 圖示，不縮放 ICO。SVG 同樣來自 `C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons`，MIT 授權全文保留於 `assets/mode/LICENSE`。視窗使用 `WS_EX_LAYERED`、`UpdateLayeredWindow` 與 32-bit premultiplied alpha，無 `COLOR_WINDOW` 白底與外圈內距；6 DIP 只作 caret 間距。1400 ms 後或下一次輸入／失焦時隱藏，維持 NOACTIVATE；同 TSF 程序，不使用額外 host。
-
-EVIDENCE：背景原生 BMP 在 `build/native-review/x64`／`x86`，模式圖示 capture 在 `build/mode-review`；無 HTML detector。來源為 `src/candidate_host.h`／`.cpp`、`candidate_palette.h`／`.cpp`、`mode_indicator.cpp` 與 `mode_button.cpp`。窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list；高對比、實際深色工作列、前景應用程式及多螢幕尚未驗收。背景圖片不等同日常使用驗收。
-
-本次修正證據：`build/native-review/{x64,x86}/candidates-{1,2}-emoji.bmp` 呈現彩色 emoji 字詞；`build/mode-review/{chinese,english}-{96,120,144,192}.bmp` 保留 alpha，呈現指定 DPI 下的透明模式圖示。實際螢幕 DPI 來源已核對，圖片不等同多螢幕實際操作驗收；本次 emoji／透明提示的獨立 finish reviewer disposition 為 ship：😀／👍🏽／👩‍💻／❤️ 與混排彩色呈現、四種指定 DPI 的中／A 清楚、alpha 透明且白框消失均符合契約；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。前述窄工作區修正已完成狀態保持不變。
-
-FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+FINISH：完成必要背景驗證、獨立 finish review、DESIGN.md 與產生物來源紀錄。

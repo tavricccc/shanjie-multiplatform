@@ -258,6 +258,7 @@ dependencies = [
  "sha2",
  "tiny-skia",
  "windows",
+ "windows-core",
  "windows-numerics",
 ]
 

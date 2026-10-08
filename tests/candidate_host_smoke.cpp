@@ -41,7 +41,7 @@ int wmain(int argc,wchar_t** argv) {
             std::filesystem::path output(argv[2]); std::filesystem::create_directories(output);
             for (auto theme : {1u,2u}) {
                 frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"};
-                preferences.theme = theme;
+                preferences.theme = theme; preferences.fontSize = 16;
                 frame.columns = 0; presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal.bmp"));
                 frame.candidates = {L"比方",L"彼方",L"比訪"}; frame.selected = 0;
@@ -56,7 +56,7 @@ int wmain(int argc,wchar_t** argv) {
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-narrow.bmp"));
                 SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",nullptr);
-                preferences.fontSize = 18; frame.columns = 0; frame.associated = true;
+                preferences.fontSize = 16; frame.columns = 0; frame.associated = true;
                 presenter.publish(frame,preferences,caret,96,true); captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-associated.bmp")); frame.associated = false;
                 frame.candidates = {L"😀",L"👍🏽",L"👩‍💻",L"🇹🇼",L"❤️",L"文字😀"};
                 presenter.publish(frame,preferences,caret,96,true);

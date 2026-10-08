@@ -6,7 +6,6 @@ use windows::{
         Graphics::{
             Direct2D::Common::*, Direct2D::*, DirectWrite::*, Dwm::*, Dxgi::Common::*, Gdi::*,
         },
-        System::LibraryLoader::GetModuleHandleW,
         UI::{Accessibility::*, HiDpi::*, WindowsAndMessaging::*},
     },
     UI::ViewManagement::{UIColorType, UISettings},
@@ -64,7 +63,7 @@ impl Palette {
                 border: rgb(if dark { 0x787884 } else { 0xb5b5bd }),
                 text: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
                 label: rgb(if dark { 0xb9b9c5 } else { 0x65656e }),
-                accent: rgb(0x007aff),
+                accent: rgb(0x006ee6),
                 selected: rgb(0xffffff),
             })
         }
@@ -74,6 +73,7 @@ struct Item {
     word: IDWriteTextLayout,
     label: IDWriteTextLayout,
     width: f32,
+    natural: f32,
     tag: f32,
     word_height: f32,
     label_height: f32,
@@ -93,6 +93,9 @@ pub struct Host {
     brush: ID2D1SolidColorBrush,
     palette: Palette,
     items: Vec<Item>,
+    start: usize,
+    end: usize,
+    work_width: f32,
 }
 impl Host {
     pub fn start(callback: HWND) -> Result<Box<Self>> {
@@ -103,7 +106,7 @@ impl Host {
                 r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
                 pixelFormat: D2D1_PIXEL_FORMAT {
                     format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                    alphaMode: D2D1_ALPHA_MODE_IGNORE,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
                 },
                 ..Default::default()
             };
@@ -115,7 +118,7 @@ impl Host {
                 sequence: 0,
                 state: Snapshot::default(),
                 theme: 0,
-                size: 18,
+                size: 16,
                 scale: 1.0,
                 row: 28.0,
                 _factory: factory,
@@ -124,11 +127,15 @@ impl Host {
                 brush,
                 palette: Palette::new(0)?,
                 items: Vec::new(),
+                start: 0,
+                end: 0,
+                work_width: 0.0,
             });
-            let module = GetModuleHandleW(None)?;
+            let module = crate::tsf::module();
             let wc = WNDCLASSW {
                 lpfnWndProc: Some(procedure),
                 hInstance: HINSTANCE(module.0),
+                hCursor: LoadCursorW(None, IDC_ARROW)?,
                 lpszClassName: w!("ShanjieRustCandidates"),
                 ..Default::default()
             };
@@ -136,7 +143,7 @@ impl Host {
             let awareness =
                 SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             let created = CreateWindowExW(
-                WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
                 wc.lpszClassName,
                 w!("善解候選"),
                 WS_POPUP,
@@ -187,14 +194,15 @@ impl Host {
                 DWRITE_FONT_WEIGHT_NORMAL,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
-                (self.size as f32 * 0.6).max(11.0),
+                (self.size as f32 * 9.0 / 16.0).max(8.0),
                 w!("zh-TW"),
             )?;
             text.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
             label.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
             let ellipsis = self.text_factory.CreateEllipsisTrimmingSign(&text)?;
             self.items.clear();
-            self.row = 26.0;
+            let ratio = self.size as f32 / 16.0;
+            self.row = 24.0 * ratio;
             for (i, value) in self.state.candidates.iter().enumerate() {
                 let tag = if self.state.selected.is_none() {
                     String::new()
@@ -220,25 +228,24 @@ impl Host {
                 let tag_width = if tag.is_empty() {
                     0.0
                 } else {
-                    nm.widthIncludingTrailingWhitespace + 6.0
+                    nm.widthIncludingTrailingWhitespace + 6.0 * ratio
                 };
-                self.row = self.row.max(wm.height + 6.0);
+                self.row = self.row.max(wm.height + 2.0 * ratio);
                 self.items.push(Item {
                     word,
                     label: number,
-                    width: wm.widthIncludingTrailingWhitespace + tag_width + 20.0,
+                    width: wm.widthIncludingTrailingWhitespace + tag_width + 11.0 * ratio,
+                    natural: wm.widthIncludingTrailingWhitespace + tag_width + 11.0 * ratio,
                     tag: tag_width,
                     word_height: wm.height,
                     label_height: nm.height,
                 });
             }
-            let available = (work_width - 8.0).max(1.0);
-            let natural: f32 = self.items.iter().map(|i| i.width).sum();
-            let ratio = (available / natural).min(1.0);
+            self.work_width = work_width;
+            let width = self.fit_view(self.state.selected);
             for item in &mut self.items {
-                item.width = (item.width * ratio * self.scale).floor() / self.scale;
                 item.word
-                    .SetMaxWidth((item.width - item.tag - 20.0).max(1.0))?;
+                    .SetMaxWidth((item.width - item.tag - 11.0 * ratio).max(1.0))?;
                 item.word.SetTrimming(
                     &DWRITE_TRIMMING {
                         granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER,
@@ -247,8 +254,101 @@ impl Host {
                     &ellipsis,
                 )?;
             }
-            Ok(self.items.iter().map(|i| i.width).sum::<f32>() + 8.0)
+            Ok(width)
         }
+    }
+    fn fit_view(&mut self, selected: Option<usize>) -> f32 {
+        let ratio = self.size as f32 / 16.0;
+        let count = self.items.len();
+        self.start = self.start.min(count.saturating_sub(1));
+        if let Some(selected) = selected {
+            if selected < self.start {
+                self.start = selected;
+            }
+        }
+        loop {
+            for item in &mut self.items {
+                item.width = item.natural;
+            }
+            let left = if self.start > 0 { 14.0 * ratio } else { 0.0 };
+            let natural = self.items[self.start..]
+                .iter()
+                .map(|i| i.natural)
+                .sum::<f32>()
+                + 2.0 * ratio * (count - self.start).saturating_sub(1) as f32;
+            let right = if natural + left + 6.0 * ratio > self.work_width {
+                14.0 * ratio
+            } else {
+                0.0
+            };
+            let available = (self.work_width - left - right - 6.0 * ratio).max(1.0);
+            let mut used = 0.0;
+            self.end = self.start;
+            for i in self.start..count {
+                let gap = if i == self.start { 0.0 } else { 2.0 * ratio };
+                let width = self.items[i].natural.min(available);
+                if self.end > self.start && used + gap + width > available {
+                    break;
+                }
+                self.items[i].width = width;
+                used += gap + width;
+                self.end = i + 1;
+            }
+            if selected.is_some_and(|i| i >= self.end) && self.start + 1 < count {
+                self.start += 1;
+                continue;
+            }
+            return (used + left + if self.end < count { 14.0 * ratio } else { 0.0 } + 6.0 * ratio)
+                .min(self.work_width);
+        }
+    }
+    unsafe fn scroll(&mut self, next: bool) -> Result<()> {
+        let start = if next {
+            self.end.min(self.items.len() - 1)
+        } else {
+            self.start.saturating_sub((self.end - self.start).max(1))
+        };
+        if start == self.start {
+            return Ok(());
+        }
+        self.start = start;
+        self.sequence = self.sequence.wrapping_add(1);
+        let width = self.fit_view(None);
+        let ratio = self.size as f32 / 16.0;
+        for item in &self.items {
+            item.word
+                .SetMaxWidth((item.width - item.tag - 11.0 * ratio).max(1.0))?;
+        }
+        let mut rect = RECT::default();
+        GetWindowRect(self.window, &mut rect)?;
+        let mut monitor = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        GetMonitorInfoW(
+            MonitorFromWindow(self.window, MONITOR_DEFAULTTONEAREST),
+            &mut monitor,
+        )
+        .ok()?;
+        let pixels = (width * self.scale).ceil() as i32;
+        let x = if std::env::var_os("SHANJIE_VERIFY_UI").is_some() {
+            rect.left
+        } else {
+            rect.left.clamp(
+                monitor.rcWork.left,
+                (monitor.rcWork.right - pixels).max(monitor.rcWork.left),
+            )
+        };
+        SetWindowPos(
+            self.window,
+            None,
+            x,
+            rect.top,
+            pixels,
+            ((self.row + 6.0 * self.size as f32 / 16.0) * self.scale).ceil() as i32,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )?;
+        self.display()
     }
     pub fn publish(
         &mut self,
@@ -263,6 +363,9 @@ impl Host {
             if !visible || state.candidates.is_empty() {
                 self.hide();
                 return Ok(());
+            }
+            if self.state.candidates != state.candidates || self.state.first != state.first {
+                self.start = 0;
             }
             self.state = state;
             self.theme = theme;
@@ -297,7 +400,8 @@ impl Host {
                     .measure((monitor.rcWork.right - monitor.rcWork.left) as f32 / self.scale)?
                     * self.scale)
                     .ceil() as i32;
-                let height = ((self.row + 4.0) * self.scale).ceil() as i32;
+                let height =
+                    ((self.row + 6.0 * self.size as f32 / 16.0) * self.scale).ceil() as i32;
                 let mut x = caret.left.clamp(
                     monitor.rcWork.left,
                     (monitor.rcWork.right - width).max(monitor.rcWork.left),
@@ -312,8 +416,6 @@ impl Host {
                     x = -12000;
                     y = -12000;
                 }
-                let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, height, height);
-                SetWindowRgn(self.window, Some(region), false);
                 SetWindowPos(
                     self.window,
                     Some(HWND_TOPMOST),
@@ -323,13 +425,45 @@ impl Host {
                     height,
                     SWP_NOACTIVATE | SWP_SHOWWINDOW,
                 )?;
-                let _ = InvalidateRect(Some(self.window), None, false);
-                let _ = UpdateWindow(self.window);
+                self.display()?;
                 Ok(())
             })();
             SetThreadDpiAwarenessContext(awareness);
             result
         }
+    }
+    unsafe fn display(&self) -> Result<()> {
+        let mut rect = RECT::default();
+        GetWindowRect(self.window, &mut rect)?;
+        let buffer = Buffer::new(rect.right - rect.left, rect.bottom - rect.top)?;
+        self.paint(buffer.dc)?;
+        let position = POINT {
+            x: rect.left,
+            y: rect.top,
+        };
+        let size = SIZE {
+            cx: rect.right - rect.left,
+            cy: rect.bottom - rect.top,
+        };
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: 255,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
+        UpdateLayeredWindow(
+            self.window,
+            None,
+            Some(&position),
+            Some(&size),
+            Some(buffer.dc),
+            Some(&POINT::default()),
+            COLORREF(0),
+            Some(&blend),
+            ULW_ALPHA,
+        )?;
+        let _ = ValidateRect(Some(self.window), None);
+        Ok(())
     }
     unsafe fn paint(&self, dc: HDC) -> Result<()> {
         let mut bounds = RECT::default();
@@ -337,7 +471,7 @@ impl Host {
         self.target.BindDC(dc, &bounds)?;
         self.target.SetDpi(96.0 * self.scale, 96.0 * self.scale);
         self.target.BeginDraw();
-        self.target.Clear(Some(&self.palette.background));
+        self.target.Clear(Some(&D2D1_COLOR_F::default()));
         let width = bounds.right as f32 / self.scale;
         let height = bounds.bottom as f32 / self.scale;
         let rounded = |l, t, r, b, radius| D2D1_ROUNDED_RECT {
@@ -350,6 +484,11 @@ impl Host {
             radiusX: radius,
             radiusY: radius,
         };
+        self.brush.SetColor(&self.palette.background);
+        self.target.FillRoundedRectangle(
+            &rounded(0.5, 0.5, width - 0.5, height - 0.5, (height - 1.0) / 2.0),
+            &self.brush,
+        );
         self.brush.SetColor(&self.palette.border);
         self.target.DrawRoundedRectangle(
             &rounded(0.5, 0.5, width - 0.5, height - 0.5, (height - 1.0) / 2.0),
@@ -357,22 +496,30 @@ impl Host {
             1.0,
             None,
         );
-        let mut x = 4.0;
-        for (i, item) in self.items.iter().enumerate() {
+        let ratio = self.size as f32 / 16.0;
+        let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
+        let y = 3.0 * ratio;
+        for (i, item) in self
+            .items
+            .iter()
+            .enumerate()
+            .take(self.end)
+            .skip(self.start)
+        {
             let selected = self.state.selected == Some(i);
             if selected {
                 self.brush.SetColor(&self.palette.accent);
                 self.target.FillRoundedRectangle(
-                    &rounded(x, 2.0, x + item.width, 2.0 + self.row, self.row / 2.0),
+                    &rounded(x, y, x + item.width, y + self.row, self.row / 2.0),
                     &self.brush,
                 );
             }
             self.target.PushAxisAlignedClip(
                 &D2D_RECT_F {
                     left: x,
-                    top: 2.0,
+                    top: y,
                     right: x + item.width,
-                    bottom: 2.0 + self.row,
+                    bottom: y + self.row,
                 },
                 D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
             );
@@ -383,8 +530,8 @@ impl Host {
             });
             self.target.DrawTextLayout(
                 Vector2 {
-                    X: x + 10.0,
-                    Y: 2.0 + (self.row - item.label_height) / 2.0,
+                    X: x + 4.0 * ratio,
+                    Y: y + (self.row - item.label_height) / 2.0,
                 },
                 &item.label,
                 &self.brush,
@@ -397,15 +544,50 @@ impl Host {
             });
             self.target.DrawTextLayout(
                 Vector2 {
-                    X: x + 10.0 + item.tag,
-                    Y: 2.0 + (self.row - item.word_height) / 2.0,
+                    X: x + 4.0 * ratio + item.tag,
+                    Y: y + (self.row - item.word_height) / 2.0,
                 },
                 &item.word,
                 &self.brush,
                 D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT,
             );
             self.target.PopAxisAlignedClip();
-            x += item.width;
+            x += item.width + 2.0 * ratio;
+        }
+        self.brush.SetColor(&self.palette.text);
+        for (present, center, direction) in [
+            (self.start > 0, 10.0 * ratio, -1.0),
+            (self.end < self.items.len(), width - 10.0 * ratio, 1.0),
+        ] {
+            if present {
+                let middle = height / 2.0;
+                self.target.DrawLine(
+                    Vector2 {
+                        X: center - direction * 2.0 * ratio,
+                        Y: middle - 4.0 * ratio,
+                    },
+                    Vector2 {
+                        X: center + direction * 2.0 * ratio,
+                        Y: middle,
+                    },
+                    &self.brush,
+                    1.5 * ratio,
+                    None,
+                );
+                self.target.DrawLine(
+                    Vector2 {
+                        X: center + direction * 2.0 * ratio,
+                        Y: middle,
+                    },
+                    Vector2 {
+                        X: center - direction * 2.0 * ratio,
+                        Y: middle + 4.0 * ratio,
+                    },
+                    &self.brush,
+                    1.5 * ratio,
+                    None,
+                );
+            }
         }
         self.target.EndDraw(None, None)
     }
@@ -414,6 +596,10 @@ impl Drop for Host {
     fn drop(&mut self) {
         unsafe {
             let _ = DestroyWindow(self.window);
+            let _ = UnregisterClassW(
+                w!("ShanjieRustCandidates"),
+                Some(HINSTANCE(crate::tsf::module().0)),
+            );
         }
     }
 }
@@ -421,7 +607,7 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
     let mut ptr = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut Host;
     if message == WM_NCCREATE {
         ptr = (*(lp.0 as *const CREATESTRUCTW)).lpCreateParams.cast();
-        SetWindowLongPtrW(window, GWLP_USERDATA, ptr as isize);
+        SetWindowLongPtrW(window, GWLP_USERDATA, ptr as _);
     }
     if message == WM_MOUSEACTIVATE {
         return LRESULT(MA_NOACTIVATE as isize);
@@ -429,27 +615,45 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
     if message == WM_ERASEBKGND {
         return LRESULT(1);
     }
+    if message == WM_PAINT {
+        let mut ps = PAINTSTRUCT::default();
+        BeginPaint(window, &mut ps);
+        let _ = EndPaint(window, &ps);
+        return LRESULT(0);
+    }
     if !ptr.is_null() {
-        let host = &mut *ptr;
-        if message == WM_PAINT || message == WM_PRINTCLIENT {
-            let mut ps = PAINTSTRUCT::default();
-            let dc = if message == WM_PAINT {
-                BeginPaint(window, &mut ps)
-            } else {
-                HDC(wp.0 as _)
-            };
-            let _ = host.paint(dc);
-            if message == WM_PAINT {
-                let _ = EndPaint(window, &ps);
-            }
+        if message == WM_PRINTCLIENT {
+            let _ = (*ptr).paint(HDC(wp.0 as _));
             return LRESULT(0);
         }
         if message == WM_LBUTTONUP {
+            let host = &mut *ptr;
             let x = (lp.0 as u16 as i16) as f32 / host.scale;
             let y = ((lp.0 >> 16) as u16 as i16) as f32 / host.scale;
-            let mut left = 4.0;
-            for (i, item) in host.items.iter().enumerate() {
-                if x >= left && x < left + item.width && y >= 2.0 && y < 2.0 + host.row {
+            let ratio = host.size as f32 / 16.0;
+            let mut bounds = RECT::default();
+            let _ = GetClientRect(window, &mut bounds);
+            if host.start > 0 && x < 17.0 * ratio {
+                let _ = host.scroll(false);
+                return LRESULT(0);
+            }
+            if host.end < host.items.len() && x > bounds.right as f32 / host.scale - 17.0 * ratio {
+                let _ = host.scroll(true);
+                return LRESULT(0);
+            }
+            let mut left = (3.0 + if host.start > 0 { 14.0 } else { 0.0 }) * ratio;
+            for (i, item) in host
+                .items
+                .iter()
+                .enumerate()
+                .take(host.end)
+                .skip(host.start)
+            {
+                if x >= left
+                    && x < left + item.width
+                    && y >= 3.0 * ratio
+                    && y < 3.0 * ratio + host.row
+                {
                     let _ = PostMessageW(
                         Some(host.callback),
                         WM_APP + 42,
@@ -458,7 +662,7 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
                     );
                     break;
                 }
-                left += item.width;
+                left += item.width + 2.0 * ratio;
             }
             return LRESULT(0);
         }
@@ -469,12 +673,48 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
         ]
         .contains(&message)
         {
+            let host = &mut *ptr;
             if let Ok(p) = Palette::new(host.theme) {
                 host.palette = p;
             }
-            let _ = InvalidateRect(Some(window), None, false);
+            let _ = host.display();
             return LRESULT(0);
         }
     }
     DefWindowProcW(window, message, wp, lp)
+}
+struct Buffer {
+    dc: HDC,
+    bitmap: HBITMAP,
+    old: HGDIOBJ,
+}
+impl Buffer {
+    unsafe fn new(width: i32, height: i32) -> Result<Self> {
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut pixels = std::ptr::null_mut();
+        let bitmap = CreateDIBSection(None, &info, DIB_RGB_COLORS, &mut pixels, None, 0)?;
+        let dc = CreateCompatibleDC(None);
+        let old = SelectObject(dc, bitmap.into());
+        Ok(Self { dc, bitmap, old })
+    }
+}
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            SelectObject(self.dc, self.old);
+            let _ = DeleteDC(self.dc);
+            let _ = DeleteObject(self.bitmap.into());
+        }
+    }
 }

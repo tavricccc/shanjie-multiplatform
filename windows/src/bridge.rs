@@ -17,7 +17,7 @@ use windows::Win32::{
     UI::Input::KeyboardAndMouse::*,
 };
 thread_local! {static ERROR:RefCell<CString>=RefCell::new(CString::default());}
-fn failure(e: impl ToString) {
+pub(crate) fn failure(e: impl ToString) {
     ERROR.with(|v| *v.borrow_mut() = CString::new(e.to_string()).unwrap());
 }
 unsafe fn text<'a>(p: *const c_char) -> &'a str {
@@ -79,6 +79,16 @@ pub extern "C" fn sj_clear_learning() -> bool {
         Err(e) => {
             failure(e);
             false
+        }
+    }
+}
+#[no_mangle]
+pub unsafe extern "C" fn sj_profile_preset(content: *const c_char, windows: bool) -> *mut c_char {
+    match profile::preset(text(content), windows) {
+        Ok(s) => CString::new(s).unwrap().into_raw(),
+        Err(e) => {
+            failure(e);
+            ptr::null_mut()
         }
     }
 }

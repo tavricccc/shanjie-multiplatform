@@ -1,4 +1,3 @@
-#include "mode_button.h"
 #include "identity.h"
 #include "mode_indicator.h"
 #include <cassert>
@@ -9,23 +8,19 @@ long objects = 0;
 int wmain(int argc,wchar_t** argv) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     assert(argc == 2 || argc == 3); module = LoadLibraryW(argv[1]); assert(module);
-    bool chinese = true;
-    auto button = new ModeButton([&] { return chinese; },[] { return S_OK; },[] {});
-    TF_LANGBARITEMINFO item{}; assert(SUCCEEDED(button->GetInfo(&item)));
-    assert(!(item.dwStyle & TF_LBI_STYLE_TEXTCOLORICON));
+    auto loadIcon = reinterpret_cast<intptr_t(__cdecl*)(bool)>(GetProcAddress(module,"sj_mode_icon")); assert(loadIcon);
     for (bool mode : {true,false}) {
-        chinese = mode; HICON icon = nullptr; assert(SUCCEEDED(button->GetIcon(&icon)));
+        HICON icon = (HICON)loadIcon(mode); assert(icon);
         ICONINFO info{}; assert(GetIconInfo(icon,&info));
         assert(info.hbmColor); BITMAP bitmap{}; assert(GetObjectW(info.hbmColor,sizeof(bitmap),&bitmap));
         assert(bitmap.bmBitsPixel == 32 && bitmap.bmHeight == GetSystemMetrics(SM_CYSMICON));
         DeleteObject(info.hbmColor); DeleteObject(info.hbmMask); DestroyIcon(icon);
     }
-    button->Release(); assert(objects == 0);
     SetEnvironmentVariableW(L"SHANJIE_VERIFY_UI",L"1");
     {
         ModeIndicator indicator; RECT caret{100,100,101,120}; auto foreground = GetForegroundWindow();
         indicator.show(caret,96,true);
-        auto window = FindWindowW(L"ShanjieModeIndicator",nullptr); assert(window && IsWindowVisible(window));
+        auto window = FindWindowW(L"ShanjieRustModeIndicator",nullptr); assert(window && IsWindowVisible(window));
         RECT bounds{}; GetWindowRect(window,&bounds); assert(bounds.right < -10000 && bounds.bottom < -10000);
         assert(GetForegroundWindow() == foreground && SendMessageW(window,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
         assert(GetWindowLongPtrW(window,GWL_EXSTYLE) & WS_EX_LAYERED);

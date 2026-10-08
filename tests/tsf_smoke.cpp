@@ -124,6 +124,10 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<ThreadProxy> proxy; proxy.Attach(new ThreadProxy(thread.Get()));
     HRESULT activation = service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY);
     if (FAILED(activation)) std::printf("Activation HRESULT %08lx\n",(unsigned long)activation);
+    if (FAILED(activation)) {
+        auto error = reinterpret_cast<const char*(__cdecl*)()>(GetProcAddress(dll,"sj_error"));
+        if (error) std::printf("Rust activation detail: %s\n",error());
+    }
     require(SUCCEEDED(activation),13);
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
@@ -177,7 +181,7 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_ESCAPE,187);
         press('S',150); press('U',152); press('3',154);
         BOOL passed = TRUE;
-        require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_SPACE,0,&passed)) && !passed,156);
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_SPACE,0,&passed)) && passed && !store->text.empty() && store->text.back() != L' ',156);
         require(noCandidates(),157); // Space commits under Down; no unsolicited association.
         wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
         auto profile = std::wstring(local) + L"/Shanjie/profile.ini";

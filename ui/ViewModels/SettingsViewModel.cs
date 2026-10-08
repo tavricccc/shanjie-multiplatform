@@ -6,7 +6,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int Model { get; set; }
+    public int Model => 3;
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
     [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
@@ -49,12 +49,5 @@ public partial class SettingsViewModel : ObservableObject
     public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
         + "Tab 移到下一候選。空白可翻頁。"
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
-    public string ModelHelp => Model switch
-    {
-        0 => "原始模型，未使用詞類表。",
-        1 => "整理簡繁轉換與詞頻計數，未使用詞類表。",
-        2 => "改善臺灣常用字形，與 classes-v1 詞類表一起使用。",
-        3 => "與 classes-v2 詞類表一起使用。上游量測 v3／v4 的選字與預測結果相同；v4 另含模型來源指紋。",
-        _ => "請選擇一個語言模型。"
-    };
+    public string ModelHelp => "使用上游最新 model-v4，固定搭配 classes-v2 詞類表。";
 }

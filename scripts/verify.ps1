@@ -36,7 +36,7 @@ try {
 call "$vcvars" >nul
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-x64"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" "$root/tests/tsf_smoke.cpp" /link /OUT:"$root/build/tsf-smoke.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/tsf_smoke.cpp" /link /OUT:"$root/build/tsf-smoke.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
     Set-Content build/native-x64/verify.cmd $command -Encoding utf8NoBOM
     & cmd.exe /d /c (Join-Path $root 'build/native-x64/verify.cmd')

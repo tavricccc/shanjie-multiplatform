@@ -78,6 +78,14 @@ impl Document {
     pub fn migrate(&mut self) {
         let schema = self.number("profile", "schema", 1);
         let windows = self.get("profile", "interaction", "windows") == "windows";
+        if schema < 4
+            && !self
+                .0
+                .get("appearance")
+                .is_some_and(|s| s.contains_key("font_size"))
+        {
+            self.set("appearance", "font_size", 18);
+        }
         if schema < 3 {
             for (s, k, v) in [
                 ("engine", "prediction", false),
@@ -117,16 +125,16 @@ impl Document {
                     self.set("shortcuts", key, 1);
                 }
             }
-            let defaults = Self::parse(if windows {
-                include_str!("../../profiles/windows.ini")
-            } else {
-                include_str!("../../profiles/shanjie.ini")
-            })
-            .unwrap();
-            for (s, fields) in defaults.0 {
-                for (k, v) in fields {
-                    self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
-                }
+        }
+        let defaults = Self::parse(if windows {
+            include_str!("../../profiles/windows.ini")
+        } else {
+            include_str!("../../profiles/shanjie.ini")
+        })
+        .unwrap();
+        for (s, fields) in defaults.0 {
+            for (k, v) in fields {
+                self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
         }
         self.set("profile", "schema", 4);
@@ -155,15 +163,14 @@ pub fn load(path: &Path) -> Result<Document> {
     }
     let original = fs::read_to_string(path)?;
     let mut doc = Document::parse(&original)?;
-    if doc.number("profile", "schema", 1) < 4 {
-        let backup = path.with_extension(format!(
-            "ini.schema{}.bak",
-            doc.number("profile", "schema", 1)
-        ));
+    let before = doc.content();
+    let schema = doc.number("profile", "schema", 1);
+    doc.migrate();
+    if doc.content() != before {
+        let backup = path.with_extension(format!("ini.schema{}.bak", schema));
         if !backup.exists() {
             fs::copy(path, &backup)?;
         }
-        doc.migrate();
         save(path, &doc.content())?;
     }
     Ok(doc)
@@ -261,5 +268,87 @@ pub fn clear_learning() -> Result<()> {
         ReleaseMutex(mutex)?;
         CloseHandle(mutex)?;
         result
+    }
+}
+pub fn preset(content: &str, windows: bool) -> Result<String> {
+    let previous = Document::parse(content)?;
+    let mut preset = Document::parse(if windows {
+        include_str!("../../profiles/windows.ini")
+    } else {
+        include_str!("../../profiles/shanjie.ini")
+    })?;
+    for (section, keys) in [
+        ("engine", &["ranking", "demote"][..]),
+        (
+            "input",
+            &[
+                "dictionary",
+                "keyboard",
+                "learning",
+                "context",
+                "chinese",
+                "full_width",
+            ][..],
+        ),
+        ("candidates", &["big5"][..]),
+        ("appearance", &["theme", "font_size", "mode_indicator"][..]),
+    ] {
+        for key in keys {
+            if let Some(value) = previous.0.get(section).and_then(|s| s.get(*key)) {
+                preset.set(section, key, value);
+            }
+        }
+    }
+    preset.migrate();
+    Ok(preset.content())
+}
+pub fn apply_preset(source: &Path) -> Result<()> {
+    let mut preset = Document::parse(&fs::read_to_string(source)?)?;
+    if path().exists() {
+        let previous = load(&path())?;
+        for (section, keys) in [
+            ("engine", &["ranking", "demote"][..]),
+            (
+                "input",
+                &[
+                    "dictionary",
+                    "keyboard",
+                    "learning",
+                    "context",
+                    "chinese",
+                    "full_width",
+                ][..],
+            ),
+            ("candidates", &["big5"][..]),
+            ("appearance", &["theme", "font_size", "mode_indicator"][..]),
+        ] {
+            for key in keys {
+                if let Some(value) = previous.0.get(section).and_then(|s| s.get(*key)) {
+                    preset.set(section, key, value);
+                }
+            }
+        }
+    }
+    save(&path(), &preset.content())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn migration_preserves_personal_data_and_removes_retired_choices() {
+        let mut doc=Document::parse("[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=1\n[input]\nlearning=1\ndictionary=custom.tsv\nescape_clears=0\n[candidates]\nlayout=grid\ntab_expands=1\n[appearance]\nfont_size=22\n").unwrap();
+        doc.migrate();
+        assert_eq!(doc.number("engine", "model", 0), 4);
+        assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
+        assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");
+        assert!(doc.flag("input", "learning", false));
+        assert_eq!(doc.number("appearance", "font_size", 0), 22);
+        assert_eq!(doc.get("input", "escape", ""), "ignore");
+        assert!(!doc.0["candidates"].contains_key("tab_expands"));
+        let preset = Document::parse(&preset(&doc.content(), false).unwrap()).unwrap();
+        assert_eq!(preset.get("input", "dictionary", ""), "custom.tsv");
+        assert!(preset.flag("input", "learning", false));
+        assert_eq!(preset.number("appearance", "font_size", 0), 22);
     }
 }

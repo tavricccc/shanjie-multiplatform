@@ -43,7 +43,7 @@ struct Preferences {
     bool modeIndicator = true;
     std::wstring dictionary = L"dictionary.tsv";
     unsigned theme = 0; // System / Light / Dark.
-    unsigned fontSize = 18;
+    unsigned fontSize = 16;
 };
 Preferences loadPreferences();
 unsigned long long preferencesStamp();

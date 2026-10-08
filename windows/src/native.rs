@@ -3,7 +3,6 @@ use windows::{
     Win32::{
         Foundation::*,
         Graphics::Gdi::*,
-        System::LibraryLoader::GetModuleHandleW,
         UI::{HiDpi::*, WindowsAndMessaging::*},
     },
 };
@@ -24,7 +23,7 @@ impl Watcher {
             context,
             message: RegisterWindowMessageW(w!("Shanjie.ProfileChanged.v1")),
         });
-        let module = GetModuleHandleW(None)?;
+        let module = crate::tsf::module();
         let wc = WNDCLASSW {
             lpfnWndProc: Some(watcher_proc),
             hInstance: HINSTANCE(module.0),
@@ -53,6 +52,10 @@ impl Drop for Watcher {
     fn drop(&mut self) {
         unsafe {
             let _ = DestroyWindow(self.window);
+            let _ = UnregisterClassW(
+                w!("ShanjieRustProfileWatcher"),
+                Some(HINSTANCE(crate::tsf::module().0)),
+            );
         }
     }
 }
@@ -65,7 +68,7 @@ unsafe extern "system" fn watcher_proc(
     let mut p = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut Watcher;
     if message == WM_NCCREATE {
         p = (*(lp.0 as *const CREATESTRUCTW)).lpCreateParams.cast();
-        SetWindowLongPtrW(window, GWLP_USERDATA, p as isize);
+        SetWindowLongPtrW(window, GWLP_USERDATA, p as _);
     }
     if !p.is_null() && message == (*p).message {
         ((*p).callback)((*p).context);
@@ -174,7 +177,7 @@ impl Indicator {
         let awareness = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let result = (|| -> Result<()> {
             if self.window.is_invalid() {
-                let module = GetModuleHandleW(None)?;
+                let module = crate::tsf::module();
                 let wc = WNDCLASSW {
                     lpfnWndProc: Some(indicator_proc),
                     hInstance: HINSTANCE(module.0),
@@ -298,6 +301,10 @@ impl Drop for Indicator {
             if !self.window.is_invalid() {
                 let _ = DestroyWindow(self.window);
             }
+            let _ = UnregisterClassW(
+                w!("ShanjieRustModeIndicator"),
+                Some(HINSTANCE(crate::tsf::module().0)),
+            );
             if !self.bitmap.is_invalid() {
                 let _ = DeleteObject(self.bitmap.into());
             }
@@ -313,7 +320,7 @@ unsafe extern "system" fn indicator_proc(
     let mut p = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut Indicator;
     if message == WM_NCCREATE {
         p = (*(lp.0 as *const CREATESTRUCTW)).lpCreateParams.cast();
-        SetWindowLongPtrW(window, GWLP_USERDATA, p as isize);
+        SetWindowLongPtrW(window, GWLP_USERDATA, p as _);
     }
     if message == WM_MOUSEACTIVATE {
         return LRESULT(MA_NOACTIVATE as isize);

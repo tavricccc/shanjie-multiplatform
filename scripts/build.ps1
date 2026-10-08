@@ -1,57 +1,49 @@
 #Requires -Version 7
-param([ValidateSet('x64','x86')][string]$Architecture = 'x64', [switch]$UseExistingCore)
+param([ValidateSet('x64','x86')][string]$Architecture = 'x64', [switch]$UseExistingCore, [switch]$SkipSettings)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
-    if (!$UseExistingCore) {
-        & "$PSScriptRoot/prepare-core.ps1"
-        rustup target add $target
-        if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
-        cargo build --release --manifest-path build/core/Cargo.toml --target $target
-        if ($LASTEXITCODE) { throw 'Core build failed.' }
-    }
-    cargo build --release --manifest-path windows/Cargo.toml --target $target
-    if ($LASTEXITCODE) { throw 'Rust Windows modules build failed.' }
+    if (!$UseExistingCore) { & "$PSScriptRoot/prepare-core.ps1" }
+    rustup target add $target
+    if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if (!$vs) { throw 'Install Visual Studio Build Tools with C++ desktop tools and Windows SDK.' }
-    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
-    $output = Join-Path $root "dist/$Architecture"
+    if (!$vs) { throw 'Install Visual Studio Build Tools with the Windows SDK resource compiler.' }
     $objects = Join-Path $root "build/native-$Architecture"
-    New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','service_keys','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
-    $library = Join-Path $root "windows/target/$target/release/shanjie_windows.lib"
+    $output = Join-Path $root "dist/$Architecture"
+    New-Item -ItemType Directory -Path $objects,$output -Force | Out-Null
+    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
     $command = @"
 @echo off
 call "$vcvars" $Architecture >nul
 if errorlevel 1 exit /b 1
-cd /d "$objects"
-rc /nologo /I"$root/assets/mode" /fo mode_icons.res "$root/src/mode_icons.rc"
-if errorlevel 1 exit /b 1
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /D_WIN32_WINNT=0x0A00 /LD /I"$root/upstream/shanjie/core/include" $($sources -join ' ') "$library" mode_icons.res /link /OUT:"$output/Shanjie.dll" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib gdiplus.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib shell32.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib /DEF:"$root/src/exports.def"
+rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/resources.rc"
 "@
-    $cmdFile = Join-Path $objects 'compile.cmd'
-    Set-Content $cmdFile $command -Encoding utf8NoBOM
-    & cmd.exe /d /c $cmdFile
-    if ($LASTEXITCODE) { throw 'TSF DLL build failed.' }
-    if ($Architecture -eq 'x64') {
+    Set-Content "$objects/resources.cmd" $command -Encoding utf8NoBOM
+    & cmd.exe /d /c "$objects/resources.cmd"
+    if ($LASTEXITCODE) { throw 'Mode resource build failed.' }
+    $env:SHANJIE_ICON_RESOURCE = Join-Path $objects 'mode_icons.res'
+    cargo build --release --manifest-path windows/Cargo.toml --target $target
+    if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }
+    Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$output/Shanjie.dll" -Force
+    if ($Architecture -eq 'x64' -and !$SkipSettings) {
         $uiOutput = [IO.Path]::GetFullPath((Join-Path $root 'dist/ui'))
         if ($uiOutput -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','ui')) { throw 'Unexpected UI output path.' }
         if (Test-Path -LiteralPath $uiOutput) { Remove-Item -LiteralPath $uiOutput -Recurse -Force }
-        dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o "$root/dist/ui" --nologo
-        if ($LASTEXITCODE) { throw 'WinUI host build failed.' }
-        Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force
+        dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o $uiOutput --nologo
+        if ($LASTEXITCODE) { throw 'WinUI settings build failed.' }
+    }
+    if ($Architecture -eq 'x64') {
+        if (Test-Path "$root/dist/ui") { Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force }
         New-Item -ItemType Directory "$root/dist/tools" -Force | Out-Null
         Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
     Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
-    Copy-Item "$root/upstream/shanjie/LICENSE" "$root/dist/LICENSES" -Force
-    Copy-Item "$root/upstream/shanjie/LICENSES/*" "$root/dist/LICENSES" -Force
-    Copy-Item "$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
+    Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
     Copy-Item "$root/assets/mode/LICENSE" "$root/dist/LICENSES/local-ime-icons-MIT.txt" -Force
-} finally { Pop-Location }
+} finally { Remove-Item Env:SHANJIE_ICON_RESOURCE -ErrorAction SilentlyContinue; Pop-Location }

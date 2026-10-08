@@ -11,7 +11,7 @@ foreach ($architecture in @('x64','x86')) {
 call "$vcvars" $architecture >nul
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$architecture"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/src" "$root/tests/mode_button_smoke.cpp" "$root/src/mode_button.cpp" "$root/src/mode_indicator.cpp" /link /OUT:"$root/build/mode-$architecture.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib gdiplus.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/mode_button_smoke.cpp" "$root/tests/support/mode_indicator.cpp" "$root/windows/target/$(if ($architecture -eq 'x64') {'x86_64'} else {'i686'})-pc-windows-msvc/release/shanjie_windows.lib" /link /OUT:"$root/build/mode-$architecture.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib
 "@
     $script = "$root/build/native-$architecture/mode-smoke.cmd"
     Set-Content $script $command -Encoding utf8NoBOM
