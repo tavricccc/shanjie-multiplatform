@@ -5,7 +5,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
-    [ObservableProperty] public partial int Layout { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int Model { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
@@ -40,9 +39,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool ModeIndicator { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterCommits { get; set; }
     [ObservableProperty] public partial bool UpCycles { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool TabExpands { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool RightExpands { get; set; }
-    [ObservableProperty] public partial bool GridUpCollapses { get; set; }
     [ObservableProperty] public partial bool BackspaceDeletes { get; set; }
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
@@ -50,9 +46,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
-    public string CandidateHelp => (Interaction == 0 ? "直列與橫列皆以 ↑／↓ 選字。" : "直列與橫列皆以 ←／→ 選字，↓ 展開格狀。")
-        + (TabExpands ? "Tab 可展開格狀。" : "Tab 不展開格狀。")
-        + (RightExpands ? "→ 可展開格狀。" : "→ 移到下一候選。")
+    public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
+        + "Tab 移到下一候選。空白可翻頁。"
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
     public string ModelHelp => Model switch
     {

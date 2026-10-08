@@ -20,7 +20,6 @@ public partial class SettingsViewModel
             Interaction = profile.Read("profile", "interaction", "windows") == "windows" ? 0 : 1;
             Trigger = Array.IndexOf(new[] { "down", "space", "both" }, profile.Read("candidates", "open", "down"));
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
-            Layout = Array.IndexOf(new[] { "vertical", "horizontal", "grid" }, profile.Read("candidates", "layout", "vertical"));
             Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1; Model = 3;
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
@@ -41,8 +40,7 @@ public partial class SettingsViewModel
             ShiftPunctuation = profile.Flag("input", "shift_punctuation", Interaction == 1); PlainPunctuation = profile.Flag("input", "plain_punctuation", Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
             EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
-            TabExpands = profile.Flag("candidates", "tab_expands", Interaction == 0); RightExpands = profile.Flag("candidates", "right_expands", Interaction == 0);
-            GridUpCollapses = profile.Flag("candidates", "grid_up_collapses", Interaction == 1); BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
+            BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
             if (readDictionary)
             {
                 var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, profile.Read("input", "dictionary", "dictionary.tsv"));
@@ -62,7 +60,7 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
-        profile.Set("profile", "schema", 3); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
+        profile.Set("profile", "schema", 4); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 4);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
@@ -71,21 +69,20 @@ public partial class SettingsViewModel
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","shift_punctuation",ShiftPunctuation), ("input","plain_punctuation",PlainPunctuation), ("input","standalone_tones",StandaloneTones),
             ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),
-            ("candidates","up_cycles",UpCycles), ("candidates","tab_expands",TabExpands), ("candidates","right_expands",RightExpands),
-            ("candidates","grid_up_collapses",GridUpCollapses), ("candidates","backspace_deletes",BackspaceDeletes),
+            ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
             ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator)
         }) profile.Set(section, key, value);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
-        profile.Set("candidates", "layout", new[] { "vertical", "horizontal", "grid" }[Layout]);
+        profile.Set("candidates", "layout", "horizontal");
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }
     public void Save()
     {
-        if (Model is < 0 or > 3 || Trigger is < 0 or > 2 || Layout is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的模型、操作選項與 14–32 的候選文字大小。");
         string dictionary = PersonalDictionary.Save(DictionaryText, Path.GetDirectoryName(ProfileStore.Path)!);
         WriteDocument(); profile.Set("input", "dictionary", dictionary); ProfileStore.Save(profile.ToString()); HasChanges = false;

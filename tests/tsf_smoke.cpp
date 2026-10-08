@@ -203,7 +203,7 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"engine",L"model",L"1",profile.c_str()),211);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         press('G',212); press('4',214); press(VK_DOWN,216); press(VK_RIGHT,218);
-        UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 9,220);
+        UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 0 && tableCount <= 9,220);
         press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
         press(VK_ESCAPE,224); press(VK_RETURN,226);
         press('S',244); press('U',246); press('3',248); press(VK_DOWN,250); press('1',252);

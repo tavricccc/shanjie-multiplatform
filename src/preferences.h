@@ -1,11 +1,9 @@
 #pragma once
 #include <string>
-enum class CandidateLayout { Vertical, Horizontal, Grid };
 enum class CandidateTrigger { Down, Space, Both };
 enum class EscapeAction { Staged, Clear, Ignore };
 struct Preferences {
     bool windowsKeys = true;
-    CandidateLayout layout = CandidateLayout::Vertical;
     CandidateTrigger trigger = CandidateTrigger::Down;
     bool rightAnchor = true;
     bool shiftToggle = true;
@@ -34,9 +32,6 @@ struct Preferences {
     bool big5 = false;
     bool enterCommits = true;
     bool upCycles = true;
-    bool tabExpands = true;
-    bool rightExpands = true;
-    bool gridUpCollapses = false;
     bool backspaceDeletes = false;
     bool wrapPages = true;
     bool symbolKeyboard = true;

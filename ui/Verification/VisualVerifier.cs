@@ -29,15 +29,15 @@ internal static class VisualVerifier
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
         string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
         File.Delete(Models.ProfileStore.Path + ".schema2.bak"); File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
-        if (settings.Vm.Model != 1 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path + ".schema2.bak") != legacy)
+        if (settings.Vm.Model != 3 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path + ".schema2.bak") != legacy)
             throw new InvalidDataException("Schema 2 migration did not preserve settings or original backup");
         settings.Vm.Preset(true); settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle || settings.Vm.CtrlSpaceToggle || settings.Vm.Model != 1 || !settings.Vm.Learning || settings.Vm.FontSize != 22 || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.ShiftPunctuation)
+        if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle || settings.Vm.CtrlSpaceToggle || settings.Vm.Model != 3 || !settings.Vm.Learning || settings.Vm.FontSize != 22 || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.ShiftPunctuation)
             throw new InvalidDataException("Windows preset/retained data round-trip failed");
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.Interaction != 1 || settings.Vm.Layout != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
+        if (settings.Vm.Interaction != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
-        foreach (int model in new[] { 0, 1, 2, 3 }) { settings.Vm.Model = model; settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != model) throw new InvalidDataException("Model selection round-trip failed"); }
+        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 3 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=horizontal")) throw new InvalidDataException("Latest model/horizontal migration failed");
         settings.ShowSection(4); settings.SetPredictionForVerification(true); await Task.Delay(60);
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);

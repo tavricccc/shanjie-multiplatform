@@ -6,16 +6,9 @@ public sealed class ProfileDocument
     private readonly Dictionary<string, Dictionary<string, string>> sections = new(StringComparer.OrdinalIgnoreCase);
     public static ProfileDocument Parse(string content)
     {
-        var document = new ProfileDocument(); string section = "";
-        foreach (string row in content.Split('\n'))
-        {
-            string line = row.Trim();
-            if (line.Length == 0 || line[0] is ';' or '#') continue;
-            if (line[0] == '[' && line[^1] == ']') { section = line[1..^1]; continue; }
-            int equals = line.IndexOf('=');
-            if (section.Length == 0 || equals <= 0) throw new InvalidDataException("設定檔格式有誤，請確認每項設定都放在 [分類] 之下。");
-            document.Set(section, line[..equals].Trim(), line[(equals + 1)..].Trim());
-        }
+        var document = new ProfileDocument();
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(Interop.Native.Take(Interop.Native.sj_document_json(content)))!;
+        foreach (var section in parsed) foreach (var field in section.Value) document.Set(section.Key, field.Key, field.Value);
         return document;
     }
     public string Read(string section, string key, string defaultValue) => sections.TryGetValue(section, out var fields) && fields.TryGetValue(key, out var value) ? value : defaultValue;

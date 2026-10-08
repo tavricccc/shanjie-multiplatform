@@ -47,7 +47,6 @@ HRESULT Service::ActivateEx(ITfThreadMgr* thread, TfClientId client, DWORD) {
     if (SUCCEEDED(CoCreateInstance(CLSID_TF_InputProcessorProfiles,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&profiles))) && SUCCEEDED(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD,&active)) && active.guidProfile == EtenProfile) layout = 1;
     auto binaryRoot = std::filesystem::path(path).parent_path().parent_path();
     auto root = binaryRoot;
-    if (root.parent_path().filename() == L"versions") root = root.parent_path().parent_path();
     profileLayout_ = layout; dataRoot_ = root / L"data";
     if (preferences_.keyboard) layout = preferences_.keyboard == 2 ? 1 : 0;
     if (!engine_.open(root / L"data",layout,preferences_.ranking,preferences_.rightAnchor,preferences_.learning,preferences_.big5,preferences_.dictionary,preferences_.model,preferences_.prediction)) { Deactivate(); return E_FAIL; }

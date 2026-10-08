@@ -18,14 +18,10 @@ struct Snapshot {
 std::wstring wide(const char* text);
 std::string utf8(const std::wstring& text);
 class Engine {
-    ShanjieEngine* handle_ = nullptr;
-    HANDLE learningMutex_ = nullptr;
-    std::filesystem::path learningPath_;
-    std::string learningEpoch_;
-    bool beginLearning();
-    void endLearning();
-    Snapshot copy(ShanjieOutput* output);
+    void* handle_ = nullptr;
+    bool action(unsigned,Snapshot&,ShanjieKey = {},unsigned = 0,const char* = "");
 public:
+    void* native() { return handle_; }
     ~Engine();
     bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0, bool rightAnchor = false, bool learning = false, bool big5 = false, const std::wstring& dictionary = L"dictionary.tsv", unsigned model = 4, bool prediction = false);
     bool key(ShanjieKey key, Snapshot& output);

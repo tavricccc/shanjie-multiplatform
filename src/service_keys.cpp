@@ -115,10 +115,6 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
     }
     bool selectedCandidate = !state_.candidates.empty() && state_.selected >= 0 && key.modifiers == 0
         && (key.kind == 3 || (key.kind == 1 && key.ch >= '1' && key.ch <= '9'));
-    if (!preferences_.gridUpCollapses && state_.columns && !state_.first && state_.selected < (int)state_.columns && key.kind == 9 && key.modifiers == 0) {
-        // Windows table navigation stops at the first row; upstream Up collapses the table.
-        *eaten = TRUE; return S_OK;
-    }
     key = shanjie::windowsKey(key,state_,preferences_);
     if (preferences_.forgetCandidate && preferences_.learning && key.kind == 4 && key.modifiers == 3 && state_.selected >= 0) key.modifiers = 8;
     bool capsEnglish = preferences_.capsLockEnglish && (key.modifiers & 16) && !(key.modifiers & 14) && (key.kind == 1 || key.kind == 2);
@@ -172,10 +168,6 @@ HRESULT Service::OnKeyDown(ITfContext* context, WPARAM vk, LPARAM flags, BOOL* e
             rawReading_ = shanjie::hasPendingReading(out) ? raw : std::string{};
         }
         if (deleteCandidate && !engine_.key(key,out)) return E_FAIL;
-        if (preferences_.layout == CandidateLayout::Grid && !out.prediction && !out.candidates.empty() && out.columns == 0) {
-            ShanjieKey expand{}; expand.kind = 10;
-            if (!engine_.key(expand,out)) return E_FAIL;
-        }
         if (preferences_.enterCommits && selectedCandidate && key.kind == 3 && key.modifiers == 0 && out.candidates.empty() && !shanjie::hasPendingReading(out) && !out.preedit.empty()) {
             auto committed = out.commit;
             if (!engine_.key(key,out)) return E_FAIL;

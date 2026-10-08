@@ -14,8 +14,7 @@ int wmain(int argc,wchar_t** argv) {
     ShanjieKey down{}; down.kind = 10;
     assert(shanjie::windowsKey(down,frame,preferences).kind == 8);
     ShanjieKey tab{}; tab.kind = 13;
-    assert(shanjie::windowsKey(tab,frame,preferences).kind == 10);
-    preferences.tabExpands = false; assert(shanjie::windowsKey(tab,frame,preferences).kind == 13); preferences.tabExpands = true;
+    assert(shanjie::windowsKey(tab,frame,preferences).kind == 8);
     frame.prediction = true; frame.selected = -1; assert(shanjie::windowsKey(tab,frame,preferences).kind == 13);
     frame.prediction = false; frame.selected = 0;
     SpecialInput special;
@@ -28,7 +27,7 @@ int wmain(int argc,wchar_t** argv) {
     key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = 'b'; special.key(key,preferences);
     for (auto ch : "a440") { key.ch = ch; special.key(key,preferences); }
     key.kind = 2; assert(special.key(key,preferences).commit == L"一");
-    key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = ',';
+    preferences.backquoteSymbols = true; key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = ',';
     assert(special.key(key,preferences).commit == L"，");
     key.ch = ','; key.modifiers = 6; special.key(key,preferences); key.modifiers = 0; key.kind = 10;
     assert(special.key(key,preferences).selected == 1);
@@ -92,7 +91,7 @@ int wmain(int argc,wchar_t** argv) {
         for (auto ch : std::string("zhuyin")) { key.ch = ch; assert(pinyin.key(key,engine,{},out,true,true)); }
         key.kind = 2; assert(pinyin.key(key,engine,{},out,true,true)); assert(out.preedit == L"注音");
     }
-    for (unsigned model : {1u,2u,3u,4u}) {
+    for (unsigned model : {4u}) {
         shanjie::Engine engine; assert(engine.open(argv[1],0,0,true,false,false,L"dictionary.tsv",model));
         assert(engine.inputOptions(false,false,false)); key.kind = 1; key.modifiers = 0; key.ch = '3';
         assert(engine.key(key,out)); assert(!out.handled && out.preedit.empty()); // Bare tone is the original digit.
@@ -116,10 +115,10 @@ int wmain(int argc,wchar_t** argv) {
     auto wrongModel = wrongData / L"models/model-v4"; std::filesystem::create_directories(wrongModel);
     std::filesystem::create_hard_link(modelRoot / L"model-v4/bigram.winmap",wrongModel / L"bigram.winmap");
     shanjie::Engine wrong; assert(!wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",4));
-    std::filesystem::copy_file(modelRoot / L"model-v3/classes.sjc",wrongModel / L"classes.sjc");
+    std::ofstream(wrongModel / L"classes.sjc") << "wrong class pairing";
     assert(!wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",4));
     std::filesystem::copy_file(modelRoot / L"model-v4/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
     assert(wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",4));
-    std::cout << "PASS: all four models, required class pairing, passive/entered prediction, live off, key options and composed punctuation\n";
+    std::cout << "PASS: latest model, required class pairing, passive/entered prediction, live off, key options and composed punctuation\n";
     std::cout << "PASS: candidate policy, Unicode/Big5/symbols, interleaved learning, personal dictionary, associations, pinyin\n";
 }

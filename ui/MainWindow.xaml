@@ -62,13 +62,10 @@
                         <ComboBox Header="方向鍵操作" SelectedIndex="{x:Bind Vm.Interaction, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="Windows／微軟注音 ↑↓"/><ComboBoxItem Content="善解上游 ←→"/></ComboBox>
                         <ComboBox Header="完整組字後開啟選字" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
                         <ComboBox Header="選字位置" SelectedIndex="{x:Bind Vm.Anchor, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="游標右側的字／詞"/><ComboBoxItem Content="游標左側的字／詞"/></ComboBox>
-                        <ComboBox Header="候選排列" SelectedIndex="{x:Bind Vm.Layout, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="直列"/><ComboBoxItem Content="橫列"/><ComboBoxItem Content="格狀"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="候選採 macOS 樣式的橫向膠囊列，每頁最多九項。"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}"/>
                         <controls:SettingToggle x:Name="CandidateKeyOptions" Label="候選中 Enter 選字並提交整句" Description="關閉時只確認候選，繼續留在組字區。" IsOn="{x:Bind Vm.EnterCommits, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="未開候選時，↑ 直接換下一個候選" IsOn="{x:Bind Vm.UpCycles, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="候選中 Tab 展開格狀" IsOn="{x:Bind Vm.TabExpands, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="候選中 → 展開格狀" IsOn="{x:Bind Vm.RightExpands, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="格狀第一列 ↑ 收回列表" Description="Windows 預設關閉，↑ 停在第一列。" IsOn="{x:Bind Vm.GridUpCollapses, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="候選中 Backspace 同時刪除前一個字" Description="關閉時只收回候選，保留組字。" IsOn="{x:Bind Vm.BackspaceDeletes, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="空白換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="最後一頁再按空白回到第一頁" IsEnabled="{x:Bind Vm.SpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>

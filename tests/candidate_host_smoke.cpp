@@ -31,7 +31,7 @@ int wmain(int argc,wchar_t** argv) {
         RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
         std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
-        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/(frame.candidates.size()*2))); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
         assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
         std::vector<double> samples;
         for (int i=0;i<30;++i) { presenter.hide(); start = clockMs(); presenter.publish(frame,preferences,caret,96,true); samples.push_back(clockMs()-start); }
@@ -42,26 +42,26 @@ int wmain(int argc,wchar_t** argv) {
             for (auto theme : {1u,2u}) {
                 frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"};
                 preferences.theme = theme;
-                for (auto layout : {CandidateLayout::Vertical,CandidateLayout::Horizontal,CandidateLayout::Grid}) {
-                    preferences.layout = layout; frame.columns = layout == CandidateLayout::Grid ? 9 : 0;
-                    presenter.publish(frame,preferences,caret,96,true);
-                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-"+std::to_wstring((int)layout)+L".bmp"));
-                }
+                frame.columns = 0; presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal.bmp"));
+                frame.candidates = {L"比方",L"彼方",L"比訪"}; frame.selected = 0;
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"reference-"+std::to_wstring(theme)+L"-conversion.bmp"));
                 frame.candidates = {L"輸入法",L"候選視窗",L"善解注音",L"微軟注音",L"個人詞庫",L"全形標點",L"倚天鍵盤",L"使用者",L"設定"};
                 for (auto size : {14u,32u}) {
                     preferences.fontSize = size; presenter.publish(frame,preferences,caret,96,true);
-                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-grid-"+std::to_wstring(size)+L".bmp"));
+                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal-"+std::to_wstring(size)+L".bmp"));
                 }
                 SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",L"720");
                 presenter.publish(frame,preferences,caret,96,true);
-                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-narrow-grid.bmp"));
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-narrow.bmp"));
                 SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",nullptr);
-                preferences.fontSize = 18; preferences.layout = CandidateLayout::Vertical; frame.columns = 0; frame.associated = true;
+                preferences.fontSize = 18; frame.columns = 0; frame.associated = true;
                 presenter.publish(frame,preferences,caret,96,true); captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-associated.bmp")); frame.associated = false;
                 frame.candidates = {L"😀",L"👍🏽",L"👩‍💻",L"🇹🇼",L"❤️",L"文字😀"};
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-emoji.bmp"));
-                frame.prediction = true; frame.selected = -1; frame.candidates = {L"奶茶",L"拿鐵",L"檸檬茶"};
+                frame.prediction = true; frame.selected = -1; frame.candidates = {L"比方說",L"說",L"數",L"說明",L"率"};
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"prediction-"+std::to_wstring(theme)+L"-passive.bmp"));
                 frame.selected = 0; presenter.publish(frame,preferences,caret,96,true);

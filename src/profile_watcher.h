@@ -1,13 +1,8 @@
 #pragma once
-#include <windows.h>
 #include <functional>
-// A hidden top-level window receives profile-save broadcasts on the TSF thread.
 class ProfileWatcher {
-    HWND window_ = nullptr;
-    std::function<void()> changed_;
-    static LRESULT CALLBACK procedure(HWND, UINT, WPARAM, LPARAM);
+    void* handle_ = nullptr; std::function<void()> changed_;
+    static void changed(void* context) { static_cast<ProfileWatcher*>(context)->changed_(); }
 public:
-    bool start(std::function<void()> changed);
-    void stop();
-    ~ProfileWatcher() { stop(); }
+    bool start(std::function<void()>); void stop(); ~ProfileWatcher(){stop();}
 };

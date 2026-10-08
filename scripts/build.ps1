@@ -12,6 +12,8 @@ try {
         cargo build --release --manifest-path build/core/Cargo.toml --target $target
         if ($LASTEXITCODE) { throw 'Core build failed.' }
     }
+    cargo build --release --manifest-path windows/Cargo.toml --target $target
+    if ($LASTEXITCODE) { throw 'Rust Windows modules build failed.' }
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if (!$vs) { throw 'Install Visual Studio Build Tools with C++ desktop tools and Windows SDK.' }
@@ -19,8 +21,8 @@ try {
     $output = Join-Path $root "dist/$Architecture"
     $objects = Join-Path $root "build/native-$Architecture"
     New-Item -ItemType Directory -Path $output,$objects -Force | Out-Null
-    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidate_palette','candidates','special_input','associated_candidates','pinyin_input','service','service_keys','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
-    $library = Join-Path $root "build/core/target/$target/release/core.lib"
+    $sources = @('engine','key_policy','preferences','profile_watcher','mode_button','mode_indicator','candidate_host','candidates','special_input','associated_candidates','pinyin_input','service','service_keys','dll') | ForEach-Object { '"' + (Join-Path $root "src/$_.cpp") + '"' }
+    $library = Join-Path $root "windows/target/$target/release/shanjie_windows.lib"
     $command = @"
 @echo off
 call "$vcvars" $Architecture >nul
@@ -40,6 +42,9 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         if (Test-Path -LiteralPath $uiOutput) { Remove-Item -LiteralPath $uiOutput -Recurse -Force }
         dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o "$root/dist/ui" --nologo
         if ($LASTEXITCODE) { throw 'WinUI host build failed.' }
+        Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force
+        New-Item -ItemType Directory "$root/dist/tools" -Force | Out-Null
+        Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
