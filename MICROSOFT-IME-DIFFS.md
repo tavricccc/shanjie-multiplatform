@@ -6,18 +6,15 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 
 同日後續依使用者要求，將目前已儲存的個別設定設為 Windows 預設；下表已同步更新 Caps Lock、學習、空白提交、拼音空白與反引號標點。這些是使用者選定的值，不把它們描述成微軟的出廠值。
 
-## 模型與資料配對
+## 模型與資料配對（2026-10-09 更新）
 
 | 模型 | 配對詞類表 | 差異與選擇 |
 | --- | --- | --- |
-| model-v1 | 明確不使用 | 保留原始模型選擇 |
-| model-v2 | 明確不使用 | 上游簡繁整理與期望詞頻計數 |
-| [model-v3](https://github.com/Nanako0129/shanjie/releases/tag/model-v3) | [classes-v1](https://github.com/Nanako0129/shanjie/releases/tag/classes-v1) | 臺灣常用字形整理；新詞類機率 |
-| [model-v4](https://github.com/Nanako0129/shanjie/releases/tag/model-v4) | [classes-v2](https://github.com/Nanako0129/shanjie/releases/tag/classes-v2) | 新安裝預設；上游量測與 v3 行為相同，模型另含來源指紋 |
+| [model-v4](https://github.com/Nanako0129/shanjie/releases/tag/model-v4) | [classes-v2](https://github.com/Nanako0129/shanjie/releases/tag/classes-v2) | 唯一模型；舊設定遷移，不提供選單 |
 
-詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。它的檔頭綁定原始模型 SHA-256；Windows 映射同時保存來源雜湊、九個模型陣列、三個詞類陣列。v3／v4 缺表或配錯就拒絕載入。v1／v2 的無詞類模式是明確選擇，沒有拿舊模型作為錯誤替代。
+詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。檔頭綁定原始模型 SHA-256；映射保存來源雜湊、九個模型陣列、三個詞類陣列。缺表或配錯明確拒絕，沒有舊模型 fallback。
 
-上游核心的「V3 即時預測」與 model-v3 是不同概念；目前即時預測可搭配四版模型，是否使用由獨立開關決定。模型切換保留詞庫與學習，但不同版本的候選順序可能不同。
+上游核心的「V3 即時預測」與模型版本是不同概念；是否使用仍由獨立開關決定。
 
 ## 按鍵與狀態
 
@@ -29,9 +26,8 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 | 完整組字＋↓ | 開轉換候選 | 同樣可開；`candidates.open` 可只選空白 |
 | 完整組字＋空白 | 提交組字，不再額外輸入空白 | 預設開候選；`open` 與 `input.space_after_commit` 可分別調整 |
 | 未開候選＋↑ | 在目前字詞的候選中循環，保持游標，不開窗 | 預設不換字；`up_cycles` 可獨立開啟 |
-| 候選中 ↑／↓ | 橫列與直列皆前後選字 | 原有 ←／→；`profile.interaction` 選擇政策 |
-| 候選中 Tab／→ | 展開九欄格狀 | 原有 ↓ 展開、→ 移動；`tab_expands`、`right_expands` 各自控制 |
-| 格狀第一列 ↑ | 停在第一列 | 原有收回列表；`grid_up_collapses` 可調整 |
+| 候選中 ↑／↓／←／→ | 橫向列前後選字 | 相同；不展開格狀 |
+| 候選中 Tab | 下一候選 | 相同；預測列仍保留 Tab 進入／Shift＋Tab 退出 |
 | 候選中空白 | 下一頁，末頁回第一頁 | `space_pages`、`wrap_pages` 分別控制換頁／循環 |
 | 候選中 1–9 | 選目前頁／列的候選，保留組字 | 相同；不以普通數字選被動預測或聯想 |
 | 候選中 Enter | 確認並提交整句、關窗 | 原有確認後繼續組字；`enter_commits` 可獨立調整 |
@@ -48,12 +44,12 @@ Support 明確列出 ↓、↑、Space、Tab、→、數字、Enter 及聯想的
 
 ## 逐項開關
 
-W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀偏好不會被覆寫。schema 3 的每個選項都可另行調整，方向鍵政策不會替其他選項偷偷改值。
+W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀偏好不會被覆寫。schema 4 的個別選項可另行調整；固定模型、橫向排列與移除格狀是本輪使用者指定。
 
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
 | `profile.interaction` | 選字與外觀：↑↓ 或 ←→ 政策 | windows／shanjie |
-| `engine.model` | 一般：v1–v4 與固定配表 | 4／4；套預設保留 |
+| `engine.model` | 固定 model-v4＋classes-v2，舊值遷移 | 4／4 |
 | `engine.ranking` | 一般：聊天／正式權重 | chat／chat；保留 |
 | `engine.prediction` | 未完成讀音的即時預測 | 0／1 |
 | `engine.demote` | 避免特定敏感詞排名過高，詞仍可選 | 1／1；保留 |
@@ -74,12 +70,9 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `input.dictionary` | 設定頁編輯、原子保存的個人詞庫 | 保留內容／路徑 |
 | `candidates.open` | 完整組字後 down／space／both | down／both |
 | `candidates.anchor` | 游標右側／左側候選範圍 | right／left |
-| `candidates.layout` | 直列／橫列／格狀 | vertical／horizontal |
+| `candidates.layout` | 僅橫向膠囊，舊值遷移 | horizontal／horizontal |
 | `candidates.enter_commits` | 候選 Enter 是否同時提交整句 | 1／0 |
 | `candidates.up_cycles` | 未開候選的 ↑ 循環換字 | 1／0 |
-| `candidates.tab_expands` | 候選 Tab 展開格狀 | 1／0 |
-| `candidates.right_expands` | 候選 → 展開格狀 | 1／0 |
-| `candidates.grid_up_collapses` | 格狀第一列 ↑ 收回 | 0／1 |
 | `candidates.backspace_deletes` | 收回候選後再刪前一音節 | 0／0 |
 | `candidates.space_pages` | 空白換候選／聯想下一頁 | 1／1 |
 | `candidates.wrap_pages` | 末頁空白是否循環到首頁 | 1／1 |
@@ -95,10 +88,10 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `shortcuts.ctrl_backslash` | 善解的 Ctrl＋反斜線頓號 | 0／1 |
 | `shortcuts.forget_candidate` | Ctrl＋Shift＋Backspace 忘記目前反白項的學習 | 0／0；學習開啟時生效 |
 | `appearance.theme` | 系統／淺／深色 | 0／0；保留 |
-| `appearance.font_size` | 候選 14–32 DIP | 18／18；保留 |
+| `appearance.font_size` | 候選 14–32 DIP | 16／16；保留既有值，舊 schema 未指定時保留 18 |
 | `appearance.mode_indicator` | 中英切換的游標旁提示 | 1／1；保留 |
 
-Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成『、Ctrl＋反斜線變成｜等錯誤。標點插入原組字，不先提交整句；Ctrl＋1／9／0 沒有 Shift 時不攔截。反引號標點共用同一份字元對照。微軟官方只公開一般符號操作，個別非標準符號的對照以 `src/key_policy.cpp` 明列的表為本專案定義。
+Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成『、Ctrl＋反斜線變成｜等錯誤。標點插入原組字，不先提交整句；Ctrl＋1／9／0 沒有 Shift 時不攔截。反引號標點共用同一份字元對照。個別非標準符號以 `windows/src/input.rs` 的表為本專案定義。
 
 ## 預測、學習與生命週期
 
@@ -106,17 +99,17 @@ Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成�
 - 聯想是選字後尚未輸入的後續詞，使用 Shift＋數字／滑鼠；Enter 提交並關閉。不是即時讀音預測，也不是一般 Enter／空白提交就要開的視窗。
 - 關閉即時預測會清除目前列與反白；關閉聯想也會清除目前聯想。兩者保留既有組字。即時預測關閉時不建立預測索引。
 - 開啟學習後，普通候選與新預測的明確選取沿用上游規則；Windows 以 mutex／重讀／epoch 協調保存與清除，不提供帳號／雲端同步。
-- 變更模型、鍵盤、排名、詞庫、學習、字元集、候選方向或前文設定時，先提交目前組字再換引擎；尚未轉換的拼音與字碼也保留其可見輸入。外觀、按鍵與預測開關透過通知套用。
+- 變更鍵盤、排名、詞庫、學習、字元集、候選方向或前文設定時，先提交目前組字再換引擎；尚未轉換的拼音與字碼也保留其可見輸入。外觀、按鍵與預測開關透過通知套用。
 - key／document／thread focus、layout destroy 都關閉候選；舊滑鼠 frame 不可選取新內容。這是生命週期與資料正確性，沒有提供「保留失焦候選」開關。
 
 ## 不做成虛假選項的功能
 
-候選每頁九個、格狀每列九個、最多五列，以及 40 音節自動提交仍是核心契約，不放沒有實作後端的頁數／無限組字選單。Backspace 的顯示順序採既有上游修正。上游的「可省略韻母」仍在後續契約，這個 pin 沒有可用的正式 API，因此沒有開關。
+候選每頁最多九個，以及 40 音節自動提交仍是核心契約，不放沒有實作後端的頁數／無限組字選單。上游內部格狀程式保留原樣，但 Windows 導覽不會進入該狀態。Backspace 順序採既有上游修正；「可省略韻母」沒有正式 API，因此沒有開關。
 
 微軟私有候選排序、無聲調拼音分段、聯想模型、舊版相容引擎、私有詞庫匯入、IME Pad 手寫／筆畫／部首辨識、雲端與搜尋都沒有被 INI 宣稱為已實作。注音原文的末尾候選／按鈕依使用者先前決定保持移除，相關 Windows 核心 API 留作驗證，不重新加回 UI。
 
 ## 遷移與驗證界線
 
-schema 1／2 第一次由設定窗讀取時先保留原檔備份，補上當時隱含的行為，再保存 schema 3；模型、聯想、個人詞庫、學習與外觀保留，新的即時預測不會自行開啟。載入 Windows 操作預設則依本輪使用者要求關閉兩種預測及額外按鍵行為。命令列與 WinUI 的預設共用 `profiles/`，不另外維護兩套值。
+Rust 共用載入流程先保存旧設定備份，補上當時隱含行為，再遷移 schema 4：模型固定 v4、排列固定 horizontal，移除 tab_expands／right_expands／grid_up_collapses；其他偏好、詞庫、學習保留，即時預測不自行開啟。命令列與 WinUI 共用 `profiles/` 與 Rust 邏輯。更新會清理退休 schema 備份；解除安裝在清理前詢問個人詞庫／學習保留或全刪。
 
 驗證結果見 [VERIFICATION.md](VERIFICATION.md)。背景 TSF、原生窗與離屏 XAML 證據分別驗證 adapter、視窗及設定保存；新安裝的記事本、Chrome／Office、多螢幕、高對比與讀屏仍需實際工作階段驗收。

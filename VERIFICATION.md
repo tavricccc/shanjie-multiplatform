@@ -1,6 +1,25 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-08。上游 pin：`1c16dffa6be9f8900d9df9819343885b90427c01`（model-v4／classes-v2 tag 指向的核心快照；不是已發佈的 v0.3.0 App）。下方 10 月 7 日與 6 日紀錄是歷史證據，不表示本輪已安裝。
+最新日期：2026-10-09。上游 pin：正式 v0.3.0 的 `8a6fe0750284f7daa46d197545f50eee9bb3387c`，與子模組／UPSTREAM.json 一致。下方舊日期均為歷史證據，不表示本轮已安裝或仍提供舊模型／排列。
+
+## 2026-10-09 最新模型、Rust TSF 與橫向候選
+
+- `prepare-core.ps1` 覆蓋契約通過。新 pin 與前一 pin 的 core/src、C header、詞庫及授權相同；更新包含上游 fixture／文件與 macOS 候選高度／位置。子模組追蹤檔案乾淨。
+- `verify.ps1` 完整核心回歸 185 項通過：lib 41、engine 32、demote 6、learning 45、lm 16、prediction 43、replay 2；標準／倚天各 302 句。5 個上游 ignored 效能測試、global_eps_table、Unix 權限與 macOS 效能仍排除，沒有計入通過數。
+- `prepare-models.ps1` 核對 model-v4／classes-v2 官方 SHA-256、全部映射陣列及代表性分數等價，清除退休模型資料／快取。包只允許最新固定配對，舊模型設定遷移至 v4，没有執行期替代版本。
+- x64／x86 生產 TSF DLL 皆由 Rust cdylib 建置成功；x64 WinUI 與 native manager 建置成功。產品 C++ 已移除，`tests/support/` 僅為測試 ABI adapters。
+- Windows crate 兩個必要測試通過：schema／preset 遷移保留個人資料并移除退休選項；巢狀退休 payload 刪除。實際包內 manager 的隔離 apply-profile 檢查通過：固定 schema 4／v4／horizontal，保留詞庫指向、學習與字級。
+- x64／x86 的 Windows／善解兩種背景 TSF harness 均通過真正 composition、edit session、caret、commit、cancel、candidate UI element 與 COM lifetime。只有 active TIP keyboard-sink 註冊使用 ThreadProxy；未註冊系統輸入法。language bar AddItem 在未註冊 harness 不可用，不阻擋輸入啟用；實際工作列仍待安裝驗收。
+- x64 interaction 通過最新模型、缺少／錯配詞類拒絕、passive／entered 預測、即時停用、Big5、Ctrl 標點、拼音、字碼／符號、個人詞庫、交錯學習及清除 epoch。
+- x64／x86 原生候選與模式圖示 harness 通過同程序、NOACTIVATE、mouse sequence、隱藏／重開、client＝window、RGBA 角落透明與提示自動隱藏。候選 36 張實際原生擷取覆盖淺深、14／16／32 DIP、自然詞寬、720 px 工作區、聯想、emoji、被動／進入預測。當前環境 120 DPI；不是實際多螢幕验收。
+- WinUI 離屏保存／重讀通過舊設定備份、最新模型與 horizontal 遷移、保留詞庫／學習／外觀，以及實際 ToggleSwitch 草稿雙向綁定。設定淺深擷取包含六頁與長頁細節；Rust共用業務邏輯，新畫面不提供模型／排列選單。
+- 全部 PowerShell 7 腳本語法通過；Rust dependency licenses 從 Cargo.lock 鎖定版本收集全文。資源量測與端點界線見 PERFORMANCE.md。
+
+候選擷取來源 `build/native-review/{x64,x86}`，36 張保留 alpha 的 PNG 副本在 `.impeccable/review/{x64,x86}`；WinUI 在 `build/ui-review-final`。沒有影像生成素材或 HTML detector。獨立 reviewer 已逐一核對 36 張候選與 6 張相關設定圖，可見畫面全部 match／adaptation；唯一 material fix 是舊 DESIGN.md 的世界與來源記錄。新鮮 documenter 已修正 DESIGN.md／sidecar，同一 reviewer 判定该項 resolved，最後 disposition 為 **ship，限定該文件 fix list**。
+
+安裝器已實作完整套件雜湊校驗、兩架構註冊與實際路徑／DLL 雜湊核對、註冊失敗回復、唯一版本 payload、舊版／舊根目錄清理及 reboot queue。解除安裝在任何刪除前詢問保留詞庫與學習、全刪或取消，清 COM／TSF／本帳號輸入法清單／Installed Apps／安裝目錄／所選個人資料。**本輪未執行系統安裝或解除安裝，管理員流程與重新啟動後清理尚未實測**；fixture 通過不能冒充實機結果。
+
+前景記事本／Chrome／Office、實際工作列、讀屏、高對比、多螢幕與 App 容器仍未驗收。没有更動真實個人設定、詞庫或學習，也沒有重新啟動使用者 App。先前已停止的 Shift 日常問題未重開。
 
 ## 2026-10-08 後續預設值更新
 

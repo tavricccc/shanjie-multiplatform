@@ -20,7 +20,7 @@ Windows 的 SJWM0002 映射格式保存來源模型／詞類表雜湊、原有�
 
 ## 哪些東西有改
 
-Windows 安裝包提供 model-v1 至 model-v4，選擇由 `[engine] model=1|2|3|4` 控制；新安裝預設 v4，已有個人設定保留模型選擇。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 核對並轉換每組，`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄；模型切換不改 scoring 程式或學習格式。
+Windows 安裝包只提供 model-v4＋classes-v2，schema 4 將所有舊模型設定遷移至 v4，沒有選單或執行期 fallback。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 核對並轉換這一組，清除舊快取與 dist 模型目錄；`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次將上游 core 複製到 `build/core`，再套用以下程式變更。**子模組沒有被改，不代表建置出的核心完全等於上游。**
 
@@ -32,7 +32,7 @@ Windows 安裝包提供 model-v1 至 model-v4，選擇由 `[engine] model=1|2|3|
 | `core/src/lm.rs` | 9 個模型與 3 個詞類陣列改為可持有唯讀映射；`.winmap` 加入專用讀取路徑與來源配對驗證 | `scripts/prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` | 右側候選範圍、↑ 循環換字並保留游標；個人詞庫、Big5 篩選、聯想與預測列種類查詢；預測停用時不建索引 | `scripts/prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵處理 | 可關閉 Shift／直接中文標點與單獨聲調；中文標點插入既有組字 | `scripts/prepare-keys.ps1`、`platform/key_options_windows.rs` |
-| `core/src/ffi.rs` | 追加 Windows 專用候選、輸入選項、標點及預測列查詢 ABI；不改上游既有函式簽名 | `platform/*_windows_ffi.rs`、`src/windows_core.h` |
+| `core/src/ffi.rs` | 追加 Windows 專用候選、輸入選項、標點及預測列查詢 ABI；不改上游既有函式簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
 | `core/Cargo.toml` | 讓產生的 core 可獨立建置，加入打包時使用的模型轉換工具 | `prepare-core.ps1`、`platform/map_model.rs` |
 
 右側候選範圍是**核心行為變更**，不能把它描述為單純換 config。原始左側模式仍是核心的預設；Windows 前端依 profile 呼叫擴充 ABI 開啟右側模式。
@@ -41,15 +41,15 @@ Windows 安裝包提供 model-v1 至 model-v4，選擇由 `[engine] model=1|2|3|
 
 | 範圍 | 程式位置 | 是否改上游核心 |
 | --- | --- | --- |
-| Windows 方向鍵、Ctrl 標點對照及快捷鍵狀態政策 | `src/key_policy.cpp`、`src/service_keys.cpp` | 按鍵政策在前端；標點插入與循環換字呼叫上述核心擴充 |
-| Shift／Ctrl＋空白中英切換、全半形、系統模式按鈕 | `src/service_keys.cpp`、`src/mode_button.*` | 否 |
-| TSF 組字、提交、游標、排版通知、外部選取變更同步 | `src/service.*` | 否 |
-| 候選直列、橫列、格狀、滑鼠點選與 DPI 定位 | `src/candidates.*` | 否 |
-| 個人 INI 讀取與 WinUI 設定窗 | `src/preferences.*`、`ui/Models/`、`ui/ViewModels/`、`ui/MainWindow.*` | 否 |
-| 設定儲存跨實例通知與重載 | `src/profile_watcher.*`、`Service::refreshPreferences`、`ProfileStore.Save`、`apply-profile.ps1` | 否 |
-| 註冊、套用輸入法清單、版本目錄安裝與乾淨移除 | `scripts/install.ps1`、`profiles.ps1`、`uninstall.ps1` | 否 |
+| Windows 方向鍵、Ctrl 標點對照及快捷鍵政策 | `windows/src/input.rs`、`tsf/keys.rs` | 按鍵政策在前端；標點插入與循環換字呼叫上述核心擴充 |
+| 中英／全半形切換、工作列模式按鈕 | `windows/src/tsf/keys.rs`、`tsf/mode.rs`、`native.rs` | 否 |
+| TSF 組字、提交、游標、sink、COM lifetime | `windows/src/tsf/` | 否 |
+| 僅橫向候選、滑鼠點選與 DPI 定位 | `windows/src/candidate.rs`、`tsf/candidates.rs` | 否 |
+| 共用 INI、詞庫／學習保存、WinUI 設定綁定 | `windows/src/profile.rs`、`bridge.rs`、`ui/` | 否 |
+| 設定跨實例通知與重載 | `windows/src/native.rs`、`tsf/service.rs` | 否 |
+| 註冊、套用清單、版本安裝／清理／解除安裝 | `windows/src/registration.rs`、`installer.rs`、`bin/shanjie-manager.rs` | 否 |
 
-`src/dll.cpp` 的 category 註冊包含 `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`，讓 Windows 將模式按鈕納入系統匣。這是 Windows 註冊差異，不是 Rust 核心修改。
+`windows/src/registration.rs` 的 category 包含 `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`。這是 Windows 註冊差異，不是上游核心修改。產品不再編譯 C++，測試 ABI adapter 在 `tests/support/`；WinUI 的 C#／XAML 僅保留原生控制項與草稿綁定。
 
 上游 `Chat`／`Formal` 是既有 LM 權重模式。Windows 設定窗只是呼叫上游 `shanjie_engine_set_profile`，沒有新增或修改其 scoring 權重。詞庫、beam decoder、bigram scorer 與詞頻資料不因操作 profile 改寫。
 
@@ -57,17 +57,17 @@ Windows 安裝包提供 model-v1 至 model-v4，選擇由 `[engine] model=1|2|3|
 
 2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
 
-`src/pinyin_input.*`、`special_input.*`、`associated_candidates.*` 處理 Windows 拼音、符號／字碼與聯想操作；`src/engine.*` 串行化選字學習及 epoch。WinUI 設定位於 `ui/`；`src/candidate_host.*` 在兩架構 DLL 內直接建立 Win32 候選視窗，`candidate_palette.*` 取得 Windows accent，高對比採系統色。候選不再使用匿名 mapping/event 或子程序。完整 schema 3 範本、schema 1／2 遷移及個別開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 套用同一份範本；操作預設保留資料與外觀偏好。
+Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立 transparent layered Win32 橫向膠囊，固定藍色反白，系統主題／高對比；没有候選子程序。schema 4 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 
 - `[profile] interaction=windows|shanjie`：方向鍵操作政策。
 - `[candidates] anchor=right|left`：啟用已實作的核心候選方向。
 - `[candidates] open=down|space|both`：完整組字後的選字開啟鍵；待輸入注音的空白聲調不受影響。
-- `[candidates] layout=vertical|horizontal|grid`：初始候選排列；格狀每列 9 個，數字選目前列。
+- `[candidates] layout=horizontal`：唯一排列。舊直向／格狀設定遷移；窄工作區以箭頭瀏覽同頁候選。
 - `[shortcuts] shift_toggle`、`ctrl_space_toggle`、`shift_space_toggle`、`ctrl_punctuation`：1 開啟、0 關閉。
 - `[engine] ranking=chat|formal`、`prediction`、`demote`：上游既有權重／即時預測／降權 API；Windows 範本停用即時預測與 `[input] associations`。
-- `[input] escape`、`space_after_commit`、`pinyin_space_converts`，以及候選 Enter、↑、Tab、→、Backspace、翻頁開關：各自選擇已實作的政策。完整對照以 `MICROSOFT-IME-DIFFS.md` 為準。
+- `[input] escape`、`space_after_commit`、`pinyin_space_converts`，以及候選 Enter、↑、Backspace、翻頁開關：各自選擇已實作的政策。Tab／方向鍵不再展開格狀，完整對照以 `MICROSOFT-IME-DIFFS.md` 為準。
 
 修改設定只會選擇**已經寫好的功能**，不是靠 INI 自動產生新的核心邏輯。設定窗不直接改 Rust 或上游檔案。
 
@@ -97,6 +97,6 @@ pwsh -File scripts/package.ps1
 
 ## 現有驗證界線
 
-本輪核心與上游回歸共 185 個通過，包含詞類機率、敏感詞降權、即時預測、學習與標準／倚天回放。Windows interaction harness 另驗證四版模型、缺表／錯配拒絕、循環換字及新開關；x64 TSF harness 驗證兩個操作 profile，但鍵盤 sink 註冊仍使用測試代理。詳見 `VERIFICATION.md`；Unix 權限、macOS 效能與 ignored 量測沒有變成已通過項目。
+核心與上游回歸、Windows 的最新模型／配表拒絕、兩種操作 profile、純 Rust TSF、候選／模式提示及 WinUI 離屏驗證詳見 `VERIFICATION.md`。TSF harness 的鍵盤 sink 註冊仍使用測試代理；Unix 權限、macOS 效能與 ignored 量測沒有變成已通過項目。安裝器清理 fixture 通過，不等同系統註冊／重開機移除實測。
 
 目前沒有提交上游 PR。右側候選擴充與平台 backend 可在和作者討論 API 後另行整理；目前版本以本機可用為目標。

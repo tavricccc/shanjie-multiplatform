@@ -1,9 +1,17 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-07T00:00:00+08:00",
+  "generatedAt": "2026-10-09T02:14:04+08:00",
   "title": "Design System: 善解 Windows",
   "extensions": {
     "colorMeta": {
+      "candidate-selected-background": {
+        "role": "primary",
+        "displayName": "選取藍"
+      },
+      "candidate-selected-foreground": {
+        "role": "primary",
+        "displayName": "選取白字"
+      },
       "candidate-light-background": {
         "role": "neutral",
         "displayName": "候選淺色底面"
@@ -14,7 +22,11 @@
       },
       "candidate-light-foreground": {
         "role": "neutral",
-        "displayName": "候選淺色文字"
+        "displayName": "候選淺色字詞"
+      },
+      "candidate-light-label": {
+        "role": "neutral",
+        "displayName": "候選淺色序號"
       },
       "candidate-dark-background": {
         "role": "neutral",
@@ -26,210 +38,298 @@
       },
       "candidate-dark-foreground": {
         "role": "neutral",
-        "displayName": "候選深色文字"
+        "displayName": "候選深色字詞"
+      },
+      "candidate-dark-label": {
+        "role": "neutral",
+        "displayName": "候選深色序號"
       }
     },
     "typographyMeta": {
+      "chinese": {
+        "displayName": "原生設定中文",
+        "purpose": "設定 TextBlock；標題沿用 WinUI 3 原生階層。"
+      },
       "candidate": {
         "displayName": "候選字詞",
-        "purpose": "Microsoft JhengHei UI；字級由個人設定控制，預設 18 DIP、範圍 14–32 DIP；量測與呈現共用字體。"
+        "purpose": "新安裝預設 16 DIP，個人字級 14–32 DIP；舊 schema 遷移保留既有字級，原本無欄位者保留舊預設 18 DIP。"
       },
       "candidate-label": {
-        "displayName": "候選數字與聯想標記",
-        "purpose": "Segoe UI；與候選字詞同列。"
+        "displayName": "候選序號與聯想 Shift 標記",
+        "purpose": "預設 9 DIP；字級為候選字級乘 9／16，最低 8 DIP。被動預測不顯示或預留序號。"
       }
+    },
+    "nativeArchitecture": {
+      "platform": "Windows 10／11 原生 TSF",
+      "productLogic": "windows/src/：Rust TSF、候選、模式、profile、installer、registration 與 manager。",
+      "settingsBinding": "ui/：WinUI 3 C#／XAML 原生控制項、事件與繫結。",
+      "testSupport": "C++ 僅在 tests/support；不作 shipping Windows 產品邏輯。",
+      "launchers": "CMD／PowerShell 為薄啟動入口。",
+      "core": "固定子模組上游引擎與平台覆蓋；不是 Windows Rust 產品邏輯的替代版本。",
+      "preview": "原生元件不提供 HTML／CSS 模擬，不使用 HTML detector。"
     },
     "nativeSettings": {
       "platform": "WinUI 3 XAML",
       "source": [
         "ui/MainWindow.xaml",
         "ui/MainWindow.xaml.cs",
-        "ui/ViewModels/SettingsViewModel.cs"
+        "ui/ViewModels/SettingsViewModel.cs",
+        "windows/src/profile.rs"
       ],
-      "modelSelector": {
-        "section": "一般",
-        "control": "原生全寬 ComboBox",
-        "header": "語言模型",
-        "options": [
-          "model-v1（原版）",
-          "model-v2（上游新版）"
-        ],
-        "default": "model-v1",
-        "sources": "MODEL-SOURCES.json 的官方來源與 hash 契約",
-        "automaticFallback": false,
-        "help": "兩版模型都在本機。儲存後會先提交目前組字，再切換模型；個人詞庫與選字學習會保留。"
+      "geometry": {
+        "initialSize": "840×680 DIP",
+        "navigationOpenPane": "208 DIP",
+        "contentPadding": "20,16,20,20 DIP",
+        "contentMaxWidth": "800 DIP",
+        "formSpacing": "{spacing.form}",
+        "toggleMinHeight": "40 DIP"
+      },
+      "themeResources": [
+        "SolidBackgroundFillColorBaseBrush",
+        "LayerFillColorDefaultBrush",
+        "TextFillColorSecondaryBrush",
+        "AccentButtonStyle"
+      ],
+      "navigation": [
+        "一般",
+        "按鍵",
+        "組字與提交",
+        "選字與外觀",
+        "預測、詞庫與學習",
+        "關於與相容性"
+      ],
+      "modelInfo": {
+        "control": "文字與可換行的次要說明",
+        "model": "model-v4",
+        "classes": "classes-v2",
+        "choices": false,
+        "sources": "MODEL-SOURCES.json",
+        "help": "只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"
+      },
+      "predictionToggle": {
+        "label": "未完成讀音的即時預測",
+        "windowsDefault": false
       },
       "associationToggle": {
-        "section": "詞庫與學習",
-        "control": "左標籤、右原生 ToggleSwitch",
-        "labelAndAutomationName": "預測尚未輸入的後續詞",
-        "help": "關閉後只顯示已輸入讀音的候選字。開啟時可在數字或滑鼠選字後提示聯想詞，用 Shift＋數字或滑鼠選取；Enter 提交並關閉候選。"
+        "label": "選字後的聯想詞",
+        "windowsDefault": false
       },
-      "draft": "與其他頁共用草稿，按儲存後才套用；沿用固定 InfoBar 與儲存／取消列。",
-      "helpStyle": "Microsoft JhengHei UI、可換行 TextBlock、TextFillColorSecondaryBrush；沿用既有表單間距與原生控制項狀態。",
+      "draft": "六頁共用草稿；操作預設只調整按鍵、選字與預測，保留詞句偏好、詞庫、學習與外觀；按儲存才套用。",
+      "feedback": "InfoBar 與儲存／取消列固定在可捲動內容外；清除學習採原生 ContentDialog。",
+      "migration": "schema 4；舊設定先備份，遷移至 model-v4 與橫向候選，移除退役展開鍵；保留個人詞庫、選字學習及其他已存偏好。",
       "captures": [
-        "build/ui-review-final/settings-1-models.png",
-        "build/ui-review-final/settings-2-models.png",
-        "build/ui-review-final/settings-1-3.png",
-        "build/ui-review-final/settings-2-3.png"
+        "build/ui-review-final/settings-{1,2}-{0,3,appearance}.png"
       ],
-      "verificationLimit": "背景真實 XAML render 與設定來源核對；未以此宣稱前景應用程式中的實際提交或模型切換驗收。候選 tokens、style 與 padding 保持原樣。"
+      "verificationLimit": "六張目前淺／深色離屏 XAML render；不是前景應用程式或實際安裝驗收。"
     },
     "nativeCandidate": {
-      "platform": "TSF 同程序 Win32 popup；Direct2D software DC render target／DirectWrite",
+      "platform": "Rust TSF 同程序 Win32 layered popup；Direct2D software DC render target／DirectWrite",
       "source": [
-        "src/candidate_host.h",
-        "src/candidate_host.cpp",
-        "src/candidate_palette.h",
-        "src/candidate_palette.cpp"
+        "windows/src/candidate.rs",
+        "windows/src/tsf/candidates.rs",
+        "windows/src/tsf/keys.rs",
+        "windows/src/tsf/service.rs"
       ],
-      "reference": "local-ime-reranker-public/rime/weasel.custom.yaml",
-      "selection": {
-        "light": {
-          "backgroundResource": "UISettings UIColorType::AccentDark1",
-          "foreground": "White"
-        },
-        "dark": {
-          "backgroundResource": "UISettings UIColorType::AccentLight2",
-          "foreground": "Black"
-        },
-        "highContrast": {
-          "backgroundResource": "GetSysColor(COLOR_HIGHLIGHT)",
-          "foregroundResource": "GetSysColor(COLOR_HIGHLIGHTTEXT)"
-        },
-        "selectedPointerOverAndPressed": "與各主題 selected 背景一致，跟隨 Windows 設定 accent。",
-        "selectionIndicator": "Direct2D 整塊反白；不包含左側 indicator。"
+      "authority": {
+        "images": [
+          "C:/Users/Tavric/Downloads/2psw38q.png",
+          "C:/Users/Tavric/Downloads/bd49j3f.png"
+        ],
+        "source": [
+          "upstream/shanjie/macos/Sources/ShanjieKit/CandidateCells.swift",
+          "upstream/shanjie/macos/Sources/ShanjieKit/InputController.swift"
+        ],
+        "contract": "docs/candidate-surface.md",
+        "decision": "只保留橫向"
       },
-      "highContrastSurface": {
+      "selection": {
+        "background": "{colors.candidate-selected-background}",
+        "foreground": "{colors.candidate-selected-foreground}",
+        "indicator": "整項膠囊反白，沒有左側 selection indicator"
+      },
+      "highContrast": {
         "backgroundResource": "GetSysColor(COLOR_WINDOW)",
         "borderResource": "GetSysColor(COLOR_WINDOWTEXT)",
-        "foregroundResource": "GetSysColor(COLOR_WINDOWTEXT)"
+        "textResource": "GetSysColor(COLOR_WINDOWTEXT)",
+        "labelResource": "GetSysColor(COLOR_WINDOWTEXT)",
+        "selectedBackgroundResource": "GetSysColor(COLOR_HIGHLIGHT)",
+        "selectedForegroundResource": "GetSysColor(COLOR_HIGHLIGHTTEXT)",
+        "verified": "來源核對；尚未實機驗收。"
       },
+      "systemTheme": "UISettings Foreground 僅用於選擇淺／深色；一般候選選取色固定。",
       "borderThickness": "1 DIP",
-      "spacing": {
-        "surface": "{spacing.candidate-surface}",
-        "item": "{spacing.candidate-item}",
+      "geometry": {
+        "baselineFont": "{typography.candidate}",
+        "baselineRowHeight": "24 DIP",
+        "baselineMinSurfaceHeight": "30 DIP",
+        "surfaceInset": "{spacing.candidate-surface}",
+        "itemGap": "{spacing.candidate-item-gap}",
+        "leading": "{spacing.candidate-leading}",
         "labelGap": "{spacing.candidate-label-gap}",
-        "owner": "Win32 每格直接使用既有 spacing，無 XAML item container。"
+        "trailing": "{spacing.candidate-trailing}",
+        "caretGap": "{spacing.candidate-caret-gap}",
+        "scale": "候選內距與幾何依字級／16 比例調整；caret 間距固定 6 DIP，依 DPI 換算。",
+        "surfaceRadius": "(外框實際高 − 1 DIP)／2",
+        "selectionRadius": "實際列高／2",
+        "rowHeight": "max(24 × 字級／16, 每個字詞的 DirectWrite metrics height + 2 × 字級／16)"
       },
-      "shapes": {
-        "surface": "{rounded.candidate-surface}",
-        "selectedSurface": "{rounded.candidate-selected}"
-      },
-      "depth": "Direct2D 提供單一不透明外框，無陰影；WS_POPUP 不包含 caption／resize frame，整個視窗作為 client content。",
+      "layouts": [
+        "橫向"
+      ],
+      "workAreaFit": "保留各詞自然寬度，只呈現放得下的項目；兩端箭頭翻動可見範圍，鍵盤選取始終可見。單一超長項目才用 character ellipsis；不共同縮窄全部項目。",
+      "position": "caret 下方 6 DIP；底部不足改放上方，夾在目前螢幕工作區內。",
+      "depth": "單一細框、實色底面、透明外角，無陰影、caption、resize frame、獨立 host 或 IPC。",
+      "compositing": "WS_EX_LAYERED／UpdateLayeredWindow，32-bit premultiplied alpha。",
       "motion": {
-        "selection": "顯示、隱藏、換頁與選取立即切換，沒有動畫。",
+        "selection": "立即切換；沒有動畫。",
         "window": "DWM TRANSITIONS_FORCEDISABLED；WS_EX_NOACTIVATE。"
       },
-      "nativeVerification": "原生背景 HWND capture；來源核對單框、無動畫、NOACTIVATE 與滑鼠 sequence；靜態 capture 無法證明轉場與真實提交。",
-      "layouts": [
-        "直列",
-        "橫列",
-        "九欄格狀"
-      ],
-      "captures": [
-        "build/native-review/x64/*.bmp",
-        "build/native-review/x86/*.bmp"
-      ],
-      "verificationLimit": "原生背景 capture，無 HTML detector；窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list。高對比僅核對來源，實際深色工作列、前景應用程式及多螢幕尚未驗收；沒有獨立候選 host 或 IPC。",
-      "measurement": "DirectWrite text layout metrics，量測與繪製共用 Microsoft JhengHei UI／Segoe UI；候選字級由個人設定控制。",
+      "prediction": "被動狀態無序號、反白或序號預留欄；Tab 進入後才顯示序號及反白，Shift＋Tab／Esc 退出。",
+      "association": "Shift＋序號；Shift＋數字或滑鼠選取。",
+      "mouse": "回傳原候選索引與 sequence，TSF 拒絕過期點擊；箭頭只翻動可見範圍。",
       "emoji": {
-        "drawOptions": "候選字詞 DrawTextLayout：D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT；數字標記維持 CLIP。",
-        "support": "目前 Windows 已安裝字型已有的彩色 emoji、膚色與 ZWJ 序列；旗幟目前呈現 TW 字母，不宣稱支援所有 emoji。",
-        "captures": [
-          "build/native-review/x64/candidates-1-emoji.bmp",
-          "build/native-review/x64/candidates-2-emoji.bmp",
-          "build/native-review/x86/candidates-1-emoji.bmp",
-          "build/native-review/x86/candidates-2-emoji.bmp"
-        ],
-        "verificationLimit": "本次彩色 emoji／透明模式提示的獨立 finish reviewer disposition 為 ship：😀／👍🏽／👩‍💻／❤️ 與混排彩色呈現符合契約；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。不更動先前窄工作區修正已完成 verdict。"
+        "drawOptions": "D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT",
+        "support": "已安裝 Windows 字型支援的彩色 emoji、膚色與 ZWJ；旗幟字形依作業系統。"
       },
-      "workAreaFit": "窄工作區每格獨立 clip，來源設定 DirectWrite character ellipsis；本次 720 px captures 僅證明裁切不跨格，未驗證省略號可見。空間足夠時小字級長詞完整呈現。"
+      "captures": [
+        ".impeccable/review/{x64,x86}/candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png",
+        ".impeccable/review/{x64,x86}/prediction-{1,2}-{passive,entered}.png",
+        ".impeccable/review/{x64,x86}/reference-{1,2}-conversion.png"
+      ],
+      "captureMethod": "每架構 18 張目前 PNG，同一 Windows 120 DPI 的背景 WM_PRINTCLIENT 原生結果轉 RGBA；不是 AI 素材。",
+      "verificationLimit": "原生背景 capture 與來源檢查不等同前景 App、高對比、多螢幕、實際工作列或讀屏驗收。"
     },
     "nativeMode": {
-      "transient": "{components.mode-indicator}：28 DIP 透明視窗、0 DIP 內距；{spacing.mode-caret-gap} 的 6 DIP 只作 caret 間距；1400 ms 後、下一次輸入或失焦時隱藏；NOACTIVATE。",
-      "appearance": "游標旁由 GDI+ 依 assets/mode/chinese.svg／english.svg 的 24×24 幾何，在所在螢幕實際 DPI 的目標像素尺寸即時繪製中／A；工作列保留原 ICO resource 101／102。",
-      "compositing": "WS_EX_LAYERED，UpdateLayeredWindow，32-bit premultiplied alpha；無 COLOR_WINDOW 白底與外圈留白，不縮放 ICO。",
-      "verificationLimit": "模式 BMP 保留 alpha，指定 96／120／144／192 DPI 的背景原生 capture；獨立 finish reviewer disposition 為 ship，確認四種指定 DPI 的中／A 清楚、alpha 透明且白框消失。實際深色工作列、前景應用程式、實際桌面與多螢幕尚未驗收，先前窄工作區修正已完成 verdict 保持不變。",
-      "provenance": "SVG 與 ICO 來自 C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons；assets/mode/chinese.svg／english.svg 保留幾何，assets/mode/LICENSE 保留原始 MIT 授權全文。",
-      "captures": [
-        "build/mode-review/chinese-{96,120,144,192}.bmp",
-        "build/mode-review/english-{96,120,144,192}.bmp"
+      "platform": "Rust TSF 同程序 Win32 layered popup",
+      "source": [
+        "windows/src/native.rs",
+        "windows/src/tsf/mode.rs"
       ],
+      "transient": "{components.mode-indicator}，{spacing.mode-caret-gap}；1400 ms 後、下一次輸入或失焦時隱藏，NOACTIVATE。",
+      "appearance": "Rust tiny-skia 依既有 24×24 SVG 幾何在目標 DPI 即時繪製中／A；工作列保留 ICO resource 101／102。",
+      "compositing": "WS_EX_LAYERED／UpdateLayeredWindow，32-bit premultiplied alpha；透明背景與零外圈內距。",
+      "provenance": "assets/mode/chinese.svg、english.svg 與 assets/mode/LICENSE；原始 MIT 幾何來源 local-ime-reranker-public/rime/icons。",
       "resources": [
         101,
         102
       ],
-      "platform": "TSF 同程序 Win32；沒有額外 host。",
-      "icons": [
-        "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/chinese.ico",
-        "C:/Users/Tavric/projects/local-ime-reranker-public/rime/icons/english.ico"
+      "captures": [
+        "build/mode-review/chinese-{96,120,144,192}.bmp",
+        "build/mode-review/english-{96,120,144,192}.bmp"
       ],
-      "caretIconGeometry": [
-        "assets/mode/chinese.svg",
-        "assets/mode/english.svg"
+      "verificationLimit": "指定 DPI 的原生背景 capture；目前 mode 檢查 PASS，實際工作列與多螢幕尚未驗收。"
+    },
+    "nativeInstaller": {
+      "source": "windows/src/installer.rs",
+      "update": "清除舊版本、舊模型與退役 payload；鎖定檔案可延至重開機刪除。",
+      "uninstallPrompt": {
+        "control": "MessageBoxW／MB_YESNOCANCEL／MB_DEFBUTTON3",
+        "yes": "完整刪除所有善解資料。",
+        "no": "移除程式與設定，保留詞庫和學習供重新安裝使用。",
+        "cancel": "不進行解除安裝。"
+      },
+      "verificationLimit": "尚未實際新安裝、日常解除安裝或重開機刪除驗收。"
+    },
+    "reviewEvidence": {
+      "currentCaptureCount": 42,
+      "candidateCaptureCount": 36,
+      "settingsCaptureCount": 6,
+      "visualAssessment": "獨立 reviewer 已逐張檢查，視覺項目均為 match／adaptation。",
+      "disposition": "fix：唯一 material fix 為 DESIGN.md 舊 token 與架構敘述；文檔已更新，須交限定複核，不自行宣告 ship。",
+      "passed": [
+        "x64／x86 build",
+        "兩個 Rust unit tests",
+        "兩個操作 profile TSF",
+        "interaction",
+        "mode",
+        "candidate 背景",
+        "WinUI 背景"
       ],
-      "source": [
-        "src/mode_indicator.cpp",
-        "src/mode_button.cpp"
-      ]
+      "historicalOnly": "舊 WinUI 直向／格狀、舊 C++ Win32 BMP 及舊模型選單圖僅供歷史，不是目前實作驗收。"
     }
   },
   "components": [
     {
-      "name": "語言模型選擇",
+      "name": "最新模型資訊",
       "kind": "custom",
-      "description": "一般頁全寬原生 ComboBox，以原有字體、主題與間距提供 model-v1／v2；次要文字說明本機模型、先提交再切換及保留詞庫學習。維持草稿儲存流程，不提供 HTML/CSS 模擬。"
+      "description": "一般頁原生 TextBlock 顯示 model-v4＋classes-v2，次要文字說明本機執行與保留詞庫學習；沒有版本選單。"
     },
     {
-      "name": "後續詞預測開關",
+      "name": "預測與聯想開關",
       "kind": "custom",
-      "description": "詞庫與學習頁沿用原生 ToggleSwitch，左側標籤與無障礙名稱同為「預測尚未輸入的後續詞」。可換行次要文字區分開關狀態與 Shift＋數字／滑鼠選取、Enter 提交關閉行為。"
+      "description": "兩個獨立 SettingToggle 使用同列左標籤、右原生 ToggleSwitch；Windows 操作預設兩者關閉，保持共用草稿與儲存流程。"
     },
     {
       "name": "候選淺色外框",
       "kind": "custom",
       "refersTo": "candidate-surface-light",
-      "description": "同程序 Win32 popup 使用候選淺色中性色；Direct2D 唯一不透明外框，無陰影、caption／resize frame 或動畫，不提供 HTML/CSS 模擬。"
+      "description": "單行自然寬度膠囊，單一細框、透明外角與原生 alpha；不提供 HTML／CSS 模擬。"
     },
     {
       "name": "候選深色外框",
       "kind": "custom",
       "refersTo": "candidate-surface-dark",
-      "description": "深色主題使用既有候選中性色，高對比透過 GetSysColor 讀系統 window／window text 色。"
+      "description": "同一幾何使用深色候選中性色；高對比整組改讀系統 window／highlight 色。"
     },
     {
-      "name": "候選數字與字詞列",
+      "name": "目前候選",
       "kind": "custom",
-      "refersTo": "candidate-item",
-      "description": "DirectWrite 數字 Segoe UI、字詞 Microsoft JhengHei UI；以實際 layout metrics 量測與置中，字詞 DrawTextLayout 啟用 ENABLE_COLOR_FONT，呈現已安裝 Windows 字型支援的 emoji、膚色與 ZWJ；旗幟目前為 TW 字母。Direct2D 選取面使用 UISettings accent，不含左側 indicator，不使用動畫；保留三排列與字級設定，窄工作區每格 clip 與 character ellipsis。"
+      "refersTo": "candidate-item-selected",
+      "description": "DirectWrite 量測與置中，固定藍色膠囊搭白色序號與字詞；窄工作區箭頭保留自然詞寬，超長單項才省略。"
     },
     {
       "name": "游標旁中英提示",
       "kind": "custom",
       "refersTo": "mode-indicator",
-      "description": "28 DIP 透明無內距 Win32 layered 視窗；GDI+ 依 MIT 原始 SVG 幾何按實際螢幕 DPI 繪製，premultiplied alpha 合成，與 caret 間隔 6 DIP。1400 ms、失焦與下一次輸入隱藏行為保持原樣。"
+      "description": "28 DIP 無內距透明原生視窗；Rust tiny-skia 依既有 SVG 幾何繪製，NOACTIVATE、1400 ms 隱藏。"
+    },
+    {
+      "name": "解除安裝詢問",
+      "kind": "custom",
+      "description": "原生三選項 MessageBox：是全刪、否保留詞庫與學習但移除程式設定、取消不執行；預設取消。"
     }
   ],
   "narrative": {
-    "northStar": "Windows 原生風格：WinUI 3 設定與同程序 Win32 候選",
-    "overview": "使用者指定 Windows 原生風格；設定保留 WinUI 3，候選依已核准的實作變更改為 TSF 同程序的 Win32 popup。兩者採 Operate 模式，以可辨讀、系統一致與文件輸入連續性為主。候選方向契約見 docs/candidate-surface.md；既有外觀 tokens 保留。",
+    "northStar": "原生設定，善解橫向膠囊候選",
+    "overview": "設定維持使用者核准的 WinUI 3 原生幾何與操作；候選依使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift`，採細框、單行膠囊、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。\n\nWindows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。",
     "keyCharacteristics": [
-      "系統主題與 accent",
-      "原生控制項",
-      "固定儲存回饋",
-      "候選不取得焦點"
+      "WinUI 3 原生設定、固定儲存回饋與共用草稿。",
+      "候選只保留橫向膠囊，字詞按自然寬度排列。",
+      "候選與中英提示均不取得焦點。",
+      "使用實際原生繪製證據，分清背景驗證與實機驗收。"
     ],
-    "rules": [],
+    "rules": [
+      {
+        "name": "The Candidate Palette Rule",
+        "body": "一般候選的選取藍固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，不沿用一般候選 RGB。高對比目前僅核對來源，尚未實機驗收。",
+        "section": "colors"
+      },
+      {
+        "name": "The Measured Text Rule",
+        "body": "DirectWrite 的實際 layout metrics 決定字詞寬度、列高與垂直置中，量測與繪製共用字體。字詞 DrawTextLayout 啟用 `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`；Windows 已安裝字型支援的 emoji、膚色與 ZWJ 序列可彩色呈現，旗幟字形依作業系統，不宣稱所有 emoji 均支援。",
+        "section": "typography"
+      },
+      {
+        "name": "The Natural Width Rule",
+        "body": "字詞依自然寬度量測，窄工作區只呈現放得下的項目，兩端箭頭翻動可見範圍；鍵盤目前選取項始終保持可見。不把所有詞一起縮窄，只有單項超過可用寬度時才以 DirectWrite character ellipsis 省略。",
+        "section": "layout"
+      },
+      {
+        "name": "The Quiet Candidate Rule",
+        "body": "顯示、隱藏、可見範圍移動與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；這項候選規則不更改設定窗原生控制項動畫。",
+        "section": "elevation"
+      }
+    ],
     "dos": [
-      "設定使用 ThemeResource，保留鍵盤與滑鼠的原生控制項狀態；候選讀取 UISettings accent 與系統高對比色。",
-      "候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交。",
-      "候選只保留單一外框，且顯示、隱藏與選取不加動畫；此契約不改變設定窗原生控制項行為。",
-      "Windows 的橫列和直列都用 ↑／↓ 選字；善解操作說明隨 profile 更新。"
+      "**Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。",
+      "**Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。",
+      "**Do** 一般候選使用固定選取藍，高對比改讀整組系統 window／highlight 色。",
+      "**Do** 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交，立即切換選取與顯示狀態。"
     ],
     "donts": [
-      "設定保留 WinUI 3 原生控制項；候選與模式提示依已核准契約使用 Win32，不新增 WebView。",
-      "不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。"
+      "**Don't** 恢復直向、九欄格狀、模型版本選單或任意詞類表選單。",
+      "**Don't** 在候選增加第二層外框、陰影、動畫、WebView 或獨立候選 host。",
+      "**Don't** 將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。"
     ]
   }
 }

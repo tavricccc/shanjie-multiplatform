@@ -1,6 +1,26 @@
 # 延遲與資源量測
 
-2026-10-07，本機 Release 建置，x64 Windows。這些是背景 harness 的實測，不是各種 App 的日常使用保證。數字屬於當日模型與核心；2026-10-08 接入 v3／v4 詞類模型後尚未重跑資源量測，不能沿用下表宣稱新版耗用。
+這些是背景 harness 實測，不是各種 App 的日常使用保證。只代表各次指定模型、核心與測試程序，不包含螢幕刷新或完整 App 的資源。
+
+## 2026-10-09 Rust／model-v4 版本
+
+原生候選在目前 120 DPI 環境，九項橫向、30 次隱藏重開；包括同步 Direct2D 繪製與 UpdateLayeredWindow。x86 冷啟動受當時負載影響，沒有以單次樣本推論架構速度。
+
+| 項目 | x64 | x86 |
+| --- | ---: | ---: |
+| 資源初始化 | 13.677 ms | 71.756 ms |
+| 初次顯示 | 9.086 ms | 29.811 ms |
+| 重開中位數／p95 | 1.453／1.527 ms | 1.734／1.865 ms |
+| 介面 Private Bytes 增量 | 16.93 MiB | 16.01 MiB |
+| 介面 Working Set 增量 | 15.94 MiB | 13.90 MiB |
+
+單一 x64 v4 引擎、學習與預測關閉、100 次短讀音／600 鍵：載入 369.317 ms，Private 增量 36.08 MiB，Working Set 增量 82.75 MiB，輸入後 Private 增量 36.42 MiB；按鍵呼叫中位數 0.001 ms／p95 0.033 ms。工具 `measure-engine.ps1` 連結 Rust Windows staticlib，C++ 只作量測 adapter。
+
+背景 TSF Windows profile 的整個 harness 程序為 Private 40.3 MiB／Working Set 101.8 MiB；善解 profile（預測開啟）73.4／133.7 MiB。兩份預設的預測開關不同，這不是可泛化的多 App 總量或唯一實體 RAM。
+
+## 2026-10-07 歷史量測
+
+下方 v1／v2、舊原生介面與 WinUI host 數值只屬於當日版本，不能當成現在 v4／Rust 產品的耗用。
 
 ## 選字介面
 

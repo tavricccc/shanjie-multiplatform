@@ -1,11 +1,11 @@
 #Requires -Version 7
-param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows')
+param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     if (!$NativeOnly) {
-    & "$PSScriptRoot/build.ps1"
+    & "$PSScriptRoot/build.ps1" -Architecture $Architecture
     New-Item -ItemType Directory -Path upstream/shanjie/data/lm -Force | Out-Null
     Copy-Item build/model/bigram-v4.sjlm upstream/shanjie/data/lm/bigram.sjlm -Force
     Copy-Item build/model/classes-v2.sjc upstream/shanjie/data/lm/classes.sjc -Force
@@ -30,21 +30,22 @@ try {
     }
     if (!(Test-Path dist/data/models/model-v4/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
     $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
+    $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
 @echo off
-call "$vcvars" >nul
+call "$vcvars" $Architecture >nul
 if errorlevel 1 exit /b 1
-cd /d "$root/build/native-x64"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/tsf_smoke.cpp" /link /OUT:"$root/build/tsf-smoke.exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
+cd /d "$root/build/native-$Architecture"
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/tsf_smoke.cpp" /link /OUT:"$harness" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-    Set-Content build/native-x64/verify.cmd $command -Encoding utf8NoBOM
-    & cmd.exe /d /c (Join-Path $root 'build/native-x64/verify.cmd')
+    Set-Content "build/native-$Architecture/verify.cmd" $command -Encoding utf8NoBOM
+    & cmd.exe /d /c (Join-Path $root "build/native-$Architecture/verify.cmd")
     if ($LASTEXITCODE) { throw 'TSF smoke harness build failed.' }
-    $arguments = @("$root/dist/x64/Shanjie.dll")
+    $arguments = @("$root/dist/$Architecture/Shanjie.dll")
     if ($Visual) { $arguments += '--visual' }
     elseif ($Interaction -eq 'shanjie') { $arguments += '--shanjie' }
-    $profileRoot = Join-Path $root "build/profile-tests/$Interaction"
+    $profileRoot = Join-Path $root "build/profile-tests/$Architecture/$Interaction"
     New-Item -ItemType Directory -Path "$profileRoot/Shanjie" -Force | Out-Null
     Copy-Item "profiles/$Interaction.ini" "$profileRoot/Shanjie/profile.ini" -Force
     $previousLocalAppData = $env:LOCALAPPDATA
@@ -52,7 +53,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     try {
         $env:LOCALAPPDATA = $profileRoot
         $env:SHANJIE_HEADLESS = if ($Visual) { $null } else { '1' }
-        & ./build/tsf-smoke.exe @arguments
+        & $harness @arguments
     } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
 } finally { Pop-Location }

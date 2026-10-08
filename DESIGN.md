@@ -1,48 +1,56 @@
 ---
 name: 善解 Windows
-description: WinUI 3 原生設定與同程序 Win32 注音候選
+description: WinUI 3 原生設定與 Rust 同程序橫向膠囊候選
 colors:
-  candidate-light-background: "#F5F6F7"
-  candidate-light-border: "#D8DADD"
-  candidate-light-foreground: "#24272B"
-  candidate-dark-background: "#24272B"
-  candidate-dark-border: "#4A4F55"
-  candidate-dark-foreground: "#F5F6F7"
+  candidate-selected-background: "#006EE6"
+  candidate-selected-foreground: "#FFFFFF"
+  candidate-light-background: "#F2F2F5"
+  candidate-light-border: "#B5B5BD"
+  candidate-light-foreground: "#222225"
+  candidate-light-label: "#65656E"
+  candidate-dark-background: "#343443"
+  candidate-dark-border: "#787884"
+  candidate-dark-foreground: "#F5F5F7"
+  candidate-dark-label: "#B9B9C5"
 typography:
   chinese:
     fontFamily: Microsoft JhengHei UI
   candidate:
     fontFamily: Microsoft JhengHei UI
-    fontSize: 18 DIP
+    fontSize: 16 DIP
+    fontWeight: 400
   candidate-label:
     fontFamily: Segoe UI
-    fontSize: 13.333 DIP
-rounded:
-  candidate-surface: 6 DIP
-  candidate-selected: 4 DIP
+    fontSize: 9 DIP
+    fontWeight: 400
 spacing:
   form: 12 DIP
   section: 12 DIP
   content: 20 DIP
-  candidate-surface: 6 DIP 8 DIP
-  candidate-item: 4 DIP
-  candidate-label-gap: 4 DIP
+  candidate-surface: 3 DIP
+  candidate-item-gap: 2 DIP
+  candidate-leading: 4 DIP
+  candidate-label-gap: 6 DIP
+  candidate-trailing: 7 DIP
+  candidate-caret-gap: 6 DIP
   mode-caret-gap: 6 DIP
 components:
   candidate-surface-light:
     backgroundColor: "{colors.candidate-light-background}"
     textColor: "{colors.candidate-light-foreground}"
-    rounded: "{rounded.candidate-surface}"
     padding: "{spacing.candidate-surface}"
   candidate-surface-dark:
     backgroundColor: "{colors.candidate-dark-background}"
     textColor: "{colors.candidate-dark-foreground}"
-    rounded: "{rounded.candidate-surface}"
     padding: "{spacing.candidate-surface}"
   candidate-item:
     typography: "{typography.candidate}"
-    rounded: "{rounded.candidate-selected}"
-    padding: "{spacing.candidate-item}"
+    padding: 0 DIP 7 DIP 0 DIP 4 DIP
+  candidate-item-selected:
+    backgroundColor: "{colors.candidate-selected-background}"
+    textColor: "{colors.candidate-selected-foreground}"
+    typography: "{typography.candidate}"
+    padding: 0 DIP 7 DIP 0 DIP 4 DIP
   mode-indicator:
     width: 28 DIP
     height: 28 DIP
@@ -53,73 +61,104 @@ components:
 
 ## Overview
 
-使用者指定 Windows 原生風格；設定保留 WinUI 3，候選依已核准的實作變更改為 TSF 同程序的 Win32 popup。兩者採 Operate 模式，以可辨讀、系統一致與文件輸入連續性為主。候選方向契約見 docs/candidate-surface.md；既有外觀 tokens 保留。
+**Creative North Star: "原生設定，善解橫向膠囊候選"**
+
+設定維持使用者核准的 WinUI 3 原生幾何與操作；候選依使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift`，採細框、單行膠囊、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。
+
+Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。
+
+**Key Characteristics:**
+
+- WinUI 3 原生設定、固定儲存回饋與共用草稿。
+- 候選只保留橫向膠囊，字詞按自然寬度排列。
+- 候選與中英提示均不取得焦點。
+- 使用實際原生繪製證據，分清背景驗證與實機驗收。
 
 ## Colors
 
-設定色彩以 XAML ThemeResource 為來源：SolidBackgroundFillColorBaseBrush、LayerFillColorDefaultBrush、TextFillColorSecondaryBrush。AccentButtonStyle 與 NavigationView 使用系統 accent，不固定 RGB。淺／深色切換與系統主題由原生資源解析，高對比尚未實際驗收。
+候選採使用者指定的 macOS 善解中性色與固定藍色；設定窗繼續使用 Windows 原生主題資源。
 
-候選中性色依使用者指定的 `local-ime-reranker-public/rime/weasel.custom.yaml` 外觀，使用 frontmatter 的淺／深底色、邊框與文字色。選取反白跟隨 Windows `UISettings`：淺色用 `AccentDark1` 配白字，深色用 `AccentLight2` 配黑字；選取後的 pointer-over／pressed 共用該背景。高對比透過 `GetSysColor` 讀取 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，不固定 accent RGB；目前僅核對來源，尚未實際高對比驗收。
+### Primary
+
+- **選取藍**：`candidate-selected-background` 只用於目前候選的膠囊反白；序號與字詞使用 `candidate-selected-foreground`。淺、深色候選共用此組配色。
+
+### Neutral
+
+- **淺色候選底面、外框、字詞與序號**：分別對應 `candidate-light-background`、`candidate-light-border`、`candidate-light-foreground` 與 `candidate-light-label`；序號降低對比，字詞保留主要閱讀層級。
+- **深色候選底面、外框、字詞與序號**：分別對應 `candidate-dark-background`、`candidate-dark-border`、`candidate-dark-foreground` 與 `candidate-dark-label`。
+- **設定主題**：以 `SolidBackgroundFillColorBaseBrush`、`LayerFillColorDefaultBrush`、`TextFillColorSecondaryBrush` 等 XAML ThemeResource 為來源。設定的 AccentButtonStyle 與 NavigationView 保留系統 accent。
+
+**The Candidate Palette Rule.** 一般候選的選取藍固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，不沿用一般候選 RGB。高對比目前僅核對來源，尚未實機驗收。
 
 ## Typography
 
-繁體中文 TextBlock 使用 Microsoft JhengHei UI；標題採 TitleTextBlockStyle／SubtitleTextBlockStyle，其餘採原生控制項字體階層。候選字級可調 14–32 DIP，預設 18 DIP。
+繁體中文設定 TextBlock 使用 Microsoft JhengHei UI；標題採 TitleTextBlockStyle／SubtitleTextBlockStyle，其餘使用原生控制項字體階層。候選字詞使用 `candidate`、數字與聯想 Shift 標記使用 `candidate-label`，兩者皆為正常字重。
 
-候選文字使用 `candidate` 字體角色，實際字級仍由個人設定控制；數字與聯想 Shift 標記使用 `candidate-label`。DirectWrite 以實際 text layout metrics 決定列高、欄寬與垂直置中，量測與繪製共用字體。
+新安裝候選字級為 frontmatter 的預設，個人設定可調 14–32 DIP。序號字級為候選字級乘 9／16，最低 8 DIP；其他候選內距與幾何按字級／16 的比例調整。舊 schema 升至 4 時保留已存字級；若舊設定沒有字級欄位，遷移會寫入舊預設 18 DIP，以保留原本外觀。
 
-候選字詞的 `DrawTextLayout` 啟用 `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`，讓目前 Windows 字型已有的 emoji、膚色與 ZWJ 序列以彩色字形呈現；數字標記維持原文字繪製。字形與序列支援取決於已安裝字型；Windows 的旗幟目前呈現 TW 字母，不宣稱支援所有 emoji。
+**The Measured Text Rule.** DirectWrite 的實際 layout metrics 決定字詞寬度、列高與垂直置中，量測與繪製共用字體。字詞 DrawTextLayout 啟用 `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`；Windows 已安裝字型支援的 emoji、膚色與 ZWJ 序列可彩色呈現，旗幟字形依作業系統，不宣稱所有 emoji 均支援。
 
 ## Layout
 
-設定初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動；InfoBar 和儲存／取消列固定在內容外。候選與游標相隔 4 DIP，外框內距、候選內距及數字與字詞間距依 frontmatter；列高至少 32 DIP，依實際字體測量增高。保留直列、橫列與九欄格狀：直列最低寬 96 DIP、橫列／格狀每格最低 52 DIP，長詞依實際文字測量加寬，受工作區限制。候選沒有底部注音按鈕或頁次提示，底部不足時向上放。
+設定初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動；InfoBar 和儲存／取消列固定在內容外。開關採同列左標籤、右原生 ToggleSwitch，MinHeight 40 DIP，標籤可換行並提供 AutomationProperties.Name。
 
-窄工作區會縮減每格寬度，每格各自 clip，來源設定 DirectWrite character ellipsis；本次 720 px captures 只證明裁切不跨格，未驗證省略號可見。空間足夠時小字級長詞完整呈現。游標旁中英切換提示使用 `mode-indicator`：28 DIP 透明視窗、無外圈內距，與 caret 間隔 `mode-caret-gap` 的 6 DIP；依所在螢幕實際 DPI 重新繪製。1400 ms 後隱藏，也於下一次輸入或失焦時隱藏。
+候選只有單行橫向排列，每頁最多九項。以預設字級計，選取膠囊基準高 24 DIP，外框最小高 30 DIP；字體 metrics 需要時增加列高。外框內距、項間距、序號前距、序號與字詞間距、尾端留白均以 frontmatter 為準；被動預測不預留序號空間。候選與 caret 的間距固定為 `candidate-caret-gap`，依 DPI 換算；底部不足時改放上方，位置夾在目前螢幕工作區內。沒有底部注音按鈕或頁次提示。
 
-開關採同列左標籤、右原生 ToggleSwitch，MinHeight 40 DIP，標籤可換行並提供 AutomationProperties.Name。參考微軟[官方候選圖片](https://support.microsoft.com/en-us/windows/media/conversion-candidate-window-1.png)的緊密數字與字詞列；圖片是視覺參考，32 DIP 等數值是本專案設計決策，並非微軟公布規格。
+**The Natural Width Rule.** 字詞依自然寬度量測，窄工作區只呈現放得下的項目，兩端箭頭翻動可見範圍；鍵盤目前選取項始終保持可見。不把所有詞一起縮窄，只有單項超過可用寬度時才以 DirectWrite character ellipsis 省略。
+
+游標旁中英提示使用 `mode-indicator`：透明視窗與零內距，caret 間距依 `mode-caret-gap`；在所在螢幕 DPI 重新繪製，1400 ms 後、下一次輸入或失焦時隱藏。
 
 ## Elevation & Depth
 
-設定使用 MicaBackdrop 與系統底色／操作列分層。候選為無標題 Win32 工具視窗，在 TSF 程序內以 Direct2D software DC render target 與 DirectWrite 繪製，沒有獨立候選 host 或 IPC。
+設定使用 MicaBackdrop 與系統底色／操作列分層。候選是 TSF 同程序 Win32 layered popup，由 Rust Direct2D software DC render target／DirectWrite 繪製；沒有獨立候選 host 或 IPC。
 
-候選只由 Direct2D 提供單一不透明中性色外框，不加陰影；`WS_POPUP` 不包含 caption／resize frame，整個視窗作為 client content，避免再包一層原生框。選取面由系統 accent 與外框底色形成層次。
+候選只保留單一細框與實色底面，圓角外側為透明 alpha，不加陰影。`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成，避免再包一層原生框。選取膠囊以固定藍色形成閱讀層次。
+
+**The Quiet Candidate Rule.** 顯示、隱藏、可見範圍移動與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；這項候選規則不更改設定窗原生控制項動畫。
 
 ## Shapes
 
-原生控制項採 Windows App SDK 預設圓角、focus、hover、pressed 行為，不另外發明網站樣式。
-
-候選外框與選取面的圓角依 frontmatter，外框線寬為 1 DIP。Direct2D rounded rectangle 提供整塊反白，不包含左側 selection indicator；HWND region 依外框圓角裁切。
+設定控制項採 Windows App SDK 預設圓角、focus、hover 與 pressed 行為。候選外框線寬 1 DIP，圓角半徑為外框高扣除 1 DIP 後的一半；選取膠囊半徑為實際列高的一半。這些圓角隨實際量測高度產生，沒有固定 6／4 DIP 圓角。反白涵蓋整項，不使用左側 selection indicator；透明外角由 layered alpha 呈現。
 
 ## Components
 
-NavigationView 的「一般」、「按鍵」、「組字與提交」、「選字與外觀」、「預測、詞庫與學習」、「關於與相容性」共六頁共用草稿。開關共用 `SettingToggle`，保留同列左標籤、右原生 ToggleSwitch 與可換行的次要說明；ComboBox、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選由同程序 Win32 popup 直接繪製，每格共用 frontmatter 內距，沒有 XAML item container 疊加留白。
+### 原生設定與保存
 
-一般頁的「語言模型」沿用全寬原生 ComboBox，提供 `model-v1（原始模型）`、`model-v2（簡繁整理）`、`model-v3＋classes-v1（臺灣常用字形）` 與 `model-v4＋classes-v2（最新）`。新安裝預設 v4；v1／v2 明確不使用詞類表，v3／v4 使用固定配對，不提供任意配表或單獨停用詞類表的控制項。其下以可換行的次要文字說明所選模型及配表、所有模型均在本機、儲存後先提交目前組字再切換，以及保留個人詞庫與選字學習；模型來源與 hash 以 `MODEL-SOURCES.json` 為準。變更仍在共用草稿內，按儲存才套用。
+NavigationView 的「一般」、「按鍵」、「組字與提交」、「選字與外觀」、「預測、詞庫與學習」、「關於與相容性」六頁共用草稿。開關共用 `SettingToggle`，ComboBox、NumberBox、TextBox 與固定按鈕對應真實設定；InfoBar 展示儲存與格式錯誤，清除學習使用 ContentDialog。設定保存與遷移來源為 `windows/src/profile.rs`，WinUI 3 控制項來源為 `ui/MainWindow.xaml`；按儲存後才套用並通知已啟用實例。
 
-預測、詞庫與學習頁提供「未完成讀音的即時預測」與「選字後的聯想詞」兩個獨立開關，AutomationProperties.Name 沿用各自標籤。即時預測的次要文字說明第一個注音鍵可提示完整詞，Tab 進入後以數字／Enter 選詞，Shift＋Tab 或 Esc 退出；聯想說明數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取，Enter 提交並關閉候選。Windows 操作預設兩種預測皆關閉；這是使用者指定，微軟公開操作的對照與差異見 `MICROSOFT-IME-DIFFS.md`。前文、敏感詞降權、學習偏好、忘記目前候選學習、清除學習與個人詞庫輸入維持原生控制項。
+一般頁以文字顯示固定 `model-v4＋classes-v2`，只提供最新模型與配對詞類表，沒有模型選單或任意配表控制項。模型在本機執行，個人詞庫與選字學習保留；來源與 hash 以 `MODEL-SOURCES.json` 為準。操作預設在共用草稿內只調整按鍵、選字與預測，保留詞句偏好、詞庫、學習與外觀。設定保存採 schema 4；舊設定先備份再遷移至最新模型及橫向候選，保留個人資料與其餘已存偏好，移除已退役的候選展開設定。
 
-設定保存採 schema 3。既有 schema 1／2 設定先備份再遷移，保留已存的模型、聯想、詞庫、學習與外觀，新即時預測不自行開啟；載入 Windows 操作預設才依新預設關閉兩種預測。操作預設在共用草稿內只調整按鍵、候選與預測，模型、詞句偏好、詞庫、學習與外觀保留，按儲存後通知已啟用實例。
+預測頁保留「未完成讀音的即時預測」與「選字後的聯想詞」兩個獨立開關。Windows 操作預設兩者皆關閉；載入操作預設仍須儲存才套用。前文、敏感詞降權、學習偏好、忘記目前候選學習、清除學習與個人詞庫輸入維持原生控制項。
 
-候選外框使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`。即時預測採橫列，被動狀態不顯示數字與反白，也不預留數字欄；Tab 進入後才顯示數字與目前選取反白。顯示、隱藏與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；滑鼠選字帶入 sequence 供 TSF 核對。反白與高對比契約以 `src/candidate_palette.cpp` 為準，視窗、量測、每格裁切、繪製與定位以 `src/candidate_host.h`／`.cpp` 為準。這是原生桌面元件，sidecar 記錄資源與行為，不提供 HTML/CSS 模擬。
+### 橫向候選與預測
 
-工作列模式按鈕保留使用者指定參考專案的 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示改由 GDI+ 依 `assets/mode/chinese.svg`／`english.svg` 的 24×24 幾何，在目標像素尺寸即時繪製彩色「中」／「A」，不縮放 ICO。兩份 SVG 同樣來自 `local-ime-reranker-public/rime/icons`，原始 MIT 授權保留於 `assets/mode/LICENSE`。`WS_EX_LAYERED` 以 `UpdateLayeredWindow` 呈現 32-bit premultiplied alpha，移除 `COLOR_WINDOW` 白底與外圈留白；只保留圖示本身的 SVG 幾何。行為見 `src/mode_button.cpp` 與 `src/mode_indicator.cpp`；提示位於同一 TSF 程序，沒有額外 host，仍保留 NOACTIVATE。
+候選外框使用 `candidate-surface-light`／`candidate-surface-dark`，一般項與目前選取項分別使用 `candidate-item`／`candidate-item-selected`。左右、上下與 Tab 均沿同一橫向候選序列操作，不展開直向或格狀；profile 的其他提交、空白翻頁與取消規則仍由個人設定控制。
+
+被動即時預測不顯示序號、反白或序號預留欄；Tab 進入後才出現序號與目前反白，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號，以 Shift＋數字或滑鼠選取。滑鼠回傳原候選索引與 sequence，TSF 拒絕過期點擊，箭頭僅翻動可見範圍。palette、量測、自然寬度、alpha、繪製與定位來源為 `windows/src/candidate.rs`；候選 UIElement、焦點與提交契約為 `windows/src/tsf/`。sidecar 記錄原生資源與行為，不提供 HTML/CSS 模擬。
+
+### 中英模式提示
+
+工作列模式按鈕保留 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示由 Rust tiny-skia 依 `assets/mode/chinese.svg`／`english.svg` 的既有 24×24 幾何繪製中／A，不縮放 ICO；原始 MIT 授權保留於 `assets/mode/LICENSE`。`windows/src/native.rs` 使用 layered alpha、NOACTIVATE 與原生計時器；模式按鈕來源為 `windows/src/tsf/mode.rs`，兩者均在 TSF 同程序內。
+
+### 原生解除安裝詢問
+
+Rust 安裝器更新時清除舊版本、舊模型與退役 payload，鎖定檔案可延至重開機刪除。原生 MessageBox 的「是」完整刪除所有善解資料；「否」移除程式與設定，保留詞庫和學習供重新安裝使用；「取消」不進行解除安裝，且為預設選項。產品文案與處理來源為 `windows/src/installer.rs`，不在啟動腳本或 WinUI 繫結層複製這套邏輯。
 
 ## Do's and Don'ts
 
-- 設定使用 ThemeResource，保留鍵盤與滑鼠的原生控制項狀態；候選讀取 UISettings accent 與系統高對比色。
-- 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交。
-- 候選只保留單一外框，且顯示、隱藏與選取不加動畫；此契約不改變設定窗原生控制項行為。
-- Windows 的橫列和直列都用 ↑／↓ 選字；善解操作說明隨 profile 更新。
-- 設定保留 WinUI 3 原生控制項；候選與模式提示依已核准契約使用 Win32，不新增 WebView。
-- 不把離屏 render 宣稱為讀屏、多 DPI 或真實文件驗收。
+### Do:
 
-既有 WinUI 設定審查：獨立 reviewer 確認固定回饋、profile 說明及來源界線已解決；確認圖另發現預設回饋沿用錯誤 severity，已重設為 Informational，最後限定確認 verdict 為 accept／ship。驗證圖片均為本機真實 XAML render；範本 placeholder 來源記錄在 ui/Assets/PROVENANCE.md，介面未使用生成影像。
+- **Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。
+- **Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。
+- **Do** 一般候選使用固定選取藍，高對比改讀整組系統 window／highlight 色。
+- **Do** 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交，立即切換選取與顯示狀態。
 
-原 WinUI 候選外觀證據為 `build/ui-review-final/candidates-1-0.png`（淺色直列）與 `candidates-2-2.png`（深色九欄格狀）。它們是舊實作的背景離屏 XAML render，保留作外觀參考，不代表目前 Win32 候選驗收。設定窗本次維持原樣。
+### Don't:
 
-目前 Win32 候選與模式提示的背景原生 capture 分別在 `build/native-review/x64`／`x86`（BMP）與 `build/mode-review`；這些是原生 HWND 繪製，無 HTML detector。來源可核對單框、無動畫、NOACTIVATE 與每格裁切；靜態圖片無法證明轉場或實際提交。窄工作區長詞修正已重擷取，24 張一般與 4 張 720 px captures 有效；獨立 reviewer 確認裁切不跨格，兩項修正完成，限於本次 fix list。高對比、實際深色工作列、前景應用程式與多螢幕尚未驗收。
+- **Don't** 恢復直向、九欄格狀、模型版本選單或任意詞類表選單。
+- **Don't** 在候選增加第二層外框、陰影、動畫、WebView 或獨立候選 host。
+- **Don't** 將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。
 
-本次彩色 emoji 與透明模式提示修正的證據為 `build/native-review/{x64,x86}/candidates-{1,2}-emoji.bmp` 與 `build/mode-review/{chinese,english}-{96,120,144,192}.bmp`。模式 BMP 保留 alpha，96／120／144／192 DPI 圖片證明指定 DPI 的背景繪製結果，不等同實際多螢幕操作驗收；本次獨立 finish reviewer disposition 為 ship：確認 😀／👍🏽／👩‍💻／❤️ 與混排以彩色呈現，四種指定 DPI 的中／A 清楚，alpha 透明且白框已移除；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。前述已完成的窄工作區修正 verdict 維持原樣。
+目前證據：`.impeccable/review/{x64,x86}/` 各有 18 張候選 PNG，包含淺／深色 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。同一 Windows 120 DPI 的背景原生 WM_PRINTCLIENT 結果轉成 RGBA PNG；不是 AI 素材或 HTML detector。設定證據為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張真實離屏 XAML render。獨立 reviewer 已逐張核對 42 張 capture，視覺項目均為 match／adaptation；唯一 material fix 是本文件的舊 token 與架構敘述。新鮮 documenter 修正後，同一 reviewer 判定該項 resolved，最後 disposition 為 ship，限定該文件 fix list；沒有擴大實機驗收範圍。
 
-後續模型與聯想設定的外觀證據為 `build/ui-review-final/settings-1-models.png`／`settings-2-models.png` 與 `settings-1-3.png`／`settings-2-3.png`，分別呈現淺／深色的一般頁模型控制項與詞庫學習開關。圖片為背景 XAML render；文案與資料繫結另核對 `ui/MainWindow.xaml`、同名 `.xaml.cs` 與 `ui/ViewModels/SettingsViewModel.cs`。此輪沿用既有設定控制項，候選 tokens、外觀與內距維持原樣；背景證據不等同前景應用程式中的實際提交與模型切換驗收。
-
-2026-10-08 模型固定配表與操作設定擴充的證據為 `build/ui-review-final/settings-{1,2}-{0..5}.png` 及 `settings-{1,2}-{advanced-keys,candidate-keys,appearance,dictionary,error}.png`，涵蓋淺／深色六頁、捲動分組、個人詞庫與錯誤回饋；即時預測被動／進入狀態為 `build/native-review/{x64,x86}/prediction-{1,2}-{passive,entered}.bmp`。前者是離屏 XAML render，後者是背景原生 HWND capture，沒有新增 shipping raster 素材，既有 provenance 維持原樣；原生 Windows 介面不跑 HTML/CSS detector。本輪 fresh finish review 初次 disposition 為 fix；Caps Lock 開關在重擷取圖中清楚可見，實際 ToggleSwitch 的 on/off 繫結亦通過檢查；深色詞庫頁的導覽殘留由驗證器先 render 一幀、等待原生轉場靜定後擷取解決，設定控制項動畫未改。限定修正複核為 Verdict Pass、remaining clear、disposition ship，僅涵蓋這兩項 fix list，不代表全面日常驗收。實際前景 App、新安裝、高對比、讀屏與多螢幕尚未驗收，這輪未安裝。
+目前 x64／x86 建置、兩個 Rust unit tests、兩個操作 profile 的 TSF、interaction、mode、candidate 與 WinUI 背景檢查皆 PASS。這些結果不涵蓋前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除。歷史 WinUI 候選直向／格狀、舊 C++ Win32 BMP captures 與舊模型選單截圖僅保留為過往證據，不是目前實作驗收；介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。
