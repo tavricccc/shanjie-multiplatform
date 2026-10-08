@@ -27,7 +27,7 @@ class Engine {
     Snapshot copy(ShanjieOutput* output);
 public:
     ~Engine();
-    bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0, bool rightAnchor = false, bool learning = false, bool big5 = false, const std::wstring& dictionary = L"dictionary.tsv", unsigned model = 1, bool prediction = false);
+    bool open(const std::filesystem::path& data, unsigned layout, unsigned ranking = 0, bool rightAnchor = false, bool learning = false, bool big5 = false, const std::wstring& dictionary = L"dictionary.tsv", unsigned model = 4, bool prediction = false);
     bool key(ShanjieKey key, Snapshot& output);
     bool pick(unsigned index, Snapshot& output);
     bool reset(bool discard, Snapshot& output);

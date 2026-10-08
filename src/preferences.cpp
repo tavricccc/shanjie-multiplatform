@@ -35,7 +35,7 @@ Preferences loadPreferences() {
     out.ctrlPunctuation = GetPrivateProfileIntW(L"shortcuts",L"ctrl_punctuation",1,path.c_str()) != 0;
     GetPrivateProfileStringW(L"engine",L"ranking",L"chat",value,32,path.c_str());
     out.ranking = std::wstring(value) == L"formal" ? 1 : 0;
-    out.model = GetPrivateProfileIntW(L"engine",L"model",legacy ? 1 : 4,path.c_str());
+    out.model = 4;
     out.prediction = GetPrivateProfileIntW(L"engine",L"prediction",!legacy && !out.windowsKeys,path.c_str()) != 0;
     out.demote = GetPrivateProfileIntW(L"engine",L"demote",1,path.c_str()) != 0;
     out.useContext = GetPrivateProfileIntW(L"input",L"context",1,path.c_str()) != 0;

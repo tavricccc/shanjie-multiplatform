@@ -21,9 +21,8 @@ function Write-ProfileIni($Document) {
 }
 function Preserve-ProfileData($Preset,$Previous) {
     $schema = if ($Previous.Contains('profile') -and $Previous.profile.Contains('schema')) { [int]$Previous.profile.schema } else { 1 }
-    if ($schema -lt 3 -and (!$Previous.Contains('engine') -or !$Previous.engine.Contains('model'))) { $Preset.engine.model = '1' }
     $keys = @{
-        engine = @('model','ranking','demote')
+        engine = @('ranking','demote')
         input = @('dictionary','keyboard','learning','context','chinese','full_width')
         candidates = @('big5')
         appearance = @('theme','font_size','mode_indicator')

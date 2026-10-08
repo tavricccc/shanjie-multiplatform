@@ -1,6 +1,10 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游目前固定於 `model-v4` tag 的 `1c16dffa6be9f8900d9df9819343885b90427c01`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。這是模型資料 tag 所指的核心快照，並非已發佈的 v0.3.0 輸入法版本。
+這份文件是後續更新善解上游的維護入口。上游固定於正式 `v0.3.0` 的 `8a6fe0750284f7daa46d197545f50eee9bb3387c`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-08 同步 v0.3.0，只保留最新模型
+
+從原 model-v4 快照至正式 v0.3.0，`core/src/`、C header、詞庫與 LICENSE 沒有變更；上游更新模型引用、驗證 fixture、文件與 macOS 候選高度／定位。Windows 只打包 model-v4＋classes-v2，舊模型設定遷移至 v4，沒有執行期模型 fallback。prepare 已重新核對覆蓋契約與 v4 映射等價。下方四版模型紀錄是歷史實作，現行包以 `MODEL-SOURCES.json` 的單一模型為準。
 
 ## 2026-10-08 接入 model-v3／v4 與詞類表
 

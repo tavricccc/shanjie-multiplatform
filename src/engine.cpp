@@ -30,7 +30,7 @@ bool Engine::beginLearning() {
 }
 void Engine::endLearning() { if (learningMutex_) ReleaseMutex(learningMutex_); }
 bool Engine::open(const std::filesystem::path& data, unsigned layout, unsigned ranking, bool rightAnchor, bool learning, bool big5, const std::wstring& dictionaryName, unsigned model, bool predictionEnabled) {
-    if (model < 1 || model > 4) return false;
+    if (model != 4) return false;
     shanjie_engine_free(handle_); handle_ = nullptr;
     wchar_t localDictionary[32768]; auto localLength = GetEnvironmentVariableW(L"LOCALAPPDATA",localDictionary,32768);
     auto personal = localLength && localLength < 32768 ? std::filesystem::path(localDictionary) / L"Shanjie" / dictionaryName : std::filesystem::path{};

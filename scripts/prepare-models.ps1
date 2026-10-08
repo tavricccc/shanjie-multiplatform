@@ -1,5 +1,4 @@
 #Requires -Version 7
-param([ValidateRange(1,4)][int[]]$Model = @(1,2,3,4))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
@@ -11,7 +10,7 @@ function Get-VerifiedAsset($asset,[string]$name) {
     }
     return $source
 }
-foreach ($entry in $manifest.models | Where-Object id -In $Model) {
+foreach ($entry in $manifest.models) {
     $source = Get-VerifiedAsset $entry 'bigram.sjlm'
     $mapped = Join-Path $root "dist/data/$($entry.mapped)"
     New-Item -ItemType Directory -Path (Split-Path $mapped -Parent) -Force | Out-Null
@@ -23,7 +22,12 @@ foreach ($entry in $manifest.models | Where-Object id -In $Model) {
     cargo run --release --manifest-path "$root/build/core/Cargo.toml" --bin map-model -- $source $mapped $classes
     if ($LASTEXITCODE) { throw "Mapped model equivalence verification failed: $($entry.release)" }
 }
-# Schema 2 kept models in the data root. Packages now have one folder per pairing.
+# Remove retired model directories from build output as well as legacy root files.
+foreach ($retired in @(Get-ChildItem -LiteralPath "$root/dist/data/models" -Directory | Where-Object Name -NotIn @($manifest.models.release))) {
+    $resolved = [IO.Path]::GetFullPath($retired.FullName)
+    if (!$resolved.StartsWith([IO.Path]::GetFullPath("$root/dist/data/models") + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected model path.' }
+    Remove-Item -LiteralPath $resolved -Recurse -Force
+}
 foreach ($legacy in @('bigram.winmap','bigram-v2.winmap')) {
     $path = Join-Path $root "dist/data/$legacy"
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }

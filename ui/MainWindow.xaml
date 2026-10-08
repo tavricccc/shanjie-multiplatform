@@ -23,11 +23,9 @@
                             <ComboBoxItem Content="選擇操作預設…"/><ComboBoxItem Content="Windows／微軟注音按鍵（預測關閉）"/><ComboBoxItem Content="善解上游操作"/>
                         </ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。模型、詞句偏好、詞庫、學習與外觀會保留。"/>
-                        <ComboBox x:Name="ModelSelector" Header="語言模型" SelectedIndex="{x:Bind Vm.Model, Mode=TwoWay}" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="model-v1（原始模型）"/><ComboBoxItem Content="model-v2（簡繁整理）"/><ComboBoxItem Content="model-v3＋classes-v1（臺灣常用字形）"/><ComboBoxItem Content="model-v4＋classes-v2（最新）"/>
-                        </ComboBox>
+                        <TextBlock x:Name="ModelSelector" Text="語言模型：model-v4＋classes-v2" FontFamily="Microsoft JhengHei UI"/>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
-                        <TextBlock Style="{StaticResource HelpText}" Text="模型與配對詞類表一起切換。儲存後先提交目前組字；個人詞庫與選字學習會保留，所有模型都在本機。"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
                         <ComboBox Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows 標準／倚天 profile"/><ComboBoxItem Content="標準注音"/><ComboBoxItem Content="倚天注音"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
                         <controls:SettingToggle Label="預設輸入模式" OnText="中文" OffText="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/>

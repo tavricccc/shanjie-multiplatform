@@ -15,9 +15,15 @@ public static class ProfileStore
     {
         if (!File.Exists(Path)) return Defaults(true);
         var profile = ProfileDocument.Parse(File.ReadAllText(Path)); int schema = profile.Number("profile", "schema", 1);
-        if (schema >= 3) return profile;
+        if (schema >= 3) {
+            if (profile.Number("engine", "model", 4) != 4) {
+                string modelBackup = Path + ".before-model-v4.bak"; if (!File.Exists(modelBackup)) File.Copy(Path, modelBackup);
+                profile.Set("engine", "model", 4); Save(profile.ToString());
+            }
+            return profile;
+        }
         bool windows = profile.Read("profile", "interaction", "windows") == "windows"; var legacy = Defaults(windows);
-        legacy.Set("engine", "model", 1); legacy.Set("engine", "prediction", false); legacy.Set("input", "associations", windows);
+        legacy.Set("engine", "model", 4); legacy.Set("engine", "prediction", false); legacy.Set("input", "associations", windows);
         foreach (string key in new[] { "shift_toggle", "ctrl_space_toggle", "shift_space_toggle", "ctrl_punctuation" }) legacy.Set("shortcuts", key, true);
         legacy.Set("candidates", "layout", "vertical"); legacy.Set("candidates", "anchor", "right"); legacy.Set("candidates", "open", "down");
         foreach (string key in new[] { "shift_punctuation", "plain_punctuation", "standalone_tones" }) legacy.Set("input", key, true);
@@ -25,7 +31,7 @@ public static class ProfileStore
         legacy.Set("input", "caps_lock_english", windows); legacy.Set("input", "learning", false);
         legacy.Set("input", "space_after_commit", true); legacy.Set("shortcuts", "backquote_symbols", windows);
         legacy.Set("input", "escape", profile.Flag("input", "escape_clears", true) ? "staged" : "ignore");
-        profile.FillMissing(legacy); profile.Set("profile", "schema", 3);
+        profile.FillMissing(legacy); profile.Set("profile", "schema", 3); profile.Set("engine", "model", 4);
         profile.Remove("input", "escape_clears"); profile.Remove("candidates", "reading");
         string backup = Path + $".schema{schema}.bak"; if (!File.Exists(backup)) File.Copy(Path, backup);
         Save(profile.ToString()); return profile;

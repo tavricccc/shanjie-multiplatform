@@ -21,7 +21,7 @@ public partial class SettingsViewModel
             Trigger = Array.IndexOf(new[] { "down", "space", "both" }, profile.Read("candidates", "open", "down"));
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
             Layout = Array.IndexOf(new[] { "vertical", "horizontal", "grid" }, profile.Read("candidates", "layout", "vertical"));
-            Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1; Model = profile.Number("engine", "model", 4) - 1;
+            Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1; Model = 3;
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
@@ -63,7 +63,7 @@ public partial class SettingsViewModel
     private void WriteDocument()
     {
         profile.Set("profile", "schema", 3); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
-        profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", Model + 1);
+        profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 4);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
