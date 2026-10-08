@@ -14,6 +14,7 @@
 - x64／x86 原生候選與模式圖示 harness 通過同程序、NOACTIVATE、mouse sequence、隱藏／重開、client＝window、RGBA 角落透明與提示自動隱藏。候選 36 張實際原生擷取覆盖淺深、14／16／32 DIP、自然詞寬、720 px 工作區、聯想、emoji、被動／進入預測。當前環境 120 DPI；不是實際多螢幕验收。
 - WinUI 離屏保存／重讀通過舊設定備份、最新模型與 horizontal 遷移、保留詞庫／學習／外觀，以及實際 ToggleSwitch 草稿雙向綁定。設定淺深擷取包含六頁與長頁細節；Rust共用業務邏輯，新畫面不提供模型／排列選單。
 - 全部 PowerShell 7 腳本語法通過；Rust dependency licenses 從 Cargo.lock 鎖定版本收集全文。資源量測與端點界線見 PERFORMANCE.md。
+- 最終套件的 native manager 校驗通過；ZIP 內 589 個檔案逐一 SHA-256 核對通過，僅有 model-v4＋classes-v2、沒有退休安裝腳本，WinUI 旁的 Rust DLL 與 x64 TSF DLL 相同。ZIP 約 111.68 MiB。
 
 候選擷取來源 `build/native-review/{x64,x86}`，36 張保留 alpha 的 PNG 副本在 `.impeccable/review/{x64,x86}`；WinUI 在 `build/ui-review-final`。沒有影像生成素材或 HTML detector。獨立 reviewer 已逐一核對 36 張候選與 6 張相關設定圖，可見畫面全部 match／adaptation；唯一 material fix 是舊 DESIGN.md 的世界與來源記錄。新鮮 documenter 已修正 DESIGN.md／sidecar，同一 reviewer 判定该項 resolved，最後 disposition 為 **ship，限定該文件 fix list**。
 
