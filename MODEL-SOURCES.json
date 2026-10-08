@@ -1,7 +1,9 @@
 {
   "repository": "https://github.com/Nanako0129/shanjie",
   "models": [
-    { "release": "model-v1", "source": "bigram.sjlm", "mapped": "bigram.winmap", "sha256": "9879fd8b264b1c1f4c083ccedf84dc5625cd8d2595bd2d13150eed5a0520a923" },
-    { "release": "model-v2", "source": "bigram-v2.sjlm", "mapped": "bigram-v2.winmap", "sha256": "8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240" }
+    { "id": 1, "release": "model-v1", "source": "bigram.sjlm", "mapped": "models/model-v1/bigram.winmap", "sha256": "9879fd8b264b1c1f4c083ccedf84dc5625cd8d2595bd2d13150eed5a0520a923", "classes": null },
+    { "id": 2, "release": "model-v2", "source": "bigram-v2.sjlm", "mapped": "models/model-v2/bigram.winmap", "sha256": "8847b73a7b9cf127b4882328191c3c5250fe9a55912926d5050e351ab644d240", "classes": null },
+    { "id": 3, "release": "model-v3", "source": "bigram-v3.sjlm", "mapped": "models/model-v3/bigram.winmap", "sha256": "5c7d5a94f762e7c5d87e14e47b03c1138222df4ea194e70e503bdd9a71ab5a48", "classes": { "release": "classes-v1", "source": "classes-v1.sjc", "sha256": "80dbaa0898fff16f90d290fbc6ebf29edb30d917c95dbef1b72649183dd49a8a" } },
+    { "id": 4, "release": "model-v4", "source": "bigram-v4.sjlm", "mapped": "models/model-v4/bigram.winmap", "sha256": "06768f2949cf8b135d1f591056ffb16f3ae3f6d70aef5911ffd55de134250322", "classes": { "release": "classes-v2", "source": "classes-v2.sjc", "sha256": "9e343d3e3ce83f1008e371f62de5d8e62721df97e7b02562503ef2cc57226f3f" } }
   ]
 }

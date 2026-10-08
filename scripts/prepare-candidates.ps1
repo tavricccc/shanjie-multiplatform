@@ -15,7 +15,9 @@ Replace-Contract '            cursor: 0,' "            cursor: 0,`n            c
 Replace-Contract 'self.cands = Some(Cands::new(list));' 'self.cands = self.make_candidates(list);' 2
 Replace-Contract '    fn open_candidates(&mut self) {' '    fn open_candidates_left(&mut self) {'
 Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l);' 2
-Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre });' "        self.fixed.push(Fixed { start, end, word, pre });`n        if self.candidate_from_right { self.cursor = end; }"
+Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key });' "        self.fixed.push(Fixed { start, end, word, pre, key });`n        if self.candidate_from_right { self.cursor = end; }"
+Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
+Replace-Contract '        all.truncate(PREDICT_MAX);' "        if self.candidate_big5 { all.retain(|p| fits_big5(&p.word)); }`n        all.truncate(PREDICT_MAX);"
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/input_windows.rs" -Raw)
 Set-Content $engine $content -Encoding utf8NoBOM

@@ -9,6 +9,7 @@ namespace shanjie {
 struct Snapshot {
     bool handled = false;
     bool associated = false;
+    bool prediction = false;
     std::wstring commit, preedit, reading;
     uint32_t cursor = 0, columns = 0, first = 0, total = 0;
     int selected = -1;
@@ -34,6 +35,8 @@ public:
     bool associate(const std::wstring& prefix, Snapshot& output);
     void setReadingCandidate(bool enabled) { readingCandidate_ = enabled; }
     bool commitReading(Snapshot&);
+    bool prediction(bool enabled, Snapshot&);
+    bool demote(bool enabled, Snapshot&);
     void context(const std::wstring& text);
 };
 bool translate(WPARAM key, LPARAM flags, ShanjieKey& result);

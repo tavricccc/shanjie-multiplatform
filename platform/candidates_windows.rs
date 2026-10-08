@@ -3,6 +3,7 @@ impl Engine {
     pub fn set_candidate_anchor(&mut self, right: bool) {
         self.candidate_from_right = right;
         self.cands = None;
+        self.clear_pred();
     }
 
     fn candidate_span(&self, length: usize) -> (usize, usize) {

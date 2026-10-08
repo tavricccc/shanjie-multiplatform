@@ -31,7 +31,7 @@ impl Mapping {
 }
 // Closed set of types with every bit pattern valid, no pointers and no padding.
 pub(crate) trait Scalar: Copy {}
-impl Scalar for u8 {} impl Scalar for u32 {} impl Scalar for u64 {} impl Scalar for f64 {}
+impl Scalar for u8 {} impl Scalar for u16 {} impl Scalar for u32 {} impl Scalar for u64 {} impl Scalar for f64 {}
 pub(crate) enum Array<T: Scalar> {
     Owned(Vec<T>),
     Mapped { owner: Arc<Mapping>, offset: usize, len: usize, marker: PhantomData<T> },

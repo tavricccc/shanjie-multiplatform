@@ -34,9 +34,12 @@ impl Engine {
             base.push_str(&format!("\n{reading} {word} {score}"));
         }
         let lex = Arc::new(Lexicon::parse(&base).map_err(|_| EngineError::LoadFailed)?);
+        let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
+        if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf()); Ok(engine)
     }
-    pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; }
+    pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; self.clear_pred(); }
+    pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
     pub fn candidate_reading(&self) -> String {
         let Some(cands) = &self.cands else { return String::new() };
         let Some((_,length)) = cands.list.get(cands.sel) else { return String::new() };
