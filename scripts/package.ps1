@@ -1,20 +1,24 @@
 #Requires -Version 7
+param([switch]$UseExistingBuild)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
-    & "$PSScriptRoot/build.ps1" -Architecture x64
-    & "$PSScriptRoot/build.ps1" -Architecture x86
+    if (!$UseExistingBuild) {
+        & "$PSScriptRoot/build.ps1" -Architecture x64
+        & "$PSScriptRoot/build.ps1" -Architecture x86
+    }
     $output = Join-Path $root 'dist/package'
     if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
     if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
     New-Item -ItemType Directory -Path $output -Force | Out-Null
-    & "$PSScriptRoot/prepare-models.ps1"
+    if (!$UseExistingBuild) { & "$PSScriptRoot/prepare-models.ps1" }
     foreach ($arch in @('x64','x86')) {
         New-Item -ItemType Directory -Path "$output/$arch" -Force | Out-Null
         Copy-Item "$root/dist/$arch/Shanjie.dll" "$output/$arch" -Force
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
+    Copy-Item "$root/LICENSES/windows-models.md" "$output/LICENSES" -Force
     Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/bootstrap.cmd","$PSScriptRoot/elevate.ps1","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md" $output -Force
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/profile-ini.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
     Copy-Item "$root/profiles" $output -Recurse -Force

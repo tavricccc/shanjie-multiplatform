@@ -6,9 +6,11 @@ THESIS：對照 local-ime-reranker-public 的 Syllune 候選設定，保持緊�
 
 OWN-WORLD：淺色 #F5F6F7／#D8DADD／#24272B；深色 #24272B／#4A4F55／#F5F6F7。依使用者後續指定，反白使用 Windows accent 系列主題色，不採來源的淡青色。
 
-STORY：先完成組字，再用所選開啟鍵進入候選；選字後可顯示聯想，失焦或取消會關閉。
+STORY：先完成組字，再用所選開啟鍵進入轉換候選；未完成讀音的即時預測與選字後的聯想各自開關，Windows 操作預設兩者皆關閉，既有個人設定則保留。開啟聯想後，數字或滑鼠選字才提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取，Enter 提交並關閉；失焦或取消也會關閉。
 
 FIRST VIEWPORT：外框圓角 6 DIP、1 DIP 邊框、內距 8×6 DIP；數字與字詞同列，間距 4 DIP、候選內距 4 DIP。保留直列、橫列與九欄格狀；18 DIP 候選字級仍由個人設定控制。
+
+即時預測沿用同一外框、字體與內距，採橫列。被動狀態不顯示數字或反白，也不預留數字欄；普通數字仍作注音輸入。Tab 進入後才顯示數字及目前選取反白，以數字／Enter 選詞；Windows 的 ↑／↓ 在已進入列中移動，Tab／Shift＋Tab 保留預測列的進退操作，Esc 退出，不會展開九欄格狀。被動／進入外觀證據為 `build/native-review/{x64,x86}/prediction-{1,2}-{passive,entered}.bmp`；來源見 `src/candidate_host.cpp`，操作對照見 `MICROSOFT-IME-DIFFS.md`。背景 capture 不等同前景 App 的實際輸入驗收。
 
 FORM：使用者指定參考，無隨機概念選擇；已核准候選改為 TSF 同程序 Win32 popup，設定保留 WinUI 3。Direct2D software DC render target 與 DirectWrite 繪製，實際 layout metrics 決定欄寬與列高；沒有獨立候選 host 或 IPC。保留 NOACTIVATE，顯示／隱藏、換頁及反白均無動畫。整個 HWND 為客戶區，只繪製單一不透明外框，不保留原生 caption／resize frame；選取圓角 4 DIP。
 

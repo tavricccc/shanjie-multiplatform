@@ -12,7 +12,7 @@
 
 THESIS：設定用 Windows 11 的操作慣例，候選讓位給正在編輯的文件；只有開設定才啟動 WinUI 程式。
 
-OWN-WORLD：Windows accent 與淺／深中性色，繁體中文採 Microsoft JhengHei UI。設定使用 NavigationView、ComboBox、ToggleSwitch、NumberBox、InfoBar；候選由 Direct2D／DirectWrite 繪製，保留既有密度与單框。
+OWN-WORLD：Windows accent 與淺／深中性色，繁體中文採 Microsoft JhengHei UI。設定使用 NavigationView、ComboBox、ToggleSwitch、NumberBox、InfoBar；候選由 Direct2D／DirectWrite 繪製，保留既有密度與單框。
 
 STORY：載入 profile → 修改草稿 → 儲存 → 通知已啟用的善解立即套用。鍵盤配置與操作政策分開；需要換引擎的設定先提交目前組字。候選不取得鍵盤焦點，滑鼠結果經 TSF edit session 提交。
 
@@ -36,7 +36,7 @@ TSF DLL 是 C++，負責 composition、edit session、按鍵與 TSF UI element�
 
 DLL 與 UI 都放在 `versions/<DLL+UI hash>/`；模型仍共用根目錄 `data/`。`ui-path.txt` 指向目前設定程式。更新不覆寫正在使用的 UI 二進位；已開啟 App 的舊 TIP 仍搭配自己的 UI。
 
-個人 profile schema 2 延伸 schema 1 的 INI。個人詞庫保存成內容雜湊命名的不可變檔，先完成詞庫寫入，再原子替換指向它的 INI；失敗不會把半份詞庫當作已保存草稿。既有 `dictionary.tsv` 可直接載入。
+目前個人 profile 為 schema 3。設定窗第一次讀取 schema 1／2 時保留原檔備份，再補上舊版隱含行為；保留既有模型及個別偏好，不自行開啟新預測。命令列與 WinUI 操作預設共用 `profiles/`，完整開關見 `MICROSOFT-IME-DIFFS.md`。個人詞庫保存成內容雜湊命名的不可變檔，先完成詞庫寫入，再原子替換指向它的 INI；失敗不會把半份詞庫當作已保存草稿。既有 `dictionary.tsv` 可直接載入。
 
 WinUI 載入預設保留個人詞庫草稿；命令列套用不含 dictionary 的範本也保留目前詞庫指向。解除安裝取消註冊及刪除 profile.ini，個人詞庫／學習檔保留。
 

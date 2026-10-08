@@ -13,8 +13,9 @@ git submodule update --init
 pwsh -File scripts/package.ps1
 ```
 
-輸出 `dist/Shanjie-Windows.zip`，包含 x64 與 x86 DLL、共用的 x64 WinUI 設定程式，兩者共用模型與詞庫。打包腳本下載上游 model-v1／model-v2，核對官方 SHA-256，再轉成唯讀映射格式；轉換時驗證模型陣列與語言分數一致。
+輸出 `dist/Shanjie-Windows.zip`，包含 x64／x86 DLL、x64 WinUI 設定程式、四版模型及兩份詞類表。v3 必須配 classes-v1，v4 必須配 classes-v2；下載核對六個官方 SHA-256，再驗證模型與詞類陣列、語言分數的映射等價。來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。大型資產採四個並行範圍下載，保留未完成分段；完整檔案通過官方雜湊後才使用。
 `build.ps1` 只編譯，不下載模型；需要完整模型的安裝包請用 `package.ps1`。
+已有完整的 `dist/` 建置與模型時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 只整理文件、安裝檔與 ZIP，略過重建及模型轉換。
 
 ## 安裝與移除
 
@@ -27,7 +28,7 @@ pwsh -File ./install.ps1
 ```
 
 安裝到 `%ProgramFiles%/Shanjie` 並註冊兩個繁體中文 profile。登出再登入後於 Windows 輸入法清單選擇「善解注音（標準）」或「善解注音（倚天）」。不更動系統預設輸入法。
-解除安裝會取消 x64 / x86 TSF profile、category 與 COM 註冊，並刪除 `%ProgramFiles%/Shanjie` 整個目錄及本帳號的 `profile.ini`。DLL 或模型若仍被應用程式使用，會安排在 Windows 重新啟動時刪除，腳本會顯示是否需要重新啟動；不必手動刪除。個人詞庫與學習檔會保留，學習可在設定啟用。解壓下載的安裝包由你自行保留或刪除。
+解除安裝會取消 x64 / x86 TSF profile、category 與 COM 註冊，並刪除 `%ProgramFiles%/Shanjie` 整個目錄、本帳號的 `profile.ini` 及 schema 遷移備份。DLL 或模型若仍被應用程式使用，會安排在 Windows 重新啟動時刪除，腳本會顯示是否需要重新啟動。個人詞庫與學習檔會保留，學習可在設定啟用。解壓下載的安裝包由你自行保留或刪除。
 
 開發 DLL 尚未簽章。正式發佈需簽章與 Windows App 容器相容性驗證。安裝腳本使用對應架構的 regsvr32 分別註冊 x64 與 x86 DLL；目標作業系統為 x64 Windows，ARM64 尚未支援。
 
@@ -41,23 +42,28 @@ pwsh -File ./install.ps1
 | 開啟候選 | ↓，可改成空白或兩者 | 上游 ↓／空白 |
 | 候選範圍 | 從游標右側往右 | 以游標左側結尾 |
 | 候選移動 | ↑／↓；→／Tab 展開格狀列表 | 上游 ←／→；↓ 展開 |
-| 選字 | 數字或 Enter | 上游數字或 Enter |
+| 選字 | 數字確認；Enter 確認並提交，可獨立關閉提交 | 數字／Enter 確認後繼續組字 |
 | 單按 Shift | 中英切換 | 保留上游行為 |
-| Ctrl＋空白 | 中英切換 | 可在設定窗啟用 |
+| Ctrl＋空白 | 預設關閉，保留 App 快捷鍵；可啟用 | 預設關閉；可啟用 |
 | Shift＋空白 | 全半形切換（英文 ASCII 輸出） | 保留上游行為 |
-| Ctrl＋標點 | 對應全形標點 | 保留上游行為 |
+| Ctrl＋標點 | 對應全形標點 | 預設關閉；Ctrl＋反斜線為原有頓號操作 |
+| 即時讀音預測 | 關閉 | 開啟；Tab 進入、Shift＋Tab 退出 |
+| 選字後聯想 | 關閉 | 關閉；可另行啟用 |
+| Shift／直接標點、單獨聲調 | 關閉 | 保留上游操作 |
 
 個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`。設定窗儲存或套用 profile 會通知已啟用的善解立即更新；直接編輯 INI 會在下一次按鍵讀取。切換鍵盤、詞庫、排名、學習或候選核心設定時會先提交目前組字，再重建引擎；單純調整外觀與開啟鍵不需重建。也可以編輯 INI 或套用自己的檔案：
 
-「一般 → 語言模型」可選 model-v1 或 model-v2，兩版都隨安裝包提供且離線運作。儲存後先提交目前組字，再載入所選模型；既有設定未指定模型時使用 v1。INI 對應 `[engine] model=1|2`，切換操作 profile 不更改模型選擇。來源與官方 SHA-256 見 `MODEL-SOURCES.json`；選取的模型缺失或損壞會載入失敗，不自動換成另一版。
+「一般 → 語言模型」可選 v1／v2／v3＋classes-v1／v4＋classes-v2，皆離線運作。新安裝預設 v4；舊設定保留原選擇，舊 schema 未指定模型則保留 v1。INI 對應 `[engine] model=1|2|3|4`。切換操作預設保留模型、詞句偏好、鍵盤、個人詞庫、學習與外觀；指定模型或配對詞類表缺少／損壞會載入失敗，不改用其他版本。
 
-「詞庫與學習 → 預測尚未輸入的後續詞」可關閉聯想預測，保留已輸入讀音的正常候選。Windows 操作下，Enter 選定最後候選即提交組字並關窗；數字或滑鼠選字仍可在開關開啟時顯示聯想。
+「預測、詞庫與學習」分開提供即時讀音預測、選字後聯想、前文、敏感詞降權與學習。Windows 預設兩種預測皆關閉；儲存後立即清掉停用的預測列，不影響正常選字。「按鍵、組字與提交、選字與外觀」提供 Enter、↑、Tab、→、Backspace、Esc、空白、符號鍵盤與額外標點等個別選項，完整索引與判斷依據見 [MICROSOFT-IME-DIFFS.md](MICROSOFT-IME-DIFFS.md)。
+
+設定窗第一次讀取 schema 1／2 時，保留 `profile.ini.schemaN.bak`，將原設定與當時隱含的行為遷移成 schema 3；不因升版開啟預測。重新載入會捨棄未儲存草稿；取消關閉設定窗。命令列預設與 WinUI 使用同一份 `profiles/*.ini`。
 
 ```powershell
 pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini
 ```
 
-`[profile] interaction` 可填 `windows` 或 `shanjie`；`[candidates] layout` 可填 `vertical`、`horizontal` 或 `grid`，`anchor` 可填 `right`／`left`，`open` 可填 `down`／`space`／`both`。`[shortcuts]` 使用 `1`／`0`。`[engine] ranking` 可填 `chat` 或 `formal`。完整維護說明見 [上游差異紀錄](UPSTREAM-CHANGES.md)。
+`[profile] interaction` 選擇方向鍵政策，個別開關獨立保存。`[candidates] layout=vertical|horizontal|grid`、`anchor=right|left`、`open=down|space|both`；`[input] escape=staged|clear|ignore`；布林開關填 `1`／`0`，`[engine] ranking=chat|formal`。完整範本位於 `profiles/`，核心覆蓋與更新流程見 [上游差異紀錄](UPSTREAM-CHANGES.md)。
 
 安裝會呼叫 Windows `InstallLayoutOrTip` 套用目前工作階段的輸入法清單，不重寫整份語言設定。DLL 放在 `versions/<DLL+UI hash>/`，兩架構共用根目錄的詞庫與模型；更新後已開啟的程式可能仍使用舊 DLL，需重新開啟。解除安裝會清除所有版本及本帳號的 `profile.ini`。
 

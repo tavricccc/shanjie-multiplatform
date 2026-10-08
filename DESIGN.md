@@ -91,13 +91,15 @@ components:
 
 ## Components
 
-NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用草稿。ComboBox、ToggleSwitch、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選由同程序 Win32 popup 直接繪製，每格共用 frontmatter 內距，沒有 XAML item container 疊加留白。
+NavigationView 的「一般」、「按鍵」、「組字與提交」、「選字與外觀」、「預測、詞庫與學習」、「關於與相容性」共六頁共用草稿。開關共用 `SettingToggle`，保留同列左標籤、右原生 ToggleSwitch 與可換行的次要說明；ComboBox、NumberBox、TextBox 與固定按鈕對應真實設定。InfoBar 展示儲存與格式錯誤；清除學習採 ContentDialog。候選由同程序 Win32 popup 直接繪製，每格共用 frontmatter 內距，沒有 XAML item container 疊加留白。
 
-一般頁的「語言模型」沿用全寬原生 ComboBox，提供 `model-v1（原版）` 與 `model-v2（上游新版）`，預設 v1，不自動改用另一版。其下以可換行的次要文字說明兩版均在本機、儲存後先提交目前組字再切換，以及保留個人詞庫與選字學習；模型來源與 hash 以 `MODEL-SOURCES.json` 為準。變更仍在共用草稿內，按儲存才套用。
+一般頁的「語言模型」沿用全寬原生 ComboBox，提供 `model-v1（原始模型）`、`model-v2（簡繁整理）`、`model-v3＋classes-v1（臺灣常用字形）` 與 `model-v4＋classes-v2（最新）`。新安裝預設 v4；v1／v2 明確不使用詞類表，v3／v4 使用固定配對，不提供任意配表或單獨停用詞類表的控制項。其下以可換行的次要文字說明所選模型及配表、所有模型均在本機、儲存後先提交目前組字再切換，以及保留個人詞庫與選字學習；模型來源與 hash 以 `MODEL-SOURCES.json` 為準。變更仍在共用草稿內，按儲存才套用。
 
-詞庫與學習頁保留聯想開關，名稱及 AutomationProperties.Name 都為「預測尚未輸入的後續詞」，沿用左標籤、右原生 ToggleSwitch。次要文字明確區分關閉時只顯示已輸入讀音的候選字、開啟時數字或滑鼠選字後提示聯想詞；聯想可用 Shift＋數字或滑鼠選取，Enter 提交並關閉候選。學習偏好開關、清除學習與個人詞庫輸入維持原有原生控制項。
+預測、詞庫與學習頁提供「未完成讀音的即時預測」與「選字後的聯想詞」兩個獨立開關，AutomationProperties.Name 沿用各自標籤。即時預測的次要文字說明第一個注音鍵可提示完整詞，Tab 進入後以數字／Enter 選詞，Shift＋Tab 或 Esc 退出；聯想說明數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取，Enter 提交並關閉候選。Windows 操作預設兩種預測皆關閉；這是使用者指定，微軟公開操作的對照與差異見 `MICROSOFT-IME-DIFFS.md`。前文、敏感詞降權、學習偏好、忘記目前候選學習、清除學習與個人詞庫輸入維持原生控制項。
 
-候選外框使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`。顯示、隱藏與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；滑鼠選字帶入 sequence 供 TSF 核對。反白與高對比契約以 `src/candidate_palette.cpp` 為準，視窗、量測、每格裁切、繪製與定位以 `src/candidate_host.h`／`.cpp` 為準。這是原生桌面元件，sidecar 記錄資源與行為，不提供 HTML/CSS 模擬。
+設定保存採 schema 3。既有 schema 1／2 設定先備份再遷移，保留已存的模型、聯想、詞庫、學習與外觀，新即時預測不自行開啟；載入 Windows 操作預設才依新預設關閉兩種預測。操作預設在共用草稿內只調整按鍵、候選與預測，模型、詞句偏好、詞庫、學習與外觀保留，按儲存後通知已啟用實例。
+
+候選外框使用 `candidate-surface-light`／`candidate-surface-dark`；每個數字與字詞列共用 `candidate-item`。即時預測採橫列，被動狀態不顯示數字與反白，也不預留數字欄；Tab 進入後才顯示數字與目前選取反白。顯示、隱藏與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；滑鼠選字帶入 sequence 供 TSF 核對。反白與高對比契約以 `src/candidate_palette.cpp` 為準，視窗、量測、每格裁切、繪製與定位以 `src/candidate_host.h`／`.cpp` 為準。這是原生桌面元件，sidecar 記錄資源與行為，不提供 HTML/CSS 模擬。
 
 工作列模式按鈕保留使用者指定參考專案的 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示改由 GDI+ 依 `assets/mode/chinese.svg`／`english.svg` 的 24×24 幾何，在目標像素尺寸即時繪製彩色「中」／「A」，不縮放 ICO。兩份 SVG 同樣來自 `local-ime-reranker-public/rime/icons`，原始 MIT 授權保留於 `assets/mode/LICENSE`。`WS_EX_LAYERED` 以 `UpdateLayeredWindow` 呈現 32-bit premultiplied alpha，移除 `COLOR_WINDOW` 白底與外圈留白；只保留圖示本身的 SVG 幾何。行為見 `src/mode_button.cpp` 與 `src/mode_indicator.cpp`；提示位於同一 TSF 程序，沒有額外 host，仍保留 NOACTIVATE。
 
@@ -119,3 +121,5 @@ NavigationView 的一般、按鍵、選字、詞庫與學習、關於頁共用�
 本次彩色 emoji 與透明模式提示修正的證據為 `build/native-review/{x64,x86}/candidates-{1,2}-emoji.bmp` 與 `build/mode-review/{chinese,english}-{96,120,144,192}.bmp`。模式 BMP 保留 alpha，96／120／144／192 DPI 圖片證明指定 DPI 的背景繪製結果，不等同實際多螢幕操作驗收；本次獨立 finish reviewer disposition 為 ship：確認 😀／👍🏽／👩‍💻／❤️ 與混排以彩色呈現，四種指定 DPI 的中／A 清楚，alpha 透明且白框已移除；旗幟 TW 仍屬字型限制，前景應用程式與實際桌面尚未驗收。前述已完成的窄工作區修正 verdict 維持原樣。
 
 後續模型與聯想設定的外觀證據為 `build/ui-review-final/settings-1-models.png`／`settings-2-models.png` 與 `settings-1-3.png`／`settings-2-3.png`，分別呈現淺／深色的一般頁模型控制項與詞庫學習開關。圖片為背景 XAML render；文案與資料繫結另核對 `ui/MainWindow.xaml`、同名 `.xaml.cs` 與 `ui/ViewModels/SettingsViewModel.cs`。此輪沿用既有設定控制項，候選 tokens、外觀與內距維持原樣；背景證據不等同前景應用程式中的實際提交與模型切換驗收。
+
+2026-10-08 模型固定配表與操作設定擴充的證據為 `build/ui-review-final/settings-{1,2}-{0..5}.png` 及 `settings-{1,2}-{advanced-keys,candidate-keys,appearance,dictionary,error}.png`，涵蓋淺／深色六頁、捲動分組、個人詞庫與錯誤回饋；即時預測被動／進入狀態為 `build/native-review/{x64,x86}/prediction-{1,2}-{passive,entered}.bmp`。前者是離屏 XAML render，後者是背景原生 HWND capture，沒有新增 shipping raster 素材，既有 provenance 維持原樣；原生 Windows 介面不跑 HTML/CSS detector。本輪 fresh finish review 初次 disposition 為 fix；Caps Lock 開關在重擷取圖中清楚可見，實際 ToggleSwitch 的 on/off 繫結亦通過檢查；深色詞庫頁的導覽殘留由驗證器先 render 一幀、等待原生轉場靜定後擷取解決，設定控制項動畫未改。限定修正複核為 Verdict Pass、remaining clear、disposition ship，僅涵蓋這兩項 fix list，不代表全面日常驗收。實際前景 App、新安裝、高對比、讀屏與多螢幕尚未驗收，這輪未安裝。

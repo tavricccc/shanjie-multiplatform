@@ -1,12 +1,25 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-07。上游版本：0.2.1；pin：`d1f32dac0b5dcea1c3a727c400ed748747021516`。
+最新日期：2026-10-08。上游 pin：`1c16dffa6be9f8900d9df9819343885b90427c01`（model-v4／classes-v2 tag 指向的核心快照；不是已發佈的 v0.3.0 App）。下方 10 月 7 日與 6 日紀錄是歷史證據，不表示本輪已安裝。
+
+## 2026-10-08 四版模型、配對詞類與 schema 3
+
+- 六份原始 Release 附件 SHA-256 與 `MODEL-SOURCES.json` 一致；v1／v2 的九個模型陣列、v3／v4 的九個模型及三個詞類陣列，連同標量與代表性語言分數的映射等價核對通過。缺少詞類表或將 classes-v1 配給 v4 時明確拒絕，放回正確配表才成功。沒有舊模型 fallback。
+- 上游與平台核心回歸 **185 個通過**：lib 41、engine 32、demote 6、learning 45、lm 16、prediction 43、replay 2；標準／倚天各回放 302 句。demote 的 1 項與 prediction 的 4 項 upstream ignored 量測未執行；global_eps_table 仍排除，Unix 權限與 macOS 效能排除沿用既有界線。降權測試的 Unix symlink fixture 在建置測試副本改為 copy，保留行為測試。子模組追蹤檔案未改。
+- 最新 x64／x86 Rust release core 與 TSF DLL、self-contained x64 WinUI 設定程式建置通過。x64 Windows／Shanjie 背景 TSF harness 通過，包含 v3／v4 重載、即時預測與聯想開關、Enter 提交選項、空白政策、未轉換拼音在重建／失焦時保留。harness 仍以 ThreadProxy 代理 keyboard-sink 註冊，未替代實際 edit session 或 composition。
+- x64 interaction harness 通過四版模型、詞類錯配、被動／進入預測、即時停用、Big5、Ctrl 標點、額外標點／聲調開關、重複 ↑ 循環保持游標、拼音單空白、符號鍵盤等必要檢查。測試使用隔離個人資料；沒有修改使用者 profile、詞庫或學習。
+- x64／x86 原生候選 harness 通過 passive／entered 預測、滑鼠 sequence、NOACTIVATE、過期 frame、隱藏／重開與單框。滑鼠 fixture 改用實際 client 尺寸取得命中點，通過目前 192 DPI 環境；這不是多螢幕 DPI 驗收。預測 BMP 在 `build/native-review/{x64,x86}/prediction-{1,2}-{passive,entered}.bmp`。
+- WinUI 離屏檢查通過 schema 2 備份／保留模型、學習與外觀、Windows／Shanjie 預設、四版模型保存／重讀，以及實際即時預測／Caps Lock ToggleSwitch 雙向更新共用草稿。淺／深兩種主題擷取六頁頂端、額外按鍵、候選政策、外觀、詞庫及錯誤回饋；證據在 `build/ui-review-final/`。命令列 profile 保留偏好的隔離檢查與 PowerShell 7 腳本解析通過。
+- `download-asset.ps1` 的實際 classes-v2 範圍下載完成，組合後 SHA-256 與官方值一致；模型轉換另外核對六份快取原檔。模型與詞類授權補充在包內 `LICENSES/windows-models.md`。
+- 獨立 impeccable reviewer 核對 22 張設定 PNG 與 8 張兩架構預測 BMP；初輪其他視覺項為 match，要求確認 Caps Lock 開關及深色詞庫的導覽殘留。複查相同三張畫面確認開關可見、殘留消失，兩項均 resolved，disposition 為 **ship，限定該兩項 fix list**。擷取先 render 一幀再等待原生 transition 靜定，未變更使用者的控制項動畫或外觀。
+
+Windows 新安裝預設 v4，兩種預測皆關閉；schema 1／2 保留現有個別選項與未指定模型時的 v1，設定窗讀取時備份原檔再遷移。完整操作／設定索引在 `MICROSOFT-IME-DIFFS.md`。這些結果是背景整合與離屏驗證；本輪沒有系統安裝、前景 App 操作、讀屏、高對比或實際多螢幕驗收，也未重開先前已停止的 Shift 日常除錯。
 
 ## 2026-10-07 WinUI 3 版本
 
 後續 emoji／中英提示修正：候選 DrawTextLayout 啟用 Windows 彩色字型；x64／x86 淺深 captures 包含表情、膚色、ZWJ、愛心與中英混合內容。Windows 原生 emoji 字型目前將臺灣旗幟顯示為 TW，沒有宣稱所有旗幟圖樣可用。游標提示移除白色底板與外圈留白，改成 28 DIP 透明 layered window；依原 SVG 幾何以 GDI+ 在實際 monitor DPI 繪製，工作列仍使用 ICO。96／120／144／192 DPI 兩種圖示 capture 保留 alpha，角落透明像素與 NOACTIVATE／自動隱藏檢查通過。新畫面尚未安裝後日常驗收。
 
-此輪 x64／x86 建置、原生候選／模式提示 harness 及背景 TSF 回歸通過。獨立 impeccable reviewer 的 disposition 為 ship，範圍限於彩色 emoji 與透明矢量提示的背景 captures／来源，未包含真實桌面合成、多螢幕或更新後前景日常操作。
+此輪 x64／x86 建置、原生候選／模式提示 harness 及背景 TSF 回歸通過。獨立 impeccable reviewer 的 disposition 為 ship，範圍限於彩色 emoji 與透明矢量提示的背景 captures／來源，未包含真實桌面合成、多螢幕或更新後前景日常操作。
 
 最新架構：依使用者確認，候選改為 DLL 內 Win32／Direct2D software DC／DirectWrite；WinUI 只保留設定頁。移除匿名 mapping/event、候選 IPC、XAML 候選與其 interop，啟用時建立隱藏原生視窗。保持原密度、系統 AccentDark1／AccentLight2、字體、字級與三排列；受限工作區逐格裁切，不會畫入下一個候選。彩色中／A ICO 嵌入兩架構 DLL，來源見 `assets/mode/README.md`；游標旁提示不搶焦點，1400 ms、開始打字或失去焦點後隱藏。
 
