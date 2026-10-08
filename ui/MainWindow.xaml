@@ -51,7 +51,7 @@
                     </StackPanel>
                     <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <controls:SettingToggle Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
+                        <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="候選或已進入的預測列仍先關閉／退出，不會因這個選項立即刪除整句。"/>

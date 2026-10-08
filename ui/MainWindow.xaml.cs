@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
+    internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAdvancedKeys() { ShowSection(1); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }

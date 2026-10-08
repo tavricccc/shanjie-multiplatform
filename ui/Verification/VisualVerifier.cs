@@ -11,6 +11,8 @@ internal static class VisualVerifier
     {
         element.UpdateLayout();
         var bitmap = new RenderTargetBitmap(); await bitmap.RenderAsync(element);
+        // An offscreen window needs a rendered frame before its native navigation transition settles.
+        await Task.Delay(600); await bitmap.RenderAsync(element);
         var pixels = await bitmap.GetPixelsAsync();
         using var stream = new InMemoryRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
@@ -40,6 +42,10 @@ internal static class VisualVerifier
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);
         if (settings.Vm.Prediction) throw new InvalidDataException("Native toggle off did not update the shared draft");
+        settings.ShowSection(2); settings.SetCapsLockForVerification(false); await Task.Delay(60);
+        if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
+        settings.SetCapsLockForVerification(true); await Task.Delay(60);
+        if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
         settings.Vm.Ranking = 0; settings.Vm.Learning = false; settings.Vm.FontSize = 18; settings.Vm.DictionaryText = "";
         settings.LoadProfile(true); settings.SaveDraft();
         foreach (int theme in new[] { 1, 2 })
