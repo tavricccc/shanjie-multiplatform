@@ -1,5 +1,5 @@
 @echo off
 setlocal
-call "%~dp0bootstrap.cmd" apply "%~dp0profiles\shanjie.ini"
+"%~dp0tools\shanjie-manager.exe" apply-profile "%~dp0profiles\shanjie.ini"
 if errorlevel 1 echo Profile application failed.
 pause

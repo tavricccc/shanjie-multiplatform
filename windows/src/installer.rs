@@ -18,12 +18,7 @@ use windows::{
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
 const TIPS:&str="0x0404:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}{AC59A613-F813-4DAD-BA97-D221A87A6ACE};0x0404:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}{338145B4-047A-4564-A0DE-223DC22C1AE1}";
 pub fn install_root() -> PathBuf {
-    PathBuf::from(
-        std::env::var_os("ProgramW6432")
-            .or_else(|| std::env::var_os("ProgramFiles"))
-            .expect("Program Files"),
-    )
-    .join("Shanjie")
+    PathBuf::from(std::env::var_os("ProgramFiles").expect("Program Files")).join("Shanjie")
 }
 fn safe_tree(root: &Path) -> Result<()> {
     if root.exists() && fs::symlink_metadata(root)?.file_attributes() & 0x400 != 0 {
@@ -86,9 +81,20 @@ fn files(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(out.into_iter().filter(|p| p.is_file()).collect())
 }
 fn digest(path: &Path) -> Result<String> {
-    Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
+    use std::io::Read;
+    let mut file = fs::File::open(path)?;
+    let mut hash = Sha256::new();
+    let mut block = [0u8; 65536];
+    loop {
+        let read = file.read(&mut block)?;
+        if read == 0 {
+            break;
+        }
+        hash.update(&block[..read]);
+    }
+    Ok(format!("{:x}", hash.finalize()))
 }
-fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
+pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     let mut listed = Vec::new();
     for line in fs::read_to_string(package.join("SHA256SUMS.txt"))?.lines() {
         let (hash, name) = line.split_once("  ").ok_or("校驗清單格式有誤。")?;
@@ -180,7 +186,7 @@ fn registry_dll(view: REG_SAM_FLAGS) -> Result<Option<PathBuf>> {
         )?)))
     }
 }
-fn profiles(remove: bool) -> Result<()> {
+pub fn profiles(remove: bool) -> Result<()> {
     unsafe {
         use windows::{
             core::PCSTR,
@@ -204,9 +210,76 @@ fn profiles(remove: bool) -> Result<()> {
 struct Installed {
     version: String,
 }
+const APP_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Shanjie";
+unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
+    let mut key = HKEY::default();
+    RegCreateKeyExW(
+        HKEY_LOCAL_MACHINE,
+        PCWSTR(wide(APP_KEY).as_ptr()),
+        Some(0),
+        None,
+        REG_OPTION_NON_VOLATILE,
+        KEY_ALL_ACCESS | KEY_WOW64_64KEY,
+        None,
+        &mut key,
+        None,
+    )
+    .ok()?;
+    let result = (|| -> Result<()> {
+        for (name, value) in [
+            ("DisplayName", "善解 Windows".to_owned()),
+            ("DisplayVersion", env!("CARGO_PKG_VERSION").to_owned()),
+            ("InstallLocation", target.to_string_lossy().into_owned()),
+            (
+                "DisplayIcon",
+                binaries
+                    .join("ui/Assets/AppIcon.ico")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            (
+                "UninstallString",
+                format!(
+                    "\"{}\" --elevate uninstall",
+                    binaries.join("tools/shanjie-manager.exe").display()
+                ),
+            ),
+        ] {
+            let value = wide(&value);
+            RegSetValueExW(
+                key,
+                PCWSTR(wide(name).as_ptr()),
+                Some(0),
+                REG_SZ,
+                Some(std::slice::from_raw_parts(
+                    value.as_ptr().cast(),
+                    value.len() * 2,
+                )),
+            )
+            .ok()?;
+        }
+        for name in ["NoModify", "NoRepair"] {
+            RegSetValueExW(
+                key,
+                PCWSTR(wide(name).as_ptr()),
+                Some(0),
+                REG_DWORD,
+                Some(&1u32.to_le_bytes()),
+            )
+            .ok()?;
+        }
+        Ok(())
+    })();
+    RegCloseKey(key).ok()?;
+    result
+}
 pub fn install(package: &Path, target: &Path) -> Result<usize> {
+    if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
+        return Err("請以系統管理員身分安裝善解。".into());
+    }
     let entries = verified_package(package)?;
     safe_tree(target)?;
+    safe_tree(&target.join("versions"))?;
     fs::create_dir_all(target)?;
     // A fresh directory prevents old PendingFileRenameOperations from deleting a later reinstall.
     let stamp = std::time::SystemTime::now()
@@ -227,18 +300,51 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
         .into_iter()
         .map(|(arch, view)| Ok((arch, registry_dll(view)?)))
         .collect::<Result<_>>()?;
-    for arch in ["x64", "x86"] {
-        if let Err(error) = regsvr(&binaries.join(arch).join("Shanjie.dll"), arch, false) {
-            for (arch, path) in &previous {
-                if let Some(path) = path {
-                    regsvr(path, arch, false)?;
-                }
-            }
-            let _ = remove_tree(&binaries);
-            return Err(error);
+    for (_, path) in &previous {
+        if path.as_ref().is_some_and(|p| !p.starts_with(target)) {
+            return Err("既有善解 DLL 路徑超出安裝目錄。".into());
         }
     }
-    profiles(false)?;
+    let mut registered = Vec::new();
+    let registration = (|| -> Result<()> {
+        for arch in ["x64", "x86"] {
+            let dll = binaries.join(arch).join("Shanjie.dll");
+            regsvr(&dll, arch, false)?;
+            registered.push(arch);
+            let view = if arch == "x64" {
+                KEY_WOW64_64KEY
+            } else {
+                KEY_WOW64_32KEY
+            };
+            if registry_dll(view)?.as_ref() != Some(&dll) {
+                return Err(format!("TSF {arch} 註冊路徑校驗失敗。").into());
+            }
+            if digest(&dll)? != digest(&package.join(arch).join("Shanjie.dll"))? {
+                return Err("已註冊 DLL 校驗失敗。".into());
+            }
+        }
+        profiles(false)
+    })();
+    if let Err(error) = registration {
+        let mut failures = Vec::new();
+        for (arch, path) in &previous {
+            let result = if let Some(path) = path {
+                regsvr(path, arch, false)
+            } else if registered.contains(arch) {
+                regsvr(&binaries.join(arch).join("Shanjie.dll"), arch, true)
+            } else {
+                Ok(())
+            };
+            if let Err(error) = result {
+                failures.push(error.to_string());
+            }
+        }
+        if failures.is_empty() {
+            remove_tree(&binaries)?;
+            return Err(error);
+        }
+        return Err(format!("{error}；回復註冊未完成：{}", failures.join("；")).into());
+    }
     fs::write(
         target.join("ui-path.txt"),
         format!("versions\\{version}\\ui\\Shanjie.UI.exe"),
@@ -255,6 +361,9 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
     )?;
     for launcher in ["settings.cmd", "uninstall.cmd"] {
         fs::copy(package.join(launcher), target.join(launcher))?;
+    }
+    unsafe {
+        app_entry(target, &binaries)?;
     }
     // Sweep the entire retired payload, including old shared data, scripts and WinUI hosts.
     let mut pending = 0;
@@ -282,6 +391,16 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
     let profile = crate::profile::path();
     if profile.exists() {
         crate::profile::load(&profile)?;
+        for retired in [
+            "profile.ini.schema1.bak",
+            "profile.ini.schema2.bak",
+            "profile.ini.before-model-v4.bak",
+        ] {
+            let path = profile.parent().unwrap().join(retired);
+            if path.exists() {
+                fs::remove_file(path)?;
+            }
+        }
     }
     Ok(pending)
 }
@@ -306,7 +425,7 @@ fn delete_key(root: HKEY, name: &str, view: REG_SAM_FLAGS) -> Result<()> {
             root,
             PCWSTR(wide(name).as_ptr()),
             Some(0),
-            KEY_WRITE | view,
+            KEY_ALL_ACCESS | view,
             &mut h,
         );
         if status == ERROR_FILE_NOT_FOUND {
@@ -323,12 +442,99 @@ fn delete_key(root: HKEY, name: &str, view: REG_SAM_FLAGS) -> Result<()> {
         Ok(())
     }
 }
+unsafe fn remove_user_profiles() -> Result<()> {
+    use windows::core::PWSTR;
+    let mut root = HKEY::default();
+    let status = RegOpenKeyExW(
+        HKEY_CURRENT_USER,
+        w!("Control Panel\\International\\User Profile"),
+        Some(0),
+        KEY_READ,
+        &mut root,
+    );
+    if status == ERROR_FILE_NOT_FOUND {
+        return Ok(());
+    }
+    status.ok()?;
+    let result = (|| -> Result<()> {
+        let mut index = 0;
+        loop {
+            let mut language = [0u16; 256];
+            let mut length = language.len() as u32;
+            let status = RegEnumKeyExW(
+                root,
+                index,
+                Some(PWSTR(language.as_mut_ptr())),
+                &mut length,
+                None,
+                None,
+                None,
+                None,
+            );
+            if status == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            status.ok()?;
+            index += 1;
+            let mut key = HKEY::default();
+            RegOpenKeyExW(
+                root,
+                PCWSTR(language.as_ptr()),
+                Some(0),
+                KEY_QUERY_VALUE | KEY_SET_VALUE,
+                &mut key,
+            )
+            .ok()?;
+            let result = (|| -> Result<()> {
+                let mut index = 0;
+                loop {
+                    let mut name = [0u16; 16384];
+                    let mut length = name.len() as u32;
+                    let status = RegEnumValueW(
+                        key,
+                        index,
+                        Some(PWSTR(name.as_mut_ptr())),
+                        &mut length,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
+                    if status == ERROR_NO_MORE_ITEMS {
+                        break;
+                    }
+                    status.ok()?;
+                    if String::from_utf16(&name[..length as usize])?
+                        .to_ascii_uppercase()
+                        .contains(&format!(":{SERVICE}"))
+                    {
+                        RegDeleteValueW(key, PCWSTR(name.as_ptr())).ok()?;
+                    } else {
+                        index += 1;
+                    }
+                }
+                Ok(())
+            })();
+            RegCloseKey(key).ok()?;
+            result?;
+        }
+        Ok(())
+    })();
+    RegCloseKey(root).ok()?;
+    result
+}
 pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
+    if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
+        return Err("請以系統管理員身分解除安裝善解。".into());
+    }
     let Some(delete) = choose_data(policy) else {
         return Ok(None);
     };
     safe_tree(target)?;
     profiles(true)?;
+    unsafe {
+        remove_user_profiles()?;
+    }
     for (arch, view) in [("x64", KEY_WOW64_64KEY), ("x86", KEY_WOW64_32KEY)] {
         if let Some(dll) = registry_dll(view)? {
             if !dll.starts_with(target) {
@@ -343,6 +549,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
             &format!("SOFTWARE\\Classes\\CLSID\\{SERVICE}"),
             view,
         )?;
+        delete_key(HKEY_LOCAL_MACHINE, APP_KEY, view)?;
         delete_key(
             HKEY_LOCAL_MACHINE,
             &format!("SOFTWARE\\Microsoft\\CTF\\TIP\\{SERVICE}"),
@@ -364,7 +571,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
             GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT,
             GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
         ] {
-            categories.UnregisterCategory(&id, &category, &id)?;
+            let _ = categories.UnregisterCategory(&id, &category, &id);
         }
         if initialized.is_ok() {
             CoUninitialize();
@@ -395,7 +602,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
 mod tests {
     use super::*;
     #[test]
-    fn cleanup_removes_retired_nested_payload_and_rejects_junction() {
+    fn cleanup_removes_retired_nested_payload() {
         let root = std::env::temp_dir().join(format!("shanjie-cleanup-{}", std::process::id()));
         fs::create_dir_all(root.join("old/data/models/model-v1")).unwrap();
         fs::write(root.join("old/data/models/model-v1/model"), b"old").unwrap();
