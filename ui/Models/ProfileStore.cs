@@ -22,6 +22,8 @@ public static class ProfileStore
         legacy.Set("candidates", "layout", "vertical"); legacy.Set("candidates", "anchor", "right"); legacy.Set("candidates", "open", "down");
         foreach (string key in new[] { "shift_punctuation", "plain_punctuation", "standalone_tones" }) legacy.Set("input", key, true);
         legacy.Set("input", "pinyin_space_converts", false); legacy.Set("shortcuts", "symbol_keyboard", true);
+        legacy.Set("input", "caps_lock_english", windows); legacy.Set("input", "learning", false);
+        legacy.Set("input", "space_after_commit", true); legacy.Set("shortcuts", "backquote_symbols", windows);
         legacy.Set("input", "escape", profile.Flag("input", "escape_clears", true) ? "staged" : "ignore");
         profile.FillMissing(legacy); profile.Set("profile", "schema", 3);
         profile.Remove("input", "escape_clears"); profile.Remove("candidates", "reading");

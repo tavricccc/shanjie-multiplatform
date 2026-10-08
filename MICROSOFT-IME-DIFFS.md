@@ -4,6 +4,8 @@
 
 Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即時讀音預測與選字後聯想都關閉**，善解的額外標點／聲調操作亦關閉。微軟也有可開關的聯想功能，這裡關閉是使用者指定，沒有把它寫成微軟的出廠值。候選順序、詞句解碼與學習仍屬於善解；沒有宣稱重製微軟私有引擎。
 
+同日後續依使用者要求，將目前已儲存的個別設定設為 Windows 預設；下表已同步更新 Caps Lock、學習、空白提交、拼音空白與反引號標點。這些是使用者選定的值，不把它們描述成微軟的出廠值。
+
 ## 模型與資料配對
 
 | 模型 | 配對詞類表 | 差異與選擇 |
@@ -25,7 +27,7 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 | --- | --- | --- |
 | 未完成注音＋空白 | 完成第一聲，不開候選 | 相同；不受開候選鍵／提交後空白選項影響 |
 | 完整組字＋↓ | 開轉換候選 | 同樣可開；`candidates.open` 可只選空白 |
-| 完整組字＋空白 | 提交組字並讓 App 輸入空白 | 預設開候選；`open` 與 `input.space_after_commit` 可分別調整 |
+| 完整組字＋空白 | 提交組字，不再額外輸入空白 | 預設開候選；`open` 與 `input.space_after_commit` 可分別調整 |
 | 未開候選＋↑ | 在目前字詞的候選中循環，保持游標，不開窗 | 預設不換字；`up_cycles` 可獨立開啟 |
 | 候選中 ↑／↓ | 橫列與直列皆前後選字 | 原有 ←／→；`profile.interaction` 選擇政策 |
 | 候選中 Tab／→ | 展開九欄格狀 | 原有 ↓ 展開、→ 移動；`tab_expands`、`right_expands` 各自控制 |
@@ -58,17 +60,17 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `input.chinese` | 一般：預設中文／英文 | 1／1；保留 |
 | `input.full_width` | 一般：預設全／半形 | 0／0；保留 |
 | `input.keyboard` | 跟隨 TSF profile／標準／倚天／漢語／臺灣拼音 | 0／0；保留 |
-| `input.caps_lock_english` | Caps Lock 暫時輸入英文；關閉時仍輸入注音 | 1／0 |
+| `input.caps_lock_english` | Caps Lock 暫時輸入英文；關閉時仍輸入注音 | 0／0 |
 | `input.alphanumeric` | 無法轉換的序列輸出實際英數 | 1／0 |
 | `input.escape` | 未開轉換候選時 staged／clear／ignore | staged／staged |
-| `input.space_after_commit` | 提交完整組字後是否再交給 App 輸入空白 | 1／1 |
-| `input.pinyin_space_converts` | 拼音按一次空白轉換；關閉為分隔／雙空白 | 1／0 |
+| `input.space_after_commit` | 提交完整組字後是否再交給 App 輸入空白 | 0／1 |
+| `input.pinyin_space_converts` | 拼音按一次空白轉換；關閉為分隔／雙空白 | 0／0 |
 | `input.standalone_tones` | 沒有組字時，聲調鍵輸入聲調符號 | 0／1 |
 | `input.shift_punctuation` | 善解式 Shift＋符號直接中文標點 | 0／1 |
 | `input.plain_punctuation` | 非注音的括號等鍵直接中文標點 | 0／1 |
 | `input.context` | 使用少量游標前文作為本機選字及學習前文 | 1／1；保留 |
 | `input.associations` | 數字／滑鼠選字後的後續詞聯想 | 0／0 |
-| `input.learning` | 學習明確選字並在提交時記錄 | 0／0；保留 |
+| `input.learning` | 學習明確選字並在提交時記錄 | 1／0；保留 |
 | `input.dictionary` | 設定頁編輯、原子保存的個人詞庫 | 保留內容／路徑 |
 | `candidates.open` | 完整組字後 down／space／both | down／both |
 | `candidates.anchor` | 游標右側／左側候選範圍 | right／left |
@@ -87,7 +89,7 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `shortcuts.ctrl_space_toggle` | 額外 Ctrl＋空白中英切換 | 0／0；保留 App 補全 |
 | `shortcuts.shift_space_toggle` | Shift＋空白全半形 | 1／0 |
 | `shortcuts.ctrl_punctuation` | Ctrl／Ctrl＋Shift 標點 | 1／0 |
-| `shortcuts.backquote_symbols` | 反引號＋標點 | 1／0 |
+| `shortcuts.backquote_symbols` | 反引號＋標點 | 0／0 |
 | `shortcuts.code_input` | 反引號＋U／B 的 Unicode／Big5 字碼 | 1／0 |
 | `shortcuts.symbol_keyboard` | Ctrl＋Alt＋逗號符號列表 | 1／0 |
 | `shortcuts.ctrl_backslash` | 善解的 Ctrl＋反斜線頓號 | 0／1 |

@@ -1,15 +1,17 @@
 #Requires -Version 7
-param([ValidateSet('x64','x86')][string]$Architecture = 'x64')
+param([ValidateSet('x64','x86')][string]$Architecture = 'x64', [switch]$UseExistingCore)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
-    & "$PSScriptRoot/prepare-core.ps1"
     $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
-    rustup target add $target
-    if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
-    cargo build --release --manifest-path build/core/Cargo.toml --target $target
-    if ($LASTEXITCODE) { throw 'Core build failed.' }
+    if (!$UseExistingCore) {
+        & "$PSScriptRoot/prepare-core.ps1"
+        rustup target add $target
+        if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
+        cargo build --release --manifest-path build/core/Cargo.toml --target $target
+        if ($LASTEXITCODE) { throw 'Core build failed.' }
+    }
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if (!$vs) { throw 'Install Visual Studio Build Tools with C++ desktop tools and Windows SDK.' }

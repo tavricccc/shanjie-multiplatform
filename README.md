@@ -16,6 +16,7 @@ pwsh -File scripts/package.ps1
 輸出 `dist/Shanjie-Windows.zip`，包含 x64／x86 DLL、x64 WinUI 設定程式、四版模型及兩份詞類表。v3 必須配 classes-v1，v4 必須配 classes-v2；下載核對六個官方 SHA-256，再驗證模型與詞類陣列、語言分數的映射等價。來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。大型資產採四個並行範圍下載，保留未完成分段；完整檔案通過官方雜湊後才使用。
 `build.ps1` 只編譯，不下載模型；需要完整模型的安裝包請用 `package.ps1`。
 已有完整的 `dist/` 建置與模型時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 只整理文件、安裝檔與 ZIP，略過重建及模型轉換。
+只改 C++ 或設定程式時，`build.ps1 -Architecture x64 -UseExistingCore`（x86 同理）可重用現有架構的 Rust core.lib。
 
 ## 安裝與移除
 
@@ -51,6 +52,8 @@ pwsh -File ./install.ps1
 | 選字後聯想 | 關閉 | 關閉；可另行啟用 |
 | Shift／直接標點、單獨聲調 | 關閉 | 保留上游操作 |
 
+2026-10-08 依使用者目前已儲存設定更新 Windows 預設：選字學習開啟、Caps Lock 不切英文、空白提交後不額外輸入空白、拼音第一次空白作分隔、反引號標點關閉；即時預測與聯想維持關閉。新安裝與 Windows 操作範本使用同一組值，既有個別設定仍保留。
+
 個人設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`。設定窗儲存或套用 profile 會通知已啟用的善解立即更新；直接編輯 INI 會在下一次按鍵讀取。切換鍵盤、詞庫、排名、學習或候選核心設定時會先提交目前組字，再重建引擎；單純調整外觀與開啟鍵不需重建。也可以編輯 INI 或套用自己的檔案：
 
 「一般 → 語言模型」可選 v1／v2／v3＋classes-v1／v4＋classes-v2，皆離線運作。新安裝預設 v4；舊設定保留原選擇，舊 schema 未指定模型則保留 v1。INI 對應 `[engine] model=1|2|3|4`。切換操作預設保留模型、詞句偏好、鍵盤、個人詞庫、學習與外觀；指定模型或配對詞類表缺少／損壞會載入失敗，不改用其他版本。
@@ -77,7 +80,7 @@ pwsh -File ./apply-profile.ps1 -ProfileFile ./profiles/windows.ini
 LM 的大陣列使用 Win32 唯讀 file mapping，程序共用檔案頁面；每個程序仍有自己的引擎狀態與詞庫。這不表示整套詞庫都已共享，也不保證特定 RAM 數字。測量應分開觀察 Private Bytes 與 Working Set，後者包含共享頁面。
 模型被載入期間不允許改寫或刪除；升級需先關閉使用該 DLL 的程序或登出。
 
-選字學習預設關閉，可在設定啟用。Windows 用使用者目錄衍生的 mutex 協調多程序，每次操作重新讀取學習；清除時更新 epoch，丟棄各引擎未提交的舊學習。背景交錯引擎測試通過，App 容器與真實多 App 尚待驗收。
+Windows 範本預設開啟選字學習，善解範本預設關閉，皆可另行調整；載入操作預設保留既有學習偏好。Windows 用使用者目錄衍生的 mutex 協調多程序，每次操作重新讀取學習；清除時更新 epoch，丟棄各引擎未提交的舊學習。背景交錯引擎測試通過，App 容器與真實多 App 尚待驗收。
 
 ## 跟進上游
 
