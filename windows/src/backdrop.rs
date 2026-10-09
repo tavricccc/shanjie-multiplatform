@@ -6,7 +6,7 @@ use windows::{
         Foundation::*,
         Graphics::{Dwm::*, Gdi::*},
         System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
-        UI::{Controls::MARGINS, HiDpi::*, WindowsAndMessaging::*},
+        UI::{HiDpi::*, WindowsAndMessaging::*},
     },
 };
 
@@ -77,13 +77,37 @@ impl Backdrop {
             (&disabled as *const i32).cast(),
             4,
         )?;
-        let frame = MARGINS {
-            cxLeftWidth: -1,
-            cxRightWidth: -1,
-            cyTopHeight: -1,
-            cyBottomHeight: -1,
-        };
-        DwmExtendFrameIntoClientArea(window, &frame)?;
+        // Acrylic supplies the client material. An extended system frame adds
+        // a second edge/shadow outside our capsule, so suppress it entirely.
+        let policy = DWMNCRP_DISABLED;
+        DwmSetWindowAttribute(
+            window,
+            DWMWA_NCRENDERING_POLICY,
+            (&policy as *const DWMNCRENDERINGPOLICY).cast(),
+            4,
+        )?;
+        // Windows 11's automatic corner decoration is independent of the
+        // capsule region. Windows 10 has no such attribute (E_INVALIDARG).
+        let corners = DWMWCP_DONOTROUND;
+        if let Err(error) = DwmSetWindowAttribute(
+            window,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            (&corners as *const DWM_WINDOW_CORNER_PREFERENCE).cast(),
+            4,
+        ) {
+            if error.code() != E_INVALIDARG {
+                return Err(error);
+            }
+        }
+        SetWindowPos(
+            window,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        )?;
         Ok(backdrop)
     }
     pub fn window(&self) -> HWND {
@@ -116,6 +140,8 @@ impl Backdrop {
         let width = bounds.right - bounds.left;
         let height = bounds.bottom - bounds.top;
         if self.size.get() != (width, height) {
+            // GDI excludes the final scanline: these bounds produce a region
+            // inset by exactly one physical pixel on all four sides.
             let region = CreateRoundRectRgn(1, 1, width, height, height - 2, height - 2);
             if region.is_invalid() {
                 return Err(Error::from_thread());

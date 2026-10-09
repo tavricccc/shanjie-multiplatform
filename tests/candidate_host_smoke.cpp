@@ -2,6 +2,7 @@
 #include "identity.h"
 #include "native_capture.h"
 #include <psapi.h>
+#include <dwmapi.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -30,8 +31,18 @@ int wmain(int argc,wchar_t** argv) {
         assert(presenter.shown()); assert(GetForegroundWindow() == foreground); assert(SendMessageW(presenter.window(),WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
         auto backdrop = GetWindow(presenter.window(),GW_OWNER); assert(backdrop);
         assert(SendMessageW(backdrop,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
+        BOOL nativeFrame = TRUE;
+        assert(SUCCEEDED(DwmGetWindowAttribute(backdrop,DWMWA_NCRENDERING_ENABLED,&nativeFrame,sizeof(nativeFrame))));
+        assert(!nativeFrame);
         std::printf("Native acrylic policy: %s\n",IsWindowVisible(backdrop)?"enabled":"system transparency disabled");
         RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
+        if (IsWindowVisible(backdrop)) {
+            auto clip = CreateRectRgn(0,0,0,0); assert(GetWindowRgn(backdrop,clip) != ERROR);
+            RECT clipBounds{}; assert(GetRgnBox(clip,&clipBounds) != ERROR); DeleteObject(clip);
+            std::fprintf(stderr,"Native clip: client=%ldx%ld bounds=%ld,%ld,%ld,%ld\n",client.right,client.bottom,clipBounds.left,clipBounds.top,clipBounds.right,clipBounds.bottom);
+            assert(clipBounds.left == client.right-clipBounds.right && clipBounds.top == client.bottom-clipBounds.bottom);
+            assert(clipBounds.left > 0 && clipBounds.top > 0);
+        }
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
         std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);

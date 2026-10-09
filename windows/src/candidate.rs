@@ -63,13 +63,19 @@ impl Palette {
                 || (theme == 0 && settings.GetColorValue(UIColorType::Foreground)?.R > 127);
             let tint = if dark { 0x343443 } else { 0xffffff };
             let mut background = rgb(tint);
-            background.a = if glass { 0.82 } else { 1.0 };
+            background.a = if !glass {
+                1.0
+            } else if dark {
+                0.74
+            } else {
+                0.55
+            };
             Ok(Self {
                 background,
                 glass,
                 tint,
                 text: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
-                label: rgb(if dark { 0xb9b9c5 } else { 0x65656e }),
+                label: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
                 accent: rgb(0x006ee6),
                 selected: rgb(0xffffff),
             })
