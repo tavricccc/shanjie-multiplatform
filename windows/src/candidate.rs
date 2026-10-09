@@ -8,7 +8,6 @@ use windows::{
         },
         UI::{Accessibility::*, HiDpi::*, WindowsAndMessaging::*},
     },
-    UI::ViewManagement::{UIColorType, UISettings},
 };
 use windows_numerics::Vector2;
 
@@ -22,15 +21,14 @@ fn rgb(value: u32) -> D2D1_COLOR_F {
 }
 struct Palette {
     background: D2D1_COLOR_F,
-    glass: bool,
-    tint: u32,
+    border: D2D1_COLOR_F,
     text: D2D1_COLOR_F,
     label: D2D1_COLOR_F,
     accent: D2D1_COLOR_F,
     selected: D2D1_COLOR_F,
 }
 impl Palette {
-    fn new(theme: u32) -> Result<Self> {
+    fn new(_theme: u32) -> Result<Self> {
         unsafe {
             let mut contrast = HIGHCONTRASTW {
                 cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,
@@ -49,33 +47,18 @@ impl Palette {
                 };
                 return Ok(Self {
                     background: system(COLOR_WINDOW),
-                    glass: false,
-                    tint: 0,
+                    border: system(COLOR_WINDOWTEXT),
                     text: system(COLOR_WINDOWTEXT),
                     label: system(COLOR_WINDOWTEXT),
                     accent: system(COLOR_HIGHLIGHT),
                     selected: system(COLOR_HIGHLIGHTTEXT),
                 });
             }
-            let settings = UISettings::new()?;
-            let glass = settings.AdvancedEffectsEnabled()?;
-            let dark = theme == 2
-                || (theme == 0 && settings.GetColorValue(UIColorType::Foreground)?.R > 127);
-            let tint = if dark { 0x343443 } else { 0xffffff };
-            let mut background = rgb(tint);
-            background.a = if !glass {
-                1.0
-            } else if dark {
-                0.74
-            } else {
-                0.55
-            };
             Ok(Self {
-                background,
-                glass,
-                tint,
-                text: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
-                label: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
+                background: rgb(0xffffff),
+                border: rgb(0xd3d3d8),
+                text: rgb(0x222225),
+                label: rgb(0x65656e),
                 accent: rgb(0x006ee6),
                 selected: rgb(0xffffff),
             })
@@ -93,7 +76,6 @@ struct Item {
 }
 pub struct Host {
     pub window: HWND,
-    backdrop: crate::backdrop::Backdrop,
     callback: HWND,
     pub sequence: i32,
     state: Snapshot,
@@ -128,7 +110,6 @@ impl Host {
             let brush = target.CreateSolidColorBrush(&rgb(0), None)?;
             let mut host = Box::new(Self {
                 window: HWND::default(),
-                backdrop: crate::backdrop::Backdrop::new()?,
                 callback,
                 sequence: 0,
                 state: Snapshot::default(),
@@ -166,7 +147,7 @@ impl Host {
                 0,
                 1,
                 1,
-                Some(host.backdrop.window()),
+                None,
                 None,
                 Some(HINSTANCE(module.0)),
                 Some((&mut *host as *mut Self).cast()),
@@ -187,7 +168,6 @@ impl Host {
         self.sequence = self.sequence.wrapping_add(1);
         unsafe {
             let _ = ShowWindow(self.window, SW_HIDE);
-            self.backdrop.hide();
         }
     }
     pub fn shown(&self) -> bool {
@@ -451,8 +431,6 @@ impl Host {
     unsafe fn display(&self) -> Result<()> {
         let mut rect = RECT::default();
         GetWindowRect(self.window, &mut rect)?;
-        self.backdrop
-            .show(self.window, rect, self.palette.glass, self.palette.tint)?;
         let buffer = Buffer::new(rect.right - rect.left, rect.bottom - rect.top)?;
         self.paint(buffer.dc)?;
         let position = POINT {
@@ -505,6 +483,19 @@ impl Host {
         self.brush.SetColor(&self.palette.background);
         self.target
             .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, height / 2.0), &self.brush);
+        self.brush.SetColor(&self.palette.border);
+        self.target.DrawRoundedRectangle(
+            &rounded(
+                0.25,
+                0.25,
+                width - 0.25,
+                height - 0.25,
+                (height - 0.5) / 2.0,
+            ),
+            &self.brush,
+            0.5,
+            None,
+        );
         let ratio = self.size as f32 / 16.0;
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
         let y = 3.0 * ratio;

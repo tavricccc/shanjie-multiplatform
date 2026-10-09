@@ -72,7 +72,7 @@
                         <TextBlock x:Name="AppearanceOptions" FontFamily="Microsoft JhengHei UI" Text="字元集與外觀" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
                         <NumberBox Header="候選文字大小" Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/>
-                        <ComboBox Header="介面主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
+                        <ComboBox Header="設定介面主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
                         <controls:SettingToggle Label="切換中英時顯示游標旁提示" IsOn="{x:Bind Vm.ModeIndicator, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Dictionary" Spacing="12" Visibility="Collapsed">
