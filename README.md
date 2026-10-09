@@ -1,6 +1,6 @@
 # 善解 Windows
 
-原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步正式 v0.3.0，只提供 model-v4＋classes-v2。候選是 DLL 內的無邊線毛玻璃橫向膠囊，淺色底調為純白；設定保留獨立 WinUI 3 原生程式。
+原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步正式 v0.3.0，只提供 model-v4＋classes-v2。候選是純白實色橫向膠囊，0.5 DIP 淡灰細邊線，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
 目前是可建置與打包的開發版。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
@@ -48,7 +48,7 @@ pwsh -File scripts/package.ps1
 | 即時讀音預測 | 關閉 | 開啟，Tab 進入／Shift＋Tab 退出 |
 | 選字後聯想 | 關閉，可啟用 | 相同 |
 
-Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。毛玻璃由 Windows 合成器模糊背後內容，文字與反白保持不透明；高對比或系統關閉透明效果時遵循系統實色底。
+Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。候選固定純白不透明底；「設定介面主題」只影響 WinUI 設定頁，高對比模式仍遵循系統色。
 
 個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`。schema 4 將舊模型遷移至 v4、舊排列遷移至 horizontal，移除格狀相關開關；其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例，直接修改 INI 則在下一鍵重讀。需要重建引擎的變更先提交可見組字。模型／詞類損壞明確拒絕載入。
 
@@ -56,7 +56,7 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 
 ## 維護與授權
 
-`windows/src/` 按 engine、input、profile、candidate、backdrop、native、registration、installer、tsf 分模組。Windows 產品的 TSF、按鍵、候選繪製、設定／詞庫／學習及安裝邏輯都是 Rust；`ui/` 的 C#／XAML 保留 WinUI 控制項與草稿綁定；`tests/support/` 的 C++ 僅是測試 ABI adapter，沒有產品 C++。CMD／PowerShell 安裝入口只呼叫 manager。
+`windows/src/` 按 engine、input、profile、candidate、native、registration、installer、tsf 分模組。Windows 產品的 TSF、按鍵、候選繪製、設定／詞庫／學習及安裝邏輯都是 Rust；`ui/` 的 C#／XAML 保留 WinUI 控制項與草稿綁定；`tests/support/` 的 C++ 僅是測試 ABI adapter，沒有產品 C++。CMD／PowerShell 安裝入口只呼叫 manager。
 
 上游是固定 commit 子模組，核心差異保留在 `platform/` 與 prepare 腳本；`build/core` 為產生檔。更新前先讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)、[UPSTREAM.json](UPSTREAM.json)、[VERIFICATION.md](VERIFICATION.md)。架構見 [WINUI-MIGRATION.md](WINUI-MIGRATION.md)，資源量測見 [PERFORMANCE.md](PERFORMANCE.md)。
 

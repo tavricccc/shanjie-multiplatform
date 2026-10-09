@@ -4,6 +4,12 @@
 
 ## 2026-10-09 最新模型、Rust TSF 與橫向候選
 
+### 最新方向：移除毛玻璃，純白實色與細邊線
+
+依使用者最新指示，完全刪除 backdrop.rs／背景 HWND／WCA composition API 與相關 features，只保留單一 NOACTIVATE layered 候選窗。正文固定 #FFFFFF、alpha 255；外角 alpha 只作曲線抗鋸齒。邊線 #D3D3D8、0.5 DIP、內縮 0.25 DIP；字詞 #222225、序號 #65656E、藍色反白與既有字級／幾何保留。候選在兩種設定主題下均為白底；WinUI 控制項改稱「設定介面主題」。
+
+x64／x86 建置、原生候選／WinUI 背景檢查及 x64 TSF 檢查通過；候選 owner 為 null，NOACTIVATE、滑鼠、過期點擊、隱藏／重開、隱藏後主題通知均通過。新鮮 reviewer 逐張核對 36 張候選與 2 張設定 appearance PNG，確認正文 RGB255／alpha255、外角alpha0、細邊線與單窗契約；disposition **ship，限定本輪背景原生繪製／離屏審查**。本輪未執行系統安裝、前景 App、高對比、讀屏或多螢幕驗收。下方所有毛玻璃、透明度與雙層窗口紀錄已是歷史，不代表目前產品。
+
 ### 後續外觀修正：無邊線、純白底調與毛玻璃
 
 最新使用者截圖回報右側異常輪廓及不夠通透：淺色 tint 從 0.82 調至 0.55，深色調至 0.74，小序號改用相同文字色以維持可讀性。背景取消負 margin 的系統 frame extension，停用 non-client rendering／Windows 11 自動圓角裝飾；另外用 GetRgnBox 檢查既有 blur region 四邊對稱內縮 1 px，遵循 GDI 輸入／輸出邊界語意。來源與既有 caption／NOACTIVATE 契約保持分離。下段 0.82 與上一審查為本日早先版本的歷史證據，不代表目前參數；本輪檢查結果另記於下方。

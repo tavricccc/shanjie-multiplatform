@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T11:51:05+08:00",
+  "generatedAt": "2026-10-09T12:37:26+08:00",
   "title": "Design System: 善解 Windows",
   "extensions": {
     "colorMeta": {
@@ -12,29 +12,21 @@
         "role": "primary",
         "displayName": "選取白字"
       },
-      "candidate-light-background": {
+      "candidate-background": {
         "role": "neutral",
-        "displayName": "候選淺色底面"
+        "displayName": "候選純白底面"
       },
-      "candidate-light-foreground": {
+      "candidate-border": {
         "role": "neutral",
-        "displayName": "候選淺色字詞"
+        "displayName": "候選淺灰細邊線"
       },
-      "candidate-light-label": {
+      "candidate-foreground": {
         "role": "neutral",
-        "displayName": "候選淺色序號"
+        "displayName": "候選字詞"
       },
-      "candidate-dark-background": {
+      "candidate-label": {
         "role": "neutral",
-        "displayName": "候選深色底面"
-      },
-      "candidate-dark-foreground": {
-        "role": "neutral",
-        "displayName": "候選深色字詞"
-      },
-      "candidate-dark-label": {
-        "role": "neutral",
-        "displayName": "候選深色序號"
+        "displayName": "候選次要序號"
       }
     },
     "typographyMeta": {
@@ -82,6 +74,7 @@
         "TextFillColorSecondaryBrush",
         "AccentButtonStyle"
       ],
+      "themeControl": "設定介面主題：只控制 WinUI 設定窗，候選始終固定白底；高對比例外使用系統色。",
       "navigation": [
         "一般",
         "按鍵",
@@ -115,10 +108,11 @@
       "verificationLimit": "六張目前淺／深色離屏 XAML render；不是前景應用程式或實際安裝驗收。"
     },
     "nativeCandidate": {
-      "platform": "Rust TSF 同程序 Win32 acrylic backdrop 與 owned layered 文字／底調 HWND；Direct2D software DC render target／DirectWrite",
+      "platform": "Rust TSF 同程序單一 Win32 layered popup；Direct2D software DC render target／DirectWrite",
       "source": [
         "windows/src/candidate.rs",
-        "windows/src/backdrop.rs",
+        "windows/src/lib.rs",
+        "windows/Cargo.toml",
         "windows/src/tsf/candidates.rs",
         "windows/src/tsf/keys.rs",
         "windows/src/tsf/service.rs"
@@ -133,7 +127,7 @@
           "upstream/shanjie/macos/Sources/ShanjieKit/InputController.swift"
         ],
         "contract": "docs/candidate-surface.md",
-        "decision": "只保留橫向；使用者後續指定無邊線、淺色純白與毛玻璃背景。"
+        "decision": "使用者最新指定移除毛玻璃、純白背景與很細的 border；只保留橫向，所有一般候選固定白底。"
       },
       "selection": {
         "background": "{colors.candidate-selected-background}",
@@ -142,40 +136,24 @@
       },
       "highContrast": {
         "backgroundResource": "GetSysColor(COLOR_WINDOW)",
+        "borderResource": "GetSysColor(COLOR_WINDOWTEXT)",
         "textResource": "GetSysColor(COLOR_WINDOWTEXT)",
         "labelResource": "GetSysColor(COLOR_WINDOWTEXT)",
         "selectedBackgroundResource": "GetSysColor(COLOR_HIGHLIGHT)",
         "selectedForegroundResource": "GetSysColor(COLOR_HIGHLIGHTTEXT)",
-        "material": "實色底、停用 acrylic；遵循系統設定。",
+        "material": "系統 window 色實色底；沒有額外背景視窗。",
         "verified": "來源核對；尚未實機驗收。"
       },
-      "systemTheme": "UISettings Foreground 僅用於選擇淺／深色；一般候選選取色固定。",
-      "border": "無描邊；不呼叫 DrawRoundedRectangle stroke。",
+      "systemTheme": "一般候選忽略 appearance.theme；設定介面主題只控制 WinUI 設定窗。高對比候選使用系統 window／highlight 色。",
+      "border": "{colors.candidate-border}，0.5 DIP stroke；rectangle 內縮 0.25 DIP，radius=(height−0.5 DIP)／2。",
       "material": {
-        "kind": "Windows DWM acrylic",
-        "lightTint": "{colors.candidate-light-background}",
-        "darkTint": "{colors.candidate-dark-background}",
-        "tintAlpha": {
-          "light": 0.55,
-          "dark": 0.74,
-          "systemSolid": 1.0
-        },
+        "kind": "純白不透明實色",
+        "background": "{colors.candidate-background}",
+        "backgroundAlpha": 1.0,
         "textAndSelectionAlpha": 1.0,
-        "labelContrast": "序號與字詞共用各主題相同前景色，以保留透明背景上的 9 DIP 小字對比；字級階層保持原樣。",
-        "layers": "原生 acrylic HWND 在下方，owned layered 文字／底調 HWND 在上方；同 TSF 程序，兩層位置、尺寸與隱藏同步，皆 NOACTIVATE。",
-        "systemSolid": "高對比或 UISettings AdvancedEffectsEnabled 關閉：隱藏 backdrop、底調 alpha 1；遵循系統設定，不是自訂 failure fallback。",
-        "failure": "API 缺少或 policy 套用失敗時回報錯誤，沒有靜默實色替代。",
-        "source": "windows/src/backdrop.rs",
-        "api": "從 user32 動態解析 SetWindowCompositionAttribute；WCA_ACCENT_POLICY=19，ACCENT_ENABLE_ACRYLICBLURBEHIND=4，flags 0，最低 native tint。",
-        "maintenance": "API 沒有 Windows SDK header／import，Microsoft 不建議一般應用使用；為避免非啟用 WinUI／DesktopAcrylic 的失焦實色行為而使用隔離私有 policy，須維護，不宣稱完全公開穩定 SDK。",
-        "nativeFrame": {
-          "extendedFrame": "移除負 margin 的 DwmExtendFrameIntoClientArea。",
-          "renderingPolicy": "DWMWA_NCRENDERING_POLICY=DWMNCRP_DISABLED，之後 SWP_FRAMECHANGED。",
-          "cornerPolicy": "Windows 11：DWMWA_WINDOW_CORNER_PREFERENCE=DWMWCP_DONOTROUND；手動膠囊 region 不變。",
-          "windows10": "E_INVALIDARG 表示沒有 corner preference 屬性，不增加替代 renderer。",
-          "verifiedState": "x64 harness 的 DwmGetWindowAttribute 讀回 DWMWA_NCRENDERING_ENABLED=false。",
-          "verificationLimit": "原生 frame 狀態通過；raw WM_PRINTCLIENT 不包含桌面 DWM 陰影，不以 PNG 宣稱實際陰影已消失。"
-        }
+        "layers": "單一 WS_EX_LAYERED NOACTIVATE HWND，owner 為 null；alpha 只處理膠囊透明外角與抗鋸齒，正文不透明。",
+        "source": "windows/src/candidate.rs",
+        "maintenance": "毛玻璃模組、私有 composition API、雙 HWND 與對應 features 已移除，沒有替代材質或 renderer。"
       },
       "geometry": {
         "baselineFont": "{typography.candidate}",
@@ -188,8 +166,10 @@
         "trailing": "{spacing.candidate-trailing}",
         "caretGap": "{spacing.candidate-caret-gap}",
         "scale": "候選內距與幾何依字級／16 比例調整；caret 間距固定 6 DIP，依 DPI 換算。",
-        "surfaceRadius": "實際表面高度／2；FillRoundedRectangle 從 0 到整個視窗邊界，無 stroke。",
-        "backdropRegion": "CreateRoundRectRgn 依膠囊裁切 native acrylic。",
+        "surfaceRadius": "實際表面高度／2；白底 FillRoundedRectangle 從 0 到整個視窗邊界。",
+        "borderWidth": "0.5 DIP",
+        "borderInset": "0.25 DIP",
+        "borderRadius": "(height−0.5 DIP)／2",
         "selectionRadius": "實際列高／2",
         "rowHeight": "max(24 × 字級／16, 每個字詞的 DirectWrite metrics height + 2 × 字級／16)"
       },
@@ -198,11 +178,11 @@
       ],
       "workAreaFit": "保留各詞自然寬度，只呈現放得下的項目；兩端箭頭翻動可見範圍，鍵盤選取始終可見。單一超長項目才用 character ellipsis；不共同縮窄全部項目。",
       "position": "caret 下方 6 DIP；底部不足改放上方，夾在目前螢幕工作區內。",
-      "depth": "無邊線毛玻璃膠囊，淺色底調 alpha 0.55、深色 alpha 0.74；無自訂陰影、caption、resize frame、候選子程序或 IPC。系統 non-client rendering 停用；選取藍與文字維持不透明。",
-      "compositing": "原生 DWM acrylic 在下，owned WS_EX_LAYERED／UpdateLayeredWindow 文字與底調在上，以 32-bit premultiplied alpha 合成。",
+      "depth": "純白不透明膠囊與淺灰細邊線；沒有 blur、陰影、caption、resize frame、額外背景窗口、候選子程序或 IPC。",
+      "compositing": "單一 WS_EX_LAYERED／UpdateLayeredWindow，32-bit premultiplied alpha；只讓膠囊外角透明，正文 alpha 1。",
       "motion": {
         "selection": "立即切換；沒有動畫。",
-        "window": "兩層同步尺寸、位置、隱藏；DWM TRANSITIONS_FORCEDISABLED，皆 WS_EX_NOACTIVATE。"
+        "window": "DWM TRANSITIONS_FORCEDISABLED；單一 HWND 為 WS_EX_NOACTIVATE。隱藏時的 setting／theme／DWM 色彩通知只更新 palette，已顯示才重新 display，不自行重開。"
       },
       "prediction": "被動狀態無序號、反白或序號預留欄；Tab 進入後才顯示序號及反白，Shift＋Tab／Esc 退出。",
       "association": "Shift＋序號；Shift＋數字或滑鼠選取。",
@@ -216,9 +196,9 @@
         ".impeccable/review/{x64,x86}/prediction-{1,2}-{passive,entered}.png",
         ".impeccable/review/{x64,x86}/reference-{1,2}-conversion.png"
       ],
-      "captureMethod": "每架構 18 張 PNG 路徑；同一 Windows 120 DPI 背景 WM_PRINTCLIENT 只擷取原生文字／底調層，premultiplied BGRA 先轉 straight alpha 再保存 RGBA，淺色底調是真正純白 RGB；不是 AI 素材。",
-      "nativePolicyVerification": "本輪 x64／x86 native harness 與 WinUI 背景驗證 PASS：acrylic 啟用、兩層 NOACTIVATE、同步 hide／reopen，DWMWA_NCRENDERING_ENABLED 讀回 false；GetRgnBox 確認四邊對稱內縮 1 px。",
-      "verificationLimit": "PNG 不包含 DWM 桌面陰影或模糊；policy／frame 狀態通過，不代表已看到真實桌面毛玻璃或證明系統陰影消失。前景 App、高對比、多螢幕、實際工作列與讀屏尚未實機驗收。"
+      "captureMethod": "每架構 18 張 PNG 已更新；檔名 1／2 代表設定主題測試案例，候選均白底。同一 Windows 120 DPI 原生 WM_PRINTCLIENT，premultiplied BGRA 轉 straight alpha 後保存 RGBA，不是 AI 素材。",
+      "nativeVerification": "x64／x86 建置與原生候選、WinUI 背景檢查 PASS；null owner、NOACTIVATE、過期點擊、滑鼠選字、hide／reopen、hidden theme 通知斷言通過，x64 TSF 背景檢查 PASS。舊雙 HWND／composition／region 專屬檢查已移除。",
+      "verificationLimit": "背景原生繪製不代表前景 App、高對比、多螢幕、實際工作列或讀屏驗收。"
     },
     "nativeMode": {
       "platform": "Rust TSF 同程序 Win32 layered popup",
@@ -255,18 +235,11 @@
       "currentCaptureCount": 42,
       "candidateCaptureCount": 36,
       "settingsCaptureCount": 6,
-      "visualAssessment": "新鮮 reviewer 已核對使用者截圖與 36 張 foreground PNG：新 alpha、可讀性與 native frame 契約符合此次修正，未擴大為桌面陰影／透度驗收。",
-      "disposition": "ship，僅涵蓋候選 foreground、底調與 native frame 契約；實際桌面陰影及毛玻璃透度仍未驗收。",
-      "passed": [
-        "x64／x86 native harness",
-        "x64／x86 acrylic policy 啟用",
-        "WinUI 背景驗證",
-        "兩層 NOACTIVATE 與同步 hide／reopen assertions",
-        "DWMWA_NCRENDERING_ENABLED=false",
-        "GetRgnBox 四邊對稱內縮 1 px"
-      ],
+      "visualAssessment": "純白不透明背景與 0.5 DIP 細邊線的新 captures 與 fresh review 待完成。",
+      "disposition": "ship，限於本輪 36 張候選與 2 張設定 appearance 圖的背景原生繪製／離屏審查；未擴大實機驗收。",
+      "passed": ["x64／x86 build 與原生候選", "WinUI 背景驗證", "x64 TSF 背景驗證", "36 張 fresh candidate captures"],
       "pending": [],
-      "historicalOnly": "原 tint alpha 0.82、上一隱藏生命週期 fix list 的 ship、先前無毛玻璃 42 張審查，以及舊 WinUI 直向／格狀、C++ BMP、模型選單圖均僅供歷史，不代表本輪實作驗收。"
+      "historicalOnly": "毛玻璃、alpha 0.82／0.55／0.74、雙視窗與其 review ship 已退役；舊 WinUI 直向／格狀、C++ BMP、模型選單圖同樣不代表本輪驗收。"
     }
   },
   "components": [
@@ -281,16 +254,10 @@
       "description": "兩個獨立 SettingToggle 使用同列左標籤、右原生 ToggleSwitch；Windows 操作預設兩者關閉，保持共用草稿與儲存流程。"
     },
     {
-      "name": "候選淺色毛玻璃表面",
+      "name": "純白候選表面",
       "kind": "custom",
-      "refersTo": "candidate-surface-light",
-      "description": "無邊線橫向膠囊，純白底調 alpha 0.55 疊在原生 acrylic 上；序號與字詞皆採深色前景，兩層 NOACTIVATE，停用系統 non-client rendering。"
-    },
-    {
-      "name": "候選深色毛玻璃表面",
-      "kind": "custom",
-      "refersTo": "candidate-surface-dark",
-      "description": "同一幾何使用深色底調 alpha 0.74，序號與字詞皆採淺色前景；高對比或 AdvancedEffects 關閉時使用實色底。"
+      "refersTo": "candidate-surface",
+      "description": "固定純白不透明橫向膠囊，0.5 DIP 淺灰細邊線、深色字詞與次要灰色序號；單一 NOACTIVATE HWND，沒有背景窗口。"
     },
     {
       "name": "目前候選",
@@ -312,7 +279,7 @@
   ],
   "narrative": {
     "northStar": "原生設定，善解橫向膠囊候選",
-    "overview": "設定維持使用者核准的 WinUI 3 原生幾何與操作；候選依使用者提供的 macOS 善解照片、上游 `CandidateCells.swift`／`InputController.swift` 與後續指定，採無描邊的單行毛玻璃膠囊、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。\n\nWindows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。",
+    "overview": "設定維持使用者核准的 WinUI 3 原生幾何與操作；候選沿用使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift` 的橫向膠囊比例，依最新指定採純白不透明背景、很細的邊線、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。\n\nWindows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。",
     "keyCharacteristics": [
       "WinUI 3 原生設定、固定儲存回饋與共用草稿。",
       "候選只保留橫向膠囊，字詞按自然寬度排列。",
@@ -322,7 +289,7 @@
     "rules": [
       {
         "name": "The Candidate Palette Rule",
-        "body": "一般候選的選取藍與底調固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT` 並關閉毛玻璃；系統關閉 AdvancedEffects 時同樣使用實色底，這是遵循系統設定。高對比目前僅核對來源，尚未實機驗收。",
+        "body": "一般候選固定使用 frontmatter 的白底、細邊線與選取藍，忽略 appearance.theme；「設定介面主題」只控制 WinUI 設定窗。高對比整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，邊線也使用 window text 色。高對比目前僅核對來源，尚未實機驗收。",
         "section": "colors"
       },
       {
@@ -337,20 +304,20 @@
       },
       {
         "name": "The Quiet Candidate Rule",
-        "body": "顯示、隱藏、可見範圍移動與選取立即切換，兩層尺寸、位置及隱藏同步，DWM 視窗轉場停用，皆保持 `WS_EX_NOACTIVATE`；這項候選規則不更改設定窗原生控制項動畫。",
+        "body": "顯示、隱藏、可見範圍移動與選取立即切換，DWM 視窗轉場停用，單一候選 HWND 保持 `WS_EX_NOACTIVATE`。隱藏時的設定／主題／DWM 色彩通知只更新 palette；已顯示時才重新 display，不自行重開候選。這項候選規則不更改設定窗原生控制項動畫。",
         "section": "elevation"
       }
     ],
     "dos": [
       "**Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。",
       "**Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。",
-      "**Do** 一般候選使用純白／深色毛玻璃底調與固定選取藍，高對比改讀系統色且與 AdvancedEffects 關閉狀態一樣使用實色底。",
-      "**Do** 兩個候選 HWND 維持 NOACTIVATE 與位置、尺寸、隱藏同步，以 sequence 驗證滑鼠提交，立即切換選取與顯示狀態。"
+      "**Do** 一般候選固定純白不透明底與 0.5 DIP 細邊線，設定介面主題獨立控制 WinUI；高對比改讀系統色。",
+      "**Do** 單一候選 HWND 維持 NOACTIVATE，以 sequence 驗證滑鼠提交，保留 hide／reopen 與 hidden theme 通知規則。"
     ],
     "donts": [
       "**Don't** 恢復直向、九欄格狀、模型版本選單或任意詞類表選單。",
-      "**Don't** 在候選增加描邊、陰影、動畫、WebView 或候選子程序。",
-      "**Don't** 將 WM_PRINTCLIENT 文字／底調 PNG 宣稱為已看到桌面毛玻璃；也不將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。"
+      "**Don't** 在候選恢復毛玻璃、半透明正文、額外背景 HWND、陰影、動畫、WebView 或候選子程序。",
+      "**Don't** 將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。"
     ]
   }
 }
