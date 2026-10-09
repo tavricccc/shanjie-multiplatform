@@ -28,11 +28,18 @@ int wmain(int argc,wchar_t** argv) {
         shanjie::Snapshot frame; frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"}; frame.selected = 1; frame.total = 9;
         Preferences preferences; preferences.theme = 1; RECT caret{100,100,101,140}; start = clockMs(); presenter.publish(frame,preferences,caret,96,true); double first = clockMs()-start;
         assert(presenter.shown()); assert(GetForegroundWindow() == foreground); assert(SendMessageW(presenter.window(),WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
+        auto backdrop = GetWindow(presenter.window(),GW_OWNER); assert(backdrop);
+        assert(SendMessageW(backdrop,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
+        std::printf("Native acrylic policy: %s\n",IsWindowVisible(backdrop)?"enabled":"system transparency disabled");
         RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
         std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
-        assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
+        assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(!IsWindowVisible(backdrop)); assert(pickedSequence != presenter.sequence());
+        for (auto notification : {WM_SETTINGCHANGE,WM_THEMECHANGED,WM_DWMCOLORIZATIONCOLORCHANGED}) {
+            SendMessageW(presenter.window(),notification,0,0);
+            assert(!presenter.shown() && !IsWindowVisible(backdrop));
+        }
         std::vector<double> samples;
         for (int i=0;i<30;++i) { presenter.hide(); start = clockMs(); presenter.publish(frame,preferences,caret,96,true); samples.push_back(clockMs()-start); }
         std::sort(samples.begin(),samples.end()); auto after = memory();
@@ -69,7 +76,7 @@ int wmain(int argc,wchar_t** argv) {
                 frame.prediction = false; frame.selected = 1;
             }
         }
-        presenter.hide(); assert(!presenter.shown());
+        presenter.hide(); assert(!presenter.shown()); assert(!IsWindowVisible(backdrop));
     }
     DestroyWindow(callback); FreeLibrary(module); CoUninitialize();
     std::puts("PASS: in-process native candidates, mouse selection, stale click sequence, no activation, no frame, hide/reopen");

@@ -22,7 +22,8 @@ fn rgb(value: u32) -> D2D1_COLOR_F {
 }
 struct Palette {
     background: D2D1_COLOR_F,
-    border: D2D1_COLOR_F,
+    glass: bool,
+    tint: u32,
     text: D2D1_COLOR_F,
     label: D2D1_COLOR_F,
     accent: D2D1_COLOR_F,
@@ -48,19 +49,25 @@ impl Palette {
                 };
                 return Ok(Self {
                     background: system(COLOR_WINDOW),
-                    border: system(COLOR_WINDOWTEXT),
+                    glass: false,
+                    tint: 0,
                     text: system(COLOR_WINDOWTEXT),
                     label: system(COLOR_WINDOWTEXT),
                     accent: system(COLOR_HIGHLIGHT),
                     selected: system(COLOR_HIGHLIGHTTEXT),
                 });
             }
+            let settings = UISettings::new()?;
+            let glass = settings.AdvancedEffectsEnabled()?;
             let dark = theme == 2
-                || (theme == 0
-                    && UISettings::new()?.GetColorValue(UIColorType::Foreground)?.R > 127);
+                || (theme == 0 && settings.GetColorValue(UIColorType::Foreground)?.R > 127);
+            let tint = if dark { 0x343443 } else { 0xffffff };
+            let mut background = rgb(tint);
+            background.a = if glass { 0.82 } else { 1.0 };
             Ok(Self {
-                background: rgb(if dark { 0x343443 } else { 0xf2f2f5 }),
-                border: rgb(if dark { 0x787884 } else { 0xb5b5bd }),
+                background,
+                glass,
+                tint,
                 text: rgb(if dark { 0xf5f5f7 } else { 0x222225 }),
                 label: rgb(if dark { 0xb9b9c5 } else { 0x65656e }),
                 accent: rgb(0x006ee6),
@@ -80,6 +87,7 @@ struct Item {
 }
 pub struct Host {
     pub window: HWND,
+    backdrop: crate::backdrop::Backdrop,
     callback: HWND,
     pub sequence: i32,
     state: Snapshot,
@@ -114,6 +122,7 @@ impl Host {
             let brush = target.CreateSolidColorBrush(&rgb(0), None)?;
             let mut host = Box::new(Self {
                 window: HWND::default(),
+                backdrop: crate::backdrop::Backdrop::new()?,
                 callback,
                 sequence: 0,
                 state: Snapshot::default(),
@@ -151,7 +160,7 @@ impl Host {
                 0,
                 1,
                 1,
-                None,
+                Some(host.backdrop.window()),
                 None,
                 Some(HINSTANCE(module.0)),
                 Some((&mut *host as *mut Self).cast()),
@@ -172,6 +181,7 @@ impl Host {
         self.sequence = self.sequence.wrapping_add(1);
         unsafe {
             let _ = ShowWindow(self.window, SW_HIDE);
+            self.backdrop.hide();
         }
     }
     pub fn shown(&self) -> bool {
@@ -435,6 +445,8 @@ impl Host {
     unsafe fn display(&self) -> Result<()> {
         let mut rect = RECT::default();
         GetWindowRect(self.window, &mut rect)?;
+        self.backdrop
+            .show(self.window, rect, self.palette.glass, self.palette.tint)?;
         let buffer = Buffer::new(rect.right - rect.left, rect.bottom - rect.top)?;
         self.paint(buffer.dc)?;
         let position = POINT {
@@ -485,17 +497,8 @@ impl Host {
             radiusY: radius,
         };
         self.brush.SetColor(&self.palette.background);
-        self.target.FillRoundedRectangle(
-            &rounded(0.5, 0.5, width - 0.5, height - 0.5, (height - 1.0) / 2.0),
-            &self.brush,
-        );
-        self.brush.SetColor(&self.palette.border);
-        self.target.DrawRoundedRectangle(
-            &rounded(0.5, 0.5, width - 0.5, height - 0.5, (height - 1.0) / 2.0),
-            &self.brush,
-            1.0,
-            None,
-        );
+        self.target
+            .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, height / 2.0), &self.brush);
         let ratio = self.size as f32 / 16.0;
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
         let y = 3.0 * ratio;
@@ -677,7 +680,9 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
             if let Ok(p) = Palette::new(host.theme) {
                 host.palette = p;
             }
-            let _ = host.display();
+            if host.shown() {
+                let _ = host.display();
+            }
             return LRESULT(0);
         }
     }
