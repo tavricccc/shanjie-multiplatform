@@ -18,7 +18,7 @@
 
 ## 候選契約
 
-完整視覺契約見 [docs/candidate-surface.md](docs/candidate-surface.md)。預設字級 16／序號 9 DIP、選取高 24／表面至少 30 DIP、內距 3 DIP。無描邊、淺色底調 #FFFFFF、深色 #343443，82% tint 疊於原生 acrylic 上；字詞與藍色選取保持不透明。高對比／關閉 AdvancedEffects 時使用系統實色。自然詞寬、窄區箭頭、單項省略與被動預測序號規則維持原契約。
+完整視覺契約見 [docs/candidate-surface.md](docs/candidate-surface.md)。預設字級 16／序號 9 DIP、選取高 24／表面至少 30 DIP、內距 3 DIP。無描邊、淺色底調 #FFFFFF、深色 #343443，淺色 55%／深色 74% tint 疊於原生 acrylic 上，並停用系統 non-client frame／自動圓角裝飾；字詞與藍色選取保持不透明。高對比／關閉 AdvancedEffects 時使用系統實色。自然詞寬、窄區箭頭、單項省略與被動預測序號規則維持原契約。
 
 材質在 `backdrop.rs` 管理：非 layered 原生 acrylic HWND 在下方，owned layered 字詞／tint HWND 在上方，同步大小、位置與隱藏；沒有候選子程序。原生 policy 使用 user32 動態匯出的 SetWindowCompositionAttribute，私有 accent policy 定義隔離於此模組，後續平台 API 升級須另核對。WM_PRINTCLIENT 圖片只有字詞與 tint，不含 DWM 實際桌面模糊；alpha 必須轉成 straight alpha 才保存 BMP／PNG。
 

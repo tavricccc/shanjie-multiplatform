@@ -6,6 +6,10 @@
 
 ### 後續外觀修正：無邊線、純白底調與毛玻璃
 
+最新使用者截圖回報右側異常輪廓及不夠通透：淺色 tint 從 0.82 調至 0.55，深色調至 0.74，小序號改用相同文字色以維持可讀性。背景取消負 margin 的系統 frame extension，停用 non-client rendering／Windows 11 自動圓角裝飾；另外用 GetRgnBox 檢查既有 blur region 四邊對稱內縮 1 px，遵循 GDI 輸入／輸出邊界語意。來源與既有 caption／NOACTIVATE 契約保持分離。下段 0.82 與上一審查為本日早先版本的歷史證據，不代表目前參數；本輪檢查結果另記於下方。
+
+本輪 x64／x86 建置與候選／WinUI 背景檢查通過：原生 acrylic 啟用、讀回 DWMWA_NCRENDERING_ENABLED=false、實際裁切範圍 454×38 → (1,1,453,37)、NOACTIVATE、主題通知後雙層保持隱藏。新鮮 reviewer 對照使用者截圖並逐張核對 36 張前景 PNG，淺色 RGB 255／alpha 140，深色 alpha 189；disposition ship 限於 foreground／底調／native frame 契約。沒有宣稱桌面陰影已消失或日常透度已驗收，也未更新使用者系統安裝。
+
 使用者指定移除描邊，淺色底調改 #FFFFFF，背景使用原生 acrylic。`backdrop.rs` 隔離動態 user32 composition API／私有 accent policy，非 layered 材質 HWND 在下方、owned layered 文字與 0.82 alpha tint 在上方。兩層皆 NOACTIVATE，大小、位置與隱藏同步；高對比或系統停用 AdvancedEffects 時遵循實色設定。
 
 x64／x86 重建與 TSF 背景 harness 通過；兩架構原生候選、模式圖示、WinUI 離屏保存／擷取也通過。原生 acrylic policy 返回成功；新增 hide 後發送三種 theme／settings 訊息的斷言，兩 HWND 均保持隱藏。BMP／PNG 在保存前將 Direct2D premultiplied BGRA 轉成 straight alpha，避免白色半透明底被錯誤加深。

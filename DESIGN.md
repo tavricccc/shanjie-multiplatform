@@ -6,10 +6,10 @@ colors:
   candidate-selected-foreground: "#FFFFFF"
   candidate-light-background: "#FFFFFF"
   candidate-light-foreground: "#222225"
-  candidate-light-label: "#65656E"
+  candidate-light-label: "#222225"
   candidate-dark-background: "#343443"
   candidate-dark-foreground: "#F5F5F7"
-  candidate-dark-label: "#B9B9C5"
+  candidate-dark-label: "#F5F5F7"
 typography:
   chinese:
     fontFamily: Microsoft JhengHei UI
@@ -74,7 +74,7 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ## Colors
 
-候選採純白／深色底調與固定選取藍；底調在一般透明效果下以 alpha 0.82 疊在 Windows acrylic 材質上，沒有邊線。設定窗繼續使用 Windows 原生主題資源。
+候選採純白／深色底調與固定選取藍；一般透明效果下，淺色底調 alpha 0.55、深色底調 alpha 0.74，疊在 Windows acrylic 材質上，沒有邊線。文字、序號與選取膠囊仍為 alpha 1。設定窗繼續使用 Windows 原生主題資源。
 
 ### Primary
 
@@ -82,8 +82,8 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ### Neutral
 
-- **淺色候選底調、字詞與序號**：分別對應 `candidate-light-background`、`candidate-light-foreground` 與 `candidate-light-label`；純白底調不帶灰色，序號降低對比，字詞保留主要閱讀層級。
-- **深色候選底調、字詞與序號**：分別對應 `candidate-dark-background`、`candidate-dark-foreground` 與 `candidate-dark-label`。
+- **淺色候選底調、字詞與序號**：分別對應 `candidate-light-background`、`candidate-light-foreground` 與 `candidate-light-label`；純白底調不帶灰色，字詞與序號共用同一深色，以保留透明背景上的小字對比。
+- **深色候選底調、字詞與序號**：分別對應 `candidate-dark-background`、`candidate-dark-foreground` 與 `candidate-dark-label`；字詞與序號共用同一淺色，序號層級由較小字級表達。
 - **設定主題**：以 `SolidBackgroundFillColorBaseBrush`、`LayerFillColorDefaultBrush`、`TextFillColorSecondaryBrush` 等 XAML ThemeResource 為來源。設定的 AccentButtonStyle 與 NavigationView 保留系統 accent。
 
 **The Candidate Palette Rule.** 一般候選的選取藍與底調固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT` 並關閉毛玻璃；系統關閉 AdvancedEffects 時同樣使用實色底，這是遵循系統設定。高對比目前僅核對來源，尚未實機驗收。
@@ -110,7 +110,9 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 設定使用 MicaBackdrop 與系統底色／操作列分層。候選使用 TSF 同程序的兩個 Win32 HWND：原生 acrylic backdrop 在下方，owned layered 文字／底調 HWND 在上方，由 Rust Direct2D software DC render target／DirectWrite 繪製。兩層同步尺寸、位置與隱藏，皆 NOACTIVATE；沒有候選子程序或 IPC。
 
-候選沒有描邊或陰影，半透明底調透出後方 DWM acrylic。文字層圓角外側為透明 alpha，原生 blur region 依膠囊裁切；`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成。選取膠囊維持不透明藍色。高對比或 AdvancedEffects 關閉時，隱藏 backdrop 並將底調 alpha 改為 1；API 失敗會回報錯誤，沒有自行靜默改成實色底的 failure fallback。
+候選不繪製描邊或自訂陰影，半透明底調透出後方 DWM acrylic。文字層圓角外側為透明 alpha，原生 blur region 依膠囊裁切；`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成。選取膠囊維持不透明藍色。高對比或 AdvancedEffects 關閉時，隱藏 backdrop 並將底調 alpha 改為 1；API 失敗會回報錯誤，沒有自行靜默改成實色底的 failure fallback。
+
+系統 frame／shadow 由 `windows/src/backdrop.rs` 管理：不再使用負 margin 的 `DwmExtendFrameIntoClientArea`，以 `DWMWA_NCRENDERING_POLICY=DWMNCRP_DISABLED` 禁用 non-client rendering，再送出 `SWP_FRAMECHANGED`。Windows 11 以 `DWMWA_WINDOW_CORNER_PREFERENCE=DWMWCP_DONOTROUND` 停用額外系統圓角，膠囊仍由手動 region 裁切；Windows 10 的 `E_INVALIDARG` 表示沒有此屬性，不增加替代 renderer。原生 harness 已讀回 `DWMWA_NCRENDERING_ENABLED=false`；此狀態檢查不能代替實際桌面陰影驗收。
 
 毛玻璃來源隔離於 `windows/src/backdrop.rs`，從 user32 動態解析 `SetWindowCompositionAttribute`，使用 `WCA_ACCENT_POLICY=19`、`ACCENT_ENABLE_ACRYLICBLURBEHIND=4`、flags 0 與最低 native tint，主要可見底調由文字層提供。此 API 沒有 Windows SDK header／import，Microsoft 不建議一般應用使用；本實作為避免非啟用 popup 的 WinUI／DesktopAcrylic 失焦實色行為而使用私有 policy。這個隔離模組須隨 Windows 行為維護，不能描述成完全公開、穩定的 SDK 契約。
 
@@ -159,6 +161,6 @@ Rust 安裝器更新時清除舊版本、舊模型與退役 payload，鎖定檔�
 - **Don't** 在候選增加描邊、陰影、動畫、WebView 或候選子程序。
 - **Don't** 將 WM_PRINTCLIENT 文字／底調 PNG 宣稱為已看到桌面毛玻璃；也不將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。
 
-目前證據：`.impeccable/review/{x64,x86}/` 各有 18 張更新後的候選 PNG，包含淺／深色 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。同一 Windows 120 DPI 的背景 WM_PRINTCLIENT 只擷取原生文字／底調層，先將 premultiplied BGRA 轉成 straight alpha，再保存 RGBA PNG，淺色底調保留真正的純白 RGB；不是 AI 素材或 HTML detector，也不包含 DWM 背後實際桌面模糊。設定證據仍為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張真實離屏 XAML render。本輪新鮮 reviewer 逐張核對 36 張前景層 PNG；唯一隱藏生命週期修正完成後，同一 reviewer 判定該项 resolved，disposition ship，限於該 fix list 與前景層／原生 policy 證據，沒有擴大實機驗收範圍。
+候選證據路徑：`.impeccable/review/{x64,x86}/` 各 18 張，包含淺／深色 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。同一 Windows 120 DPI 的背景 WM_PRINTCLIENT 只擷取原生文字／底調層，先將 premultiplied BGRA 轉成 straight alpha，再保存 RGBA PNG，淺色底調保留真正的純白 RGB；不是 AI 素材或 HTML detector，也不包含 DWM 背後實際桌面陰影或模糊。設定證據仍為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張真實離屏 XAML render。本輪新鮮 reviewer 對照使用者截圖並核對 36 張新前景 PNG，disposition ship 限於 foreground／底調／native frame 契約；沒有擴大為實際桌面陰影或透度驗收。
 
-本次 x64／x86 建置、原生 candidate、mode 與 WinUI 背景檢查皆 PASS，acrylic policy 的 native call 回傳成功；兩層 NOACTIVATE 與同步隱藏 assertions 通過，x64 TSF 檢查 PASS。這些結果只證明 policy 啟用、文字／底調繪製及已列出的背景行為，實際桌面毛玻璃、前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除仍未實機驗收。先前無毛玻璃候選的 42 張審查與文件 fix list 的 ship 僅是歷史結果；舊 WinUI 候選直向／格狀、C++ Win32 BMP 與模型選單截圖同樣不是目前實作驗收。介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。
+本輪 x64／x86 native harness 與 WinUI 背景驗證 PASS：acrylic policy 啟用、NOACTIVATE、同步 hide／reopen、`DWMWA_NCRENDERING_ENABLED=false` 與 GetRgnBox 四邊對稱內縮 1 px 均通過。這些結果只證明原生 policy／frame 狀態、文字／底調繪製與已列出的背景行為，不能宣稱 raw WM_PRINTCLIENT PNG 已證明桌面陰影消失或模糊透度符合日常使用。實際桌面毛玻璃、前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除仍未實機驗收。原底調 alpha 0.82 與上一隱藏生命週期 fix list 的 ship 已是歷史結果；更早無毛玻璃 42 張審查、舊 WinUI 直向／格狀、C++ BMP 與模型選單圖同樣不代表本輪驗收。介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。

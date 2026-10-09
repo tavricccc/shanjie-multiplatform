@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T10:40:51+08:00",
+  "generatedAt": "2026-10-09T11:51:05+08:00",
   "title": "Design System: 善解 Windows",
   "extensions": {
     "colorMeta": {
@@ -155,13 +155,27 @@
         "kind": "Windows DWM acrylic",
         "lightTint": "{colors.candidate-light-background}",
         "darkTint": "{colors.candidate-dark-background}",
-        "tintAlpha": 0.82,
+        "tintAlpha": {
+          "light": 0.55,
+          "dark": 0.74,
+          "systemSolid": 1.0
+        },
+        "textAndSelectionAlpha": 1.0,
+        "labelContrast": "序號與字詞共用各主題相同前景色，以保留透明背景上的 9 DIP 小字對比；字級階層保持原樣。",
         "layers": "原生 acrylic HWND 在下方，owned layered 文字／底調 HWND 在上方；同 TSF 程序，兩層位置、尺寸與隱藏同步，皆 NOACTIVATE。",
         "systemSolid": "高對比或 UISettings AdvancedEffectsEnabled 關閉：隱藏 backdrop、底調 alpha 1；遵循系統設定，不是自訂 failure fallback。",
         "failure": "API 缺少或 policy 套用失敗時回報錯誤，沒有靜默實色替代。",
         "source": "windows/src/backdrop.rs",
         "api": "從 user32 動態解析 SetWindowCompositionAttribute；WCA_ACCENT_POLICY=19，ACCENT_ENABLE_ACRYLICBLURBEHIND=4，flags 0，最低 native tint。",
-        "maintenance": "API 沒有 Windows SDK header／import，Microsoft 不建議一般應用使用；為避免非啟用 WinUI／DesktopAcrylic 的失焦實色行為而使用隔離私有 policy，須維護，不宣稱完全公開穩定 SDK。"
+        "maintenance": "API 沒有 Windows SDK header／import，Microsoft 不建議一般應用使用；為避免非啟用 WinUI／DesktopAcrylic 的失焦實色行為而使用隔離私有 policy，須維護，不宣稱完全公開穩定 SDK。",
+        "nativeFrame": {
+          "extendedFrame": "移除負 margin 的 DwmExtendFrameIntoClientArea。",
+          "renderingPolicy": "DWMWA_NCRENDERING_POLICY=DWMNCRP_DISABLED，之後 SWP_FRAMECHANGED。",
+          "cornerPolicy": "Windows 11：DWMWA_WINDOW_CORNER_PREFERENCE=DWMWCP_DONOTROUND；手動膠囊 region 不變。",
+          "windows10": "E_INVALIDARG 表示沒有 corner preference 屬性，不增加替代 renderer。",
+          "verifiedState": "x64 harness 的 DwmGetWindowAttribute 讀回 DWMWA_NCRENDERING_ENABLED=false。",
+          "verificationLimit": "原生 frame 狀態通過；raw WM_PRINTCLIENT 不包含桌面 DWM 陰影，不以 PNG 宣稱實際陰影已消失。"
+        }
       },
       "geometry": {
         "baselineFont": "{typography.candidate}",
@@ -184,7 +198,7 @@
       ],
       "workAreaFit": "保留各詞自然寬度，只呈現放得下的項目；兩端箭頭翻動可見範圍，鍵盤選取始終可見。單一超長項目才用 character ellipsis；不共同縮窄全部項目。",
       "position": "caret 下方 6 DIP；底部不足改放上方，夾在目前螢幕工作區內。",
-      "depth": "無邊線毛玻璃膠囊、alpha 0.82 底調與透明外角；無陰影、caption、resize frame、候選子程序或 IPC。選取藍維持不透明。",
+      "depth": "無邊線毛玻璃膠囊，淺色底調 alpha 0.55、深色 alpha 0.74；無自訂陰影、caption、resize frame、候選子程序或 IPC。系統 non-client rendering 停用；選取藍與文字維持不透明。",
       "compositing": "原生 DWM acrylic 在下，owned WS_EX_LAYERED／UpdateLayeredWindow 文字與底調在上，以 32-bit premultiplied alpha 合成。",
       "motion": {
         "selection": "立即切換；沒有動畫。",
@@ -202,9 +216,9 @@
         ".impeccable/review/{x64,x86}/prediction-{1,2}-{passive,entered}.png",
         ".impeccable/review/{x64,x86}/reference-{1,2}-conversion.png"
       ],
-      "captureMethod": "每架構 18 張更新後 PNG，同一 Windows 120 DPI 背景 WM_PRINTCLIENT 只擷取原生文字／底調層；premultiplied BGRA 先轉 straight alpha 再保存 RGBA，淺色底調是真正純白 RGB；不是 AI 素材。",
-      "nativePolicyVerification": "x64／x86 acrylic policy native call 回傳成功；兩層 NOACTIVATE、同步隱藏 assertions 通過。",
-      "verificationLimit": "PNG 不包含 DWM 背後的桌面模糊；policy 啟用與文字／底調繪製通過，不代表已看到真實桌面毛玻璃。前景 App、高對比、多螢幕、實際工作列與讀屏尚未實機驗收。"
+      "captureMethod": "每架構 18 張 PNG 路徑；同一 Windows 120 DPI 背景 WM_PRINTCLIENT 只擷取原生文字／底調層，premultiplied BGRA 先轉 straight alpha 再保存 RGBA，淺色底調是真正純白 RGB；不是 AI 素材。",
+      "nativePolicyVerification": "本輪 x64／x86 native harness 與 WinUI 背景驗證 PASS：acrylic 啟用、兩層 NOACTIVATE、同步 hide／reopen，DWMWA_NCRENDERING_ENABLED 讀回 false；GetRgnBox 確認四邊對稱內縮 1 px。",
+      "verificationLimit": "PNG 不包含 DWM 桌面陰影或模糊；policy／frame 狀態通過，不代表已看到真實桌面毛玻璃或證明系統陰影消失。前景 App、高對比、多螢幕、實際工作列與讀屏尚未實機驗收。"
     },
     "nativeMode": {
       "platform": "Rust TSF 同程序 Win32 layered popup",
@@ -241,18 +255,18 @@
       "currentCaptureCount": 42,
       "candidateCaptureCount": 36,
       "settingsCaptureCount": 6,
-      "visualAssessment": "新鮮 reviewer 已逐張核對 36 張前景／底調 PNG；無描邊、純白底調、alpha 與原生 policy 證據符合契約，唯一隱藏生命週期修正已 resolved。",
-      "disposition": "ship，限於本輪已評分的隱藏生命週期 fix list 與前景層／原生 policy 證據；真實桌面毛玻璃仍未驗收。",
+      "visualAssessment": "新鮮 reviewer 已核對使用者截圖與 36 張 foreground PNG：新 alpha、可讀性與 native frame 契約符合此次修正，未擴大為桌面陰影／透度驗收。",
+      "disposition": "ship，僅涵蓋候選 foreground、底調與 native frame 契約；實際桌面陰影及毛玻璃透度仍未驗收。",
       "passed": [
-        "x64／x86 build",
-        "x64 TSF",
-        "x64／x86 acrylic policy native call 成功",
-        "兩層 NOACTIVATE 與同步隱藏 assertions",
-        "mode",
-        "candidate 背景",
-        "WinUI 背景"
+        "x64／x86 native harness",
+        "x64／x86 acrylic policy 啟用",
+        "WinUI 背景驗證",
+        "兩層 NOACTIVATE 與同步 hide／reopen assertions",
+        "DWMWA_NCRENDERING_ENABLED=false",
+        "GetRgnBox 四邊對稱內縮 1 px"
       ],
-      "historicalOnly": "先前無毛玻璃的 42 張審查與文件 fix list ship，以及舊 WinUI 直向／格狀、C++ Win32 BMP、模型選單圖僅供歷史，不是目前毛玻璃實作驗收。"
+      "pending": [],
+      "historicalOnly": "原 tint alpha 0.82、上一隱藏生命週期 fix list 的 ship、先前無毛玻璃 42 張審查，以及舊 WinUI 直向／格狀、C++ BMP、模型選單圖均僅供歷史，不代表本輪實作驗收。"
     }
   },
   "components": [
@@ -270,13 +284,13 @@
       "name": "候選淺色毛玻璃表面",
       "kind": "custom",
       "refersTo": "candidate-surface-light",
-      "description": "無邊線橫向膠囊，純白底調 alpha 0.82 疊在原生 acrylic 上；兩層皆 NOACTIVATE，不提供 HTML／CSS 模擬。"
+      "description": "無邊線橫向膠囊，純白底調 alpha 0.55 疊在原生 acrylic 上；序號與字詞皆採深色前景，兩層 NOACTIVATE，停用系統 non-client rendering。"
     },
     {
       "name": "候選深色毛玻璃表面",
       "kind": "custom",
       "refersTo": "candidate-surface-dark",
-      "description": "同一幾何使用深色底調 alpha 0.82；高對比讀系統色並停用 acrylic，AdvancedEffects 關閉時也使用實色底。"
+      "description": "同一幾何使用深色底調 alpha 0.74，序號與字詞皆採淺色前景；高對比或 AdvancedEffects 關閉時使用實色底。"
     },
     {
       "name": "目前候選",
