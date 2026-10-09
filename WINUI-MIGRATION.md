@@ -8,7 +8,7 @@
 | --- | --- |
 | `windows/src/tsf/` | Rust COM factory、TSF composition／edit session、sink、按鍵與 candidate UI element、工作列模式按鈕 |
 | `engine.rs`／`input.rs` | 核心 handle、學習 mutex／epoch、注音／拼音、符號／字碼、聯想与按鍵政策 |
-| `candidate.rs`／`native.rs` | Direct2D／DirectWrite layered popup、DPI／工作區、透明模式提示與設定通知 |
+| `candidate.rs`／`backdrop.rs`／`native.rs` | Direct2D／DirectWrite layered popup、原生 acrylic、DPI／工作區、透明模式提示與設定通知 |
 | `profile.rs`／`bridge.rs` | 共用 INI 遷移、範本、原子保存、詞庫、窄 C ABI |
 | `registration.rs`／`installer.rs` | TSF／COM 註冊、套件校驗、更新與回復、舊版清理、完整解除安裝 |
 | `ui/` | C#／XAML WinUI 控制項、草稿綁定、原生對話框与測試擷取 |
@@ -18,7 +18,11 @@
 
 ## 候選契約
 
-完整視覺契約見 [docs/candidate-surface.md](docs/candidate-surface.md)。預設字級 16／序號 9 DIP、選取高 24／外框至少 30 DIP、內距 3 DIP。單框透明圓角、藍色選取，兩種主題與系統高對比。按詞量測，窄螢幕使用左右箭頭瀏覽，同一核心頁的索引不改變；超長單詞才省略。被動預測無序號／選取，Tab 進入後才顯示。
+完整視覺契約見 [docs/candidate-surface.md](docs/candidate-surface.md)。預設字級 16／序號 9 DIP、選取高 24／表面至少 30 DIP、內距 3 DIP。無描邊、淺色底調 #FFFFFF、深色 #343443，82% tint 疊於原生 acrylic 上；字詞與藍色選取保持不透明。高對比／關閉 AdvancedEffects 時使用系統實色。自然詞寬、窄區箭頭、單項省略與被動預測序號規則維持原契約。
+
+材質在 `backdrop.rs` 管理：非 layered 原生 acrylic HWND 在下方，owned layered 字詞／tint HWND 在上方，同步大小、位置與隱藏；沒有候選子程序。原生 policy 使用 user32 動態匯出的 SetWindowCompositionAttribute，私有 accent policy 定義隔離於此模組，後續平台 API 升級須另核對。WM_PRINTCLIENT 圖片只有字詞與 tint，不含 DWM 實際桌面模糊；alpha 必須轉成 straight alpha 才保存 BMP／PNG。
+
+API 維護來源：[Microsoft SetWindowCompositionAttribute](https://learn.microsoft.com/en-us/windows/win32/dwm/setwindowcompositionattribute) 說明其無 import library／header 並建議一般用途優先使用 DwmSetWindowAttribute；此處使用 native acrylic policy 以保留候選的 NOACTIVATE，不將其私有 policy 定義宣稱為穩定公開 SDK。Windows App SDK 的非啟用 acrylic 行為另有 [Microsoft UI XAML #10570](https://github.com/microsoft/microsoft-ui-xaml/issues/10570) 使用者回報，並非本專案已完成所有 Windows 版本驗收的證明。
 
 視窗為 TSF 同程序的 Win32 popup、NOACTIVATE、無動畫；mouse sequence 與非同步 edit session 的 revision 分別檢查，失焦與取消立即關閉。彩色 emoji 使用 Windows 安裝字型，不宣稱所有旗幟字形可用。模式提示由 tiny-skia 依原 SVG 幾何畫 28 DIP，透明、1400 ms。
 

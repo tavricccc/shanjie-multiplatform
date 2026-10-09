@@ -4,6 +4,16 @@
 
 ## 2026-10-09 最新模型、Rust TSF 與橫向候選
 
+### 後續外觀修正：無邊線、純白底調與毛玻璃
+
+使用者指定移除描邊，淺色底調改 #FFFFFF，背景使用原生 acrylic。`backdrop.rs` 隔離動態 user32 composition API／私有 accent policy，非 layered 材質 HWND 在下方、owned layered 文字與 0.82 alpha tint 在上方。兩層皆 NOACTIVATE，大小、位置與隱藏同步；高對比或系統停用 AdvancedEffects 時遵循實色設定。
+
+x64／x86 重建與 TSF 背景 harness 通過；兩架構原生候選、模式圖示、WinUI 離屏保存／擷取也通過。原生 acrylic policy 返回成功；新增 hide 後發送三種 theme／settings 訊息的斷言，兩 HWND 均保持隱藏。BMP／PNG 在保存前將 Direct2D premultiplied BGRA 轉成 straight alpha，避免白色半透明底被錯誤加深。
+
+新鮮 reviewer 逐張核對 36 張最新前景層 PNG：無描邊、淺色純白、alpha 209／255、角落透明與閱讀層級符合契約。初輪唯一 material fix 是隱藏後主題通知會重新顯示底層；修正並重建／擷取後，同一 reviewer 判定該項 resolved，disposition **ship，限於該 fix list 與前景層／原生 policy 證據**。WM_PRINTCLIENT 不包含 DWM 實際桌面模糊，未將這些 PNG 當成真實毛玻璃觀感驗收；本輪沒有更新系統安裝。
+
+### 本次上游與功能驗證
+
 - `prepare-core.ps1` 覆蓋契約通過。新 pin 與前一 pin 的 core/src、C header、詞庫及授權相同；更新包含上游 fixture／文件與 macOS 候選高度／位置。子模組追蹤檔案乾淨。
 - `verify.ps1` 完整核心回歸 185 項通過：lib 41、engine 32、demote 6、learning 45、lm 16、prediction 43、replay 2；標準／倚天各 302 句。5 個上游 ignored 效能測試、global_eps_table、Unix 權限與 macOS 效能仍排除，沒有計入通過數。
 - `prepare-models.ps1` 核對 model-v4／classes-v2 官方 SHA-256、全部映射陣列及代表性分數等價，清除退休模型資料／快取。包只允許最新固定配對，舊模型設定遷移至 v4，没有執行期替代版本。

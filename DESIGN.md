@@ -4,12 +4,10 @@ description: WinUI 3 原生設定與 Rust 同程序橫向膠囊候選
 colors:
   candidate-selected-background: "#006EE6"
   candidate-selected-foreground: "#FFFFFF"
-  candidate-light-background: "#F2F2F5"
-  candidate-light-border: "#B5B5BD"
+  candidate-light-background: "#FFFFFF"
   candidate-light-foreground: "#222225"
   candidate-light-label: "#65656E"
   candidate-dark-background: "#343443"
-  candidate-dark-border: "#787884"
   candidate-dark-foreground: "#F5F5F7"
   candidate-dark-label: "#B9B9C5"
 typography:
@@ -63,7 +61,7 @@ components:
 
 **Creative North Star: "原生設定，善解橫向膠囊候選"**
 
-設定維持使用者核准的 WinUI 3 原生幾何與操作；候選依使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift`，採細框、單行膠囊、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。
+設定維持使用者核准的 WinUI 3 原生幾何與操作；候選依使用者提供的 macOS 善解照片、上游 `CandidateCells.swift`／`InputController.swift` 與後續指定，採無描邊的單行毛玻璃膠囊、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。
 
 Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。
 
@@ -76,7 +74,7 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ## Colors
 
-候選採使用者指定的 macOS 善解中性色與固定藍色；設定窗繼續使用 Windows 原生主題資源。
+候選採純白／深色底調與固定選取藍；底調在一般透明效果下以 alpha 0.82 疊在 Windows acrylic 材質上，沒有邊線。設定窗繼續使用 Windows 原生主題資源。
 
 ### Primary
 
@@ -84,11 +82,11 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ### Neutral
 
-- **淺色候選底面、外框、字詞與序號**：分別對應 `candidate-light-background`、`candidate-light-border`、`candidate-light-foreground` 與 `candidate-light-label`；序號降低對比，字詞保留主要閱讀層級。
-- **深色候選底面、外框、字詞與序號**：分別對應 `candidate-dark-background`、`candidate-dark-border`、`candidate-dark-foreground` 與 `candidate-dark-label`。
+- **淺色候選底調、字詞與序號**：分別對應 `candidate-light-background`、`candidate-light-foreground` 與 `candidate-light-label`；純白底調不帶灰色，序號降低對比，字詞保留主要閱讀層級。
+- **深色候選底調、字詞與序號**：分別對應 `candidate-dark-background`、`candidate-dark-foreground` 與 `candidate-dark-label`。
 - **設定主題**：以 `SolidBackgroundFillColorBaseBrush`、`LayerFillColorDefaultBrush`、`TextFillColorSecondaryBrush` 等 XAML ThemeResource 為來源。設定的 AccentButtonStyle 與 NavigationView 保留系統 accent。
 
-**The Candidate Palette Rule.** 一般候選的選取藍固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，不沿用一般候選 RGB。高對比目前僅核對來源，尚未實機驗收。
+**The Candidate Palette Rule.** 一般候選的選取藍與底調固定於 frontmatter；系統主題模式只判斷淺／深色。高對比則整組改用 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT` 並關閉毛玻璃；系統關閉 AdvancedEffects 時同樣使用實色底，這是遵循系統設定。高對比目前僅核對來源，尚未實機驗收。
 
 ## Typography
 
@@ -110,15 +108,17 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ## Elevation & Depth
 
-設定使用 MicaBackdrop 與系統底色／操作列分層。候選是 TSF 同程序 Win32 layered popup，由 Rust Direct2D software DC render target／DirectWrite 繪製；沒有獨立候選 host 或 IPC。
+設定使用 MicaBackdrop 與系統底色／操作列分層。候選使用 TSF 同程序的兩個 Win32 HWND：原生 acrylic backdrop 在下方，owned layered 文字／底調 HWND 在上方，由 Rust Direct2D software DC render target／DirectWrite 繪製。兩層同步尺寸、位置與隱藏，皆 NOACTIVATE；沒有候選子程序或 IPC。
 
-候選只保留單一細框與實色底面，圓角外側為透明 alpha，不加陰影。`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成，避免再包一層原生框。選取膠囊以固定藍色形成閱讀層次。
+候選沒有描邊或陰影，半透明底調透出後方 DWM acrylic。文字層圓角外側為透明 alpha，原生 blur region 依膠囊裁切；`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成。選取膠囊維持不透明藍色。高對比或 AdvancedEffects 關閉時，隱藏 backdrop 並將底調 alpha 改為 1；API 失敗會回報錯誤，沒有自行靜默改成實色底的 failure fallback。
 
-**The Quiet Candidate Rule.** 顯示、隱藏、可見範圍移動與選取立即切換，DWM 視窗轉場停用，保持 `WS_EX_NOACTIVATE`；這項候選規則不更改設定窗原生控制項動畫。
+毛玻璃來源隔離於 `windows/src/backdrop.rs`，從 user32 動態解析 `SetWindowCompositionAttribute`，使用 `WCA_ACCENT_POLICY=19`、`ACCENT_ENABLE_ACRYLICBLURBEHIND=4`、flags 0 與最低 native tint，主要可見底調由文字層提供。此 API 沒有 Windows SDK header／import，Microsoft 不建議一般應用使用；本實作為避免非啟用 popup 的 WinUI／DesktopAcrylic 失焦實色行為而使用私有 policy。這個隔離模組須隨 Windows 行為維護，不能描述成完全公開、穩定的 SDK 契約。
+
+**The Quiet Candidate Rule.** 顯示、隱藏、可見範圍移動與選取立即切換，兩層尺寸、位置及隱藏同步，DWM 視窗轉場停用，皆保持 `WS_EX_NOACTIVATE`；這項候選規則不更改設定窗原生控制項動畫。
 
 ## Shapes
 
-設定控制項採 Windows App SDK 預設圓角、focus、hover 與 pressed 行為。候選外框線寬 1 DIP，圓角半徑為外框高扣除 1 DIP 後的一半；選取膠囊半徑為實際列高的一半。這些圓角隨實際量測高度產生，沒有固定 6／4 DIP 圓角。反白涵蓋整項，不使用左側 selection indicator；透明外角由 layered alpha 呈現。
+設定控制項採 Windows App SDK 預設圓角、focus、hover 與 pressed 行為。候選沒有描邊，底調 FillRoundedRectangle 從 0 到整個視窗邊界，圓角半徑為實際表面高度的一半；選取膠囊半徑為實際列高的一半。原生 acrylic window 另以 rounded region 裁切。這些圓角隨實際量測高度產生，沒有固定 6／4 DIP 圓角；字級、內距與列高維持既有測量契約。反白涵蓋整項，不使用左側 selection indicator。
 
 ## Components
 
@@ -132,9 +132,9 @@ NavigationView 的「一般」、「按鍵」、「組字與提交」、「選�
 
 ### 橫向候選與預測
 
-候選外框使用 `candidate-surface-light`／`candidate-surface-dark`，一般項與目前選取項分別使用 `candidate-item`／`candidate-item-selected`。左右、上下與 Tab 均沿同一橫向候選序列操作，不展開直向或格狀；profile 的其他提交、空白翻頁與取消規則仍由個人設定控制。
+候選表面使用 `candidate-surface-light`／`candidate-surface-dark`，一般項與目前選取項分別使用 `candidate-item`／`candidate-item-selected`。左右、上下與 Tab 均沿同一橫向候選序列操作，不展開直向或格狀；profile 的其他提交、空白翻頁與取消規則仍由個人設定控制。
 
-被動即時預測不顯示序號、反白或序號預留欄；Tab 進入後才出現序號與目前反白，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號，以 Shift＋數字或滑鼠選取。滑鼠回傳原候選索引與 sequence，TSF 拒絕過期點擊，箭頭僅翻動可見範圍。palette、量測、自然寬度、alpha、繪製與定位來源為 `windows/src/candidate.rs`；候選 UIElement、焦點與提交契約為 `windows/src/tsf/`。sidecar 記錄原生資源與行為，不提供 HTML/CSS 模擬。
+被動即時預測不顯示序號、反白或序號預留欄；Tab 進入後才出現序號與目前反白，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號，以 Shift＋數字或滑鼠選取。滑鼠回傳原候選索引與 sequence，TSF 拒絕過期點擊，箭頭僅翻動可見範圍。palette、量測、自然寬度、alpha、繪製與定位來源為 `windows/src/candidate.rs`，材質 policy 與 native backdrop 為 `windows/src/backdrop.rs`；候選 UIElement、焦點與提交契約為 `windows/src/tsf/`。sidecar 記錄原生資源與行為，不提供 HTML/CSS 模擬。
 
 ### 中英模式提示
 
@@ -150,15 +150,15 @@ Rust 安裝器更新時清除舊版本、舊模型與退役 payload，鎖定檔�
 
 - **Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。
 - **Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。
-- **Do** 一般候選使用固定選取藍，高對比改讀整組系統 window／highlight 色。
-- **Do** 候選維持 NOACTIVATE，以 sequence 驗證滑鼠提交，立即切換選取與顯示狀態。
+- **Do** 一般候選使用純白／深色毛玻璃底調與固定選取藍，高對比改讀系統色且與 AdvancedEffects 關閉狀態一樣使用實色底。
+- **Do** 兩個候選 HWND 維持 NOACTIVATE 與位置、尺寸、隱藏同步，以 sequence 驗證滑鼠提交，立即切換選取與顯示狀態。
 
 ### Don't:
 
 - **Don't** 恢復直向、九欄格狀、模型版本選單或任意詞類表選單。
-- **Don't** 在候選增加第二層外框、陰影、動畫、WebView 或獨立候選 host。
-- **Don't** 將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。
+- **Don't** 在候選增加描邊、陰影、動畫、WebView 或候選子程序。
+- **Don't** 將 WM_PRINTCLIENT 文字／底調 PNG 宣稱為已看到桌面毛玻璃；也不將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。
 
-目前證據：`.impeccable/review/{x64,x86}/` 各有 18 張候選 PNG，包含淺／深色 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。同一 Windows 120 DPI 的背景原生 WM_PRINTCLIENT 結果轉成 RGBA PNG；不是 AI 素材或 HTML detector。設定證據為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張真實離屏 XAML render。獨立 reviewer 已逐張核對 42 張 capture，視覺項目均為 match／adaptation；唯一 material fix 是本文件的舊 token 與架構敘述。新鮮 documenter 修正後，同一 reviewer 判定該項 resolved，最後 disposition 為 ship，限定該文件 fix list；沒有擴大實機驗收範圍。
+目前證據：`.impeccable/review/{x64,x86}/` 各有 18 張更新後的候選 PNG，包含淺／深色 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。同一 Windows 120 DPI 的背景 WM_PRINTCLIENT 只擷取原生文字／底調層，先將 premultiplied BGRA 轉成 straight alpha，再保存 RGBA PNG，淺色底調保留真正的純白 RGB；不是 AI 素材或 HTML detector，也不包含 DWM 背後實際桌面模糊。設定證據仍為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張真實離屏 XAML render。本輪新鮮 reviewer 逐張核對 36 張前景層 PNG；唯一隱藏生命週期修正完成後，同一 reviewer 判定該项 resolved，disposition ship，限於該 fix list 與前景層／原生 policy 證據，沒有擴大實機驗收範圍。
 
-目前 x64／x86 建置、兩個 Rust unit tests、兩個操作 profile 的 TSF、interaction、mode、candidate 與 WinUI 背景檢查皆 PASS。這些結果不涵蓋前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除。歷史 WinUI 候選直向／格狀、舊 C++ Win32 BMP captures 與舊模型選單截圖僅保留為過往證據，不是目前實作驗收；介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。
+本次 x64／x86 建置、原生 candidate、mode 與 WinUI 背景檢查皆 PASS，acrylic policy 的 native call 回傳成功；兩層 NOACTIVATE 與同步隱藏 assertions 通過，x64 TSF 檢查 PASS。這些結果只證明 policy 啟用、文字／底調繪製及已列出的背景行為，實際桌面毛玻璃、前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除仍未實機驗收。先前無毛玻璃候選的 42 張審查與文件 fix list 的 ship 僅是歷史結果；舊 WinUI 候選直向／格狀、C++ Win32 BMP 與模型選單截圖同樣不是目前實作驗收。介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。
