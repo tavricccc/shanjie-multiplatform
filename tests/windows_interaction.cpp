@@ -129,6 +129,10 @@ int wmain(int argc,wchar_t** argv) {
         assert(engine.reset(true,out)); type("sucl");
         ShanjieKey space{}; space.kind = 2; assert(engine.key(space,out)); assert(!out.preedit.empty() && !out.prediction);
         assert(engine.reset(true,out)); type("callsu3"); assert(out.preedit == L"call你");
+        assert(engine.reset(true,out)); type("hello"); assert(engine.key(space,out)); assert(out.preedit == L"hello ");
+        type("world"); assert(engine.key(enter,out)); assert(out.commit == L"hello world");
+        type("hello123"); assert(engine.key(enter,out)); assert(out.commit == L"hello123");
+        type("hello,su3"); assert(engine.key(enter,out)); assert(out.commit == L"hello,你");
         assert(engine.reset(true,out)); assert(engine.smartInput(0,out)); type("sc"); assert(out.candidates.empty());
         std::cout << "PASS: smart Zhuyin full/initials, candidate pick, Enter/Space, mixed call + Chinese, switches off\n";
     }

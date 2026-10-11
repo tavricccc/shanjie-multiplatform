@@ -382,11 +382,12 @@ impl Data {
             && key.kind == 4
             && key.modifiers == 0;
         let trigger = p.get("candidates", "open", "down");
+        let mixed_pending = self.state.borrow().engine.mixed_pending();
         let bypass = key.modifiers == 0
             && closed
             && !state.preedit.is_empty()
             && !input::pending(&state)
-            && !(p.flag("input", "mixed_input", false) && state.preedit.chars().any(|c| c.is_ascii_alphabetic()))
+            && !mixed_pending
             && ((key.kind == 2 && trigger == "down") || (key.kind == 10 && trigger == "space"));
         let cycle = p.flag("candidates", "up_cycles", true)
             && key.kind == 9
@@ -394,7 +395,7 @@ impl Data {
             && closed
             && !state.preedit.is_empty()
             && !input::pending(&state);
-        let cycle = cycle && !(p.flag("input", "mixed_input", false) && state.preedit.chars().any(|c| c.is_ascii_alphabetic()));
+        let cycle = cycle && !mixed_pending;
         let handled = Rc::new(Cell::new(false));
         let result_handled = handled.clone();
         let data = self.clone();

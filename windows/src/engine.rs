@@ -222,6 +222,9 @@ impl Engine {
     pub fn key(&mut self, k: ShanjieKey) -> Option<Snapshot> {
         self.operation(|h, o| unsafe { shanjie_engine_key(h, k, o) })
     }
+    pub fn mixed_pending(&self) -> bool {
+        unsafe { shanjie_windows_is_mixed_pending(self.handle) != 0 }
+    }
     pub fn reset(&mut self, discard: bool) -> Option<Snapshot> {
         // Upstream reset clears composition without learning or persistence.
         // Focus loss must not wait for another App's learning writer.
