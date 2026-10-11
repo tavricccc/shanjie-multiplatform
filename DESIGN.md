@@ -8,6 +8,10 @@ colors:
   candidate-border: "#D3D3D8"
   candidate-foreground: "#222225"
   candidate-label: "#65656E"
+  candidate-dark-background: "#202020"
+  candidate-dark-border: "#505055"
+  candidate-dark-foreground: "#F5F5F7"
+  candidate-dark-label: "#B8B8C2"
 typography:
   chinese:
     fontFamily: Microsoft JhengHei UI
@@ -43,6 +47,14 @@ components:
     textColor: "{colors.candidate-selected-foreground}"
     typography: "{typography.candidate}"
     padding: 0 DIP 7 DIP 0 DIP 4 DIP
+  candidate-surface-dark:
+    backgroundColor: "{colors.candidate-dark-background}"
+    textColor: "{colors.candidate-dark-foreground}"
+    padding: "{spacing.candidate-surface}"
+  mixed-reading-hint:
+    backgroundColor: "{colors.candidate-selected-background}"
+    textColor: "{colors.candidate-selected-foreground}"
+    typography: "{typography.candidate}"
   mode-indicator:
     width: 28 DIP
     height: 28 DIP
@@ -55,7 +67,7 @@ components:
 
 **Creative North Star: "原生設定，善解橫向膠囊候選"**
 
-設定維持使用者核准的 WinUI 3 原生幾何與操作；候選沿用使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift` 的橫向膠囊比例，依最新指定採純白不透明背景、很細的邊線、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。
+設定維持使用者核准的 WinUI 3 原生幾何與操作；候選沿用使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift` 的橫向膠囊比例，依最新指定共用設定窗的淺／深色主題偏好，保留不透明背景、很細的邊線、小型序號與藍色選取面。中英混打依 ASUS 參考的呈現方式，在正文保留英文原始按鍵，下方用藍底白字提示注音。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。
 
 Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。
 
@@ -68,19 +80,20 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 ## Colors
 
-一般候選固定為純白不透明背景、淺灰細邊線與選取藍，背景、文字、序號及選取面均為 alpha 1。此配色以使用者本輪明確指定為準，不跟隨設定介面深色主題。設定窗繼續使用 Windows 原生主題資源。
+一般候選依共用主題偏好使用淺色或深色底面與對應文字、序號、細邊線，背景、文字、序號及選取面均為 alpha 1。設定窗繼續使用 Windows 原生主題資源。
 
 ### Primary
 
-- **選取藍**：`candidate-selected-background` 只用於目前候選的膠囊反白；序號與字詞使用 `candidate-selected-foreground`。
+- **選取藍**：`candidate-selected-background` 用於目前候選的膠囊反白與混打注音提示；序號與字詞使用 `candidate-selected-foreground`。
 
 ### Neutral
 
 - **純白候選底面與細邊線**：`candidate-background` 與 `candidate-border` 構成單一清楚的膠囊邊界，不加入陰影或背景材質。
 - **候選字詞與序號**：`candidate-foreground` 提供主要閱讀對比；`candidate-label` 使用次要灰色，配合較小字級區分序號。
+- **深色候選**：`candidate-dark-background`、`candidate-dark-border`、`candidate-dark-foreground` 與 `candidate-dark-label` 分別提供深色底面、細邊線、字詞與次要序號；選取藍與白字共用。
 - **設定主題**：以 `SolidBackgroundFillColorBaseBrush`、`LayerFillColorDefaultBrush`、`TextFillColorSecondaryBrush` 等 XAML ThemeResource 為來源。設定的 AccentButtonStyle 與 NavigationView 保留系統 accent。
 
-**The Candidate Palette Rule.** 一般候選固定使用 frontmatter 的白底、細邊線與選取藍，忽略 appearance.theme；「設定介面主題」只控制 WinUI 設定窗。高對比整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，邊線也使用 window text 色。高對比目前僅核對來源，尚未實機驗收。
+**The Candidate Palette Rule.** 「介面與選字框主題」共用 `appearance.theme`：0 跟隨 Windows，候選讀取 `AppsUseLightTheme`；1 淺色，2 深色。高對比優先整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，邊線也使用 window text 色。高對比與實際切換 Windows 主題尚未實機驗收。
 
 ## Typography
 
@@ -104,13 +117,13 @@ Windows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設�
 
 設定使用 MicaBackdrop 與系統底色／操作列分層。候選只使用 TSF 同程序的單一 Win32 layered popup，由 Rust Direct2D software DC render target／DirectWrite 繪製；沒有 owner／背景 HWND、候選子程序或 IPC。
 
-候選正文純白且不透明，layered alpha 只處理膠囊外側透明圓角與抗鋸齒。單一細邊線提供表面邊界，選取膠囊維持不透明藍色；沒有 blur、陰影或額外背景視窗。`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成。已移除毛玻璃模組、私有 composition API 與相應 feature dependencies，不保留替代材質或 renderer。
+候選正文依主題使用實色且不透明，layered alpha 只處理膠囊外側透明圓角與抗鋸齒。單一細邊線提供表面邊界，選取膠囊維持不透明藍色；沒有 blur、陰影或額外背景視窗。`WS_POPUP` 沒有 caption 或 resize frame，`UpdateLayeredWindow` 以 premultiplied alpha 合成。已移除毛玻璃模組、私有 composition API 與相應 feature dependencies，不保留替代材質或 renderer。
 
 **The Quiet Candidate Rule.** 顯示、隱藏、可見範圍移動與選取立即切換，DWM 視窗轉場停用，單一候選 HWND 保持 `WS_EX_NOACTIVATE`。隱藏時的設定／主題／DWM 色彩通知只更新 palette；已顯示時才重新 display，不自行重開候選。這項候選規則不更改設定窗原生控制項動畫。
 
 ## Shapes
 
-設定控制項採 Windows App SDK 預設圓角、focus、hover 與 pressed 行為。候選白底 FillRoundedRectangle 從 0 到整個視窗邊界，圓角半徑為實際表面高度的一半；邊線寬 0.5 DIP，stroke rectangle 內縮 0.25 DIP，半徑為（表面高度 − 0.5 DIP）／2。選取膠囊半徑為實際列高的一半。圓角依實際量測高度產生，字級、內距與列高維持既有測量契約；反白涵蓋整項，不使用左側 selection indicator。
+設定控制項採 Windows App SDK 預設圓角、focus、hover 與 pressed 行為。候選底面 FillRoundedRectangle 從 0 到整個視窗邊界，圓角半徑為實際表面高度的一半；邊線寬 0.5 DIP，stroke rectangle 內縮 0.25 DIP，半徑為（表面高度 − 0.5 DIP）／2。選取膠囊半徑為實際列高的一半。圓角依實際量測高度產生，字級、內距與列高維持既有測量契約；反白涵蓋整項，不使用左側 selection indicator。
 
 ## Components
 
@@ -126,7 +139,11 @@ NavigationView 的「一般」、「按鍵」、「組字與提交」、「選�
 
 ### 橫向候選與預測
 
-候選表面使用 `candidate-surface`，一般項與目前選取項分別使用 `candidate-item`／`candidate-item-selected`。左右、上下與 Tab 均沿同一橫向候選序列操作，不展開直向或格狀；profile 的其他提交、空白翻頁與取消規則仍由個人設定控制。
+候選表面依主題使用 `candidate-surface`／`candidate-surface-dark`，一般項與目前選取項分別使用 `candidate-item`／`candidate-item-selected`。左右、上下與 Tab 均沿同一橫向候選序列操作，不展開直向或格狀；profile 的其他提交、空白翻頁與取消規則仍由個人設定控制。
+
+### 混打原文與注音提示
+
+「組字與提交」保留「中英混打自動判斷」，移除簡拼／免聲調控制項及其設定欄位。標準／倚天注音混打先在正文組字區顯示原始英文按鍵，例如 `gj`；下方的 `mixed-reading-hint` 顯示 `ㄕㄨ`。提示沿用同一候選 HWND 與既有尺寸，藍底白字、沒有序號、不接受點選。聲調完成後轉中文，Enter 保留原文；拼音鍵盤停用混打控制項但保存偏好。行為來源為 `platform/smart_input_windows.rs`，控制項與說明來源為 `ui/MainWindow.xaml`。
 
 被動即時預測不顯示序號、反白或序號預留欄；Tab 進入後才出現序號與目前反白，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號，以 Shift＋數字或滑鼠選取。滑鼠回傳原候選索引與 sequence，TSF 拒絕過期點擊，箭頭僅翻動可見範圍。palette、量測、自然寬度、alpha、繪製與定位來源為 `windows/src/candidate.rs`；候選 UIElement、焦點與提交契約為 `windows/src/tsf/`。`windows/src/lib.rs` 與 `windows/Cargo.toml` 不再載入毛玻璃模組或 UI_ViewManagement／UI_Controls features。sidecar 記錄原生資源與行為，不提供 HTML/CSS 模擬。
 
@@ -144,7 +161,7 @@ Rust 安裝器更新時清除舊版本、舊模型與退役 payload，鎖定檔�
 
 - **Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。
 - **Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。
-- **Do** 一般候選固定純白不透明底與 0.5 DIP 細邊線，設定介面主題獨立控制 WinUI；高對比改讀系統色。
+- **Do** 一般候選與 WinUI 共用主題偏好，保留淺／深色不透明底與 0.5 DIP 細邊線；高對比優先改讀系統色。
 - **Do** 單一候選 HWND 維持 NOACTIVATE，以 sequence 驗證滑鼠提交，保留 hide／reopen 與 hidden theme 通知規則。
 
 ### Don't:
@@ -153,6 +170,8 @@ Rust 安裝器更新時清除舊版本、舊模型與退役 payload，鎖定檔�
 - **Don't** 在候選恢復毛玻璃、半透明正文、額外背景 HWND、陰影、動畫、WebView 或候選子程序。
 - **Don't** 將歷史截圖、離屏 render 或來源檢查宣稱為前景 App、工作列、高對比、多螢幕、讀屏、實際安裝或重開機驗收。
 
-候選證據路徑：`.impeccable/review/{x64,x86}/` 各 18 張，包含 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`。檔名的 1／2 保留兩種設定主題測試案例，兩者候選都應是白底；這些是同一 Windows 120 DPI 背景原生 WM_PRINTCLIENT 結果，premultiplied BGRA 轉 straight alpha 後保存 RGBA PNG，不是 AI 素材或 HTML detector。設定證據為 `build/ui-review-final/settings-{1,2}-{0,3,appearance}.png` 六張離屏 XAML render。本輪新鮮 reviewer 逐張核對 36 張候選與 2 張設定 appearance PNG，disposition ship，限於背景原生繪製／離屏審查，沒有擴大安裝或前景 App 驗收。
+本輪候選證據為 `build/native-review/{x64,x86}/candidates-{1,2}-horizontal.bmp` 與 `mixed-hint-{1,2}.bmp`，共八張原生 WM_PRINTCLIENT 擷取；1／2 分別為淺／深色。設定證據為 `build/ui-review-final/settings-{1,2}-2.png` 與 `settings-{1,2}-appearance.png`，共四張離屏 XAML render。本輪 finish reviewer 已逐張核對這十二張，disposition ship，僅限本輪視覺與離屏證據；沒有前景 App、安裝、讀屏、多螢幕、高對比或實際切換 Windows 主題驗收。
 
-本輪 x64／x86 建置與原生候選／WinUI 背景驗證均 PASS，x64 TSF 背景檢查亦 PASS；測試保留 null owner、NOACTIVATE、過期點擊、滑鼠選字、hide／reopen 與隱藏時主題通知斷言，移除舊雙 HWND、composition policy 與 region 專屬斷言。前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除仍未實機驗收。舊毛玻璃、alpha 0.82／0.55／0.74、雙視窗與其 review ship 已退役，只是歷史結果；更早舊 WinUI 直向／格狀、C++ BMP 與模型選單圖也不代表本輪驗收。介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。
+歷史證據保留：`.impeccable/review/{x64,x86}/` 各 18 張白底 PNG，包含 `candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png`、`prediction-{1,2}-{passive,entered}.png` 及 `reference-{1,2}-conversion.png`，來自 Windows 120 DPI 原生 WM_PRINTCLIENT、premultiplied BGRA 轉 straight alpha 的 RGBA PNG。當時兩種主題都固定白底，36 張候選與 2 張設定 appearance 圖曾獲背景審查 ship；它們不代表本輪淺／深色或混打提示驗收。
+
+先前純白版 x64／x86 建置與原生候選／WinUI 背景驗證均 PASS，x64 TSF 背景檢查亦 PASS；保留的斷言包括 null owner、NOACTIVATE、過期點擊、滑鼠選字、hide／reopen 與隱藏時主題通知，舊雙 HWND、composition policy 與 region 專屬斷言已移除。本輪非視覺檢查結果以 `VERIFICATION.md` 為準。前景 App、實際工作列、高對比、多螢幕、實際新安裝與重開機刪除仍未實機驗收。舊毛玻璃、alpha 0.82／0.55／0.74、雙視窗與其 review ship 已退役，只是歷史結果；更早舊 WinUI 直向／格狀、C++ BMP 與模型選單圖也不代表本輪驗收。介面未使用生成影像，既有素材 provenance 見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/LICENSE`。

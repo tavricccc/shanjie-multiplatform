@@ -2,7 +2,17 @@
 
 最新日期：2026-10-11。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
 
-## 2026-10-11 中英混打與免聲調／簡拼
+## 2026-10-11 後續：移除簡拼、原文組字提示與深色候選
+
+- 已移除 Windows 簡拼／免聲調開關、核心擴充政策及強制 prediction，舊 `smart_zhuyin` 欄位遷移刪除。Rust 原有兩個設定／清理測試通過，包含新增的退役欄位清除斷言。
+- core lib 47、engine 33，共 **80 項通過**。本輪沒有重跑無關模型 fixture；最後英文字串內 Shift 大寫修正另以同一必要單元案例定向重跑通過，兩架構重新建置。記錄 `build/mixed-preview-core.log`、`mixed-preview-final-core.log`。
+- 正式模型 interaction 檢查通過 `gj` 原文、`ㄕㄨ` 提示、提示不接受 pick、Enter 原文、`su3` →「你」、既有中英分界與開關關閉。x64／x86 TSF 背景 harness 通過句中插入、原文與提示、Enter 提交、關閉功能保留組字，以及原有 commit／cancel／caret／COM lifetime。記錄 `build/mixed-preview-interaction.log`、`mixed-preview-tsf-{x64,x86}.log`。
+- 兩架構原生候選 harness 通過 NOACTIVATE、滑鼠／過期 sequence、提示點擊不觸發選字、隱藏時 theme 通知不重開視窗。淺／深候選及藍色提示的本輪 BMP 在 `build/native-review/{x64,x86}/`；深色實際為深灰底與淺色文字。WinUI 開關保存／重讀與淺深擷取通過，`build/ui-review-final/result.txt` 為 PASS。`verify-ui.ps1` 只等待自己的測試程式退出，不再等待共享 runtime 子程序。
+- 新鮮 impeccable reviewer 已逐張核對兩架構共八張候選／提示 BMP，以及四張設定 composition／appearance PNG，disposition **ship，限此次視覺修改與離屏驗證**。沒有 web detector 或生成素材。主題系統文件由 documenter 依本輪原生來源同步。
+
+未更新系統安裝、未修改真實個人設定，未操作使用者前景 App。原文與提示在實際 App 的相對定位、已註冊 TIP、即時切換 Windows 主題、高對比、讀屏、多螢幕仍未實機驗收。下方簡拼版紀錄為已被取代的初版，不能當作目前仍提供簡拼。
+
+## 2026-10-11 中英混打與免聲調／簡拼（初版，簡拼已移除）
 
 - 新增兩個獨立且預設關閉的設定；兩架構 release DLL 與 x64 WinUI 編譯通過。上游 pin 不變，子模組乾淨，核心差異由 `prepare-smart-input.ps1` 的確切錨點核對後產生。
 - 本輪相關核心回歸 **144 項通過**：lib 47、engine 33、prediction 64；8 個既有 ignored 量測沒有執行。沒有重跑與本功能無關的整套模型／學習長 fixture。記錄 `build/smart-core-regression.log`。

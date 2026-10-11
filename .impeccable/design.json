@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T12:37:26+08:00",
+  "generatedAt": "2026-10-11T14:07:49.252Z",
   "title": "Design System: 善解 Windows",
   "extensions": {
     "colorMeta": {
@@ -27,6 +27,22 @@
       "candidate-label": {
         "role": "neutral",
         "displayName": "候選次要序號"
+      },
+      "candidate-dark-background": {
+        "role": "neutral",
+        "displayName": "深色候選底面"
+      },
+      "candidate-dark-border": {
+        "role": "neutral",
+        "displayName": "深色候選細邊線"
+      },
+      "candidate-dark-foreground": {
+        "role": "neutral",
+        "displayName": "深色候選字詞"
+      },
+      "candidate-dark-label": {
+        "role": "neutral",
+        "displayName": "深色候選次要序號"
       }
     },
     "typographyMeta": {
@@ -74,7 +90,7 @@
         "TextFillColorSecondaryBrush",
         "AccentButtonStyle"
       ],
-      "themeControl": "設定介面主題：只控制 WinUI 設定窗，候選始終固定白底；高對比例外使用系統色。",
+      "themeControl": "介面與選字框主題：0 跟隨 Windows，1 淺色，2 深色；同時控制 WinUI 設定與原生候選，高對比優先使用系統色。",
       "navigation": [
         "一般",
         "按鍵",
@@ -85,8 +101,8 @@
       ],
       "modelInfo": {
         "control": "文字與可換行的次要說明",
-        "model": "model-v4",
-        "classes": "classes-v2",
+        "model": "model-v5",
+        "classes": "classes-v3",
         "choices": false,
         "sources": "MODEL-SOURCES.json",
         "help": "只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"
@@ -101,11 +117,18 @@
       },
       "draft": "六頁共用草稿；操作預設只調整按鍵、選字與預測，保留詞句偏好、詞庫、學習與外觀；按儲存才套用。",
       "feedback": "InfoBar 與儲存／取消列固定在可捲動內容外；清除學習採原生 ContentDialog。",
-      "migration": "schema 4；舊設定先備份，遷移至 model-v4 與橫向候選，移除退役展開鍵；保留個人詞庫、選字學習及其他已存偏好。",
+      "migration": "schema 5；舊設定先備份，遷移至 model-v5 與橫向候選，移除退役展開鍵及簡拼欄位；保留個人詞庫、選字學習及其他已存偏好。",
       "captures": [
-        "build/ui-review-final/settings-{1,2}-{0,3,appearance}.png"
+        "build/ui-review-final/settings-{1,2}-2.png",
+        "build/ui-review-final/settings-{1,2}-appearance.png"
       ],
-      "verificationLimit": "六張目前淺／深色離屏 XAML render；不是前景應用程式或實際安裝驗收。"
+      "verificationLimit": "本輪四張淺／深色離屏 XAML render 經 finish reviewer 逐張核對；不是前景應用程式、實際安裝或實際切換 Windows 主題驗收。",
+      "mixedInput": {
+        "label": "中英混打自動判斷",
+        "description": "組字區先顯示英文按鍵，下方提示注音；輸入聲調後轉成中文，Enter 保留英文。適用標準／倚天注音。",
+        "pinyin": "停用控制項但保存偏好。",
+        "removed": "簡拼／免聲調控制項與設定欄位。"
+      }
     },
     "nativeCandidate": {
       "platform": "Rust TSF 同程序單一 Win32 layered popup；Direct2D software DC render target／DirectWrite",
@@ -127,7 +150,7 @@
           "upstream/shanjie/macos/Sources/ShanjieKit/InputController.swift"
         ],
         "contract": "docs/candidate-surface.md",
-        "decision": "使用者最新指定移除毛玻璃、純白背景與很細的 border；只保留橫向，所有一般候選固定白底。"
+        "decision": "使用者最新指定修復深色候選白底；淺／深色與設定共用主題偏好，保留實色、細邊線、橫向。混打依 ASUS 參考在正文呈現英文原文，下方提示注音。"
       },
       "selection": {
         "background": "{colors.candidate-selected-background}",
@@ -144,13 +167,13 @@
         "material": "系統 window 色實色底；沒有額外背景視窗。",
         "verified": "來源核對；尚未實機驗收。"
       },
-      "systemTheme": "一般候選忽略 appearance.theme；設定介面主題只控制 WinUI 設定窗。高對比候選使用系統 window／highlight 色。",
-      "border": "{colors.candidate-border}，0.5 DIP stroke；rectangle 內縮 0.25 DIP，radius=(height−0.5 DIP)／2。",
+      "systemTheme": "appearance.theme：0 讀取 Windows AppsUseLightTheme，1 淺色，2 深色；高對比優先使用系統 window／highlight 色。",
+      "border": "依主題使用 {colors.candidate-border} 或 {colors.candidate-dark-border}；0.5 DIP stroke，rectangle 內縮 0.25 DIP，radius=(height−0.5 DIP)／2。",
       "material": {
-        "kind": "純白不透明實色",
-        "background": "{colors.candidate-background}",
-        "backgroundAlpha": 1.0,
-        "textAndSelectionAlpha": 1.0,
+        "kind": "淺／深色不透明實色",
+        "background": "依主題使用 {colors.candidate-background} 或 {colors.candidate-dark-background}",
+        "backgroundAlpha": 1,
+        "textAndSelectionAlpha": 1,
         "layers": "單一 WS_EX_LAYERED NOACTIVATE HWND，owner 為 null；alpha 只處理膠囊透明外角與抗鋸齒，正文不透明。",
         "source": "windows/src/candidate.rs",
         "maintenance": "毛玻璃模組、私有 composition API、雙 HWND 與對應 features 已移除，沒有替代材質或 renderer。"
@@ -166,7 +189,7 @@
         "trailing": "{spacing.candidate-trailing}",
         "caretGap": "{spacing.candidate-caret-gap}",
         "scale": "候選內距與幾何依字級／16 比例調整；caret 間距固定 6 DIP，依 DPI 換算。",
-        "surfaceRadius": "實際表面高度／2；白底 FillRoundedRectangle 從 0 到整個視窗邊界。",
+        "surfaceRadius": "實際表面高度／2；實色底面 FillRoundedRectangle 從 0 到整個視窗邊界。",
         "borderWidth": "0.5 DIP",
         "borderInset": "0.25 DIP",
         "borderRadius": "(height−0.5 DIP)／2",
@@ -178,7 +201,7 @@
       ],
       "workAreaFit": "保留各詞自然寬度，只呈現放得下的項目；兩端箭頭翻動可見範圍，鍵盤選取始終可見。單一超長項目才用 character ellipsis；不共同縮窄全部項目。",
       "position": "caret 下方 6 DIP；底部不足改放上方，夾在目前螢幕工作區內。",
-      "depth": "純白不透明膠囊與淺灰細邊線；沒有 blur、陰影、caption、resize frame、額外背景窗口、候選子程序或 IPC。",
+      "depth": "淺／深色不透明膠囊與對應細邊線；沒有 blur、陰影、caption、resize frame、額外背景窗口、候選子程序或 IPC。",
       "compositing": "單一 WS_EX_LAYERED／UpdateLayeredWindow，32-bit premultiplied alpha；只讓膠囊外角透明，正文 alpha 1。",
       "motion": {
         "selection": "立即切換；沒有動畫。",
@@ -192,13 +215,19 @@
         "support": "已安裝 Windows 字型支援的彩色 emoji、膚色與 ZWJ；旗幟字形依作業系統。"
       },
       "captures": [
-        ".impeccable/review/{x64,x86}/candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png",
-        ".impeccable/review/{x64,x86}/prediction-{1,2}-{passive,entered}.png",
-        ".impeccable/review/{x64,x86}/reference-{1,2}-conversion.png"
+        "build/native-review/{x64,x86}/candidates-{1,2}-horizontal.bmp",
+        "build/native-review/{x64,x86}/mixed-hint-{1,2}.bmp"
       ],
-      "captureMethod": "每架構 18 張 PNG 已更新；檔名 1／2 代表設定主題測試案例，候選均白底。同一 Windows 120 DPI 原生 WM_PRINTCLIENT，premultiplied BGRA 轉 straight alpha 後保存 RGBA，不是 AI 素材。",
-      "nativeVerification": "x64／x86 建置與原生候選、WinUI 背景檢查 PASS；null owner、NOACTIVATE、過期點擊、滑鼠選字、hide／reopen、hidden theme 通知斷言通過，x64 TSF 背景檢查 PASS。舊雙 HWND／composition／region 專屬檢查已移除。",
-      "verificationLimit": "背景原生繪製不代表前景 App、高對比、多螢幕、實際工作列或讀屏驗收。"
+      "captureMethod": "本輪 x64／x86 各四張原生 WM_PRINTCLIENT BMP，1／2 為淺／深色；finish reviewer 逐張核對。",
+      "nativeVerification": "本輪非視覺檢查結果以 VERIFICATION.md 為準。先前純白版 x64／x86 建置與原生候選、WinUI 背景檢查及 x64 TSF 背景檢查 PASS；不將歷史結果當作本輪證據。",
+      "verificationLimit": "本輪背景原生繪製不代表前景 App、安裝、高對比、多螢幕、實際工作列、讀屏或實際切換 Windows 主題驗收。",
+      "mixedReadingHint": {
+        "component": "mixed-reading-hint",
+        "inline": "正文組字區呈現原始英文按鍵，例如 gj。",
+        "hint": "同一候選 HWND 與既有尺寸；下方顯示 ㄕㄨ，藍底白字、沒有序號、不接受點選。",
+        "commit": "聲調完成後轉中文；Enter 保留原文。",
+        "source": "platform/smart_input_windows.rs"
+      }
     },
     "nativeMode": {
       "platform": "Rust TSF 同程序 Win32 layered popup",
@@ -232,21 +261,29 @@
       "verificationLimit": "尚未實際新安裝、日常解除安裝或重開機刪除驗收。"
     },
     "reviewEvidence": {
-      "currentCaptureCount": 42,
-      "candidateCaptureCount": 36,
-      "settingsCaptureCount": 6,
-      "visualAssessment": "純白不透明背景與 0.5 DIP 細邊線的新 captures 與 fresh review 待完成。",
-      "disposition": "ship，限於本輪 36 張候選與 2 張設定 appearance 圖的背景原生繪製／離屏審查；未擴大實機驗收。",
-      "passed": ["x64／x86 build 與原生候選", "WinUI 背景驗證", "x64 TSF 背景驗證", "36 張 fresh candidate captures"],
+      "currentCaptureCount": 12,
+      "candidateCaptureCount": 8,
+      "settingsCaptureCount": 4,
+      "visualAssessment": "finish reviewer 逐張核對 x64／x86 的淺／深色橫向候選與混打注音提示，以及淺／深色組字與外觀設定圖。",
+      "disposition": "ship，限於本輪八張候選 BMP 與四張設定 PNG 的視覺／離屏證據；未擴大實機驗收。",
+      "passed": [
+        "本輪八張原生候選與注音提示 BMP 視覺審查",
+        "本輪四張設定離屏 PNG 視覺審查"
+      ],
       "pending": [],
-      "historicalOnly": "毛玻璃、alpha 0.82／0.55／0.74、雙視窗與其 review ship 已退役；舊 WinUI 直向／格狀、C++ BMP、模型選單圖同樣不代表本輪驗收。"
+      "historicalCaptures": [
+        ".impeccable/review/{x64,x86}/candidates-{1,2}-{horizontal,horizontal-14,horizontal-32,narrow,associated,emoji}.png",
+        ".impeccable/review/{x64,x86}/prediction-{1,2}-{passive,entered}.png",
+        ".impeccable/review/{x64,x86}/reference-{1,2}-conversion.png"
+      ],
+      "historicalOnly": "先前 36 張固定白底候選 PNG 與當時設定 appearance 審查 ship 為歷史；毛玻璃、alpha 0.82／0.55／0.74、雙視窗與其 review ship 已退役。舊 WinUI 直向／格狀、C++ BMP、模型選單圖同樣不代表本輪驗收。"
     }
   },
   "components": [
     {
       "name": "最新模型資訊",
       "kind": "custom",
-      "description": "一般頁原生 TextBlock 顯示 model-v4＋classes-v2，次要文字說明本機執行與保留詞庫學習；沒有版本選單。"
+      "description": "一般頁原生 TextBlock 顯示 model-v5＋classes-v3，次要文字說明本機執行與保留詞庫學習；沒有版本選單。"
     },
     {
       "name": "預測與聯想開關",
@@ -254,10 +291,10 @@
       "description": "兩個獨立 SettingToggle 使用同列左標籤、右原生 ToggleSwitch；Windows 操作預設兩者關閉，保持共用草稿與儲存流程。"
     },
     {
-      "name": "純白候選表面",
+      "name": "淺／深色候選表面",
       "kind": "custom",
       "refersTo": "candidate-surface",
-      "description": "固定純白不透明橫向膠囊，0.5 DIP 淺灰細邊線、深色字詞與次要灰色序號；單一 NOACTIVATE HWND，沒有背景窗口。"
+      "description": "依共用主題偏好使用淺／深色不透明橫向膠囊、0.5 DIP 細邊線、對應字詞與次要序號；單一 NOACTIVATE HWND，沒有背景窗口。"
     },
     {
       "name": "目前候選",
@@ -275,11 +312,17 @@
       "name": "解除安裝詢問",
       "kind": "custom",
       "description": "原生三選項 MessageBox：是全刪、否保留詞庫與學習但移除程式設定、取消不執行；預設取消。"
+    },
+    {
+      "name": "混打注音提示",
+      "kind": "custom",
+      "refersTo": "mixed-reading-hint",
+      "description": "正文保留英文原始按鍵，同一候選窗在下方顯示藍底白字注音；無序號、不接受點選，沿用既有尺寸。"
     }
   ],
   "narrative": {
     "northStar": "原生設定，善解橫向膠囊候選",
-    "overview": "設定維持使用者核准的 WinUI 3 原生幾何與操作；候選沿用使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift` 的橫向膠囊比例，依最新指定採純白不透明背景、很細的邊線、小型序號與藍色選取面。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。\n\nWindows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。",
+    "overview": "設定維持使用者核准的 WinUI 3 原生幾何與操作；候選沿用使用者提供的 macOS 善解照片與上游 `CandidateCells.swift`／`InputController.swift` 的橫向膠囊比例，依最新指定共用設定窗的淺／深色主題偏好，保留不透明背景、很細的邊線、小型序號與藍色選取面。中英混打依 ASUS 參考的呈現方式，在正文保留英文原始按鍵，下方用藍底白字提示注音。兩者服務日常輸入，以辨讀、低資源與不中斷文件焦點為主。候選方向契約見 `docs/candidate-surface.md`。\n\nWindows 產品邏輯由 Rust 實作，包含 TSF、候選、模式提示、設定保存、安裝與解除安裝。C#／XAML 保留 WinUI 3 控制項與繫結；C++ 僅在 tests/support 供測試使用，CMD／PowerShell 為薄啟動入口。上游引擎仍由固定子模組與平台覆蓋提供，不將此架構變更描述為上游演算法重寫。",
     "keyCharacteristics": [
       "WinUI 3 原生設定、固定儲存回饋與共用草稿。",
       "候選只保留橫向膠囊，字詞按自然寬度排列。",
@@ -289,7 +332,7 @@
     "rules": [
       {
         "name": "The Candidate Palette Rule",
-        "body": "一般候選固定使用 frontmatter 的白底、細邊線與選取藍，忽略 appearance.theme；「設定介面主題」只控制 WinUI 設定窗。高對比整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，邊線也使用 window text 色。高對比目前僅核對來源，尚未實機驗收。",
+        "body": "「介面與選字框主題」共用 `appearance.theme`：0 跟隨 Windows，候選讀取 `AppsUseLightTheme`；1 淺色，2 深色。高對比優先整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT` 與 `COLOR_HIGHLIGHTTEXT`，邊線也使用 window text 色。高對比與實際切換 Windows 主題尚未實機驗收。",
         "section": "colors"
       },
       {
@@ -311,7 +354,7 @@
     "dos": [
       "**Do** 設定使用 ThemeResource，保留原生控制項狀態、既有幾何、六頁共用草稿與固定儲存回饋。",
       "**Do** 候選沿單行自然寬度排列，窄工作區以箭頭移動可見範圍，只省略超長單項。",
-      "**Do** 一般候選固定純白不透明底與 0.5 DIP 細邊線，設定介面主題獨立控制 WinUI；高對比改讀系統色。",
+      "**Do** 一般候選與 WinUI 共用主題偏好，保留淺／深色不透明底與 0.5 DIP 細邊線；高對比優先改讀系統色。",
       "**Do** 單一候選 HWND 維持 NOACTIVATE，以 sequence 驗證滑鼠提交，保留 hide／reopen 與 hidden theme 通知規則。"
     ],
     "donts": [

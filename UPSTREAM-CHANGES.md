@@ -2,7 +2,15 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
-## 2026-10-11 可選中英混打與簡拼
+## 2026-10-11 後續：移除簡拼、原文組字與深色候選
+
+依最新要求移除 Windows `smart_zhuyin` 欄位、免聲調／簡拼按鍵政策、設定控制項與強制 prediction。profile 遷移直接刪除舊設定，不保留兼容開關。上游既有 abbreviation API 未改動，也未在 Windows 啟用。
+
+中英混打在未完成讀音時，以原始英數按鍵作為 preedit，另以不可選取的單項注音提示顯示 reading。聲調仍走上游完整音節轉換，Enter 可提交短／未知英文字串。Core 的 view 與 key 都覆蓋提示輸出，Windows bridge 以 prediction flags 的 bit 1 標記 reading hint；普通 prediction 保持 bit 0。TSF 與原生 renderer 拒絕提示點選，數字聲調不被當成選字。
+
+候選 theme 不再被忽略；明確淺／深或系統 AppsUseLightTheme 決定實色配色，高對比仍優先。注音提示採選取藍與白字，沒有數字、毛玻璃或額外 HWND。介面文件以此次後續結果為準，下一段為被取代的初版紀錄。
+
+## 2026-10-11 可選中英混打與簡拼（初版，簡拼已移除）
 
 `platform/smart_input_windows.rs` 與 `prepare-smart-input.ps1` 新增 Windows 組字政策：本機常用英文詞辨識、英文／帶聲調中文分界、英文逐字刪除，以及免聲調／部分注音候選的空白、Enter、↓ 操作。簡拼沿用上游 prediction、abbreviation 與原模型排名，補上由較後注音欄回到較前欄時的新音節分界。這是核心擴充，不是只改設定，也不是華碩的私有模型。
 
@@ -77,7 +85,7 @@ Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型�
 
 2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
 
-Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，純白實色、0.5 DIP 淡灰邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 5 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
+Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，淺／深實色、0.5 DIP 細邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 5 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 
