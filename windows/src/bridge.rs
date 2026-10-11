@@ -44,11 +44,14 @@ pub unsafe extern "C" fn sj_profile_load_text() -> *mut c_char {
     }
 }
 #[no_mangle]
-pub extern "C" fn sj_profile_stamp() -> u64 {
-    use std::os::windows::fs::MetadataExt;
-    std::fs::metadata(profile::path())
-        .map(|m| m.last_write_time())
-        .unwrap_or(0)
+pub extern "C" fn sj_restart() -> bool {
+    match profile::restart() {
+        Ok(()) => true,
+        Err(e) => {
+            failure(e);
+            false
+        }
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_document_json(content: *const c_char) -> *mut c_char {

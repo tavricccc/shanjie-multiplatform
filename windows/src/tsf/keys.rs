@@ -30,19 +30,22 @@ fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
 fn held(key: VIRTUAL_KEY) -> bool {
     unsafe { GetKeyState(key.0 as i32) as u16 & 0x8000 != 0 }
 }
+fn system_shortcut(key: WPARAM) -> bool {
+    key.0 == VK_LWIN.0 as usize || key.0 == VK_RWIN.0 as usize || held(VK_LWIN) || held(VK_RWIN)
+}
 fn plain_shortcut(vk: WPARAM, modifier: VIRTUAL_KEY, other: VIRTUAL_KEY) -> bool {
     vk.0 == 32 && held(modifier) && !held(other) && !held(VK_MENU)
 }
 impl Data {
     fn wants(self: &Rc<Self>, context: &ITfContext, vk: WPARAM, flags: LPARAM) -> Result<bool> {
-        self.refresh()?;
+        if system_shortcut(vk) {
+            return Ok(false);
+        }
         unsafe {
             let status = context.GetStatus()?;
             if status.dwStaticFlags & TF_SD_READONLY != 0
                 || compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED)
                 || compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT)
-                || held(VK_LWIN)
-                || held(VK_RWIN)
             {
                 return Ok(false);
             }
@@ -124,6 +127,9 @@ impl Data {
         }
     }
     fn key_down(self: &Rc<Self>, context: &ITfContext, vk: WPARAM, flags: LPARAM) -> Result<bool> {
+        if system_shortcut(vk) {
+            return Ok(false);
+        }
         if !shift(vk) {
             self.mode_revision.set(self.mode_revision.get() + 1);
             unsafe {
@@ -163,6 +169,7 @@ impl Data {
             }
             return Ok(true);
         }
+        self.ensure_engine()?;
         self.watch(context)?;
         let mut key = translate(vk, flags).ok_or(E_FAIL)?;
         if !p.flag("input", "caps_lock_english", false) {
@@ -515,12 +522,18 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         if !shift(key) && self.data.state.borrow().shift_tap {
             self.data.state.borrow_mut().shift_used = true;
         }
+        if system_shortcut(key) {
+            return Ok(false.into());
+        }
         Ok(self.data.wants(context.ok()?, key, flags)?.into())
     }
     fn OnTestKeyUp(&self, _: Ref<ITfContext>, key: WPARAM, _: LPARAM) -> Result<BOOL> {
         Ok((shift(key) && self.data.state.borrow().shift_tap).into())
     }
     fn OnKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        if system_shortcut(key) {
+            return Ok(false.into());
+        }
         match self.data.key_down(context.ok()?, key, flags) {
             Ok(handled) => Ok(handled.into()),
             Err(_) => {

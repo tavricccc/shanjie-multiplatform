@@ -85,7 +85,6 @@ pub unsafe fn new(
             Some(Rc::as_ptr(&data).cast()),
         )?;
         data.window.set(window);
-        *data.host.borrow_mut() = Some(Host::start(window)?);
     }
     Ok(Handle {
         data,
@@ -175,7 +174,16 @@ impl Candidates {
         self.show(true)
     }
     fn show(&self, visible: bool) -> Result<()> {
-        if let Some(host) = self.host.borrow_mut().as_mut() {
+        let mut host = self.host.borrow_mut();
+        if visible
+            && self.native.get()
+            && !self.window.get().is_invalid()
+            && !self.snapshot.borrow().candidates.is_empty()
+            && host.is_none()
+        {
+            *host = Some(Host::start(self.window.get())?);
+        }
+        if let Some(host) = host.as_mut() {
             host.publish(
                 self.snapshot.borrow().clone(),
                 self.theme.get(),

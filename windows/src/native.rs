@@ -6,15 +6,16 @@ use windows::{
         UI::{HiDpi::*, WindowsAndMessaging::*},
     },
 };
-pub struct Watcher {
+pub struct ControlChannel {
     window: HWND,
-    callback: unsafe extern "C" fn(*mut std::ffi::c_void),
+    callback: unsafe extern "C" fn(*mut std::ffi::c_void, bool),
     context: *mut std::ffi::c_void,
     message: u32,
+    restart: u32,
 }
-impl Watcher {
+impl ControlChannel {
     pub unsafe fn new(
-        callback: unsafe extern "C" fn(*mut std::ffi::c_void),
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, bool),
         context: *mut std::ffi::c_void,
     ) -> Result<Box<Self>> {
         let mut w = Box::new(Self {
@@ -22,12 +23,13 @@ impl Watcher {
             callback,
             context,
             message: RegisterWindowMessageW(w!("Shanjie.ProfileChanged.v1")),
+            restart: RegisterWindowMessageW(w!("Shanjie.Restart.v1")),
         });
         let module = crate::tsf::module();
         let wc = WNDCLASSW {
             lpfnWndProc: Some(watcher_proc),
             hInstance: HINSTANCE(module.0),
-            lpszClassName: w!("ShanjieRustProfileWatcher"),
+            lpszClassName: w!("ShanjieRustProfileControlChannel"),
             ..Default::default()
         };
         RegisterClassW(&wc);
@@ -48,12 +50,12 @@ impl Watcher {
         Ok(w)
     }
 }
-impl Drop for Watcher {
+impl Drop for ControlChannel {
     fn drop(&mut self) {
         unsafe {
             let _ = DestroyWindow(self.window);
             let _ = UnregisterClassW(
-                w!("ShanjieRustProfileWatcher"),
+                w!("ShanjieRustProfileControlChannel"),
                 Some(HINSTANCE(crate::tsf::module().0)),
             );
         }
@@ -65,29 +67,16 @@ unsafe extern "system" fn watcher_proc(
     wp: WPARAM,
     lp: LPARAM,
 ) -> LRESULT {
-    let mut p = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut Watcher;
+    let mut p = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut ControlChannel;
     if message == WM_NCCREATE {
         p = (*(lp.0 as *const CREATESTRUCTW)).lpCreateParams.cast();
         SetWindowLongPtrW(window, GWLP_USERDATA, p as _);
     }
-    if !p.is_null() && message == (*p).message {
-        ((*p).callback)((*p).context);
+    if !p.is_null() && (message == (*p).message || message == (*p).restart) {
+        ((*p).callback)((*p).context, message == (*p).restart);
         return LRESULT(0);
     }
     DefWindowProcW(window, message, wp, lp)
-}
-#[no_mangle]
-pub unsafe extern "C" fn sj_watcher_new(
-    callback: unsafe extern "C" fn(*mut std::ffi::c_void),
-    context: *mut std::ffi::c_void,
-) -> *mut Watcher {
-    Watcher::new(callback, context).map_or(std::ptr::null_mut(), Box::into_raw)
-}
-#[no_mangle]
-pub unsafe extern "C" fn sj_watcher_free(p: *mut Watcher) {
-    if !p.is_null() {
-        drop(Box::from_raw(p));
-    }
 }
 
 fn icon(size: u32, chinese: bool) -> tiny_skia::Pixmap {

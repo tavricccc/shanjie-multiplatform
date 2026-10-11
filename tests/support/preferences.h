@@ -46,4 +46,3 @@ struct Preferences {
     unsigned fontSize = 16;
 };
 Preferences loadPreferences();
-unsigned long long preferencesStamp();

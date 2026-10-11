@@ -1,6 +1,7 @@
 use shanjie_core::ffi::*;
 use std::{
     ffi::{CStr, CString},
+    os::windows::fs::MetadataExt,
     path::{Path, PathBuf},
     ptr,
 };
@@ -31,6 +32,8 @@ pub struct Engine {
     mutex: Option<HANDLE>,
     folder: PathBuf,
     epoch: String,
+    learning_stamp: Option<(u64, u64)>,
+    learning_loaded: bool,
 }
 impl Default for Engine {
     fn default() -> Self {
@@ -39,6 +42,8 @@ impl Default for Engine {
             mutex: None,
             folder: PathBuf::new(),
             epoch: String::new(),
+            learning_stamp: None,
+            learning_loaded: false,
         }
     }
 }
@@ -132,6 +137,11 @@ impl Engine {
                 shanjie_engine_set_learning(self.handle, 0);
                 shanjie_engine_set_learning(self.handle, 1);
                 self.epoch = epoch;
+                self.learning_loaded = false;
+            }
+            let stamp = self.store_stamp();
+            if self.learning_loaded && stamp == self.learning_stamp {
+                return true;
             }
             if shanjie_engine_learning_open(
                 self.handle,
@@ -140,6 +150,8 @@ impl Engine {
                     .as_ptr(),
             ) == 0
             {
+                self.learning_loaded = true;
+                self.learning_stamp = self.store_stamp();
                 true
             } else {
                 let _ = ReleaseMutex(m);
@@ -147,8 +159,16 @@ impl Engine {
             }
         }
     }
-    fn end(&self) {
+    fn store_stamp(&self) -> Option<(u64, u64)> {
+        std::fs::metadata(self.folder.join("learning.tsv"))
+            .ok()
+            .map(|m| (m.last_write_time(), m.file_size()))
+    }
+    fn end(&mut self) {
         if let Some(h) = self.mutex {
+            // Capture our own writes while holding the same cross-process lock.
+            // A peer write or clear is detected before the next operation.
+            self.learning_stamp = self.store_stamp();
             unsafe {
                 let _ = ReleaseMutex(h);
             }
@@ -161,9 +181,19 @@ impl Engine {
         if self.handle.is_null() || !self.begin() {
             return None;
         }
+        let out = self.invoke(f);
+        self.end();
+        out
+    }
+    fn invoke(
+        &mut self,
+        f: impl FnOnce(*mut ShanjieEngine, *mut *mut ShanjieOutput) -> i32,
+    ) -> Option<Snapshot> {
+        if self.handle.is_null() {
+            return None;
+        }
         let mut raw = ptr::null_mut();
         let result = f(self.handle, &mut raw);
-        self.end();
         if result != 0 {
             return None;
         }
@@ -193,6 +223,8 @@ impl Engine {
         self.operation(|h, o| unsafe { shanjie_engine_key(h, k, o) })
     }
     pub fn reset(&mut self, discard: bool) -> Option<Snapshot> {
-        self.operation(|h, o| unsafe { shanjie_engine_reset(h, discard as u32, o) })
+        // Upstream reset clears composition without learning or persistence.
+        // Focus loss must not wait for another App's learning writer.
+        self.invoke(|h, o| unsafe { shanjie_engine_reset(h, discard as u32, o) })
     }
 }

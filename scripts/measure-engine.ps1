@@ -1,4 +1,5 @@
 #Requires -Version 7
+param([switch]$Learning)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -15,9 +16,18 @@ Set-Content "$root/build/native-x64/engine-perf.cmd" $command -Encoding utf8NoBO
 if ($LASTEXITCODE) { throw 'Engine benchmark build failed.' }
 $savedLocal = $env:LOCALAPPDATA
 try {
-    $env:LOCALAPPDATA = "$root/build/perf-profile"
+    $env:LOCALAPPDATA = if ($Learning) { "$root/build/perf-profile-learning" } else { "$root/build/perf-profile" }
+    if ($Learning) {
+        New-Item -ItemType Directory -Path "$env:LOCALAPPDATA/Shanjie" -Force | Out-Null
+        $day = [int][Math]::Floor(([DateTime]::Today - [DateTime]::new(1970,1,1)).TotalDays)
+        $rows = [Text.StringBuilder]::new("#shanjie-learning v1`n")
+        foreach ($index in 0..7999) { [void]$rows.Append("字$([char](0x4e00+$index))`tㄋㄧˇ`t妳`t1`t$day`n") }
+        [IO.File]::WriteAllText("$env:LOCALAPPDATA/Shanjie/learning.tsv",$rows.ToString())
+    }
     foreach ($model in @(5)) {
-        & "$root/build/engine-perf.exe" "$root/dist/data" $model
+        $arguments = @("$root/dist/data",$model)
+        if ($Learning) { $arguments += '--learning' }
+        & "$root/build/engine-perf.exe" @arguments
         if ($LASTEXITCODE) { throw "Model $model benchmark failed." }
     }
 } finally { $env:LOCALAPPDATA = $savedLocal }

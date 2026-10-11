@@ -2,7 +2,7 @@ use super::{candidates, mode, Count};
 use crate::{
     engine::{Engine, Snapshot},
     input::{Associated, Pinyin, Special},
-    native::{Indicator, Watcher},
+    native::{ControlChannel, Indicator},
     profile::{self, Document},
 };
 use shanjie_core::ffi::*;
@@ -57,7 +57,7 @@ pub struct State {
     pub candidates: Option<candidates::Handle>,
     button: Option<ITfLangBarItemButton>,
     bar: Option<ITfLangBarItemMgr>,
-    watcher: Option<Box<Watcher>>,
+    watcher: Option<Box<ControlChannel>>,
     pub engine: Engine,
     pub pinyin: Pinyin,
     pub special: Special,
@@ -68,7 +68,6 @@ pub struct State {
     pub data: PathBuf,
     binary: PathBuf,
     profile_layout: u32,
-    pub stamp: u64,
     pub full_width: bool,
     pub shift_tap: bool,
     pub shift_used: bool,
@@ -99,7 +98,6 @@ impl Default for State {
             data: PathBuf::new(),
             binary: PathBuf::new(),
             profile_layout: 0,
-            stamp: 0,
             full_width: false,
             shift_tap: false,
             shift_used: false,
@@ -112,6 +110,7 @@ pub struct Data {
     pub ending: Cell<bool>,
     pub editing: Cell<bool>,
     pub mode_revision: Cell<u64>,
+    profile_revision: Cell<u64>,
     pub indicator: RefCell<Box<Indicator>>,
     watcher_context: RefCell<Option<Box<std::rc::Weak<Data>>>>,
     owner: Cell<*mut c_void>,
@@ -135,6 +134,7 @@ pub fn new() -> ITfTextInputProcessorEx {
         ending: Cell::new(false),
         editing: Cell::new(false),
         mode_revision: Cell::new(0),
+        profile_revision: Cell::new(0),
         indicator: RefCell::new(Box::new(Indicator::default())),
         watcher_context: RefCell::new(None),
         owner: Cell::new(std::ptr::null_mut()),
@@ -255,9 +255,12 @@ impl Data {
             }
             s.layout_sink = TF_INVALID_COOKIE;
             s.text_sink = TF_INVALID_COOKIE;
-            let final_text = if !s.pinyin.pending.is_empty() || [1, 2, 3].contains(&s.special.mode)
-            {
-                s.snapshot.preedit.clone()
+            let final_text = if s.snapshot.preedit.is_empty() {
+                String::new()
+            } else if !s.pinyin.pending.is_empty() || [1, 2, 3].contains(&s.special.mode) {
+                let final_text = s.snapshot.preedit.clone();
+                let _ = s.engine.reset(true);
+                final_text
             } else {
                 s.engine.reset(false).map(|o| o.commit).unwrap_or_default()
             };
@@ -283,7 +286,6 @@ impl Data {
         s.associated.clear();
         s.association_caret = None;
         s.raw_reading.clear();
-        let _ = s.engine.reset(true);
         s.snapshot = Snapshot::default();
         if let Some(c) = s.candidates.as_ref() {
             c.data.close();
@@ -322,6 +324,7 @@ impl Data {
         }
         s.thread = None;
         s.client = 0;
+        s.engine = Engine::default();
         cancelled
     }
     pub fn watch(self: &Rc<Self>, context: &ITfContext) -> Result<()> {
@@ -647,12 +650,9 @@ impl Data {
         )
     }
     pub fn refresh(self: &Rc<Self>) -> Result<()> {
-        let stamp = crate::bridge::sj_profile_stamp();
-        if stamp == self.state.borrow().stamp {
-            return Ok(());
-        }
-        self.state.borrow_mut().stamp = stamp;
         let current = profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
+        let revision = self.profile_revision.get() + 1;
+        self.profile_revision.set(revision);
         let old = self.state.borrow().prefs.clone();
         let rebuild = [
             ("input", "keyboard"),
@@ -678,7 +678,8 @@ impl Data {
             let mut s = self.state.borrow_mut();
             s.prefs = current.clone();
             if rebuild {
-                configure_engine(&mut s)?;
+                s.engine = Engine::default();
+                s.pinyin = Pinyin::default();
             }
             configure_options(&mut s)?;
             if width_changed {
@@ -701,10 +702,10 @@ impl Data {
                     .set(current.number("appearance", "font_size", 18));
             }
         }
-        if prediction_changed || demote_changed || rebuild {
+        if !self.state.borrow().engine.handle.is_null() && (prediction_changed || demote_changed) {
             let configure = move |s: &mut State| -> Result<Snapshot> {
                 let mut out = Snapshot::default();
-                if demote_changed || rebuild {
+                if demote_changed {
                     out = output(s.engine.operation(|h, o| unsafe {
                         shanjie_engine_set_demote(
                             h,
@@ -713,7 +714,7 @@ impl Data {
                         )
                     }))?;
                 }
-                if prediction_changed && !rebuild {
+                if prediction_changed {
                     out = output(s.engine.operation(|h, o| unsafe {
                         shanjie_engine_set_prediction(
                             h,
@@ -734,7 +735,8 @@ impl Data {
                     move |cookie| {
                         let out = {
                             let mut s = data.state.borrow_mut();
-                            if s.stamp != stamp {
+                            if data.profile_revision.get() != revision || s.engine.handle.is_null()
+                            {
                                 return Ok(());
                             }
                             s.associated.clear();
@@ -758,6 +760,28 @@ impl Data {
         let context = self.state.borrow().context.clone();
         if let Some(context) = context {
             self.layout(&context, TF_LC_CHANGE)?;
+        }
+        Ok(())
+    }
+    pub fn restart(self: &Rc<Self>) -> Result<()> {
+        self.cancel()?;
+        {
+            let mut s = self.state.borrow_mut();
+            s.engine = Engine::default();
+            s.pinyin = Pinyin::default();
+        }
+        self.refresh()
+    }
+    pub fn ensure_engine(&self) -> Result<()> {
+        let mut s = self.state.borrow_mut();
+        if s.engine.handle.is_null() {
+            configure_engine(&mut s)?;
+            configure_options(&mut s)?;
+            let demote = s.prefs.flag("engine", "demote", true);
+            output(
+                s.engine
+                    .operation(|h, o| unsafe { shanjie_engine_set_demote(h, demote as u32, o) }),
+            )?;
         }
         Ok(())
     }
@@ -835,6 +859,9 @@ fn configure_engine(s: &mut State) -> Result<()> {
     Ok(())
 }
 fn configure_options(s: &mut State) -> Result<()> {
+    if s.engine.handle.is_null() {
+        return Ok(());
+    }
     let p = &s.prefs;
     let flags = p.flag("input", "shift_punctuation", false) as u32
         | ((p.flag("input", "plain_punctuation", false) as u32) << 1)
@@ -844,10 +871,14 @@ fn configure_options(s: &mut State) -> Result<()> {
     }
     Ok(())
 }
-unsafe extern "C" fn changed(context: *mut c_void) {
+unsafe extern "C" fn changed(context: *mut c_void, restart: bool) {
     let weak = &*(context as *const std::rc::Weak<Data>);
     if let Some(data) = weak.upgrade() {
-        let _ = data.refresh();
+        let _ = if restart {
+            data.restart()
+        } else {
+            data.refresh()
+        };
     }
 }
 impl ITfTextInputProcessor_Impl for Service_Impl {
@@ -894,18 +925,10 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 s.thread = Some(thread.clone());
                 s.client = client;
                 s.prefs = preferences.clone();
-                s.stamp = crate::bridge::sj_profile_stamp();
                 s.binary = binary.clone();
                 s.data = binary.join("data");
                 s.profile_layout = layout;
                 s.full_width = preferences.flag("input", "full_width", false);
-                configure_engine(&mut s)?;
-                configure_options(&mut s)?;
-                let demote = preferences.flag("engine", "demote", true);
-                output(
-                    s.engine
-                        .operation(|h, o| shanjie_engine_set_demote(h, demote as u32, o)),
-                )?;
             }
             self.data
                 .set_mode(preferences.flag("input", "chinese", true))
@@ -938,10 +961,10 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 s.focus_sink = focus_sink;
             }
             let weak = Box::new(Rc::downgrade(&self.data));
-            let watcher = Watcher::new(
+            let watcher = ControlChannel::new(
                 changed,
                 (&*weak as *const std::rc::Weak<Data>).cast_mut().cast(),
-            )?; // Watcher context is retained alongside its native window.
+            )?; // ControlChannel context is retained alongside its native window.
             self.data.state.borrow_mut().watcher = Some(watcher);
             self.data.watcher_context.replace(Some(weak));
             if let Ok(bar) = thread.cast::<ITfLangBarItemMgr>() {

@@ -1,7 +1,5 @@
 #include "preferences.h"
 #include "rust_bridge.h"
-extern "C" unsigned long long sj_profile_stamp();
-unsigned long long preferencesStamp(){return sj_profile_stamp();}
 Preferences loadPreferences() {
     Preferences out;auto content=sj_profile_load_text();if(!content)return out;
     auto doc=sj_document_open(content);sj_string_free(content);

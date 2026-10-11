@@ -1,7 +1,7 @@
 // Prepared from the upstream parser: score calculation and decode remain upstream.
 impl Lm {
     pub fn windows_map_matches(&self, other: &Self) -> bool {
-        self.n == other.n && self.d.to_bits() == other.d.to_bits() && self.p_eos.to_bits() == other.p_eos.to_bits()
+        self.sha == other.sha && self.n == other.n && self.d.to_bits() == other.d.to_bits() && self.p_eos.to_bits() == other.p_eos.to_bits()
             && *self.pool == *other.pool && *self.voff == *other.voff && *self.uni == *other.uni
             && *self.ctx_id == *other.ctx_id && *self.ctx_total == *other.ctx_total
             && *self.ctx_back == *other.ctx_back && *self.off == *other.off

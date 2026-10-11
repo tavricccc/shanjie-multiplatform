@@ -7,8 +7,10 @@
 #include <psapi.h>
 #include <wrl/client.h>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <string>
+#include <thread>
 #include "identity.h"
 using Microsoft::WRL::ComPtr;
 #include "thread_proxy.h"
@@ -92,9 +94,10 @@ LRESULT CALLBACK testProcedure(HWND window, UINT message, WPARAM key, LPARAM fla
 }
 void require(bool condition, int check) { if (!condition) { std::printf("TSF check %d failed\n",check); std::fflush(stdout); ExitProcess(check); } }
 int wmain(int argc, wchar_t** argv) {
-    require(argc == 2 || (argc == 3 && (std::wstring(argv[2]) == L"--visual" || std::wstring(argv[2]) == L"--shanjie")),1);
+    require(argc == 2 || (argc == 3 && (std::wstring(argv[2]) == L"--visual" || std::wstring(argv[2]) == L"--shanjie" || std::wstring(argv[2]) == L"--cold-start")),1);
     bool visual = argc == 3 && std::wstring(argv[2]) == L"--visual";
     bool original = argc == 3 && std::wstring(argv[2]) == L"--shanjie";
+    bool cold = argc == 3 && std::wstring(argv[2]) == L"--cold-start";
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
     HMODULE dll = LoadLibraryW(argv[1]); require(dll != nullptr,3);
     auto factoryFn = (HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(factoryFn != nullptr,4);
@@ -122,7 +125,10 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<ITfClientId> identifiers; TfClientId serviceClient = TF_CLIENTID_NULL;
     require(SUCCEEDED(thread.As(&identifiers)) && SUCCEEDED(identifiers->GetClientId(ServiceId,&serviceClient)),15);
     ComPtr<ThreadProxy> proxy; proxy.Attach(new ThreadProxy(thread.Get()));
+    using Clock = std::chrono::steady_clock;
+    auto started = Clock::now();
     HRESULT activation = service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY);
+    std::printf("TSF activation: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
     if (FAILED(activation)) std::printf("Activation HRESULT %08lx\n",(unsigned long)activation);
     if (FAILED(activation)) {
         auto error = reinterpret_cast<const char*(__cdecl*)()>(GetProcAddress(dll,"sj_error"));
@@ -131,10 +137,40 @@ int wmain(int argc, wchar_t** argv) {
     require(SUCCEEDED(activation),13);
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
-        std::printf("Harness memory after engine activation: private %.1f MiB, working set %.1f MiB\n",memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
+        std::printf("Harness memory after TSF activation: private %.1f MiB, working set %.1f MiB\n",memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
     ComPtr<ITfKeyEventSink> keys; require(SUCCEEDED(service.As(&keys)),14);
+    if (!visual) {
+        started = Clock::now();
+        for (int i=0;i<100;++i) require(SUCCEEDED(keys->OnSetFocus(FALSE)),360);
+        std::printf("Idle focus loss (100 calls): %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
+        BYTE previous[256], keyboard[256]{}; require(GetKeyboardState(previous),361);
+        for (int win : {VK_LWIN,VK_RWIN}) {
+            keyboard[win]=0x80; require(SetKeyboardState(keyboard),362);
+            started = Clock::now();
+            for (int i=0;i<100;++i) for (WPARAM key : {WPARAM('R'),WPARAM('E')}) {
+                BOOL test=TRUE,eaten=TRUE;
+                require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,0,&test)) && !test,363);
+                require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,0,&eaten)) && !eaten,364);
+            }
+            std::printf("Win shortcuts (%s, 400 callbacks): %.3f ms\n",win==VK_LWIN?"left":"right",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
+            keyboard[win]=0;
+        }
+        require(SetKeyboardState(previous),365);
+    }
+    if (cold) {
+        // This DLL lives in a fixture without any lexicon or model. Activation,
+        // focus loss and shortcut testing must not touch the engine.
+        BOOL test=FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'S',0,&test)) && test,366);
+        require(SUCCEEDED(service->Deactivate()),367); keys.Reset(); service.Reset();
+        thread->SetFocus(nullptr); document->Pop(TF_POPF_ALL); context.Reset(); document.Reset();
+        store.Reset(); proxy.Reset(); identifiers.Reset(); thread->Deactivate(); thread.Reset(); factory.Reset();
+        auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload()==S_OK,368);
+        FreeLibrary(dll); CoUninitialize(); std::puts("PASS: activation and system shortcuts require no model or lexicon"); return 0;
+    }
     auto press = [&](WPARAM vk, int check) { BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1); };
+    started = Clock::now();
     for (wchar_t key : std::wstring(L"SU3CL3")) press(key,20);
+    std::printf("First composition (6 keys): %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
     require(store->text == L"你好",30); require(store->selection.acpStart == 2 && store->selection.acpEnd == 2,31);
     if (!original && !visual) {
         press(VK_HOME,120); press(VK_RIGHT,122); press(VK_DOWN,124);
@@ -186,6 +222,8 @@ int wmain(int argc, wchar_t** argv) {
         wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
         auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
         require(WritePrivateProfileStringW(L"candidates",L"open",L"space",profile.c_str()),158);
+        press('S',370); press('U',372); press('3',374); press(VK_SPACE,376);
+        require(noCandidates(),378); // Direct INI edits have no per-key polling.
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         press('S',159); press('U',161); press('3',163); press(VK_SPACE,165);
         require(!noCandidates(),167); // The same service sees the saved trigger without reactivation.
@@ -194,7 +232,23 @@ int wmain(int argc, wchar_t** argv) {
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         press(VK_DOWN,171); require(!noCandidates(),173);
         ComPtr<ITfThreadFocusSink> focus; require(SUCCEEDED(service.As(&focus)),174);
-        require(SUCCEEDED(focus->OnKillThreadFocus()) && noCandidates(),175);
+        std::wstring folder = std::wstring(local) + L"\\Shanjie";
+        CharUpperBuffW(folder.data(),(DWORD)folder.size()); std::replace(folder.begin(),folder.end(),L'\\',L'_');
+        auto mutexName = L"Local\\ShanjieLearning-" + folder;
+        HANDLE ready = CreateEventW(nullptr,TRUE,FALSE,nullptr), release = CreateEventW(nullptr,TRUE,FALSE,nullptr);
+        require(ready && release,393);
+        std::thread writer([&] {
+            HANDLE mutex = CreateMutexW(nullptr,FALSE,mutexName.c_str());
+            require(mutex && GetLastError()==ERROR_ALREADY_EXISTS,395);
+            require(mutex && WaitForSingleObject(mutex,INFINITE)==WAIT_OBJECT_0,394);
+            SetEvent(ready); WaitForSingleObject(release,INFINITE); ReleaseMutex(mutex); CloseHandle(mutex);
+        });
+        WaitForSingleObject(ready,INFINITE); auto beforeFocus = store->text; started = Clock::now();
+        HRESULT lostFocus = focus->OnKillThreadFocus();
+        double focusMs = std::chrono::duration<double,std::milli>(Clock::now()-started).count();
+        SetEvent(release); writer.join(); CloseHandle(ready); CloseHandle(release);
+        std::printf("Focus commit while learning writer holds mutex: %.3f ms\n",focusMs);
+        require(SUCCEEDED(lostFocus) && noCandidates() && store->text==beforeFocus && focusMs<200,175);
         press('S',190); press('U',192); press('3',194);
         auto beforeReload = store->text;
         require(WritePrivateProfileStringW(L"engine",L"ranking",L"formal",profile.c_str()),196);
@@ -249,6 +303,11 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"engine",L"model",L"3",profile.c_str()),341);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         require(store->text == beforePinyinReload && noCandidates(),342);
+        require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),380);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.Restart.v1"),0,0);
+        require(store->text == beforePinyinReload && noCandidates(),381);
+        press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
+        require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

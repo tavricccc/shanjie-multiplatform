@@ -201,6 +201,17 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
     }
     Ok(())
 }
+pub fn restart() -> Result<()> {
+    unsafe {
+        SendNotifyMessageW(
+            HWND(0xffffusize as _),
+            RegisterWindowMessageW(PCWSTR(crate::wide("Shanjie.Restart.v1").as_ptr())),
+            Default::default(),
+            Default::default(),
+        )?;
+    }
+    Ok(())
+}
 pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
     let mut content = String::new();

@@ -1,5 +1,6 @@
 #Requires -Version 7
-param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64')
+param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
+    [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny'))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -13,7 +14,7 @@ try {
         $destination = Join-Path $root "build/$name"
         if (!(Test-Path $destination)) { New-Item -ItemType Junction -Path $destination -Target (Join-Path $root "upstream/shanjie/$name") | Out-Null }
     }
-    cargo test --manifest-path build/core/Cargo.toml --lib
+    cargo test --release --manifest-path build/core/Cargo.toml --lib
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
     foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
@@ -25,7 +26,19 @@ try {
     $demoteTests = Get-Content build/core/tests/engine_demote.rs -Raw
     $demoteTests = $demoteTests.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(')
     Set-Content build/core/tests/engine_demote.rs $demoteTests -Encoding utf8NoBOM
-    cargo test --manifest-path build/core/Cargo.toml --test engine --test engine_learn --test engine_replay --test engine_lm --test engine_demote --test engine_predict --test engine_pack --test engine_vertical --test kn_tiny --test tinylm_tiny -- --test-threads=4 --skip global_eps_table
+    $knTests = (Get-Content build/core/tests/kn_tiny.rs -Raw).Replace("`r`n","`n")
+    $symlink = @'
+    std::os::unix::fs::symlink(tmp.join("missing.sjkn"), tmp.join("kn.sjkn")).unwrap();
+    assert_eq!(Lm::load(&m).err(), Some(LmError::KnSide), "a dangling kn.sjkn symlink is not 'absent'");
+    assert!(Lm::load_with(&m, true, false).is_ok());
+    std::fs::remove_file(tmp.join("kn.sjkn")).unwrap();
+'@
+    if (!$knTests.Contains($symlink)) { throw 'Upstream KN symlink fixture changed.' }
+    $knTests = $knTests.Replace($symlink,"    #[cfg(unix)] {`n$symlink`n    }")
+    $knTests = $knTests.Replace('let want = String::from_utf8(bytes("decode.tsv")).unwrap();', 'let want = String::from_utf8(bytes("decode.tsv")).unwrap().replace("\r\n", "\n");')
+    Set-Content build/core/tests/kn_tiny.rs $knTests -Encoding utf8NoBOM
+    $testArguments = foreach ($test in $CoreTests) { '--test'; $test }
+    cargo test --release --manifest-path build/core/Cargo.toml @testArguments -- --test-threads=4 --skip global_eps_table
     if ($LASTEXITCODE) { throw 'Engine behavior tests failed.' }
     }
     if (!(Test-Path dist/data/models/model-v5/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
@@ -56,4 +69,17 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         & $harness @arguments
     } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
     if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
+    if (!$Visual) {
+        $cold = Join-Path $root "build/cold-tip/$Architecture"
+        New-Item -ItemType Directory -Path $cold -Force | Out-Null
+        Copy-Item "$root/dist/$Architecture/Shanjie.dll" "$cold/Shanjie.dll" -Force
+        try {
+            $env:LOCALAPPDATA = $profileRoot
+            # Keep the native channel enabled: it must remain hidden and avoid
+            # renderer initialization while no candidate is displayed.
+            $env:SHANJIE_HEADLESS = $null
+            & $harness "$cold/Shanjie.dll" --cold-start
+            if ($LASTEXITCODE) { throw 'Model-free TSF activation/shortcut check failed.' }
+        } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
+    }
 } finally { Pop-Location }
