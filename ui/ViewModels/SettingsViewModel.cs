@@ -49,5 +49,5 @@ public partial class SettingsViewModel : ObservableObject
     public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
         + "Tab 移到下一候選。空白可翻頁。"
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
-    public string ModelHelp => "使用上游最新 model-v4，固定搭配 classes-v2 詞類表。";
+    public string ModelHelp => "使用上游最新 model-v5，固定搭配 classes-v3 詞類表。";
 }

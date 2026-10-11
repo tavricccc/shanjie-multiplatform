@@ -6,7 +6,7 @@ pub unsafe extern "C" fn shanjie_windows_reading(engine: *mut ShanjieEngine, com
         let output = if commit == 1 { engine.commit_candidate_reading() } else {
             let reading = engine.candidate_reading();
             Output { handled: true, commit: String::new(), cursor_utf16: reading.encode_utf16().count() as u32, preedit: reading,
-                candidates: Vec::new(), selected: None, columns: 0, first: 0, total: 0 }
+                candidates: Vec::new(), selected: None, columns: 0, first: 0, total: 0, vertical: 0 }
         };
         unsafe { emit(output,out) }
     })

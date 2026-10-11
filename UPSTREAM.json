@@ -1,11 +1,11 @@
 {
   "repository": "https://github.com/Nanako0129/shanjie",
-  "commit": "8a6fe0750284f7daa46d197545f50eee9bb3387c",
-  "release": "v0.3.0",
-  "baseAppRelease": "v0.3.0",
+  "commit": "368eebc426981852094d8c0c49b8b0618143bd2b",
+  "release": "main",
+  "baseAppRelease": "v0.4.0",
   "abi": "core/include/shanjie.h",
-  "modelRelease": "model-v4",
-  "modelReleases": ["model-v4"],
-  "classReleases": ["classes-v2"],
+  "modelRelease": "model-v5",
+  "modelReleases": ["model-v5"],
+  "classReleases": ["classes-v3"],
   "modelSources": "MODEL-SOURCES.json"
 }

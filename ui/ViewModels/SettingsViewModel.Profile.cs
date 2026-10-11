@@ -57,8 +57,8 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
-        profile.Set("profile", "schema", 4); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
-        profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 4);
+        profile.Set("profile", "schema", 5); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
+        profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 5);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),

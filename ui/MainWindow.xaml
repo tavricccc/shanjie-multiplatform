@@ -23,7 +23,7 @@
                             <ComboBoxItem Content="選擇操作預設…"/><ComboBoxItem Content="Windows／微軟注音按鍵（預測關閉）"/><ComboBoxItem Content="善解上游操作"/>
                         </ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。詞句偏好、詞庫、學習與外觀會保留。"/>
-                        <TextBlock x:Name="ModelSelector" Text="語言模型：model-v4＋classes-v2" FontFamily="Microsoft JhengHei UI"/>
+                        <TextBlock x:Name="ModelSelector" Text="語言模型：model-v5＋classes-v3" FontFamily="Microsoft JhengHei UI"/>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
@@ -94,7 +94,7 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="與微軟注音的差異" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="Differences" TextWrapping="Wrap"/>
                         <HyperlinkButton Content="微軟注音官方操作說明" NavigateUri="https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime" HorizontalAlignment="Left"/>
-                        <HyperlinkButton Content="上游 model-v4 與詞類表說明" NavigateUri="https://github.com/Nanako0129/shanjie/releases/tag/model-v4" HorizontalAlignment="Left"/>
+                        <HyperlinkButton Content="上游 model-v5 與詞類表說明" NavigateUri="https://github.com/Nanako0129/shanjie/releases/tag/model-v5" HorizontalAlignment="Left"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

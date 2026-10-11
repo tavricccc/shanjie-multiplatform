@@ -19,7 +19,7 @@ impl Engine {
         words.truncate(81);
         let candidates: Vec<_> = words.into_iter().map(|(word,_)| word).collect();
         Output { handled: true, commit: String::new(), preedit: String::new(), cursor_utf16: 0,
-            selected: (!candidates.is_empty()).then_some(0), columns: 0, first: 0, total: candidates.len() as u32, candidates }
+            selected: (!candidates.is_empty()).then_some(0), columns: 0, first: 0, total: candidates.len() as u32, vertical: 0, candidates }
     }
     pub fn new_with_personal(data: &Path, layout: Layout, personal: Option<&Path>) -> Result<Engine,EngineError> {
         let Some(personal) = personal else { return Engine::new(data,layout) };
@@ -59,7 +59,7 @@ impl Engine {
     }
     fn make_candidates(&self, mut list: Vec<(String,usize)>) -> Option<Cands> {
         if self.candidate_big5 { list.retain(|(word,_)| fits_big5(word)); }
-        (!list.is_empty()).then(|| Cands::new(list))
+        (!list.is_empty()).then(|| Cands::new(list, self.cand_vertical))
     }
 }
 fn fits_big5(word: &str) -> bool {

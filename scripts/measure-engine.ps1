@@ -16,7 +16,7 @@ if ($LASTEXITCODE) { throw 'Engine benchmark build failed.' }
 $savedLocal = $env:LOCALAPPDATA
 try {
     $env:LOCALAPPDATA = "$root/build/perf-profile"
-    foreach ($model in @(4)) {
+    foreach ($model in @(5)) {
         & "$root/build/engine-perf.exe" "$root/dist/data" $model
         if ($LASTEXITCODE) { throw "Model $model benchmark failed." }
     }

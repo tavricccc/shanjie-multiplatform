@@ -116,8 +116,8 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "x64/Shanjie.dll",
         "x86/Shanjie.dll",
         "ui/Shanjie.UI.exe",
-        "data/models/model-v4/bigram.winmap",
-        "data/models/model-v4/classes.sjc",
+        "data/models/model-v5/bigram.winmap",
+        "data/models/model-v5/classes.sjc",
         "tools/shanjie-manager.exe",
     ] {
         if !listed.contains(&PathBuf::from(required)) {
@@ -126,9 +126,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     }
     if listed
         .iter()
-        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v4"))
+        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v5"))
     {
-        return Err("安裝包只允許最新 model-v4＋classes-v2。".into());
+        return Err("安裝包只允許最新 model-v5＋classes-v3。".into());
     }
     Ok(listed)
 }
@@ -395,6 +395,7 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
             "profile.ini.schema1.bak",
             "profile.ini.schema2.bak",
             "profile.ini.before-model-v4.bak",
+            "profile.ini.before-model-v5.bak",
         ] {
             let path = profile.parent().unwrap().join(retired);
             if path.exists() {

@@ -1,6 +1,14 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游固定於正式 `v0.3.0` 的 `8a6fe0750284f7daa46d197545f50eee9bb3387c`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-11 同步 main 與 model-v5
+
+包含正式 v0.4.0 及其後已合入 main 的 Kneser–Ney side file、Rust tiny-LM／SJTL0001 研究核心。新增詞包、縮寫組字、預測起點及 Enter 提交未完成注音等上游行為。Windows 仍僅提供橫向候選；本次接入完整核心，不新增詞包／縮寫／研究模型設定與下載。
+
+C ABI 的 ShanjieOutput 尾端新增 candidate_vertical；候選 constructor 新增方向參數。平台 Output literals 和 Cands 擴充同步更新。映射模型保持 SJWM0002，補足來源 sha 與 KN 狀態，沿用上游 side-file 拒絕／配對規則；沒有 KN 檔時保持上游預設關閉。tiny-LM 核心與既有研究 API 一同編譯，沒有自動啟用 rerank。
+
+包只提供 model-v5＋classes-v3，schema 5 遷移舊模型並保留已存詞庫、學習與外觀。官方來源 SHA-256 與大小記於 MODEL-SOURCES.json。prepare 覆蓋契約已通過，完整回歸／打包結果待本輪 VERIFICATION.md 記錄。
 
 ## 2026-10-08 同步 v0.3.0，只保留最新模型
 

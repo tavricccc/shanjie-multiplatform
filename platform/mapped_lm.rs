@@ -67,6 +67,8 @@ impl Lm {
             nxt: read(&owner,&mut cursor).map_err(|_| LmError::Format)?,
             cnt: read(&owner,&mut cursor).map_err(|_| LmError::Format)?,
             classes: None,
+            sha: bytes[32..64].iter().map(|b| format!("{b:02x}")).collect(),
+            kn: None,
         };
         if classed == 1 {
             // Keep the released class table beside the map. Missing/wrong pairs fail,
@@ -109,6 +111,12 @@ impl Lm {
         if model.vocab_word(0) != b"<s>" || model.vocab_word(1) != b"</s>"
             || (0..v).any(|i| std::str::from_utf8(model.vocab_word(i)).is_err())
             || (3..v).any(|i| model.vocab_word(i-1) >= model.vocab_word(i)) { return Err(LmError::Format); }
+        let side = path.with_file_name("kn.sjkn");
+        match std::fs::symlink_metadata(&side) {
+            Ok(_) => model.add_kn(&std::fs::read(&side).map_err(|_| LmError::KnSide)?)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(LmError::KnSide),
+        }
         Ok(model)
     }
 }

@@ -137,8 +137,8 @@ impl Document {
                 self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
         }
-        self.set("profile", "schema", 4);
-        self.set("engine", "model", 4);
+        self.set("profile", "schema", 5);
+        self.set("engine", "model", 5);
         self.set("candidates", "layout", "horizontal");
         for key in [
             "reading",
@@ -339,7 +339,7 @@ mod tests {
     fn migration_preserves_personal_data_and_removes_retired_choices() {
         let mut doc=Document::parse("[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=1\n[input]\nlearning=1\ndictionary=custom.tsv\nescape_clears=0\n[candidates]\nlayout=grid\ntab_expands=1\n[appearance]\nfont_size=22\n").unwrap();
         doc.migrate();
-        assert_eq!(doc.number("engine", "model", 0), 4);
+        assert_eq!(doc.number("engine", "model", 0), 5);
         assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
         assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");
         assert!(doc.flag("input", "learning", false));
