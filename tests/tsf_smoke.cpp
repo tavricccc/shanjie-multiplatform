@@ -245,6 +245,23 @@ int wmain(int argc, wchar_t** argv) {
             ComPtr<ITfUIElement> item; ULONG found = 0;
             return active->Next(1,&item,&found) == S_FALSE && !found;
         };
+        auto beforeSpaces = store->text;
+        auto spaceCaret = store->selection.acpStart;
+        press('S',480); press('U',482); press('3',484); press(VK_SPACE,486); press(VK_SPACE,488);
+        auto withSpaces = beforeSpaces; withSpaces.insert(spaceCaret,L"你  ");
+        require(store->text == withSpaces && noCandidates(),490);
+        press(VK_BACK,491); press(VK_ESCAPE,493);
+        require(store->text == beforeSpaces,495); // Spaces and text were still one editable composition.
+        press('S',496); press('U',498); press('3',500); press(VK_DOWN,502);
+        auto candidateSpace = store->text; candidateSpace.insert(store->selection.acpStart,L" ");
+        press(VK_SPACE,504);
+        require(store->text == candidateSpace && noCandidates(),506);
+        press(VK_ESCAPE,507); require(store->text == beforeSpaces,509);
+        wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+        auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
+        require(WritePrivateProfileStringW(L"input",L"space_commits",L"1",profile.c_str()),510);
+        require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"1",profile.c_str()),511);
+        SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         press('S',180); press('U',182); press(VK_SPACE,184);
         require(noCandidates(),186); // First-tone space completes reading without opening a list.
         press(VK_ESCAPE,187);
@@ -252,8 +269,6 @@ int wmain(int argc, wchar_t** argv) {
         BOOL passed = TRUE;
         require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_SPACE,0,&passed)) && passed && !store->text.empty() && store->text.back() != L' ',156);
         require(noCandidates(),157); // Space commits under Down; no unsolicited association.
-        wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
-        auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
         require(WritePrivateProfileStringW(L"candidates",L"open",L"space",profile.c_str()),158);
         press('S',370); press('U',372); press('3',374); press(VK_SPACE,376);
         require(noCandidates(),378); // Direct INI edits have no per-key polling.
@@ -342,7 +357,22 @@ int wmain(int argc, wchar_t** argv) {
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
+        require(WritePrivateProfileStringW(L"input",L"space_commits",L"0",profile.c_str()),512);
+        require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"0",profile.c_str()),513);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
+        for (int spaces : {0,1,2}) {
+            for (wchar_t key : std::wstring(L"SU3CL35K4G4")) press(key,514);
+            auto beforeEnglish = store->text; auto englishCaret = store->selection.acpStart;
+            for (wchar_t key : std::wstring(L"ENGLISH")) press(key,516);
+            for (int i=0;i<spaces;++i) press(VK_SPACE,518);
+            auto expected = beforeEnglish; expected.insert(englishCaret,L"english"+std::wstring(spaces,L' '));
+            require(store->text == expected,520);
+            press('5',521); press('J',523); press(VK_OEM_2,525); press(VK_SPACE,527); press('J',529); press('P',531); press('6',533);
+            expected.insert(englishCaret+7+spaces,L"中文");
+            require(store->text == expected,535);
+            press(VK_RETURN,536); require(store->text == expected,538);
+        }
+        std::puts("Mixed English/Chinese: literal english retained with zero/one/two spaces; spaces remain editable; legacy switches passed");
         auto beforeSmart = store->text;
         auto smartCaret = store->selection.acpStart;
         press('C',402); press('A',404); press('L',406); press('L',408);

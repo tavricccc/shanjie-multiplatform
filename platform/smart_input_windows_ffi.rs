@@ -1,5 +1,16 @@
 /// Set Windows smart input policies. Caller commits the old composition before changing options.
 #[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_insert_space(engine: *mut ShanjieEngine, out: *mut *mut ShanjieOutput) -> i32 {
+    guard(|| {
+        if !unsafe { clear_out(out) } || engine.is_null() { return SHANJIE_ERR_NULL; }
+        match unsafe { (*engine).0.insert_literal_space() } {
+            Ok(value) => unsafe { emit(value, out) },
+            Err(_) => SHANJIE_ERR_INTERNAL,
+        }
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_set_mixed_input(
     engine: *mut ShanjieEngine,
     flags: u32,

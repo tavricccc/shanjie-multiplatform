@@ -361,6 +361,13 @@ mod tests {
         assert_eq!(doc.number("appearance", "font_size", 0), 22);
         assert_eq!(doc.get("input", "escape", ""), "ignore");
         assert!(!doc.0["candidates"].contains_key("tab_expands"));
+        assert!(!doc.flag("input", "space_commits", true));
+        assert!(!doc.flag("candidates", "space_operates", true));
+        doc.set("input", "space_commits", 1);
+        doc.set("candidates", "space_operates", 1);
+        doc.migrate();
+        assert!(doc.flag("input", "space_commits", false));
+        assert!(doc.flag("candidates", "space_operates", false));
         let preset = Document::parse(&preset(&doc.content(), false).unwrap()).unwrap();
         assert_eq!(preset.get("input", "dictionary", ""), "custom.tsv");
         assert!(preset.flag("input", "learning", false));

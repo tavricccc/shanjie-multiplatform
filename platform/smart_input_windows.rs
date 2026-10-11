@@ -73,10 +73,22 @@ mod windows_smart_tests {
             assert_eq!(out.preedit, format!("你好這是english{spaces}中文"));
             assert_eq!(e.reset(ResetMode::Commit).commit, out.preedit);
         }
+        type_keys(&mut e, "su3english");
+        for _ in 0..2 { assert!(e.insert_literal_space().unwrap().commit.is_empty()); }
+        assert_eq!(type_keys(&mut e, "5j/ jp6").preedit, "你english  中文");
+        assert_eq!(e.reset(ResetMode::Commit).commit, "你english  中文");
     }
 }
 
 impl Engine {
+    pub fn insert_literal_space(&mut self) -> Result<Output, EngineError> {
+        let raw = std::mem::take(&mut self.mixed_raw);
+        self.mixed_latin = false;
+        let prefix = self.mixed_text(&raw)?.commit;
+        let mut out = self.mixed_text(" ")?;
+        out.commit = prefix + &out.commit;
+        Ok(out)
+    }
     pub fn is_mixed_pending(&self) -> bool {
         self.mixed_latin || !self.mixed_raw.is_empty()
     }

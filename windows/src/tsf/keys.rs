@@ -241,6 +241,36 @@ impl Data {
             })?;
             return Ok(true);
         }
+        let space_candidates = p.flag("candidates", "space_operates", false);
+        let trigger = if space_candidates { p.get("candidates", "open", "down") } else { "down" };
+        if key.kind == 2 && key.modifiers == 0
+            && self.state.borrow().special.mode == 0
+            && self.state.borrow().pinyin.pending.is_empty()
+            && !input::pending(&state)
+            && !self.state.borrow().engine.mixed_pending()
+            && !(space_candidates && (!closed || trigger != "down"))
+        {
+            let data = self.clone();
+            let current = context.clone();
+            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
+                let out = {
+                    let mut s = data.state.borrow_mut();
+                    s.associated.clear();
+                    s.association_caret = None;
+                    s.raw_reading.clear();
+                    if p.flag("input", "space_commits", false) {
+                        let mut out = output(s.engine.reset(false))?;
+                        out.handled = true;
+                        if p.flag("input", "space_after_commit", false) { out.commit.push(' '); }
+                        out
+                    } else {
+                        output(s.engine.operation(|h, o| unsafe { shanjie_core::ffi::shanjie_windows_insert_space(h, o) }))?
+                    }
+                };
+                data.apply(&current, cookie, out, false)
+            })?;
+            return Ok(true);
+        }
         if self.state.borrow().associated.handles(key) {
             if key.kind == 2
                 && (!p.flag("candidates", "space_pages", true)
@@ -381,14 +411,13 @@ impl Data {
             && !state.candidates.is_empty()
             && key.kind == 4
             && key.modifiers == 0;
-        let trigger = p.get("candidates", "open", "down");
         let mixed_pending = self.state.borrow().engine.mixed_pending();
         let bypass = key.modifiers == 0
             && closed
             && !state.preedit.is_empty()
             && !input::pending(&state)
             && !mixed_pending
-            && ((key.kind == 2 && trigger == "down") || (key.kind == 10 && trigger == "space"));
+            && key.kind == 10 && trigger == "space";
         let cycle = p.flag("candidates", "up_cycles", true)
             && key.kind == 9
             && key.modifiers == 0
