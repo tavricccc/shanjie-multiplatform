@@ -6,6 +6,7 @@ use windows::{
         Graphics::{
             Direct2D::Common::*, Direct2D::*, DirectWrite::*, Dwm::*, Dxgi::Common::*, Gdi::*,
         },
+        System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
         UI::{Accessibility::*, HiDpi::*, WindowsAndMessaging::*},
     },
 };
@@ -28,7 +29,7 @@ struct Palette {
     selected: D2D1_COLOR_F,
 }
 impl Palette {
-    fn new(_theme: u32) -> Result<Self> {
+    fn new(theme: u32) -> Result<Self> {
         unsafe {
             let mut contrast = HIGHCONTRASTW {
                 cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,
@@ -53,6 +54,19 @@ impl Palette {
                     accent: system(COLOR_HIGHLIGHT),
                     selected: system(COLOR_HIGHLIGHTTEXT),
                 });
+            }
+            let mut light = 1u32;
+            if theme == 0 {
+                let mut size = 4;
+                // An absent personalization value is Windows' default light appearance.
+                let _ = RegGetValueW(HKEY_CURRENT_USER,
+                    w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+                    w!("AppsUseLightTheme"), RRF_RT_REG_DWORD, None,
+                    Some((&mut light as *mut u32).cast()), Some(&mut size));
+            }
+            if theme == 2 || (theme == 0 && light == 0) {
+                return Ok(Self { background: rgb(0x202020), border: rgb(0x505055),
+                    text: rgb(0xf5f5f7), label: rgb(0xb8b8c2), accent: rgb(0x006ee6), selected: rgb(0xffffff) });
             }
             Ok(Self {
                 background: rgb(0xffffff),
@@ -480,10 +494,10 @@ impl Host {
             radiusX: radius,
             radiusY: radius,
         };
-        self.brush.SetColor(&self.palette.background);
+        self.brush.SetColor(if self.state.reading_hint { &self.palette.accent } else { &self.palette.background });
         self.target
             .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, height / 2.0), &self.brush);
-        self.brush.SetColor(&self.palette.border);
+        self.brush.SetColor(if self.state.reading_hint { &self.palette.accent } else { &self.palette.border });
         self.target.DrawRoundedRectangle(
             &rounded(
                 0.25,
@@ -523,7 +537,7 @@ impl Host {
                 },
                 D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
             );
-            self.brush.SetColor(if selected {
+            self.brush.SetColor(if selected || self.state.reading_hint {
                 &self.palette.selected
             } else {
                 &self.palette.label
@@ -537,7 +551,7 @@ impl Host {
                 &self.brush,
                 D2D1_DRAW_TEXT_OPTIONS_CLIP,
             );
-            self.brush.SetColor(if selected {
+            self.brush.SetColor(if selected || self.state.reading_hint {
                 &self.palette.selected
             } else {
                 &self.palette.text
@@ -628,6 +642,7 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
         }
         if message == WM_LBUTTONUP {
             let host = &mut *ptr;
+            if host.state.reading_hint { return LRESULT(0); }
             let x = (lp.0 as u16 as i16) as f32 / host.scale;
             let y = ((lp.0 >> 16) as u16 as i16) as f32 / host.scale;
             let ratio = host.size as f32 / 16.0;

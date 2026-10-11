@@ -34,6 +34,10 @@ mod windows_smart_tests {
     #[test]
     fn mixed_boundaries_and_lifecycle() {
         let mut e = engine();
+        assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
+        assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "g");
+        assert_eq!(e.key(Key::ch('j', MOD_SHIFT)).unwrap().preedit, "gJ");
+        assert_eq!(e.reset(ResetMode::Commit).commit, "gJ");
         assert_eq!(type_keys(&mut e, "su3hello").preedit, "你hello");
         assert_eq!(type_keys(&mut e, "su3").preedit, "你hello你");
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "你hello你");
@@ -215,11 +219,12 @@ impl Engine {
             && key.kind == KeyKind::Char
             && key.modifiers == MOD_SHIFT
             && key.ch.is_ascii_alphabetic()
-            && self.pending().is_empty()
+            && (self.pending().is_empty() || !self.mixed_raw.is_empty())
             && self.cands.is_none()
         {
-            self.mixed_raw = key.ch.to_ascii_uppercase().to_string();
+            self.mixed_raw.push(key.ch.to_ascii_uppercase());
             self.mixed_latin = true;
+            self.clear_pend();
             self.clear_pred();
             return self.handled();
         }

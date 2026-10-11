@@ -72,6 +72,15 @@ int wmain(int argc,wchar_t** argv) {
                 frame.selected = 0; presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"prediction-"+std::to_wstring(theme)+L"-entered.bmp"));
                 frame.prediction = false; frame.selected = 1;
+                frame.readingHint = true; frame.prediction = true; frame.selected = -1; frame.candidates = {L"ㄕㄨ"};
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"mixed-hint-"+std::to_wstring(theme)+L".bmp"));
+                auto beforeHintClick = picks;
+                GetClientRect(presenter.window(),&client);
+                SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2));
+                while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+                assert(picks == beforeHintClick);
+                frame.readingHint = false; frame.prediction = false; frame.selected = 1;
             }
         }
         presenter.hide(); assert(!presenter.shown());
