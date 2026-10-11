@@ -60,6 +60,20 @@ mod windows_smart_tests {
         e.set_mixed_input(false);
         assert!(!type_keys(&mut e, "hello").preedit.contains("hello"));
     }
+
+    #[test]
+    fn english_before_chinese_keeps_the_word_and_spaces() {
+        let lex = Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄓㄜˋ 這 -0.1\nㄕˋ 是 -0.1\nㄓㄨㄥ 中 -0.1\nㄨㄣˊ 文 -0.1\n").unwrap();
+        let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
+        e.set_mixed_input(true);
+        for spaces in ["", " "] {
+            assert_eq!(type_keys(&mut e, "su3cl35k4g4english").preedit, "你好這是english");
+            type_keys(&mut e, spaces);
+            let out = type_keys(&mut e, "5j/ jp6");
+            assert_eq!(out.preedit, format!("你好這是english{spaces}中文"));
+            assert_eq!(e.reset(ResetMode::Commit).commit, out.preedit);
+        }
+    }
 }
 
 impl Engine {
@@ -106,7 +120,8 @@ impl Engine {
     fn finish_latin(&mut self, key: Key) -> Result<Output, EngineError> {
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
-        // At a tone boundary prefer the longest English prefix that leaves a real Chinese syllable.
+        // Keep every literal prefix, including names absent from the English
+        // list. Only the valid trailing syllable is allowed to become Chinese.
         let tone = if key.kind == KeyKind::Space {
             Some(0)
         } else if key.kind == KeyKind::Char && key.modifiers == 0 {
@@ -117,9 +132,12 @@ impl Engine {
         if let Some(tone) =
             tone.filter(|_| key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
         {
-            for split in (3..raw.len().min(33)).rev() {
+            for split in raw.len().saturating_sub(3).max(1)..raw.len() {
                 let (word, tail) = raw.split_at(split);
-                if !english_word(&word.to_ascii_lowercase()) {
+                if key.kind == KeyKind::Space
+                    && !english_word(&word.to_ascii_lowercase())
+                    && tail.chars().all(|ch| ch.is_ascii_alphabetic())
+                {
                     continue;
                 }
                 if let Some(mut reading) = self.mixed_reading(tail) {
@@ -190,6 +208,17 @@ impl Engine {
                     key.ch
                 });
                 return self.handled();
+            }
+            if key.kind == KeyKind::Char && key.modifiers == 0
+                && self.layout.symbol_of(key.ch).is_some()
+            {
+                let next = format!("{}{}", self.mixed_raw, key.ch);
+                // Zhuyin also uses digits and punctuation (e.g. 5j/ = ㄓㄨㄥ).
+                // Retain a possible suffix until its tone arrives.
+                if (1..next.len()).any(|split| self.mixed_reading(&next[split..]).is_some()) {
+                    self.mixed_raw = next;
+                    return self.handled();
+                }
             }
             match key.kind {
                 KeyKind::Backspace => {
@@ -262,7 +291,7 @@ impl Engine {
                 self.mixed_raw.clear();
             }
             self.mixed_raw.push(key.ch);
-            if english_word(&self.mixed_raw) && self.mixed_reading(&self.mixed_raw).is_none() {
+            if self.mixed_reading(&self.mixed_raw).is_none() {
                 self.clear_pend();
                 self.clear_pred();
                 self.mixed_latin = true;
