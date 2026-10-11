@@ -2,7 +2,23 @@
 
 這些是背景 harness 實測，不是各種 App 的日常使用保證。只代表各次指定模型、核心與測試程序，不包含螢幕刷新或完整 App 的資源。
 
-## 2026-10-11 main／model-v5
+## 2026-10-11 背景預載與核心常駐
+
+啟用時在背景載入核心與拼音資料，同程序保留一個備用核心，TSF 停用／重建後可重用。背景 harness 用載入計數確認：預載期間銷毀再建立服務、預載後再次重新啟用，均只有一次載入；每次不靠重新讀模型恢復。DLL 隨 App 程序常駐，COM 計數在清理後仍歸零。沒有改動 WinUI 或候選 renderer。
+
+| 本輪背景樣本 | x64 Windows profile | x86 Windows profile | x64 善解 profile |
+| --- | ---: | ---: | ---: |
+| TSF 啟用 | 1.920 ms | 2.379 ms | 4.572 ms |
+| 測試等待背景預載完成 | 498.209 ms | 463.709 ms | 729.164 ms |
+| 預載後首次六鍵中文組字 | 1.114 ms | 1.476 ms | 8.677 ms |
+| 重建服務、啟用、首鍵及取消合計 | 1.275 ms | 1.051 ms | 1.644 ms |
+| 預載後程序 Private／Working Set | 38.6／96.2 MiB | 37.9／95.8 MiB | 71.8／128.0 MiB |
+
+預載等待以 5 ms 間隔檢查完成計數，包含排程誤差，並非核心函式的精確耗時；首鍵樣本是在預載完成後才開始。新程序若立即輸入仍會等待尚未完成的預載，沒有宣稱消除全新 App 冷啟動。上述記憶體是整個 headless 測試程序；不含實際 App／候選繪圖，Working Set 也不能跨 App 直接加總成唯一實體 RAM。善解 profile 開啟預測，不能與 Windows profile 當成相同工作量比較。
+
+證據：`build/resident-tsf-x64.log`、`resident-tsf-x86.log`、`resident-tsf-shanjie-x64.log`。Win 快捷鍵、閒置失焦、背景載入失敗時的啟用／放行、組字與設定更新檢查皆通過。尚未更新系統安裝，沒有前景 App 或鍵盤到螢幕刷新量測。
+
+## 2026-10-11 main／model-v5 延後載入版（歷史）
 
 TSF Activate 不再同步建立核心或候選 renderer，OnTestKeyDown 只判斷按鍵；Win 快捷鍵在取 context、查 compartment 與任何核心 I/O 前放行。按鍵路徑沒有 INI metadata／變更監控。儲存時由設定程式主動通知；手動改檔由明確重啟讀取。
 

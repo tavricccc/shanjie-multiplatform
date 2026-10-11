@@ -26,7 +26,7 @@ C ABI 的 ShanjieOutput 尾端新增 candidate_vertical；候選 constructor 新
 
 包只提供 model-v5＋classes-v3，schema 5 遷移舊模型並保留已存詞庫、學習與外觀。官方來源 SHA-256 與大小記於 MODEL-SOURCES.json。prepare 覆蓋契約與映射等價核對已通過，完整回歸／打包結果見本輪 VERIFICATION.md。
 
-Windows TSF 啟用僅接入 sinks、設定與原生通道，不再同步讀詞庫／模型。首次確定接收中文／全形輸入才建立引擎；OnTestKeyDown 不載入核心，Win 組合鍵在取 context／compartment 前放行。閒置失焦不重置核心或等待學習 mutex。按鍵不查 INI；設定儲存主動通知仍保留，直接改檔需明確重啟或重新啟用。重啟只釋放引擎，不替換已載入 DLL。
+Windows TSF 啟用接入 sinks、設定與原生通道，並透過 `windows/src/tsf/resident.rs` 在背景預載詞庫／模型；不在啟用執行緒同步載入。每個程序保留一個備用核心或尚未完成的載入工作，停用／重新建立服務時重用；核心移交前清除組字和拼音狀態，各服務不共用可變組字。DLL 隨程序常駐，避免背景工作或備用核心被卸載；COM 物件仍正常釋放。第一鍵只接收預載結果，過早輸入會等待同一份工作。OnTestKeyDown 不等待核心，Win 組合鍵在取 context／compartment 前放行。閒置失焦不重置核心或等待學習 mutex。按鍵不查 INI；設定儲存主動通知仍保留，直接改檔需明確重啟或重新啟用。明確重啟清除備用核心並背景重載，不替換已載入 DLL。這是 Windows 宿主生命週期變更，上游 pin 與核心覆蓋不變。
 
 學習仍在使用者範圍 mutex 內核對 epoch 及 learning.tsv 版本；檔案沒有變動時不重新解析整份 store，自己的 append／rewrite 完成後記錄版本。跨實例寫入和清除仍在下一次學習操作重讀。這項差異屬於 Windows bridge，沒有改上游學習權重。
 

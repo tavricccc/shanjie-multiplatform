@@ -2,6 +2,17 @@
 
 最新日期：2026-10-11。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
 
+## 2026-10-11 後續：輸入核心背景預載與常駐
+
+- x64／x86 release DLL 與 manager 建置通過；WinUI 原始碼與 UI payload 沿用，僅同步它使用的新版 Rust DLL。上游 pin 與 `platform/` 覆蓋未改。
+- `resident.rs` 將核心／拼音載入移到專屬背景執行緒。TSF 停用或服務釋放後保留一份備用核心，設定相符時重用；尚未完成的預載也可以移交。核心只有單一擁有者，COM／HWND 不跨執行緒。移交前清除組字、預測及拼音暫存。
+- x64／x86 Windows profile 與 x64 善解 profile 背景 harness 通過。新增計數斷言確認服務釋放／重建前後只載入一次；預載後首組字與再次啟用耗時見 PERFORMANCE.md。原有 commit／cancel／caret、設定重載、拼音保留、中英混打與忙碌學習鎖檢查仍通過。
+- DLL 採程序生命週期常駐，因此 `DllCanUnloadNow` 在啟動預載後為 S_FALSE；另外讀取 COM 物件計數，確認服務／factory 清理後為零。沒有把刻意保留的核心當成 COM 洩漏，也不在 worker 尚存時卸載 DLL。
+- 無模型 fixture 的預載失敗不阻擋啟用、Win 快捷鍵或閒置失焦；實際按鍵放行且不再次同步載入。初輪 fixture 曾錯誤預期 OnKeyDown 回傳失敗 HRESULT，已改成符合既有錯誤政策的「成功回傳且不吃鍵」，重跑通過。
+- 證據：`build/resident-build-{x64,x86}.log`、`build/resident-tsf-{x64,x86}.log`、`build/resident-tsf-shanjie-x64.log`。未重跑與生命週期無關的完整核心／模型或 UI 截圖測試。
+
+本輪沒有更新系統安裝、改寫個人設定或操作前景 App。常駐以各 App 程序為範圍；全新程序若在背景預載完成前立刻輸入，第一鍵仍等待同一份載入工作。安裝新版後須重新開啟已載入舊 DLL 的 App，設定頁的重啟按鈕不能替換 DLL。已註冊 TIP 在實際 App 的體感仍待驗收。
+
 ## 2026-10-11 後續：移除簡拼、原文組字提示與深色候選
 
 - 已移除 Windows 簡拼／免聲調開關、核心擴充政策及強制 prediction，舊 `smart_zhuyin` 欄位遷移刪除。Rust 原有兩個設定／清理測試通過，包含新增的退役欄位清除斷言。
