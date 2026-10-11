@@ -8,7 +8,11 @@
 
 C ABI 的 ShanjieOutput 尾端新增 candidate_vertical；候選 constructor 新增方向參數。平台 Output literals 和 Cands 擴充同步更新。映射模型保持 SJWM0002，補足來源 sha 與 KN 狀態，沿用上游 side-file 拒絕／配對規則；沒有 KN 檔時保持上游預設關閉。tiny-LM 核心與既有研究 API 一同編譯，沒有自動啟用 rerank。
 
-包只提供 model-v5＋classes-v3，schema 5 遷移舊模型並保留已存詞庫、學習與外觀。官方來源 SHA-256 與大小記於 MODEL-SOURCES.json。prepare 覆蓋契約已通過，完整回歸／打包結果待本輪 VERIFICATION.md 記錄。
+包只提供 model-v5＋classes-v3，schema 5 遷移舊模型並保留已存詞庫、學習與外觀。官方來源 SHA-256 與大小記於 MODEL-SOURCES.json。prepare 覆蓋契約與映射等價核對已通過，完整回歸／打包結果見本輪 VERIFICATION.md。
+
+Windows TSF 啟用僅接入 sinks、設定與原生通道，不再同步讀詞庫／模型。首次確定接收中文／全形輸入才建立引擎；OnTestKeyDown 不載入核心，Win 組合鍵在取 context／compartment 前放行。閒置失焦不重置核心或等待學習 mutex。按鍵不查 INI；設定儲存主動通知仍保留，直接改檔需明確重啟或重新啟用。重啟只釋放引擎，不替換已載入 DLL。
+
+學習仍在使用者範圍 mutex 內核對 epoch 及 learning.tsv 版本；檔案沒有變動時不重新解析整份 store，自己的 append／rewrite 完成後記錄版本。跨實例寫入和清除仍在下一次學習操作重讀。這項差異屬於 Windows bridge，沒有改上游學習權重。
 
 ## 2026-10-08 同步 v0.3.0，只保留最新模型
 
@@ -28,7 +32,7 @@ Windows 的 SJWM0002 映射格式保存來源模型／詞類表雜湊、原有�
 
 ## 哪些東西有改
 
-Windows 安裝包只提供 model-v4＋classes-v2，schema 4 將所有舊模型設定遷移至 v4，沒有選單或執行期 fallback。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 核對並轉換這一組，清除舊快取與 dist 模型目錄；`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄。
+Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型設定遷移至 v5，沒有選單或執行期 fallback。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 核對並轉換這一組，清除舊快取與 dist 模型目錄；`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次將上游 core 複製到 `build/core`，再套用以下程式變更。**子模組沒有被改，不代表建置出的核心完全等於上游。**
 
@@ -65,7 +69,7 @@ Windows 安裝包只提供 model-v4＋classes-v2，schema 4 將所有舊模型�
 
 2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
 
-Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，純白實色、0.5 DIP 淡灰邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 4 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
+Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，純白實色、0.5 DIP 淡灰邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 5 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 

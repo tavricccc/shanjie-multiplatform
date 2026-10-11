@@ -103,7 +103,7 @@
         <Grid Grid.Row="3" Padding="16,8" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="12"><Button Content="重新載入已儲存設定" Click="Reload"/><TextBlock Text="{x:Bind Vm.DraftHelp, Mode=OneWay}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"><Button Content="取消" Click="Cancel"/><Button Content="儲存" Style="{ThemeResource AccentButtonStyle}" Click="Save"/></StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"><Button Content="重新啟動輸入法" Click="Restart" ToolTipService.ToolTip="儲存設定、提交目前組字並重載善解核心"/><Button Content="取消" Click="Cancel"/><Button Content="儲存" Style="{ThemeResource AccentButtonStyle}" Click="Save"/></StackPanel>
         </Grid>
     </Grid>
 </Window>

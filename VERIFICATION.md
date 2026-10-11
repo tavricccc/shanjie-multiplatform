@@ -1,6 +1,19 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-09。上游 pin：正式 v0.3.0 的 `8a6fe0750284f7daa46d197545f50eee9bb3387c`，與子模組／UPSTREAM.json 一致。下方舊日期均為歷史證據，不表示本轮已安裝或仍提供舊模型／排列。
+最新日期：2026-10-11。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-11 上游 main 與系統操作延遲
+
+- prepare 覆蓋契約通過；上游追蹤檔案乾淨。接入 v0.4.0 與其後 main 的 KN／tiny-LM 核心、更新候選 ABI，Windows 仍維持橫向候選。model-v5＋classes-v3 官方大小與 SHA-256、所有映射陣列、來源 hash 與代表性分數等價核對通過；僅打包這一組。
+- 核心回歸合計 **248 個通過**：lib 46、engine 33、demote 6、learning 46、lm 16、pack 2、prediction 64、replay 2、vertical 20、kn_tiny 7、tinylm_tiny 6；標準／倚天各 302 句。已通過的完整範圍結果加上修正 Windows fixture 後的 KN／tiny-LM 定向重跑；沒有重跑已通過的長 fixture。9 個上游 ignored 量測、global_eps_table、既有 Unix 權限／macOS RSS 排除均未計入。KN 懸空 symlink 的 Unix 專用片段以 cfg(unix) 排除；其 Python golden 只將 checkout 的 CRLF 正規化為 LF，排序及分數仍逐字一致。核心 gate 改用 release，預設測試範圍不縮減。
+- x64／x86 Rust DLL、manager 與 x64 WinUI 編譯通過；Windows crate 2 個既有遷移／清理測試通過。schema 5 保留已存詞庫、學習與外觀，舊模型統一遷移至 v5。
+- 兩架構、兩種操作 profile 的 TSF 背景 harness 通過 composition、caret、commit、cancel、candidate UI element 與 COM lifetime。新增左／右 Win＋R／E 放行、無模型／無詞庫的原生隱藏通道啟用、直接改 INI 不逐鍵重讀、儲存通知套用、明確重啟保留拼音並切換鍵盤等檢查。keyboard sink 註冊仍使用 ThreadProxy；沒有註冊系統輸入法。
+- Windows profile 的忙碌學習鎖檢查通過：先確認測試握住的是引擎已有的同名 mutex，再從另一執行緒持鎖，失焦提交文字保持完整；x64 0.011 ms、x86 0.027 ms，沒有 250 ms 等待。reset 依上游「不學習／不寫檔」契約直接呼叫；閒置失焦也不重置空引擎。
+- interaction harness 通過缺少／錯配詞類拒絕、個人詞庫、Unicode／Big5、預測與聯想、拼音、標點、交錯引擎學習及 epoch 清除。學習 store 未變動時不重讀；自己的寫入在持鎖期間更新版本，保留跨實例同步。
+- 兩架構候選與模式 harness 通過 NOACTIVATE、滑鼠／過期點擊、隱藏／重開、DPI 與提示自動隱藏。候選繪圖資源改在第一次真正顯示時建立，純白細邊線與既有幾何保持。WinUI 離屏保存／重讀及淺深擷取通過，人工核對一般頁與儲存回饋中的新「重新啟動輸入法」按鈕；未儲存草稿先保存，沒有草稿則讀取磁碟設定。設定儲存主動通知保留，逐鍵 INI metadata API 已刪除。
+- 量測與首次輸入代價見 PERFORMANCE.md。證據在 build/verify-main-*-final.log、build/verify-main-kn-and-native.log、build/verify-main-x64.log、build/engine-v5-*-final.log、build/ui-final-check.log、build/ui-review-final/ 與 build/mode-final-check.log。完整回歸的初輪 KN 失敗是 CRLF fixture，修正後的定向結果才是最終 KN 證據。
+
+本輪未更新系統安裝或終止使用者 App。Win＋R／E 真實開啟延遲、前景 App、實際工作列、多螢幕／讀屏仍未驗收；上述回呼量測不能當作檔案總管已實機修復。重啟按鈕只重載核心，無法替換 App 已載入的舊版 DLL。首次中文輸入與首次候選顯示仍承擔初始化成本，沒有宣稱消除所有冷啟動延遲。
 
 ## 2026-10-09 最新模型、Rust TSF 與橫向候選
 

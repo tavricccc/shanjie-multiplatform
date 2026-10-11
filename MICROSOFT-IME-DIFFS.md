@@ -10,7 +10,7 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 
 | 模型 | 配對詞類表 | 差異與選擇 |
 | --- | --- | --- |
-| [model-v4](https://github.com/Nanako0129/shanjie/releases/tag/model-v4) | [classes-v2](https://github.com/Nanako0129/shanjie/releases/tag/classes-v2) | 唯一模型；舊設定遷移，不提供選單 |
+| [model-v5](https://github.com/Nanako0129/shanjie/releases/tag/model-v5) | [classes-v3](https://github.com/Nanako0129/shanjie/releases/tag/classes-v3) | 唯一模型；舊設定遷移，不提供選單 |
 
 詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。檔頭綁定原始模型 SHA-256；映射保存來源雜湊、九個模型陣列、三個詞類陣列。缺表或配錯明確拒絕，沒有舊模型 fallback。
 
@@ -44,12 +44,12 @@ Support 明確列出 ↓、↑、Space、Tab、→、數字、Enter 及聯想的
 
 ## 逐項開關
 
-W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀偏好不會被覆寫。schema 4 的個別選項可另行調整；固定模型、橫向排列與移除格狀是本輪使用者指定。
+W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀偏好不會被覆寫。schema 5 的個別選項可另行調整；固定模型、橫向排列與移除格狀是本輪使用者指定。
 
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
 | `profile.interaction` | 選字與外觀：↑↓ 或 ←→ 政策 | windows／shanjie |
-| `engine.model` | 固定 model-v4＋classes-v2，舊值遷移 | 4／4 |
+| `engine.model` | 固定 model-v5＋classes-v3，舊值遷移 | 5／5 |
 | `engine.ranking` | 一般：聊天／正式權重 | chat／chat；保留 |
 | `engine.prediction` | 未完成讀音的即時預測 | 0／1 |
 | `engine.demote` | 避免特定敏感詞排名過高，詞仍可選 | 1／1；保留 |
@@ -110,6 +110,8 @@ Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成�
 
 ## 遷移與驗證界線
 
-Rust 共用載入流程先保存旧設定備份，補上當時隱含行為，再遷移 schema 4：模型固定 v4、排列固定 horizontal，移除 tab_expands／right_expands／grid_up_collapses；其他偏好、詞庫、學習保留，即時預測不自行開啟。命令列與 WinUI 共用 `profiles/` 與 Rust 邏輯。更新會清理退休 schema 備份；解除安裝在清理前詢問個人詞庫／學習保留或全刪。
+Rust 共用載入流程先保存旧設定備份，補上當時隱含行為，再遷移 schema 5：模型固定 v5、排列固定 horizontal，移除 tab_expands／right_expands／grid_up_collapses；其他偏好、詞庫、學習保留，即時預測不自行開啟。命令列與 WinUI 共用 `profiles/` 與 Rust 邏輯。更新會清理退休 schema 備份；解除安裝在清理前詢問個人詞庫／學習保留或全刪。
+
+儲存由程式主動通知已啟用的實例；沒有 INI 監控或逐鍵查檔。「重新啟動輸入法」先保存未儲存草稿，再提交組字並重載核心；沒有草稿時讀取直接改過的 INI，不覆寫手動修改。它不終止 App，也不替換 App 已載入的舊版 DLL。
 
 驗證結果見 [VERIFICATION.md](VERIFICATION.md)。背景 TSF、原生窗與離屏 XAML 證據分別驗證 adapter、視窗及設定保存；新安裝的記事本、Chrome／Office、多螢幕、高對比與讀屏仍需實際工作階段驗收。

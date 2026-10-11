@@ -1,6 +1,6 @@
 # 善解 Windows
 
-原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步正式 v0.3.0，只提供 model-v4＋classes-v2。候選是純白實色橫向膠囊，0.5 DIP 淡灰細邊線，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
+原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是純白實色橫向膠囊，0.5 DIP 淡灰細邊線，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
 目前是可建置與打包的開發版。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
@@ -50,7 +50,9 @@ pwsh -File scripts/package.ps1
 
 Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。候選固定純白不透明底；「設定介面主題」只影響 WinUI 設定頁，高對比模式仍遵循系統色。
 
-個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`。schema 4 將舊模型遷移至 v4、舊排列遷移至 horizontal，移除格狀相關開關；其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例，直接修改 INI 則在下一鍵重讀。需要重建引擎的變更先提交可見組字。模型／詞類損壞明確拒絕載入。
+個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`。schema 5 將舊模型遷移至 v5、舊排列遷移至 horizontal，移除格狀相關開關；其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例；不監控 INI，也不在每次按鍵查檔案。直接改 INI 後，按設定頁的「重新啟動輸入法」或重新啟用善解才讀取。
+
+「重新啟動輸入法」先保存未儲存草稿；沒有草稿時直接讀取磁碟設定，保留手動改檔的內容。它通知各 App 內已啟用的善解提交組字、釋放並重新載入核心，不終止 App。核心在首次需要輸入時才載入，Win 快捷鍵與閒置失焦不載入模型；首次中文輸入仍有載入成本。此按鈕不能換掉 App 已載入的舊版 DLL，安裝更新後仍須重新開啟 App。模型／詞類損壞明確拒絕載入。
 
 完整設定與鍵位見 [MICROSOFT-IME-DIFFS.md](MICROSOFT-IME-DIFFS.md)，範本在 `profiles/`。個人詞庫採內容雜湊命名，先寫詞庫再原子替換 INI；學習以使用者範圍 mutex／epoch 協調多程序。
 

@@ -24,7 +24,7 @@ Rust cdylib 使用靜態 CRT，SDK rc 嵌入 ICO 資源 101／102。核心由 pr
 
 ## 設定與打包
 
-WinUI 為 x64 .NET 10／Windows App SDK self-contained unpackaged 程式。parser、schema 4 遷移、範本、詞庫與保存共用 Rust；C# 僅控制項與綁定。「設定介面主題」控制 Root.RequestedTheme。
+WinUI 為 x64 .NET 10／Windows App SDK self-contained unpackaged 程式。parser、schema 5 遷移、範本、詞庫與保存共用 Rust；C# 僅控制項與綁定。「設定介面主題」控制 Root.RequestedTheme。
 
 DLL、UI、工具與最新模型置於唯一 version 目錄。Rust manager 驗證、註冊並核對路徑／雜湊後清舊版；使用中檔案排入 reboot queue。解除安裝先詢問保留詞庫／學習、全刪或取消。個人資料、原子詞庫與學習協調契約不變。
 

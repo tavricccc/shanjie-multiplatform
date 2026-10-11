@@ -9,7 +9,7 @@
    使用中 DLL／模型會安排重新啟動時刪除；請重新開啟 App 使用新版。
 
 3. settings.cmd 開啟設定，修改後按「儲存」才套用。
-   只提供最新 model-v4＋classes-v2；候選只保留 macOS 樣式橫向膠囊。
+   只提供最新 model-v5＋classes-v3；候選只保留 macOS 樣式橫向膠囊。
    Windows 預設 ↓ 開候選，方向鍵／Tab 移動，數字確認、Enter 選字提交。
    個人詞庫、學習與外觀偏好在升級時保留。
 

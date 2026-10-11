@@ -11,4 +11,5 @@ public static class ProfileStore
     public static ProfileDocument Load() => ProfileDocument.Parse(Native.Take(Native.sj_profile_load_text()));
     public static void Save(string content) => Native.Check(Native.sj_profile_save(content));
     public static void ClearLearning() => Native.Check(Native.sj_clear_learning());
+    public static void Restart() => Native.Check(Native.sj_restart());
 }

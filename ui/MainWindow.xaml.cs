@@ -60,12 +60,24 @@ public sealed partial class MainWindow : Window
     }
     private void Save(object sender, RoutedEventArgs args)
         => SaveDraft();
-    internal void SaveDraft()
+    private void Restart(object sender, RoutedEventArgs args) => RestartInput();
+    internal void RestartInput()
     {
-        try { Vm.Save(); StatusBar.Severity = InfoBarSeverity.Success; }
+        if (Vm.HasChanges && !SaveDraft()) return;
+        try { Vm.Load(); Models.ProfileStore.Restart(); Vm.Status = "已通知善解重新啟動並讀取已儲存設定。正在輸入的組字會先提交。"; StatusBar.Severity = InfoBarSeverity.Success; }
+        catch (InvalidDataException error) { Vm.Status = "無法重新啟動輸入法：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        catch (IOException error) { Vm.Status = "無法讀取已儲存設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        catch (UnauthorizedAccessException error) { Vm.Status = "無法讀取個人設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        StatusBar.IsOpen = true;
+    }
+    internal bool SaveDraft()
+    {
+        bool saved = false;
+        try { Vm.Save(); StatusBar.Severity = InfoBarSeverity.Success; saved = true; }
         catch (InvalidDataException error) { Vm.Status = error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         catch (IOException error) { Vm.Status = "無法儲存設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         catch (UnauthorizedAccessException error) { Vm.Status = "無法寫入個人設定：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         StatusBar.IsOpen = true;
+        return saved;
     }
 }
