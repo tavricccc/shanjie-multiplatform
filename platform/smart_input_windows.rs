@@ -15,7 +15,7 @@ mod windows_smart_tests {
             Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄧˇ 以 -0.2\nㄋㄧˇ-ㄏㄠˇ 你好 -0.1\n")
                 .unwrap();
         let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
-        e.set_smart_input(true, false);
+        e.set_mixed_input(true);
         e
     }
     fn type_keys(e: &mut Engine, keys: &str) -> Output {
@@ -53,19 +53,20 @@ mod windows_smart_tests {
         e.key(Key::new(KeyKind::Backspace)).unwrap();
         assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "hell");
         e.reset(ResetMode::Discard);
-        e.set_smart_input(false, false);
+        e.set_mixed_input(false);
         assert!(!type_keys(&mut e, "hello").preedit.contains("hello"));
     }
 }
 
 impl Engine {
     pub fn is_mixed_pending(&self) -> bool {
-        self.mixed_latin
+        self.mixed_latin || !self.mixed_raw.is_empty()
     }
-    pub fn set_smart_input(&mut self, mixed: bool, zhuyin: bool) {
+    pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
-        self.smart_zhuyin = zhuyin;
-        self.abbr = zhuyin;
+    }
+    pub fn is_mixed_hint(&self) -> bool {
+        self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
     }
 
     // A normal syllable must follow initial -> medial -> final without replacement.
@@ -158,6 +159,22 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        let out = self.mixed_key(key)?;
+        Ok(self.mixed_view(out))
+    }
+
+    fn mixed_view(&self, mut out: Output) -> Output {
+        if self.is_mixed_hint() {
+            out.candidates = vec![self.pending()];
+            out.selected = None;
+            out.columns = 0;
+            out.first = 0;
+            out.total = 1;
+        }
+        out
+    }
+
+    fn mixed_key(&mut self, key: Key) -> Result<Output, EngineError> {
         if self.mixed_latin {
             if key.modifiers & !MOD_SHIFT != 0 {
                 return self.passthrough(String::new());
@@ -189,7 +206,7 @@ impl Engine {
                     for ch in raw.chars() {
                         self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?;
                     }
-                    return self.smart_key(Key::new(KeyKind::Down));
+                    return self.key_original(Key::new(KeyKind::Down));
                 }
                 _ => return self.finish_latin(key),
             }
@@ -206,19 +223,40 @@ impl Engine {
             self.clear_pred();
             return self.handled();
         }
+        if self.mixed_input && !self.mixed_raw.is_empty() && key.modifiers == 0 {
+            match key.kind {
+                KeyKind::Enter => {
+                    let raw = std::mem::take(&mut self.mixed_raw);
+                    let prefix = self.mixed_text(&raw)?.commit;
+                    let mut out = self.key_original(key)?;
+                    out.commit = prefix + &out.commit;
+                    return Ok(out);
+                }
+                KeyKind::Backspace => {
+                    self.mixed_raw.pop();
+                    self.clear_pend();
+                    self.clear_pred();
+                    for ch in self.mixed_raw.clone().chars() { self.key_original(Key::ch(ch, 0))?; }
+                    return self.handled();
+                }
+                KeyKind::Down | KeyKind::Tab => {
+                    self.mixed_raw.clear();
+                    return self.key_original(key);
+                }
+                _ => {}
+            }
+        }
         let tracking = self.mixed_input
             && self.cands.is_none()
             && self.pred_sel.is_none()
             && key.kind == KeyKind::Char
             && key.modifiers == 0
-            && key.ch.is_ascii_alphabetic();
+            && self.layout.symbol_of(key.ch).is_some();
         if tracking {
             if self.pend.iter().all(Option::is_none) {
                 self.mixed_raw.clear();
             }
-            if self.mixed_raw.len() < 64 {
-                self.mixed_raw.push(key.ch);
-            }
+            self.mixed_raw.push(key.ch);
             if english_word(&self.mixed_raw) && self.mixed_reading(&self.mixed_raw).is_none() {
                 self.clear_pend();
                 self.clear_pred();
@@ -228,36 +266,14 @@ impl Engine {
         } else if key.kind == KeyKind::Backspace {
             self.mixed_raw.pop();
         } else {
-            self.mixed_raw.clear();
-        }
-        self.smart_key(key)
-    }
-
-    fn smart_key(&mut self, key: Key) -> Result<Output, EngineError> {
-        if self.smart_zhuyin
-            && key.modifiers == 0
-            && !self.pending().is_empty()
-            && self.cands.is_none()
-            && !self.pred.is_empty()
-        {
-            match key.kind {
-                KeyKind::Space | KeyKind::Enter => {
-                    let prefix = self.choose_pred(self.pred_sel.unwrap_or(0))?.commit;
-                    self.mixed_raw.clear();
-                    let mut out = if key.kind == KeyKind::Enter {
-                        self.key_original(key)?
-                    } else {
-                        self.handled()?
-                    };
-                    out.commit = prefix + &out.commit;
-                    return Ok(out);
-                }
-                KeyKind::Down if self.pred_sel.is_none() => {
-                    self.pred_sel = Some(0);
-                    return self.handled();
-                }
-                _ => {}
+            let previous = std::mem::take(&mut self.mixed_raw);
+            let out = self.key_original(key)?;
+            if !previous.is_empty() && !self.pending().is_empty()
+                && (key.kind == KeyKind::Space || (key.kind == KeyKind::Char && self.layout.tone_of(key.ch).is_some())) {
+                self.mixed_raw = previous;
+                return Ok(self.view(out.handled, out.commit));
             }
+            return Ok(out);
         }
         self.key_original(key)
     }

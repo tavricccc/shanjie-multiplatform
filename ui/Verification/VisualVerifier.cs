@@ -46,12 +46,12 @@ internal static class VisualVerifier
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
-        settings.SetSmartInputForVerification(true, true); await Task.Delay(60);
-        if (!settings.Vm.MixedInput || !settings.Vm.SmartZhuyin) throw new InvalidDataException("Smart input toggle binding failed");
+        settings.SetMixedInputForVerification(true); await Task.Delay(60);
+        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle binding failed");
         settings.Vm.Save(); settings.Vm.Load();
-        if (!settings.Vm.MixedInput || !settings.Vm.SmartZhuyin) throw new InvalidDataException("Smart input persistence failed");
-        settings.SetSmartInputForVerification(false, false); await Task.Delay(60);
-        if (settings.Vm.MixedInput || settings.Vm.SmartZhuyin) throw new InvalidDataException("Smart input toggle off failed");
+        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input persistence failed");
+        settings.SetMixedInputForVerification(false); await Task.Delay(60);
+        if (settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle off failed");
         settings.Vm.Ranking = 0; settings.Vm.Learning = false; settings.Vm.FontSize = 18; settings.Vm.DictionaryText = "";
         settings.LoadProfile(true); settings.SaveDraft();
         foreach (int theme in new[] { 1, 2 })

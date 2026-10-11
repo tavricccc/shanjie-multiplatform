@@ -149,6 +149,7 @@ impl Document {
             self.remove("candidates", key);
         }
         self.remove("input", "escape_clears");
+        self.remove("input", "smart_zhuyin");
     }
 }
 pub fn folder() -> PathBuf {
@@ -350,6 +351,9 @@ mod tests {
     fn migration_preserves_personal_data_and_removes_retired_choices() {
         let mut doc=Document::parse("[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=1\n[input]\nlearning=1\ndictionary=custom.tsv\nescape_clears=0\n[candidates]\nlayout=grid\ntab_expands=1\n[appearance]\nfont_size=22\n").unwrap();
         doc.migrate();
+        doc.set("input", "smart_zhuyin", 1);
+        doc.migrate();
+        assert!(!doc.0["input"].contains_key("smart_zhuyin"));
         assert_eq!(doc.number("engine", "model", 0), 5);
         assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
         assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");

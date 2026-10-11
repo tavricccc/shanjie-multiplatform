@@ -49,9 +49,7 @@
                     </StackPanel>
                     <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <controls:SettingToggle x:Name="MixedInputToggle" Label="中英混打自動判斷" Description="中文優先，辨識到英文單字時保留英文，不必切換模式。英文後按 ↓ 可改回注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedInput, Mode=TwoWay}"/>
-                        <controls:SettingToggle x:Name="SmartZhuyinToggle" Label="免聲調與簡拼注音" Description="例如輸入 ㄋㄧㄏㄠ 或 ㄋㄏ 選「你好」。空白選首詞，Enter 選詞並提交；↓／Tab 進入候選。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.SmartZhuyin, Mode=TwoWay}"/>
-                        <TextBlock Style="{StaticResource HelpText}" Text="以上兩項適用於標準／倚天注音，可各自開關。簡拼會自動顯示讀音候選，不必另開即時預測。"/>
+                        <controls:SettingToggle x:Name="MixedInputToggle" Label="中英混打自動判斷" Description="組字區先顯示英文按鍵，下方提示注音；輸入聲調後轉成中文，Enter 保留英文。適用標準／倚天注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedInput, Mode=TwoWay}"/>
                         <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
@@ -75,7 +73,7 @@
                         <TextBlock x:Name="AppearanceOptions" FontFamily="Microsoft JhengHei UI" Text="字元集與外觀" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
                         <NumberBox Header="候選文字大小" Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/>
-                        <ComboBox Header="設定介面主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
+                        <ComboBox Header="介面與選字框主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
                         <controls:SettingToggle Label="切換中英時顯示游標旁提示" IsOn="{x:Bind Vm.ModeIndicator, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Dictionary" Spacing="12" Visibility="Collapsed">

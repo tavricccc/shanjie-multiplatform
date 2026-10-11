@@ -36,11 +36,11 @@ struct FrameView {
     std::string commit,preedit; std::vector<std::string> words; std::vector<const char*> pointers; WinFrame raw;
     explicit FrameView(const shanjie::Snapshot& s):commit(shanjie::utf8(s.commit)),preedit(shanjie::utf8(s.preedit)) {
         for (auto& word:s.candidates) words.push_back(shanjie::utf8(word)); for (auto& word:words) pointers.push_back(word.c_str());
-        raw={s.handled,s.associated,s.prediction,commit.c_str(),preedit.c_str(),s.cursor,s.columns,s.first,s.total,s.selected,(unsigned)pointers.size(),pointers.data()};
+        raw={s.handled,s.associated,unsigned(s.prediction) | (unsigned(s.readingHint) << 1),commit.c_str(),preedit.c_str(),s.cursor,s.columns,s.first,s.total,s.selected,(unsigned)pointers.size(),pointers.data()};
     }
 };
 inline shanjie::Snapshot takeFrame(WinFrame* f) {
-    shanjie::Snapshot s;s.handled=f->handled!=0;s.associated=f->associated!=0;s.prediction=f->prediction!=0;
+    shanjie::Snapshot s;s.handled=f->handled!=0;s.associated=f->associated!=0;s.prediction=(f->prediction&1)!=0;s.readingHint=(f->prediction&2)!=0;
     s.commit=shanjie::wide(f->commit);s.preedit=shanjie::wide(f->preedit);s.cursor=f->cursor;
     s.columns=f->columns;s.first=f->first;s.total=f->total;s.selected=f->selected;
     for(unsigned i=0;i<f->count;++i)s.candidates.push_back(shanjie::wide(f->candidates[i]));sj_frame_free(f);return s;

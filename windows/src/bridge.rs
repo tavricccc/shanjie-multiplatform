@@ -165,7 +165,7 @@ fn frame(s: Snapshot) -> *mut Frame {
     let raw = Frame {
         handled: s.handled as u32,
         associated: s.associated as u32,
-        prediction: s.prediction as u32,
+        prediction: s.prediction as u32 | ((s.reading_hint as u32) << 1),
         commit: strings[0].as_ptr(),
         preedit: strings[1].as_ptr(),
         cursor: s.cursor,
@@ -188,7 +188,8 @@ unsafe fn snapshot(r: *const Frame) -> Snapshot {
     Snapshot {
         handled: r.handled != 0,
         associated: r.associated != 0,
-        prediction: r.prediction != 0,
+        prediction: r.prediction & 1 != 0,
+        reading_hint: r.prediction & 2 != 0,
         commit: text(r.commit).into(),
         preedit: text(r.preedit).into(),
         cursor: r.cursor,
@@ -262,8 +263,8 @@ pub unsafe extern "C" fn sj_engine_action(
         7 => e.operation(|h, o| shanjie_windows_punctuation(h, string, o)),
         8 => e.operation(|h, o| shanjie_windows_cycle_candidate(h, o)),
         9 => {
-            if shanjie_windows_set_smart_input(e.handle, value) != 0 { return ptr::null_mut(); }
-            e.operation(|h, o| shanjie_engine_set_prediction(h, (value & 2 != 0) as u32, o))
+            if shanjie_windows_set_mixed_input(e.handle, value) != 0 { return ptr::null_mut(); }
+            e.reset(true)
         }
         _ => None,
     };

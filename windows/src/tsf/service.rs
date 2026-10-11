@@ -357,7 +357,7 @@ impl Data {
             move |cookie| {
                 let out = {
                     let mut s = data.state.borrow_mut();
-                    if s.context.as_ref() != Some(&current)
+                    if s.snapshot.reading_hint || s.context.as_ref() != Some(&current)
                         || s.candidates
                             .as_ref()
                             .is_none_or(|c| c.data.revision.get() != revision)
@@ -663,7 +663,6 @@ impl Data {
             ("input", "dictionary"),
             ("input", "context"),
             ("input", "mixed_input"),
-            ("input", "smart_zhuyin"),
         ]
         .iter()
         .any(|(s, k)| current.get(s, k, "") != old.get(s, k, ""));
@@ -720,7 +719,7 @@ impl Data {
                     out = output(s.engine.operation(|h, o| unsafe {
                         shanjie_engine_set_prediction(
                             h,
-                            effective_prediction(&current) as u32,
+                            current.flag("engine", "prediction", false) as u32,
                             o,
                         )
                     }))?;
@@ -826,10 +825,6 @@ unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
     }
     Ok(())
 }
-fn effective_prediction(p: &Document) -> bool {
-    p.flag("engine", "prediction", false)
-        || (p.number("input", "keyboard", 0) < 3 && p.flag("input", "smart_zhuyin", false))
-}
 fn configure_engine(s: &mut State) -> Result<()> {
     let p = &s.prefs;
     let keyboard = p.number("input", "keyboard", 0);
@@ -851,7 +846,7 @@ fn configure_engine(s: &mut State) -> Result<()> {
         p.flag("input", "learning", true),
         p.flag("candidates", "big5", false),
         p.get("input", "dictionary", "dictionary.tsv"),
-        effective_prediction(p),
+        p.flag("engine", "prediction", false),
     )
     .ok_or_else(|| {
         crate::bridge::failure(format!("engine load: {}", s.data.display()));
@@ -877,9 +872,8 @@ fn configure_options(s: &mut State) -> Result<()> {
     }
     let flags = if p.number("input", "keyboard", 0) < 3 {
         p.flag("input", "mixed_input", false) as u32
-            | ((p.flag("input", "smart_zhuyin", false) as u32) << 1)
     } else { 0 };
-    if unsafe { shanjie_windows_set_smart_input(s.engine.handle, flags) } != 0 {
+    if unsafe { shanjie_windows_set_mixed_input(s.engine.handle, flags) } != 0 {
         return Err(E_FAIL.into());
     }
     Ok(())

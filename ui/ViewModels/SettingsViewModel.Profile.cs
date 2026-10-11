@@ -36,7 +36,7 @@ public partial class SettingsViewModel
             Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true);
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedInput = profile.Flag("input", "mixed_input", false); SmartZhuyin = profile.Flag("input", "smart_zhuyin", false);
+            MixedInput = profile.Flag("input", "mixed_input", false);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             ShiftPunctuation = profile.Flag("input", "shift_punctuation", Interaction == 1); PlainPunctuation = profile.Flag("input", "plain_punctuation", Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -64,7 +64,7 @@ public partial class SettingsViewModel
             ("engine","prediction",Prediction), ("engine","demote",Demote),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
-            ("input","mixed_input",MixedInput), ("input","smart_zhuyin",SmartZhuyin),
+            ("input","mixed_input",MixedInput),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","shift_punctuation",ShiftPunctuation), ("input","plain_punctuation",PlainPunctuation), ("input","standalone_tones",StandaloneTones),
             ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),

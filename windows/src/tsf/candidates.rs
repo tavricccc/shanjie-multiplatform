@@ -299,6 +299,7 @@ impl ITfCandidateListUIElement_Impl for Element_Impl {
 impl ITfCandidateListUIElementBehavior_Impl for Element_Impl {
     fn SetSelection(&self, index: u32) -> Result<()> {
         let mut s = self.data.snapshot.borrow_mut();
+        if s.reading_hint { return Ok(()); }
         if index as usize >= s.candidates.len() {
             return Err(E_INVALIDARG.into());
         }

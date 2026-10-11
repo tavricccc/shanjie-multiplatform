@@ -309,7 +309,6 @@ int wmain(int argc, wchar_t** argv) {
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
-        require(WritePrivateProfileStringW(L"input",L"smart_zhuyin",L"1",profile.c_str()),401);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         auto beforeSmart = store->text;
         auto smartCaret = store->selection.acpStart;
@@ -317,17 +316,18 @@ int wmain(int argc, wchar_t** argv) {
         press('S',410); press('U',412); press('3',414); press(VK_RETURN,416);
         beforeSmart.insert(smartCaret,L"call你");
         require(store->text == beforeSmart,418);
-        press('S',420); press('U',422); press('C',424); press('L',426);
-        require(!noCandidates(),428); press(VK_DOWN,430); press('1',432); press(VK_RETURN,434);
+        auto beforeRaw = store->text; auto rawCaret = store->selection.acpStart;
+        press('G',420); press('J',422);
+        beforeRaw.insert(rawCaret,L"gj"); require(store->text == beforeRaw && !noCandidates(),428);
+        press(VK_RETURN,434); require(store->text == beforeRaw,435);
         require(noCandidates(),436);
         press('H',438); press('E',440); press('L',442); press('L',444); press('O',446);
         auto beforeSmartOff = store->text;
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"0",profile.c_str()),448);
-        require(WritePrivateProfileStringW(L"input",L"smart_zhuyin",L"0",profile.c_str()),449);
         SendMessageW(HWND_BROADCAST,RegisterWindowMessageW(L"Shanjie.ProfileChanged.v1"),0,0);
         require(store->text == beforeSmartOff && noCandidates(),450);
         press('S',452); require(noCandidates(),454); press(VK_ESCAPE,456);
-        std::puts("Smart input: mixed composition, abbreviation candidates, live off preserves English passed");
+        std::puts("Mixed input: raw English with reading hint, tone composition, live off preserves English passed");
     }
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);

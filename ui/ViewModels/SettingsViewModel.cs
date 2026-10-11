@@ -29,7 +29,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial bool MixedInput { get; set; }
-    [ObservableProperty] public partial bool SmartZhuyin { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool Big5 { get; set; }

@@ -6,7 +6,7 @@ impl Engine {
         self.standalone_tones = flags & 4 != 0;
     }
     pub fn insert_windows_punctuation(&mut self, mark: &str) -> Result<Output,EngineError> {
-        let committed = if self.mixed_latin {
+        let committed = if !self.mixed_raw.is_empty() {
             let raw = std::mem::take(&mut self.mixed_raw);
             self.mixed_latin = false;
             self.mixed_text(&raw)?.commit
