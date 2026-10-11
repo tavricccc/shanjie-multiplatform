@@ -135,6 +135,17 @@ int wmain(int argc, wchar_t** argv) {
         if (error) std::printf("Rust activation detail: %s\n",error());
     }
     require(SUCCEEDED(activation),13);
+    auto residentStatus = (unsigned long long (__cdecl*)())GetProcAddress(dll,"sj_resident_status");
+    auto liveObjects = (unsigned (__cdecl*)())GetProcAddress(dll,"sj_tsf_objects");
+    require(residentStatus && liveObjects,460);
+    auto waitPreload = [&]() {
+        auto start = Clock::now();
+        while ((residentStatus() >> 32) != (residentStatus() & 0xffffffffULL)) {
+            require(Clock::now()-start < std::chrono::seconds(15),461);
+            Sleep(5);
+        }
+        std::printf("Background preload wait: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-start).count());
+    };
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
         std::printf("Harness memory after TSF activation: private %.1f MiB, working set %.1f MiB\n",memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
@@ -159,15 +170,28 @@ int wmain(int argc, wchar_t** argv) {
     }
     if (cold) {
         // This DLL lives in a fixture without any lexicon or model. Activation,
-        // focus loss and shortcut testing must not touch the engine.
+        // focus loss and shortcuts must succeed even if background loading fails.
         BOOL test=FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'S',0,&test)) && test,366);
+        waitPreload();
+        BOOL eaten=TRUE; require(SUCCEEDED(keys->OnKeyDown(context.Get(),'S',0,&eaten)) && !eaten,462);
+        require((residentStatus() & 0xffffffffULL)==1,463); // No synchronous retry on a key.
         require(SUCCEEDED(service->Deactivate()),367); keys.Reset(); service.Reset();
         thread->SetFocus(nullptr); document->Pop(TF_POPF_ALL); context.Reset(); document.Reset();
         store.Reset(); proxy.Reset(); identifiers.Reset(); thread->Deactivate(); thread.Reset(); factory.Reset();
-        auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload()==S_OK,368);
+        auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload()==S_FALSE && liveObjects()==0,368);
         FreeLibrary(dll); CoUninitialize(); std::puts("PASS: activation and system shortcuts require no model or lexicon"); return 0;
     }
     auto press = [&](WPARAM vk, int check) { BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1); };
+    // Release a service while its background job may still be running; the next
+    // service must acquire that job, not launch a second model load.
+    require(SUCCEEDED(service->Deactivate()),464); keys.Reset(); service.Reset();
+    require(SUCCEEDED(factory->CreateInstance(nullptr,IID_PPV_ARGS(&service))),465);
+    require(SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),466);
+    require(SUCCEEDED(service.As(&keys)),467);
+    waitPreload();
+    require((residentStatus() & 0xffffffffULL)==1,468);
+    if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
+        std::printf("Harness memory with resident core: private %.1f MiB, working set %.1f MiB\n",memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
     started = Clock::now();
     for (wchar_t key : std::wstring(L"SU3CL3")) press(key,20);
     std::printf("First composition (6 keys): %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
@@ -182,6 +206,15 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_ESCAPE,135); press(VK_END,137);
     }
     press(VK_RETURN,32); require(store->text == L"你好",34);
+    auto residentLoads = residentStatus() & 0xffffffffULL;
+    require(SUCCEEDED(service->Deactivate()),469); keys.Reset(); service.Reset();
+    require(SUCCEEDED(factory->CreateInstance(nullptr,IID_PPV_ARGS(&service))),470);
+    started = Clock::now();
+    require(SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),471);
+    require(SUCCEEDED(service.As(&keys)),472);
+    press('S',473); press(VK_ESCAPE,475);
+    std::printf("Resident reactivation + first key/cancel: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
+    require((residentStatus() & 0xffffffffULL)==residentLoads && store->text==L"你好",477);
     press('S',35); press(VK_ESCAPE,37); require(store->text == L"你好",39);
     press('S',40); press('U',42); press('3',44); press(VK_DOWN,46);
     ComPtr<ITfUIElementMgr> ui; require(SUCCEEDED(thread.As(&ui)),48);
@@ -354,6 +387,6 @@ int wmain(int argc, wchar_t** argv) {
     thread->SetFocus(nullptr); document->Pop(TF_POPF_ALL); context.Reset(); document.Reset();
     if (store->window) DestroyWindow(store->window); visibleStore = nullptr;
     store.Reset(); proxy.Reset(); identifiers.Reset(); thread->Deactivate(); thread.Reset(); factory.Reset();
-    auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload() == S_OK,55);
+    auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload() == S_FALSE && liveObjects()==0,55);
     FreeLibrary(dll); CoUninitialize(); std::puts("TSF composition, caret, commit, cancel, candidates, and COM lifetime passed");
 }

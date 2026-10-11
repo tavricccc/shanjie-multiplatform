@@ -1,4 +1,4 @@
-use super::{candidates, mode, Count};
+use super::{candidates, mode, resident, Count};
 use crate::{
     engine::{Engine, Snapshot},
     input::{Associated, Pinyin, Special},
@@ -59,6 +59,7 @@ pub struct State {
     bar: Option<ITfLangBarItemMgr>,
     watcher: Option<Box<ControlChannel>>,
     pub engine: Engine,
+    preload: Option<resident::Pending>,
     pub pinyin: Pinyin,
     pub special: Special,
     pub associated: Associated,
@@ -89,6 +90,7 @@ impl Default for State {
             bar: None,
             watcher: None,
             engine: Engine::default(),
+            preload: None,
             pinyin: Pinyin::default(),
             special: Special::default(),
             associated: Associated::default(),
@@ -104,6 +106,22 @@ impl Default for State {
             raw_reading: String::new(),
         }
     }
+}
+impl State {
+    fn core_config(&self) -> resident::Config {
+        resident::Config::new(&self.data, &self.prefs, self.profile_layout)
+    }
+    fn park_engine(&mut self) {
+        if !self.engine.handle.is_null() {
+            resident::park(self.core_config(), std::mem::take(&mut self.engine),
+                std::mem::take(&mut self.pinyin));
+        } else if let Some(pending) = self.preload.take() {
+            pending.park();
+        }
+    }
+}
+impl Drop for State {
+    fn drop(&mut self) { self.park_engine(); }
 }
 pub struct Data {
     pub state: RefCell<State>,
@@ -324,7 +342,7 @@ impl Data {
         }
         s.thread = None;
         s.client = 0;
-        s.engine = Engine::default();
+        s.park_engine();
         cancelled
     }
     pub fn watch(self: &Rc<Self>, context: &ITfContext) -> Result<()> {
@@ -680,6 +698,7 @@ impl Data {
             s.prefs = current.clone();
             if rebuild {
                 s.engine = Engine::default();
+                s.preload = None;
                 s.pinyin = Pinyin::default();
             }
             configure_options(&mut s)?;
@@ -703,6 +722,7 @@ impl Data {
                     .set(current.number("appearance", "font_size", 18));
             }
         }
+        self.prepare_engine()?;
         if !self.state.borrow().engine.handle.is_null() && (prediction_changed || demote_changed) {
             let configure = move |s: &mut State| -> Result<Snapshot> {
                 let mut out = Snapshot::default();
@@ -769,14 +789,30 @@ impl Data {
         {
             let mut s = self.state.borrow_mut();
             s.engine = Engine::default();
+            s.preload = None;
             s.pinyin = Pinyin::default();
         }
+        resident::invalidate();
         self.refresh()
+    }
+    fn prepare_engine(&self) -> Result<()> {
+        let mut s = self.state.borrow_mut();
+        if s.engine.handle.is_null() {
+            let config = s.core_config();
+            if !s.preload.as_ref().is_some_and(|p| p.matches(&config)) {
+                s.preload = Some(resident::prepare(config)?);
+            }
+        }
+        Ok(())
     }
     pub fn ensure_engine(&self) -> Result<()> {
         let mut s = self.state.borrow_mut();
         if s.engine.handle.is_null() {
-            configure_engine(&mut s)?;
+            // Activation already started the load. An unusually early key joins
+            // that same job; it never starts another copy on the input thread.
+            let (engine, pinyin) = s.preload.take().and_then(|p| p.take()).ok_or(E_FAIL)?;
+            s.engine = engine;
+            s.pinyin = pinyin;
             configure_options(&mut s)?;
             let demote = s.prefs.flag("engine", "demote", true);
             output(
@@ -823,40 +859,6 @@ unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
             bottom: end.y,
         };
     }
-    Ok(())
-}
-fn configure_engine(s: &mut State) -> Result<()> {
-    let p = &s.prefs;
-    let keyboard = p.number("input", "keyboard", 0);
-    s.engine = Engine::open(
-        &s.data,
-        if keyboard == 0 {
-            s.profile_layout
-        } else if keyboard == 2 {
-            1
-        } else {
-            0
-        },
-        if p.get("engine", "ranking", "chat") == "formal" {
-            1
-        } else {
-            0
-        },
-        p.get("candidates", "anchor", "right") == "right",
-        p.flag("input", "learning", true),
-        p.flag("candidates", "big5", false),
-        p.get("input", "dictionary", "dictionary.tsv"),
-        p.flag("engine", "prediction", false),
-    )
-    .ok_or_else(|| {
-        crate::bridge::failure(format!("engine load: {}", s.data.display()));
-        Error::from_hresult(E_FAIL)
-    })?;
-    s.pinyin = if keyboard >= 3 {
-        Pinyin::load(&s.data, keyboard == 4).map_err(|_| Error::from_hresult(E_FAIL))?
-    } else {
-        Pinyin::default()
-    };
     Ok(())
 }
 fn configure_options(s: &mut State) -> Result<()> {
@@ -983,6 +985,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                     s.button = Some(button);
                 }
             }
+            self.data.prepare_engine()?;
             Ok(())
         })();
         if result.is_err() {

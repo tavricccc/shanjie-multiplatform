@@ -1,6 +1,7 @@
 mod candidates;
 mod keys;
 mod mode;
+mod resident;
 mod service;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
@@ -21,6 +22,8 @@ use windows::{
 };
 static MODULE: OnceLock<isize> = OnceLock::new();
 static OBJECTS: AtomicU32 = AtomicU32::new(0);
+#[no_mangle]
+pub extern "C" fn sj_tsf_objects() -> u32 { OBJECTS.load(Ordering::Relaxed) }
 pub struct Count;
 impl Count {
     pub fn new() -> Self {
@@ -76,7 +79,7 @@ impl IClassFactory_Impl for Factory_Impl {
 }
 #[no_mangle]
 pub extern "system" fn DllCanUnloadNow() -> HRESULT {
-    if OBJECTS.load(Ordering::Relaxed) == 0 {
+    if OBJECTS.load(Ordering::Relaxed) == 0 && !resident::started() {
         S_OK
     } else {
         S_FALSE

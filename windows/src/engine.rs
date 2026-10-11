@@ -36,6 +36,10 @@ pub struct Engine {
     learning_stamp: Option<(u64, u64)>,
     learning_loaded: bool,
 }
+// The core owns its allocations/mappings and has no thread-affine UI or COM
+// objects. Move exclusive ownership only; never share an Engine concurrently.
+// The learning mutex is acquired and released within each operation.
+unsafe impl Send for Engine {}
 impl Default for Engine {
     fn default() -> Self {
         Self {
