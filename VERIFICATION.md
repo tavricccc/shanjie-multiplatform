@@ -1,6 +1,15 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-11。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-12。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-12 中英混打保留英文與空白鍵行為
+
+- 修正「你好這是english → 中文」時英文被取代：常用英文表外的英文前綴保留，只轉換尾端有效注音。核心單元案例涵蓋零／一／二個空白，core lib **48 項通過**；Windows crate 2 項通過，含 `space_commits`／`space_operates` 預設關閉與遷移保留。
+- 空白鍵預設在組字中插入可編輯空格（`shanjie_windows_insert_space`），不提交、不開／翻候選。舊行為改為兩個預設關閉的開關：「空白鍵提交組字」（含提交後補空格）與「空白鍵操作候選字」（含開候選、翻頁、回第一頁）。
+- x64／x86 Windows profile 與 x64 善解 profile TSF 背景 harness 通過：連續空格、Backspace／Esc 回復、候選開啟時空白不操作、混打 english 加零到二個空白後接「中文」，以及兩個開關開啟時的舊流程。x86 首輪曾在 check 336（拼音鍵盤 reload 後第一鍵）失敗一次，後續連續四次重跑皆通過；未確認原因，視為疑似既有 reload 時序不穩。記錄 `build/space-tsf-{x64,x86}.log`、`space-tsf-shanjie-x64.log`。
+- WinUI 開關綁定、保存／重讀與淺深擷取通過；`build/ui-review-final/settings-{1,2}-space.png` 已人工檢視，相依開關正確停用。記錄 `build/space-ui.log`。
+
+未安裝到系統、未修改真實個人設定，未在前景 App 實機驗收；沒有新的 impeccable reviewer 審查。
 
 ## 2026-10-11 後續：輸入核心背景預載與常駐
 
