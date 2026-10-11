@@ -2,9 +2,17 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-11 可選中英混打與簡拼
+
+`platform/smart_input_windows.rs` 與 `prepare-smart-input.ps1` 新增 Windows 組字政策：本機常用英文詞辨識、英文／帶聲調中文分界、英文逐字刪除，以及免聲調／部分注音候選的空白、Enter、↓ 操作。簡拼沿用上游 prediction、abbreviation 與原模型排名，補上由較後注音欄回到較前欄時的新音節分界。這是核心擴充，不是只改設定，也不是華碩的私有模型。
+
+`[input] mixed_input`、`smart_zhuyin` 預設均為 0，適用標準／倚天注音。簡拼開啟時，Windows 讓有效 prediction 為開啟，不改使用者保存的 prediction 偏好；切換任一新選項先保留組字再重建核心。舊 schema 5 由既有缺省值遷移補入兩個關閉值，不改個人資料。拼音保留設定值但不啟用這兩項政策。
+
+英文詞表來源固定於 Rime Easy English commit `54a4a07289412efc54134092c0d945f895a71ed3`，僅抽取常用、至少三個字母的英文項目，來源與 LGPL 授權見 `LICENSES/english-data.md`。沒有網路辨識；英文候選不是另一個雲端或大型模型。完整合法注音優先，小寫短詞、詞表外單字、無分界的英文／簡拼混合仍可能需要手動選詞或切換。英文後按 ↓／Tab 可要求回到注音；這不承諾華碩所有整句辨識行為。
+
 ## 2026-10-11 同步 main 與 model-v5
 
-包含正式 v0.4.0 及其後已合入 main 的 Kneser–Ney side file、Rust tiny-LM／SJTL0001 研究核心。新增詞包、縮寫組字、預測起點及 Enter 提交未完成注音等上游行為。Windows 仍僅提供橫向候選；本次接入完整核心，不新增詞包／縮寫／研究模型設定與下載。
+包含正式 v0.4.0 及其後已合入 main 的 Kneser–Ney side file、Rust tiny-LM／SJTL0001 研究核心。新增詞包、縮寫組字、預測起點及 Enter 提交未完成注音等上游行為。Windows 仍僅提供橫向候選；此階段接入完整核心，縮寫設定由上方後續功能接入，詞包／研究模型設定與下載仍未新增。
 
 C ABI 的 ShanjieOutput 尾端新增 candidate_vertical；候選 constructor 新增方向參數。平台 Output literals 和 Cands 擴充同步更新。映射模型保持 SJWM0002，補足來源 sha 與 KN 狀態，沿用上游 side-file 拒絕／配對規則；沒有 KN 檔時保持上游預設關閉。tiny-LM 核心與既有研究 API 一同編譯，沒有自動啟用 rerank。
 

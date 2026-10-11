@@ -2,6 +2,17 @@
 
 最新日期：2026-10-11。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
 
+## 2026-10-11 中英混打與免聲調／簡拼
+
+- 新增兩個獨立且預設關閉的設定；兩架構 release DLL 與 x64 WinUI 編譯通過。上游 pin 不變，子模組乾淨，核心差異由 `prepare-smart-input.ps1` 的確切錨點核對後產生。
+- 本輪相關核心回歸 **144 項通過**：lib 47、engine 33、prediction 64；8 個既有 ignored 量測沒有執行。沒有重跑與本功能無關的整套模型／學習長 fixture。記錄 `build/smart-core-regression.log`。
+- 使用正式 model-v5 的 interaction harness 通過 `sucl`、`sc` 候選包含「你好」、滑鼠 pick API、Enter／空白轉換、兩項關閉，以及 `callsu3` →「call你」、`hello world`、`hello123`、`hello,su3` →「hello,你」。另有小詞庫單元檢查中文接英文、失焦 reset、Esc、未提交與已確認英文的逐字刪除。記錄 `build/smart-interaction.log`。
+- x64／x86 TSF 背景 harness 均通過：實際游標位置插入中英組字、簡拼候選／數字選詞、儲存通知關閉功能時保留英文、關閉後不出現簡拼列；原有 composition、caret、commit、cancel、COM lifetime 與無模型啟用檢查仍通過。keyboard sink 仍用 ThreadProxy，不是註冊 TIP 的前景 App 驗收。記錄 `build/smart-tsf-x64.log`、`smart-tsf-x86.log`。
+- WinUI 原生 ToggleSwitch 的開／關、草稿保存與重讀通過；淺深兩張 `build/smart-ui-review/settings-{1,2}-2.png` 已打開檢查，新鮮 impeccable reviewer 的 disposition 為 **ship，限此次設定介面擴充**；documenter 確認沒有系統級設計變動，保留 DESIGN.md 與既有 sidecar。沒有使用生成影像或 web detector。`build/smart-ui-review/result.txt` 為 PASS。
+- `package.ps1 -UseExistingBuild` 已完成套件雜湊校驗與 ZIP；重用原有已核對的 model-v5／classes-v3，沒有再次下載模型。包內包含兩架構 DLL、更新後 WinUI、兩份預設、英文詞表及來源／授權文件。記錄 `build/smart-package.log`。
+
+本輪沒有安裝到系統、修改真實個人設定或操作使用者前景視窗。中英辨識是 4,960 個常用英文項目的本機規則；沒有宣稱等同華碩私有模型、支援任意未知英文或無分界的英文／簡拼整句。標準鍵盤新增案例已實際跑過；倚天共用解析路徑與上游配置回歸通過，新增智慧混打的倚天日常情境仍待驗收。資料來源及 LGPL 全文已隨包提供。
+
 ## 2026-10-11 上游 main 與系統操作延遲
 
 - prepare 覆蓋契約通過；上游追蹤檔案乾淨。接入 v0.4.0 與其後 main 的 KN／tiny-LM 核心、更新候選 ABI，Windows 仍維持橫向候選。model-v5＋classes-v3 官方大小與 SHA-256、所有映射陣列、來源 hash 與代表性分數等價核對通過；僅打包這一組。

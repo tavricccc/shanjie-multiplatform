@@ -63,3 +63,6 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 上游是固定 commit 子模組，核心差異保留在 `platform/` 與 prepare 腳本；`build/core` 為產生檔。更新前先讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)、[UPSTREAM.json](UPSTREAM.json)、[VERIFICATION.md](VERIFICATION.md)。架構見 [WINUI-MIGRATION.md](WINUI-MIGRATION.md)，資源量測見 [PERFORMANCE.md](PERFORMANCE.md)。
 
 程式碼沿用 Apache-2.0；詞庫、模型與 icons 分別有資料授權。Rust 相依套件的鎖定版本與全文也保存在包內 `LICENSES/windows-rust/`，不能把整包稱為單一 Apache 授權。
+## 可選智慧輸入
+
+設定 →「組字與提交」可各自開啟「中英混打自動判斷」與「免聲調與簡拼注音」，兩者預設關閉，適用標準／倚天注音。中英混打採中文優先的本機常用詞辨識；簡拼例如 ㄋㄧㄏㄠ 或 ㄋㄏ 可選「你好」，空白確認、Enter 提交、↓／Tab 選其他候選。操作範例與辨識界線見 `MICROSOFT-IME-DIFFS.md`。
