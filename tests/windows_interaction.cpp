@@ -108,6 +108,30 @@ int wmain(int argc,wchar_t** argv) {
         assert(engine.punctuation(L"「",out)); assert(out.preedit == L"你「" && out.commit.empty());
     }
     auto modelRoot = std::filesystem::path(argv[1]) / L"models";
+    {
+        shanjie::Engine engine; assert(engine.open(argv[1],0));
+        assert(engine.smartInput(3,out));
+        auto type = [&](const char* keys) {
+            ShanjieKey k{}; k.kind = 1;
+            for (auto ch : std::string(keys)) { k.ch = ch; assert(engine.key(k,out)); }
+        };
+        for (const char* keys : {"sucl", "sc"}) {
+            assert(engine.reset(true,out)); type(keys);
+            assert(out.prediction && !out.candidates.empty());
+            auto found = std::find(out.candidates.begin(),out.candidates.end(),L"你好");
+            assert(found != out.candidates.end());
+            assert(engine.pick((unsigned)(found - out.candidates.begin()),out));
+            assert(out.preedit == L"你好");
+        }
+        assert(engine.reset(true,out)); type("sucl");
+        auto predicted = out.candidates.front();
+        ShanjieKey enter{}; enter.kind = 3; assert(engine.key(enter,out)); assert(out.commit == predicted);
+        assert(engine.reset(true,out)); type("sucl");
+        ShanjieKey space{}; space.kind = 2; assert(engine.key(space,out)); assert(!out.preedit.empty() && !out.prediction);
+        assert(engine.reset(true,out)); type("callsu3"); assert(out.preedit == L"call你");
+        assert(engine.reset(true,out)); assert(engine.smartInput(0,out)); type("sc"); assert(out.candidates.empty());
+        std::cout << "PASS: smart Zhuyin full/initials, candidate pick, Enter/Space, mixed call + Chinese, switches off\n";
+    }
     // Reuse the converter's loader through the native adapter with an isolated data root.
     auto wrongData = std::filesystem::path(local) / L"wrong-data";
     std::filesystem::create_directory(wrongData);

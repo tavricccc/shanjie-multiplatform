@@ -34,6 +34,7 @@ public:
     bool inputOptions(bool shift, bool plain, bool tones);
     bool punctuation(const std::wstring&, Snapshot&);
     bool cycleCandidate(Snapshot&);
+    bool smartInput(unsigned flags, Snapshot& out) { return action(9,out,{},flags); }
     void context(const std::wstring& text);
 };
 bool translate(WPARAM key, LPARAM flags, ShanjieKey& result);

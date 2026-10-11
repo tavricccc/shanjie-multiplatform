@@ -386,6 +386,7 @@ impl Data {
             && closed
             && !state.preedit.is_empty()
             && !input::pending(&state)
+            && !(p.flag("input", "mixed_input", false) && state.preedit.chars().any(|c| c.is_ascii_alphabetic()))
             && ((key.kind == 2 && trigger == "down") || (key.kind == 10 && trigger == "space"));
         let cycle = p.flag("candidates", "up_cycles", true)
             && key.kind == 9
@@ -393,6 +394,7 @@ impl Data {
             && closed
             && !state.preedit.is_empty()
             && !input::pending(&state);
+        let cycle = cycle && !(p.flag("input", "mixed_input", false) && state.preedit.chars().any(|c| c.is_ascii_alphabetic()));
         let handled = Rc::new(Cell::new(false));
         let result_handled = handled.clone();
         let data = self.clone();

@@ -43,6 +43,8 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
     Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
+    Copy-Item "$root/data/english-common.txt" "$root/dist/data" -Force
+    Copy-Item "$root/LICENSES/english-data.md","$root/LICENSES/easy-en-LGPL-3.0.txt" "$root/dist/LICENSES" -Force
     Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
     Copy-Item "$root/assets/mode/LICENSE" "$root/dist/LICENSES/local-ime-icons-MIT.txt" -Force

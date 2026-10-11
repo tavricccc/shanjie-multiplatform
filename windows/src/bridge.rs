@@ -261,6 +261,10 @@ pub unsafe extern "C" fn sj_engine_action(
         6 => e.operation(|h, o| shanjie_engine_set_demote(h, value, o)),
         7 => e.operation(|h, o| shanjie_windows_punctuation(h, string, o)),
         8 => e.operation(|h, o| shanjie_windows_cycle_candidate(h, o)),
+        9 => {
+            if shanjie_windows_set_smart_input(e.handle, value) != 0 { return ptr::null_mut(); }
+            e.operation(|h, o| shanjie_engine_set_prediction(h, (value & 2 != 0) as u32, o))
+        }
         _ => None,
     };
     out.map_or(ptr::null_mut(), frame)

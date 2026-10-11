@@ -6,7 +6,12 @@ impl Engine {
         self.standalone_tones = flags & 4 != 0;
     }
     pub fn insert_windows_punctuation(&mut self, mark: &str) -> Result<Output,EngineError> {
-        self.pend = [None;3]; self.cands = None; self.clear_pred();
+        if self.mixed_latin {
+            let raw = std::mem::take(&mut self.mixed_raw);
+            self.mixed_latin = false;
+            self.mixed_text(&raw)?;
+        }
+        self.clear_pend(); self.cands = None; self.clear_pred();
         self.insert_token(format!("{PUNCT_PREFIX}{mark}"),Some(mark.to_owned()))
     }
 }
