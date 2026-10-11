@@ -54,22 +54,24 @@
                         <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="候選或已進入的預測列仍先關閉／退出，不會因這個選項立即刪除整句。"/>
-                        <controls:SettingToggle Label="空白提交完整組字後，再輸入空白" Description="只在空白沒有用來開候選時生效；第一聲的空白不受影響。" IsOn="{x:Bind Vm.SpaceAfterCommit, Mode=TwoWay}"/>
+                        <controls:SettingToggle x:Name="SpaceCommitsToggle" Label="空白鍵提交組字" Description="預設關閉：直接在組字中插入空格，仍可繼續編輯。注音第一聲與拼音轉換依原有規則處理。" IsOn="{x:Bind Vm.SpaceCommits, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="提交後再補一個空格" Description="只在空白鍵用來提交組字時生效。" IsEnabled="{x:Bind Vm.SpaceCommits, Mode=OneWay}" IsOn="{x:Bind Vm.SpaceAfterCommit, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="拼音按一次空白就轉換" Description="關閉時，第一次空白分隔音節，Enter 或連按兩次空白轉換。聲調鍵 1–5 皆可直接轉換。" IsOn="{x:Bind Vm.PinyinSpaceConverts, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Candidates" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="選字與外觀" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <ComboBox Header="方向鍵操作" SelectedIndex="{x:Bind Vm.Interaction, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="Windows／微軟注音 ↑↓"/><ComboBoxItem Content="善解上游 ←→"/></ComboBox>
-                        <ComboBox Header="完整組字後開啟選字" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
+                        <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
+                        <ComboBox Header="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
                         <ComboBox Header="選字位置" SelectedIndex="{x:Bind Vm.Anchor, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="游標右側的字／詞"/><ComboBoxItem Content="游標左側的字／詞"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="候選採 macOS 樣式的橫向膠囊列，每頁最多九項。"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}"/>
                         <controls:SettingToggle x:Name="CandidateKeyOptions" Label="候選中 Enter 選字並提交整句" Description="關閉時只確認候選，繼續留在組字區。" IsOn="{x:Bind Vm.EnterCommits, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="未開候選時，↑ 直接換下一個候選" IsOn="{x:Bind Vm.UpCycles, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="候選中 Backspace 同時刪除前一個字" Description="關閉時只收回候選，保留組字。" IsOn="{x:Bind Vm.BackspaceDeletes, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="空白換下一頁候選" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="最後一頁再按空白回到第一頁" IsEnabled="{x:Bind Vm.SpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="空白換下一頁候選" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="最後一頁再按空白回到第一頁" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
                         <TextBlock x:Name="AppearanceOptions" FontFamily="Microsoft JhengHei UI" Text="字元集與外觀" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
                         <NumberBox Header="候選文字大小" Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/>

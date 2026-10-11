@@ -17,8 +17,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool CapsLockEnglish { get; set; }
     [ObservableProperty] public partial int Escape { get; set; }
     [ObservableProperty] public partial bool SpaceAfterCommit { get; set; }
+    [ObservableProperty] public partial bool SpaceCommits { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp)), NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial bool SpaceOperates { get; set; }
     [ObservableProperty] public partial bool PinyinSpaceConverts { get; set; }
-    [ObservableProperty] public partial bool SpacePages { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial bool SpacePages { get; set; }
+    public bool CanWrapSpacePages => SpaceOperates && SpacePages;
     [ObservableProperty] public partial bool WrapPages { get; set; }
     [ObservableProperty] public partial bool BackquoteSymbols { get; set; }
     [ObservableProperty] public partial bool CodeInput { get; set; }
@@ -49,7 +52,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
     public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
-        + "Tab 移到下一候選。空白可翻頁。"
+        + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
     public string ModelHelp => "使用上游最新 model-v5，固定搭配 classes-v3 詞類表。";
 }

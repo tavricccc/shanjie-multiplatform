@@ -52,6 +52,14 @@ internal static class VisualVerifier
         if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input persistence failed");
         settings.SetMixedInputForVerification(false); await Task.Delay(60);
         if (settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle off failed");
+        if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
+        foreach (bool enabled in new[] { true, false }) {
+            settings.ShowSection(2); settings.SetSpaceCommitsForVerification(enabled);
+            settings.ShowSection(3); settings.SetSpaceOperatesForVerification(enabled); await Task.Delay(60);
+            if (settings.Vm.SpaceCommits != enabled || settings.Vm.SpaceOperates != enabled) throw new InvalidDataException("Space toggle binding failed");
+            settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.SpaceCommits != enabled || settings.Vm.SpaceOperates != enabled) throw new InvalidDataException("Space toggle persistence failed");
+        }
         settings.Vm.Ranking = 0; settings.Vm.Learning = false; settings.Vm.FontSize = 18; settings.Vm.DictionaryText = "";
         settings.LoadProfile(true); settings.SaveDraft();
         foreach (int theme in new[] { 1, 2 })
@@ -74,6 +82,7 @@ internal static class VisualVerifier
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-models.png"));
             settings.ShowAdvancedKeys(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-advanced-keys.png"));
             settings.ShowCandidateKeys(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-candidate-keys.png"));
+            settings.ShowSpaceOptions(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-space.png"));
             settings.ShowAppearance(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-appearance.png"));
             settings.ShowDictionary(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-dictionary.png"));
         }

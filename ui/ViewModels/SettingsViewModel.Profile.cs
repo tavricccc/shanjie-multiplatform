@@ -29,6 +29,7 @@ public partial class SettingsViewModel
             CapsLockEnglish = profile.Flag("input", "caps_lock_english", Interaction == 0);
             Escape = Array.IndexOf(new[] { "staged", "clear", "ignore" }, profile.Read("input", "escape", "staged"));
             SpaceAfterCommit = profile.Flag("input", "space_after_commit", true); PinyinSpaceConverts = profile.Flag("input", "pinyin_space_converts", Interaction == 0);
+            SpaceCommits = profile.Flag("input", "space_commits", false); SpaceOperates = profile.Flag("candidates", "space_operates", false);
             SpacePages = profile.Flag("candidates", "space_pages", true); WrapPages = profile.Flag("candidates", "wrap_pages", true);
             BackquoteSymbols = profile.Flag("shortcuts", "backquote_symbols", Interaction == 0); CodeInput = profile.Flag("shortcuts", "code_input", Interaction == 0);
             SymbolKeyboard = profile.Flag("shortcuts", "symbol_keyboard", Interaction == 0); CtrlBackslash = profile.Flag("shortcuts", "ctrl_backslash", Interaction == 1);
@@ -64,6 +65,7 @@ public partial class SettingsViewModel
             ("engine","prediction",Prediction), ("engine","demote",Demote),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
+            ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
             ("input","mixed_input",MixedInput),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","shift_punctuation",ShiftPunctuation), ("input","plain_punctuation",PlainPunctuation), ("input","standalone_tones",StandaloneTones),
