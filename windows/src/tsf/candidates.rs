@@ -116,14 +116,22 @@ impl Candidates {
         range: &ITfRange,
         state: Snapshot,
     ) -> Result<()> {
-        if state.candidates.is_empty() {
+        if state.candidates.is_empty() && state.preedit.is_empty() {
             self.close();
             return Ok(());
         }
+        let listed = !state.candidates.is_empty();
         self.revision.set(self.revision.get() + 1);
         *self.snapshot.borrow_mut() = state;
         *self.document.borrow_mut() = Some(context.GetDocumentMgr()?);
-        if self.id.get() == TF_INVALID_UIELEMENTID {
+        // Composition without candidates keeps only our reading panel; TSF sees no candidate list.
+        if !listed {
+            if self.id.get() != TF_INVALID_UIELEMENTID {
+                let id = self.id.replace(TF_INVALID_UIELEMENTID);
+                let _ = self.manager.EndUIElement(id);
+                self.native.set(true);
+            }
+        } else if self.id.get() == TF_INVALID_UIELEMENTID {
             let mut show = true.into();
             let raw = self.interface.get();
             let element = ITfCandidateListUIElementBehavior::from_raw_borrowed(&raw).unwrap();
@@ -132,7 +140,9 @@ impl Candidates {
             self.id.set(id);
             self.native.set(show.as_bool());
         }
-        self.manager.UpdateUIElement(self.id.get())?;
+        if listed {
+            self.manager.UpdateUIElement(self.id.get())?;
+        }
         if !self.native.get() {
             self.show(false)?;
             return Ok(());
@@ -178,7 +188,10 @@ impl Candidates {
         if visible
             && self.native.get()
             && !self.window.get().is_invalid()
-            && !self.snapshot.borrow().candidates.is_empty()
+            && {
+                let s = self.snapshot.borrow();
+                !s.candidates.is_empty() || !s.preedit.is_empty()
+            }
             && host.is_none()
         {
             *host = Some(Host::start(self.window.get())?);

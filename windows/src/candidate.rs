@@ -103,6 +103,9 @@ pub struct Host {
     brush: ID2D1SolidColorBrush,
     palette: Palette,
     items: Vec<Item>,
+    reading: Option<IDWriteTextLayout>,
+    reading_width: f32,
+    reading_height: f32,
     start: usize,
     end: usize,
     work_width: f32,
@@ -137,6 +140,9 @@ impl Host {
                 brush,
                 palette: Palette::new(0)?,
                 items: Vec::new(),
+                reading: None,
+                reading_width: 0.0,
+                reading_height: 0.0,
                 start: 0,
                 end: 0,
                 work_width: 0.0,
@@ -213,7 +219,8 @@ impl Host {
             self.items.clear();
             let ratio = self.size as f32 / 16.0;
             self.row = 24.0 * ratio;
-            for (i, value) in self.state.candidates.iter().enumerate() {
+            let candidates: &[String] = if self.state.reading_hint { &[] } else { &self.state.candidates };
+            for (i, value) in candidates.iter().enumerate() {
                 let tag = if self.state.selected.is_none() {
                     String::new()
                 } else {
@@ -251,6 +258,48 @@ impl Host {
                     label_height: nm.height,
                 });
             }
+            // The reading row shows uncommitted text above candidates; a mixed hint shows its pending Zhuyin.
+            let reading = if self.state.reading_hint {
+                self.state.candidates.first().cloned().unwrap_or_default()
+            } else {
+                self.state.preedit.clone()
+            };
+            self.reading = None;
+            self.reading_width = 0.0;
+            self.reading_height = 0.0;
+            if !reading.is_empty() {
+                let format = self.text_factory.CreateTextFormat(
+                    w!("Microsoft JhengHei UI"),
+                    None,
+                    DWRITE_FONT_WEIGHT_NORMAL,
+                    DWRITE_FONT_STYLE_NORMAL,
+                    DWRITE_FONT_STRETCH_NORMAL,
+                    (self.size as f32 * 0.8).max(9.0),
+                    w!("zh-TW"),
+                )?;
+                format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
+                let layout = self.text_factory.CreateTextLayout(
+                    &reading.encode_utf16().collect::<Vec<_>>(),
+                    &format,
+                    10000.0,
+                    1000.0,
+                )?;
+                let mut m = DWRITE_TEXT_METRICS::default();
+                layout.GetMetrics(&mut m)?;
+                self.reading_width = m
+                    .widthIncludingTrailingWhitespace
+                    .min((work_width - 28.0 * ratio).max(1.0));
+                self.reading_height = m.height + 6.0 * ratio;
+                layout.SetMaxWidth(self.reading_width.max(1.0))?;
+                layout.SetTrimming(
+                    &DWRITE_TRIMMING {
+                        granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+                        ..Default::default()
+                    },
+                    &self.text_factory.CreateEllipsisTrimmingSign(&format)?,
+                )?;
+                self.reading = Some(layout);
+            }
             self.work_width = work_width;
             let width = self.fit_view(self.state.selected);
             for item in &mut self.items {
@@ -264,8 +313,15 @@ impl Host {
                     &ellipsis,
                 )?;
             }
-            Ok(width)
+            Ok(width.max(self.reading_width + 28.0 * ratio).min(work_width))
         }
+    }
+    fn top(&self) -> f32 {
+        3.0 * self.size as f32 / 16.0 + self.reading_height
+    }
+    fn height(&self) -> f32 {
+        let rows = if self.items.is_empty() { 0.0 } else { self.row };
+        self.top() + rows + 3.0 * self.size as f32 / 16.0
     }
     fn fit_view(&mut self, selected: Option<usize>) -> f32 {
         let ratio = self.size as f32 / 16.0;
@@ -313,6 +369,9 @@ impl Host {
         }
     }
     unsafe fn scroll(&mut self, next: bool) -> Result<()> {
+        if self.items.is_empty() {
+            return Ok(());
+        }
         let start = if next {
             self.end.min(self.items.len() - 1)
         } else {
@@ -323,8 +382,11 @@ impl Host {
         }
         self.start = start;
         self.sequence = self.sequence.wrapping_add(1);
-        let width = self.fit_view(None);
         let ratio = self.size as f32 / 16.0;
+        let width = self
+            .fit_view(None)
+            .max(self.reading_width + 28.0 * ratio)
+            .min(self.work_width);
         for item in &self.items {
             item.word
                 .SetMaxWidth((item.width - item.tag - 11.0 * ratio).max(1.0))?;
@@ -355,7 +417,7 @@ impl Host {
             x,
             rect.top,
             pixels,
-            ((self.row + 6.0 * self.size as f32 / 16.0) * self.scale).ceil() as i32,
+            (self.height() * self.scale).ceil() as i32,
             SWP_NOZORDER | SWP_NOACTIVATE,
         )?;
         self.display()
@@ -370,7 +432,7 @@ impl Host {
     ) -> Result<()> {
         unsafe {
             self.sequence = self.sequence.wrapping_add(1);
-            if !visible || state.candidates.is_empty() {
+            if !visible || (state.candidates.is_empty() && state.preedit.is_empty()) {
                 self.hide();
                 return Ok(());
             }
@@ -410,8 +472,7 @@ impl Host {
                     .measure((monitor.rcWork.right - monitor.rcWork.left) as f32 / self.scale)?
                     * self.scale)
                     .ceil() as i32;
-                let height =
-                    ((self.row + 6.0 * self.size as f32 / 16.0) * self.scale).ceil() as i32;
+                let height = (self.height() * self.scale).ceil() as i32;
                 let mut x = caret.left.clamp(
                     monitor.rcWork.left,
                     (monitor.rcWork.right - width).max(monitor.rcWork.left),
@@ -494,25 +555,43 @@ impl Host {
             radiusX: radius,
             radiusY: radius,
         };
-        self.brush.SetColor(if self.state.reading_hint { &self.palette.accent } else { &self.palette.background });
+        let ratio = self.size as f32 / 16.0;
+        // Large corners: one row stays a full pill; two rows keep the same generous radius.
+        let radius = (height / 2.0).min(20.0 * ratio);
+        self.brush.SetColor(&self.palette.background);
         self.target
-            .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, height / 2.0), &self.brush);
-        self.brush.SetColor(if self.state.reading_hint { &self.palette.accent } else { &self.palette.border });
+            .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, radius), &self.brush);
+        self.brush.SetColor(&self.palette.border);
         self.target.DrawRoundedRectangle(
             &rounded(
                 0.25,
                 0.25,
                 width - 0.25,
                 height - 0.25,
-                (height - 0.5) / 2.0,
+                radius - 0.25,
             ),
             &self.brush,
             0.5,
             None,
         );
-        let ratio = self.size as f32 / 16.0;
+        if let Some(reading) = &self.reading {
+            self.brush.SetColor(if self.state.reading_hint {
+                &self.palette.accent
+            } else {
+                &self.palette.label
+            });
+            self.target.DrawTextLayout(
+                Vector2 {
+                    X: 14.0 * ratio,
+                    Y: 6.0 * ratio,
+                },
+                reading,
+                &self.brush,
+                D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT,
+            );
+        }
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
-        let y = 3.0 * ratio;
+        let y = self.top();
         for (i, item) in self
             .items
             .iter()
@@ -537,7 +616,7 @@ impl Host {
                 },
                 D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
             );
-            self.brush.SetColor(if selected || self.state.reading_hint {
+            self.brush.SetColor(if selected {
                 &self.palette.selected
             } else {
                 &self.palette.label
@@ -551,7 +630,7 @@ impl Host {
                 &self.brush,
                 D2D1_DRAW_TEXT_OPTIONS_CLIP,
             );
-            self.brush.SetColor(if selected || self.state.reading_hint {
+            self.brush.SetColor(if selected {
                 &self.palette.selected
             } else {
                 &self.palette.text
@@ -574,7 +653,7 @@ impl Host {
             (self.end < self.items.len(), width - 10.0 * ratio, 1.0),
         ] {
             if present {
-                let middle = height / 2.0;
+                let middle = self.top() + self.row / 2.0;
                 self.target.DrawLine(
                     Vector2 {
                         X: center - direction * 2.0 * ratio,
@@ -664,10 +743,11 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
                 .take(host.end)
                 .skip(host.start)
             {
+                let top = host.top();
                 if x >= left
                     && x < left + item.width
-                    && y >= 3.0 * ratio
-                    && y < 3.0 * ratio + host.row
+                    && y >= top
+                    && y < top + host.row
                 {
                     let _ = PostMessageW(
                         Some(host.callback),

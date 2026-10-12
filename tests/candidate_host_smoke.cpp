@@ -81,6 +81,13 @@ int wmain(int argc,wchar_t** argv) {
                 while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
                 assert(picks == beforeHintClick);
                 frame.readingHint = false; frame.prediction = false; frame.selected = 1;
+                frame.preedit = L"善ㄐㄧㄝˇ"; frame.candidates = {L"解",L"姐",L"借",L"介",L"界"};
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"composing-"+std::to_wstring(theme)+L".bmp"));
+                frame.candidates.clear(); frame.selected = -1;
+                presenter.publish(frame,preferences,caret,96,true); assert(presenter.shown());
+                captureNative(presenter.window(),output/(L"composing-"+std::to_wstring(theme)+L"-reading.bmp"));
+                frame.preedit.clear(); frame.selected = 1;
             }
         }
         presenter.hide(); assert(!presenter.shown());

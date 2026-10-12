@@ -638,7 +638,10 @@ impl Data {
             return self.cancel();
         }
         if self.state.borrow().context.as_ref() != Some(context)
-            || self.state.borrow().snapshot.candidates.is_empty()
+            || {
+                let s = self.state.borrow();
+                s.snapshot.candidates.is_empty() && s.snapshot.preedit.is_empty()
+            }
         {
             return Ok(());
         }
