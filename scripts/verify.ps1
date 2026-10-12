@@ -58,9 +58,12 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     $arguments = @("$root/dist/$Architecture/Shanjie.dll")
     if ($Visual) { $arguments += '--visual' }
     elseif ($Interaction -eq 'shanjie') { $arguments += '--shanjie' }
-    $profileRoot = Join-Path $root "build/profile-tests/$Architecture/$Interaction"
+    $profileRoot = Join-Path $root ("build/profile-tests/$Architecture/$Interaction/" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path "$profileRoot/Shanjie" -Force | Out-Null
     Copy-Item "profiles/$Interaction.ini" "$profileRoot/Shanjie/profile.ini" -Force
+    # Force Standard; desktop active profile and prior learning must not change fixtures.
+    $profileText = (Get-Content "$profileRoot/Shanjie/profile.ini" -Raw) -replace '(?m)^keyboard=.*','keyboard=1'
+    Set-Content "$profileRoot/Shanjie/profile.ini" $profileText -Encoding utf8NoBOM
     $previousLocalAppData = $env:LOCALAPPDATA
     $previousHeadless = $env:SHANJIE_HEADLESS
     try {

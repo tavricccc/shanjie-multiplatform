@@ -112,7 +112,7 @@ impl State {
         resident::Config::new(&self.data, &self.prefs, self.profile_layout)
     }
     fn park_engine(&mut self) {
-        if !self.engine.handle.is_null() {
+        if self.engine.is_open() {
             resident::park(self.core_config(), std::mem::take(&mut self.engine),
                 std::mem::take(&mut self.pinyin));
         } else if let Some(pending) = self.preload.take() {
@@ -389,7 +389,7 @@ impl Data {
                     } else {
                         output(
                             s.engine
-                                .operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
+                                .perform(crate::broker::Op::Pick(index)),
                         )?
                     }
                 };
@@ -507,13 +507,13 @@ impl Data {
                     let prefix = CString::new(chars.iter().collect::<String>()).unwrap();
                     let mut suggestions = output(
                         s.engine
-                            .operation(|h, o| shanjie_windows_associate(h, prefix.as_ptr(), o)),
+                            .perform(crate::broker::Op::Associate(prefix.to_str().unwrap().into())),
                     )?;
                     if suggestions.candidates.is_empty() && chars.len() == 2 {
                         let last = CString::new(chars[1].to_string()).unwrap();
                         suggestions = output(
                             s.engine
-                                .operation(|h, o| shanjie_windows_associate(h, last.as_ptr(), o)),
+                                .perform(crate::broker::Op::Associate(last.to_str().unwrap().into())),
                         )?;
                     }
                     s.associated.open(suggestions.candidates, out);
@@ -723,26 +723,14 @@ impl Data {
             }
         }
         self.prepare_engine()?;
-        if !self.state.borrow().engine.handle.is_null() && (prediction_changed || demote_changed) {
+        if self.state.borrow().engine.is_open() && (prediction_changed || demote_changed) {
             let configure = move |s: &mut State| -> Result<Snapshot> {
                 let mut out = Snapshot::default();
                 if demote_changed {
-                    out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_engine_set_demote(
-                            h,
-                            current.flag("engine", "demote", true) as u32,
-                            o,
-                        )
-                    }))?;
+                    out = output(s.engine.perform(crate::broker::Op::Demote(current.flag("engine", "demote", true))))?;
                 }
                 if prediction_changed {
-                    out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_engine_set_prediction(
-                            h,
-                            current.flag("engine", "prediction", false) as u32,
-                            o,
-                        )
-                    }))?;
+                    out = output(s.engine.perform(crate::broker::Op::Prediction(current.flag("engine", "prediction", false))))?;
                 }
                 Ok(out)
             };
@@ -756,7 +744,7 @@ impl Data {
                     move |cookie| {
                         let out = {
                             let mut s = data.state.borrow_mut();
-                            if data.profile_revision.get() != revision || s.engine.handle.is_null()
+                            if data.profile_revision.get() != revision || !s.engine.is_open()
                             {
                                 return Ok(());
                             }
@@ -797,7 +785,7 @@ impl Data {
     }
     fn prepare_engine(&self) -> Result<()> {
         let mut s = self.state.borrow_mut();
-        if s.engine.handle.is_null() {
+        if !s.engine.is_open() {
             let config = s.core_config();
             if !s.preload.as_ref().is_some_and(|p| p.matches(&config)) {
                 s.preload = Some(resident::prepare(config)?);
@@ -807,7 +795,7 @@ impl Data {
     }
     pub fn ensure_engine(&self) -> Result<()> {
         let mut s = self.state.borrow_mut();
-        if s.engine.handle.is_null() {
+        if !s.engine.is_open() {
             // Activation already started the load. An unusually early key joins
             // that same job; it never starts another copy on the input thread.
             let (engine, pinyin) = s.preload.take().and_then(|p| p.take()).ok_or(E_FAIL)?;
@@ -817,7 +805,7 @@ impl Data {
             let demote = s.prefs.flag("engine", "demote", true);
             output(
                 s.engine
-                    .operation(|h, o| unsafe { shanjie_engine_set_demote(h, demote as u32, o) }),
+                    .perform(crate::broker::Op::Demote(demote)),
             )?;
         }
         Ok(())
@@ -862,20 +850,20 @@ unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
     Ok(())
 }
 fn configure_options(s: &mut State) -> Result<()> {
-    if s.engine.handle.is_null() {
+    if !s.engine.is_open() {
         return Ok(());
     }
     let p = &s.prefs;
     let flags = p.flag("input", "shift_punctuation", false) as u32
         | ((p.flag("input", "plain_punctuation", false) as u32) << 1)
         | ((p.flag("input", "standalone_tones", false) as u32) << 2);
-    if unsafe { shanjie_windows_set_input_options(s.engine.handle, flags) } != 0 {
+    if s.engine.perform(crate::broker::Op::Options(flags)).is_none() {
         return Err(E_FAIL.into());
     }
     let flags = if p.number("input", "keyboard", 0) < 3 {
         p.flag("input", "mixed_input", false) as u32
     } else { 0 };
-    if unsafe { shanjie_windows_set_mixed_input(s.engine.handle, flags) } != 0 {
+    if s.engine.perform(crate::broker::Op::Mixed(flags != 0)).is_none() {
         return Err(E_FAIL.into());
     }
     Ok(())

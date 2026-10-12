@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前是可建置與打包的開發版。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.5.0**，新增登入後共用常駐核心、`Ctrl + '` 頓號，以及混打英文 Caps Lock 修正。新版說明見 [RELEASE-NOTES-0.5.0.md](RELEASE-NOTES-0.5.0.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 建置與打包
 
@@ -21,15 +21,17 @@ pwsh -File scripts/package.ps1
 
 完整解壓後雙擊 `install.cmd`，或右鍵「以系統管理員身分執行」。Rust manager 透過 UAC 提權，使用者安裝不再需要 PowerShell。目標是 x64 Windows；同時註冊 x64／x86 標準與倚天繁體中文 profile。ARM64 尚未支援。安裝後登出再登入，選「善解注音（標準）」或「善解注音（倚天）」。
 
-更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI 與模型），核對實際 COM DLL 路徑及雜湊，才清理所有舊版本與舊根目錄殘留。註冊失敗會回復原有 DLL 註冊。正在使用的 DLL／模型會排入重新啟動後刪除；已開啟 App 需要重新開啟才使用新版。唯一版本目錄避免先前刪除佇列誤刪重裝版本。
+更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI、核心與模型），核對實際 COM DLL 路徑及雜湊，才將舊版本與殘留移到各自原目錄旁的 `.deleted_files`。註冊失敗會回復原有 DLL 註冊。使用中而不能移動的項目先保留，不安排永久刪除或自動重新啟動；已開啟 App 需要重新開啟才使用新版。
+
+安裝時設定 `ShanjieCore` 登入啟動項目，登入後在背景預先載入共用詞庫與模型，沒有主視窗。x64／x86 前端各使用獨立組字會話。登入啟動尚未執行時，前端會啟動同一核心並等待就緒；核心連線中斷則重建會話及恢復尚未提交的組字。個人設定與學習位置沿用。
 
 可由 Windows「已安裝的應用程式」解除安裝，或執行安裝／解壓目錄的 `uninstall.cmd`。開始前詢問：
 
-- 「是」：刪除程式、註冊、設定、個人詞庫及所有學習資料。
-- 「否」：刪除程式、註冊與設定，保留詞庫／學習供重新安裝使用。
+- 「是」：移除程式、註冊與全部個人資料；檔案保留至 `.deleted_files`。
+- 「否」：移除程式、註冊與設定，保留詞庫／學習供重新安裝使用。
 - 「取消」：不進行解除安裝。
 
-清除包含兩架構 COM、TSF profiles／categories、本帳號輸入法清單、Installed Apps 登錄與整個安裝目錄。使用中檔案會安排重新啟動清理；解壓下載的 ZIP／資料夾由你自行保留或刪除。命令列可指定 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data` 或 `--delete-user-data`。DLL 尚未簽章。
+清除包含兩架構 COM、TSF profiles／categories、本帳號輸入法清單、Installed Apps 與登入啟動登錄。會停止本登入工作階段已知的核心，並將安裝檔案移到 `.deleted_files`；尚在使用而無法移動的檔案先保留。命令列可指定 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data` 或 `--delete-user-data`。DLL 尚未簽章。
 
 ## 設定與操作
 

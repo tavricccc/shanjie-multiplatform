@@ -10,7 +10,6 @@ use windows::{
     core::{w, BOOL, PCWSTR},
     Win32::{
         Foundation::*,
-        Storage::FileSystem::*,
         System::{Com::*, Registry::*},
         UI::{TextServices::*, WindowsAndMessaging::*},
     },
@@ -38,42 +37,23 @@ fn children(root: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     }
     Ok(())
 }
-/// Files precede their parent directories in the reboot queue. Never follow reparse points.
+/// Preserve retired payloads beside their old location. Never follow reparse points.
 pub fn remove_tree(root: &Path) -> Result<usize> {
     if !root.exists() {
         return Ok(0);
     }
     safe_tree(root)?;
-    let mut paths = Vec::new();
-    if root.is_dir() {
-        children(root, &mut paths)?;
+    let archive=root.parent().ok_or("不可清理根目錄。")?.join(".deleted_files");
+    safe_tree(&archive)?;
+    fs::create_dir_all(&archive)?;
+    let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let destination=archive.join(format!("{stamp:x}-{}",root.file_name().ok_or("缺少檔名。")?.to_string_lossy()));
+    match fs::rename(root,&destination) {
+        Ok(())=>Ok(0),
+        // Keep a busy payload in place; no reboot-time permanent deletion.
+        Err(e) if [Some(5),Some(32),Some(33)].contains(&e.raw_os_error())=>Ok(1),
+        Err(e)=>Err(e.into()),
     }
-    paths.push(root.to_owned());
-    let mut pending = 0;
-    for path in paths {
-        if path != root && !path.starts_with(root) {
-            return Err("清理路徑超出指定目錄。".into());
-        }
-        let result = if path.is_dir() {
-            fs::remove_dir(&path)
-        } else {
-            fs::remove_file(&path)
-        };
-        if let Err(error) = result {
-            if ![Some(5), Some(32), Some(33), Some(145)].contains(&error.raw_os_error()) {
-                return Err(error.into());
-            }
-            unsafe {
-                MoveFileExW(
-                    PCWSTR(wide(&path.to_string_lossy()).as_ptr()),
-                    PCWSTR::null(),
-                    MOVEFILE_DELAY_UNTIL_REBOOT,
-                )?;
-            }
-            pending += 1;
-        }
-    }
-    Ok(pending)
 }
 fn files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
@@ -119,6 +99,7 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "data/models/model-v5/bigram.winmap",
         "data/models/model-v5/classes.sjc",
         "tools/shanjie-manager.exe",
+        "tools/shanjie-core.exe",
     ] {
         if !listed.contains(&PathBuf::from(required)) {
             return Err(format!("安裝包缺少 {required}").into());
@@ -211,6 +192,24 @@ struct Installed {
     version: String,
 }
 const APP_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Shanjie";
+const RUN_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+unsafe fn core_login(executable: Option<&Path>) -> Result<()> {
+    let mut key = HKEY::default();
+    RegCreateKeyExW(HKEY_LOCAL_MACHINE, PCWSTR(wide(RUN_KEY).as_ptr()), Some(0), None,
+        REG_OPTION_NON_VOLATILE, KEY_SET_VALUE | KEY_WOW64_64KEY, None, &mut key, None).ok()?;
+    let result = if let Some(exe) = executable {
+        let command = format!("\"{}\" --serve", exe.display());
+        if command.len() > 260 { let _ = RegCloseKey(key); return Err("常駐核心啟動路徑過長。".into()); }
+        let value = wide(&command);
+        RegSetValueExW(key, w!("ShanjieCore"), Some(0), REG_SZ,
+            Some(std::slice::from_raw_parts(value.as_ptr().cast(), value.len()*2))).ok()
+    } else {
+        let status = RegDeleteValueW(key, w!("ShanjieCore"));
+        if status == ERROR_FILE_NOT_FOUND { Ok(()) } else { status.ok() }
+    };
+    let _ = RegCloseKey(key);
+    result.map_err(Into::into)
+}
 unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
     let mut key = HKEY::default();
     RegCreateKeyExW(
@@ -364,12 +363,13 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
     }
     unsafe {
         app_entry(target, &binaries)?;
+        core_login(Some(&binaries.join("tools/shanjie-core.exe")))?;
     }
     // Sweep the entire retired payload, including old shared data, scripts and WinUI hosts.
     let mut pending = 0;
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
-        if entry.file_name() != version.as_str() {
+        if entry.file_name() != version.as_str() && entry.file_name() != ".deleted_files" {
             pending += remove_tree(&entry.path())?;
         }
     }
@@ -382,6 +382,7 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
             "manager-path.txt",
             "settings.cmd",
             "uninstall.cmd",
+            ".deleted_files",
         ]
         .contains(&entry.file_name().to_string_lossy().as_ref())
         {
@@ -399,7 +400,7 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
         ] {
             let path = profile.parent().unwrap().join(retired);
             if path.exists() {
-                fs::remove_file(path)?;
+                pending += remove_tree(&path)?;
             }
         }
     }
@@ -415,7 +416,7 @@ fn choose_data(policy: UserData) -> Option<bool> {
         UserData::Keep => Some(false),
         UserData::Delete => Some(true),
         UserData::Ask => unsafe {
-            match MessageBoxW(None,w!("要一併刪除個人詞庫、選字學習與設定嗎？\n\n是：完整刪除所有善解資料。\n否：移除程式與設定，保留詞庫和學習供重新安裝使用。\n取消：不進行解除安裝。"),w!("解除安裝善解"),MB_YESNOCANCEL|MB_ICONQUESTION|MB_DEFBUTTON3){IDYES=>Some(true),IDNO=>Some(false),_=>None}
+            match MessageBoxW(None,w!("要一併移除個人詞庫、選字學習與設定嗎？\n\n是：移除程式與全部個人資料，檔案保留至 .deleted_files。\n否：移除程式與設定，保留詞庫和學習供重新安裝使用。\n取消：不進行解除安裝。"),w!("解除安裝善解"),MB_YESNOCANCEL|MB_ICONQUESTION|MB_DEFBUTTON3){IDYES=>Some(true),IDNO=>Some(false),_=>None}
         },
     }
 }
@@ -531,6 +532,16 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     let Some(delete) = choose_data(policy) else {
         return Ok(None);
     };
+    unsafe { core_login(None)?; }
+    if let Ok(entries)=fs::read_dir(target.join("versions")) {
+        for entry in entries.flatten() {
+            if entry.file_name()==".deleted_files" {continue;}
+            let core=entry.path().join("tools/shanjie-core.exe");
+            if core.exists() {
+                let _=Command::new(core).arg("--stop").creation_flags(0x08000000).status();
+            }
+        }
+    }
     safe_tree(target)?;
     profiles(true)?;
     unsafe {

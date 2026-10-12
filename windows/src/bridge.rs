@@ -246,24 +246,27 @@ pub unsafe extern "C" fn sj_engine_action(
         return ptr::null_mut();
     }
     let e = &mut *p;
+    if [5, 6, 9].contains(&action) && value > 1 {
+        return ptr::null_mut();
+    }
     let out = match action {
         0 => e.key(key),
-        1 => e.operation(|h, o| shanjie_engine_pick(h, value, o)),
+        1 => e.perform(crate::broker::Op::Pick(value)),
         2 => e.reset(value != 0),
         3 => {
-            let mut o = e.operation(|h, o| shanjie_windows_associate(h, string, o));
+            let mut o = e.perform(crate::broker::Op::Associate(text(string).into()));
             if let Some(s) = o.as_mut() {
                 s.associated = true;
             }
             o
         }
-        4 => e.operation(|h, o| shanjie_windows_reading(h, 1, o)),
-        5 => e.operation(|h, o| shanjie_engine_set_prediction(h, value, o)),
-        6 => e.operation(|h, o| shanjie_engine_set_demote(h, value, o)),
-        7 => e.operation(|h, o| shanjie_windows_punctuation(h, string, o)),
-        8 => e.operation(|h, o| shanjie_windows_cycle_candidate(h, o)),
+        4 => e.perform(crate::broker::Op::Reading),
+        5 => e.perform(crate::broker::Op::Prediction(value != 0)),
+        6 => e.perform(crate::broker::Op::Demote(value != 0)),
+        7 => e.perform(crate::broker::Op::Punctuation(text(string).into())),
+        8 => e.perform(crate::broker::Op::Cycle),
         9 => {
-            if shanjie_windows_set_mixed_input(e.handle, value) != 0 { return ptr::null_mut(); }
+            if e.perform(crate::broker::Op::Mixed(value != 0)).is_none() { return ptr::null_mut(); }
             e.reset(true)
         }
         _ => None,
@@ -272,11 +275,11 @@ pub unsafe extern "C" fn sj_engine_action(
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_engine_context(p: *mut Engine, value: *const c_char) {
-    shanjie_engine_set_left_context((*p).handle, value);
+    if !p.is_null() { (*p).perform(crate::broker::Op::Context(text(value).into())); }
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_engine_options(p: *mut Engine, value: u32) -> bool {
-    !p.is_null() && shanjie_windows_set_input_options((*p).handle, value) == 0
+    !p.is_null() && (*p).perform(crate::broker::Op::Options(value)).is_some()
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_translate(vk: usize, flags: isize, out: *mut ShanjieKey) -> bool {

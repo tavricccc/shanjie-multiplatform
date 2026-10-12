@@ -231,9 +231,7 @@ impl Data {
                     }
                     s.raw_reading.clear();
                     s.associated.clear();
-                    let mut out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_core::ffi::shanjie_windows_punctuation(h, mark.as_ptr(), o)
-                    }))?;
+                    let mut out = output(s.engine.perform(crate::broker::Op::Punctuation(mark.to_str().unwrap().into())))?;
                     out.commit = converted.commit + &out.commit;
                     out
                 };
@@ -264,7 +262,7 @@ impl Data {
                         if p.flag("input", "space_after_commit", false) { out.commit.push(' '); }
                         out
                     } else {
-                        output(s.engine.operation(|h, o| unsafe { shanjie_core::ffi::shanjie_windows_insert_space(h, o) }))?
+                        output(s.engine.perform(crate::broker::Op::Space))?
                     }
                 };
                 data.apply(&current, cookie, out, false)
@@ -364,7 +362,22 @@ impl Data {
             && key.modifiers & 16 != 0
             && key.modifiers & 14 == 0
             && [1, 2].contains(&key.kind);
-        let ascii = key.kind == 1
+        let mixed_letter = p.flag("input", "mixed_input", false)
+            && p.number("input", "keyboard", 0) < 3
+            && key.kind == 1 && (key.ch as u8).is_ascii_alphabetic()
+            && key.modifiers & 14 == 0 && !english;
+        let latin = if mixed_letter {
+            let mut keyboard = [0u8; 256];
+            let mut text = [0u16; 4];
+            unsafe {
+                GetKeyboardState(&mut keyboard)?;
+                let n = ToUnicodeEx(vk.0 as u32, ((flags.0 >> 16) & 255) as u32,
+                    &keyboard, &mut text, 4, Some(GetKeyboardLayout(0)));
+                (n == 1).then(|| char::from_u32(text[0] as u32)).flatten()
+                    .filter(|ch| ch.is_ascii_alphabetic())
+            }
+        } else { None };
+        let ascii = !mixed_letter && key.kind == 1
             && key.modifiers == 1
             && (!p.flag("input", "shift_punctuation", false)
                 || !",./1;[]90`\\'=".contains(key.ch as u8 as char));
@@ -454,10 +467,7 @@ impl Data {
                         String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?,
                     )
                     .unwrap();
-                    shanjie_core::ffi::shanjie_engine_set_left_context(
-                        data.state.borrow().engine.handle,
-                        value.as_ptr(),
-                    );
+                    data.state.borrow_mut().engine.perform(crate::broker::Op::Context(value.to_str().unwrap().into()));
                 }
                 let out = {
                     let mut s = data.state.borrow_mut();
@@ -467,9 +477,7 @@ impl Data {
                             key.kind == 2 && !p.flag("input", "space_after_commit", false);
                         out
                     } else if cycle {
-                        output(s.engine.operation(|h, o| {
-                            shanjie_core::ffi::shanjie_windows_cycle_candidate(h, o)
-                        }))?
+                        output(s.engine.perform(crate::broker::Op::Cycle))?
                     } else {
                         let mut raw = s.raw_reading.clone();
                         if key.kind == 4 {
@@ -480,7 +488,7 @@ impl Data {
                         } else if key.kind == 2 && key.modifiers == 0 {
                             raw.push(' ');
                         }
-                        let out = if let Some(out) = s.engine.key(key) {
+                        let out = if let Some(out) = s.engine.key_with_latin(key, latin) {
                             out
                         } else {
                             if !p.flag("input", "alphanumeric", true)

@@ -79,14 +79,14 @@ fn run() -> Result<()> {
         Some("install") => {
             let package=std::env::current_exe()?.parent().unwrap().parent().unwrap().to_owned();
             let pending=installer::install(&package,&target)?;
-            announce(&format!("已更新善解並清理舊版。\n{pending} 個使用中的檔案／目錄將在重新啟動後刪除。\n請重新開啟使用輸入法的程式，或登出再登入。"),dialog);
+            announce(&format!("已更新善解，並設定登入後啟動常駐核心。\n舊檔保留於原目錄旁的 .deleted_files。\n另有 {pending} 個使用中的項目暫留原位，關閉相關程式後可再處理。\n請重新開啟使用輸入法的程式，並登出再登入。"),dialog);
         }
         Some("uninstall") => {
             let delete=args.iter().any(|s|s=="--delete-user-data");let keep=args.iter().any(|s|s=="--keep-user-data");
             if delete&&keep{return Err("請只選一種個人資料處理方式。".into());}
             let policy=if delete{UserData::Delete}else if keep{UserData::Keep}else{UserData::Ask};
             match installer::uninstall(&target,policy)? {
-                Some(pending)=>announce(&format!("已移除善解與系統整合。\n{pending} 個使用中的檔案／目錄將在重新啟動後刪除。"),dialog),
+                Some(pending)=>announce(&format!("已移除善解與登入自動啟動設定。\n檔案保留於原目錄旁的 .deleted_files。\n另有 {pending} 個使用中的項目暫留原位，關閉相關程式後可再處理。"),dialog),
                 None=>announce("已取消解除安裝，沒有修改任何資料。",dialog),
             }
         }

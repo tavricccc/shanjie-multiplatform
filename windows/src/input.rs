@@ -57,7 +57,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
             if shift {
                 "＂"
             } else {
-                "＇"
+                "、"
             }
         }
         '=' => {
