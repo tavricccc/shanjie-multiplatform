@@ -5,8 +5,7 @@ $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     if (!$UseExistingBuild) {
-        & "$PSScriptRoot/build.ps1" -Architecture x64
-        & "$PSScriptRoot/build.ps1" -Architecture x86
+        & "$PSScriptRoot/build.ps1"
     }
     $output = Join-Path $root 'dist/package'
     if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }

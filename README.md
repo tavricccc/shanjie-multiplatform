@@ -15,7 +15,7 @@ pwsh -File scripts/package.ps1
 
 輸出 `dist/Shanjie-Windows.zip`：x64／x86 Rust DLL、x64 self-contained WinUI 設定、原生 Rust 安裝管理程式、最新模型與詞類表、授權全文及 SHA256SUMS。下載核對官方 SHA-256，再驗證映射陣列及語言分數等價；來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。不保留舊模型或執行期 fallback。
 
-只編譯用 `pwsh -File scripts/build.ps1 -Architecture x64`；x86 同理。`-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定 UI 並更新其 Rust DLL。已有完整 `dist/` 時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 重新整理、校驗及打包。
+只編譯用 `pwsh -File scripts/build.ps1`，預設 x64 與 x86 都建置（x86 供 64 位元 Windows 上的 32 位元程式載入）；只要單一架構加 `-Architecture x64` 或 `x86`。`-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定 UI 並更新其 Rust DLL。已有完整 `dist/` 時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 重新整理、校驗及打包。
 
 ## 安裝與解除安裝
 

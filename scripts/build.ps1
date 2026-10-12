@@ -1,6 +1,12 @@
 #Requires -Version 7
-param([ValidateSet('x64','x86')][string]$Architecture = 'x64', [switch]$UseExistingCore, [switch]$SkipSettings)
+param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings)
 $ErrorActionPreference = 'Stop'
+# Default builds both: x86 is the DLL that 32-bit apps on 64-bit Windows load.
+if ($Architecture -eq 'all') {
+    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings
+    & $PSCommandPath -Architecture x86 -UseExistingCore
+    return
+}
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
