@@ -105,7 +105,7 @@ impl Engine {
         let mut last = None;
         let mut reading = String::new();
         for ch in raw.chars() {
-            let (column, symbol) = self.layout.symbol_of(ch)?;
+            let (column, symbol) = self.layout.symbol_of(ch.to_ascii_lowercase())?;
             if last.is_some_and(|previous| previous >= column) {
                 return None;
             }
@@ -159,7 +159,7 @@ impl Engine {
                     }
                     let prefix = self.mixed_text(word)?.commit;
                     for ch in tail.chars() {
-                        self.key_original(Key::ch(ch, 0))?;
+                        self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?;
                     }
                     let mut out = self.key_original(key)?;
                     out.commit = prefix + &out.commit;
@@ -197,6 +197,19 @@ impl Engine {
         Ok(self.mixed_view(out))
     }
 
+    pub fn key_with_latin(&mut self, key: Key, display: Option<char>) -> Result<Output, EngineError> {
+        self.mixed_display_char = display.filter(|ch| ch.is_ascii_alphabetic());
+        let result = self.key(key);
+        self.mixed_display_char = None;
+        result
+    }
+
+    fn latin_character(&self, key: Key) -> char {
+        self.mixed_display_char.unwrap_or_else(|| {
+            if key.modifiers == MOD_SHIFT { key.ch.to_ascii_uppercase() } else { key.ch }
+        })
+    }
+
     fn mixed_view(&self, mut out: Output) -> Output {
         if self.is_mixed_hint() {
             out.candidates = vec![self.pending()];
@@ -214,11 +227,7 @@ impl Engine {
                 return self.passthrough(String::new());
             }
             if key.kind == KeyKind::Char && key.ch.is_ascii_alphabetic() {
-                self.mixed_raw.push(if key.modifiers == MOD_SHIFT {
-                    key.ch.to_ascii_uppercase()
-                } else {
-                    key.ch
-                });
+                self.mixed_raw.push(self.latin_character(key));
                 return self.handled();
             }
             if key.kind == KeyKind::Char && key.modifiers == 0
@@ -263,7 +272,7 @@ impl Engine {
             && (self.pending().is_empty() || !self.mixed_raw.is_empty())
             && self.cands.is_none()
         {
-            self.mixed_raw.push(key.ch.to_ascii_uppercase());
+            self.mixed_raw.push(self.latin_character(key));
             self.mixed_latin = true;
             self.clear_pend();
             self.clear_pred();
@@ -282,7 +291,7 @@ impl Engine {
                     self.mixed_raw.pop();
                     self.clear_pend();
                     self.clear_pred();
-                    for ch in self.mixed_raw.clone().chars() { self.key_original(Key::ch(ch, 0))?; }
+                    for ch in self.mixed_raw.clone().chars() { self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?; }
                     return self.handled();
                 }
                 KeyKind::Down | KeyKind::Tab => {
@@ -302,7 +311,7 @@ impl Engine {
             if self.pend.iter().all(Option::is_none) {
                 self.mixed_raw.clear();
             }
-            self.mixed_raw.push(key.ch);
+            self.mixed_raw.push(self.latin_character(key));
             if self.mixed_reading(&self.mixed_raw).is_none() {
                 self.clear_pend();
                 self.clear_pred();
