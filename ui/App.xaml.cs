@@ -7,7 +7,19 @@ public partial class App : Application
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         var arguments = Environment.GetCommandLineArgs();
-        if (arguments.Length == 3 && arguments[1] == "--verify-ui")
+        if (arguments.Length is 3 or 4 && arguments[1] == "--verify-dictionary")
+        {
+            string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
+            try {
+                window = new MainWindow();
+                await Verification.DictionaryVerifier.Run((MainWindow)window, output, arguments.Length == 4 ? arguments[3] : null);
+                File.WriteAllText(Path.Combine(output, "result.txt"), "PASS");
+            }
+            catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString()); }
+            Exit();
+        }
+        else if (arguments.Length == 3 && arguments[1] == "--verify-ui")
         {
             string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
             Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));

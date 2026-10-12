@@ -1,4 +1,4 @@
-善解 Windows v0.5.0 開發版
+善解 Windows v0.5.1 開發版
 
 1. 完整解壓 Shanjie-Windows.zip，雙擊 install.cmd。
    或右鍵「以系統管理員身分執行」。會要求 UAC。
@@ -15,6 +15,7 @@
    個人詞庫、學習與外觀偏好在升級時保留。
    Ctrl + 單引號鍵可輸入頓號「、」（須開啟 Ctrl 標點快捷鍵）。
    中英混打英文尊重 Caps Lock／Shift，與「Caps Lock 切英文」分開處理。
+   個人詞庫可一次貼上多行，支援 Windows、Unix 與 WinUI 文字框換行。
 
 4. 在 Windows「已安裝的應用程式」移除，或執行 uninstall.cmd。
    開始前詢問：是＝一併移除個人資料；否＝保留詞庫與學習；取消＝不移除。

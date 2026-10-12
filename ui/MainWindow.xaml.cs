@@ -32,6 +32,8 @@ public sealed partial class MainWindow : Window
     internal void ShowCandidateKeys() { ShowSection(3); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAppearance() { ShowSection(3); Root.UpdateLayout(); AppearanceOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowDictionary() { ShowSection(4); Root.UpdateLayout(); PersonalDictionaryEditor.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void SetDictionaryForVerification(string text) => PersonalDictionaryEditor.Text = text;
+    internal string DictionaryForVerification => PersonalDictionaryEditor.Text;
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;

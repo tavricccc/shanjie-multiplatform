@@ -29,7 +29,7 @@ try {
     Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-Item "$root/RELEASE-NOTES-0.5.0.md" $output -Force
+    Copy-Item "$root/RELEASE-NOTES-0.5.1.md" $output -Force
     Copy-Item "$root/MODEL-SOURCES.json" $output -Force
     Copy-Item "$root/WINUI-MIGRATION.md","$root/MICROSOFT-IME-DIFFS.md","$root/DESIGN.md","$root/PERFORMANCE.md" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force

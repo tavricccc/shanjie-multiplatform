@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.5.0**，新增登入後共用常駐核心、`Ctrl + '` 頓號，以及混打英文 Caps Lock 修正。新版說明見 [RELEASE-NOTES-0.5.0.md](RELEASE-NOTES-0.5.0.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.5.1**，修正設定中多行個人詞庫被誤判格式錯誤的問題；保留 0.5.0 的登入後共用常駐核心、`Ctrl + '` 頓號與混打英文 Caps Lock 修正。新版說明見 [RELEASE-NOTES-0.5.1.md](RELEASE-NOTES-0.5.1.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 建置與打包
 
