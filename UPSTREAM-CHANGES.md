@@ -2,6 +2,10 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-13 Windows 0.5.2：前端可靠性與單一鍵盤安裝
+
+本輪只修改 Windows 前端、broker、個人資料保存、安裝器與 WinUI。上游子模組、platform 核心覆蓋、prepare 契約、詞庫、model-v5／classes-v3 及解碼器未更新。新增 request sequence／結果確認、可取消管線期限、焦點與世代復原，以及獨立的 installation／registry_snapshot／installer transaction 模組。原生安裝回復與前景 App 界線見 VERIFICATION.md。
+
 ## 2026-10-12 Windows 0.5.0：共用資源與大小寫顯示
 
 上游 pin、模型格式、評分器與上游檔案不變。`prepare-resident.ps1` 在產生核心時，將個人詞庫建構及模型載入分成原始路徑與快取入口；`platform/resident_windows.rs` 以 Arc 分享不可變 Lexicon／LmState，最多保留四份詞庫及四組模型，依資料路徑、檔案版本與詞庫實例區分。組字與學習政策仍屬於各 Engine。

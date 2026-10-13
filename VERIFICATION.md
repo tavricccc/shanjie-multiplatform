@@ -1,6 +1,19 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-12。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.1 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-13。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.1 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-13 Windows 0.5.2 可靠性與安裝選擇
+
+- Windows crate release 11 項單元測試通過：包含詞典原子發布／截斷修復／併發／發布前後失敗、格式与遷移、可用配置，以及安裝交易。安裝交易以替代系統作用的 adapter 注入 152 個失敗組合（首次、舊版雙配置、標準、倚天 × 兩種選擇 × 19 個部分寫入或階段失敗），核對恢復原狀；另驗证成功選擇、其他輸入法順序與回復失敗保留引用。這是交易邏輯驗證，未在真正 COM／登錄／InstallLayoutOrTip 中注入故障。證據 `build/reliability-0.5.2/unit-final.log`。
+- 新提交 harness **80 項通過**，涵蓋 x64／x86、標準／倚天；同時核對最後文字與每次組字結束通知。包含 adb、xyz、中文／中英混合、96 個字母、取消、失焦、延後模式／連續設定更新、同 context 返回、取消世代、停用再啟用，以及學習鎖忙碌後普通按鍵、數字／UIElement 選字、取消、失焦、5 秒期限與 epoch 更新。證據 `build/reliability-0.5.2/submission-queue-initialized/results.json`。
+- 提交 harness 使用真正 Windows TSF context、range、組字及延後授鎖；手動啟用測試 DLL，以 proxy 替代必須系統註冊的 keyboard sink，並隔離兩個輸入模式 compartment。按鍵 fixture 初始化個別按鍵快取，避免目前桌面的 Win 鍵／輸入模式通知污染背景案例；無 SendInput、前景視窗操作或系統註冊。初輪干擾與修正過程保留於同目錄其他子資料夾，不計入通過數。
+- x64／x86 核心各 8 項隔離檢查通過：已連線無回覆與阻塞寫入的取消、處理前／後逾時與丟回覆、Busy、重啟重建、結果未知且學習不重播、64 個會話與第 65 個明確拒絕／容量恢復。初輪 x86 在重建並更換測試核心時失敗，固定檔案後通過；初輪學習 fixture 沒有足夠前文而未產生紀錄，改用公開前文與選字後已核對實際學習檔。證據 `core-outside-sandbox`、`core-remaining-final`、`core-x86` 與 `core-x86-serial` 子資料夾。
+- 公開兩行詞條透過發佈 DLL 的 C ABI 首次保存、截斷修復、檔名 SHA-256 與 x64／x86 兩程序同時共 200 次保存通過；損壞檔以原內容留在 `.deleted_files`。證據 `build/reliability-0.5.2/dictionary-abi-final/results.txt`。詞典發布寫入及發布前／後的故障另由上述單元測試覆蓋。
+- 實際 WinUI 多行 TextBox、可用鍵盤反灰／退回說明、無效鍵盤保存拒絕、原生學習 mutex 逾時、部分清除失敗與成功重試通過；未儲存草稿與 profile 保留、成功時 epoch 更新。使用原清除確認後的共用處理路徑，不操作真實確認對話框；取消分支沒有更動。淺／深設定及錯誤截圖已檢視，證據 `build/reliability-0.5.2/ui-first/`。
+- 既有 **64 項** Caps Lock／Shift、頓號、中文、首鍵、欄位切換及跨程序核心回歸通過，`build/reliability-0.5.2/existing-update-fixed/results.json`。核心重啟測試改為明確重试同一鍵，符合現在有期限的回傳規則；沒有改寫上游或模型。
+- x64／x86 Windows profile TSF 組字、游標、候選、提交、取消、設定、英文／空白、COM 生命周期與無模型啟動通過，`smoke-x64-recovery.log`／`smoke-x86-recovery.log`。無模型時按鍵現在保留供復原，測試依新規則核對，不再期待直接放行；系統快捷鍵仍立即放行。
+
+測試使用隔離 LOCALAPPDATA、公開 fixture 與自行啟動的核心；測試保存／重啟不廣播到其他程序。沙箱禁止命名管線存取的初輪 AccessDenied 不作產品缺陷判斷，隔離 IPC 在獲准的沙箱外執行。未安裝到目前系統、未清除真實學習或控制前景 cmd；原生安裝／回復、真正登入、解除安裝與前景 App 仍待實機驗收。已完成開發項目移出 TODO，保留實機驗收界線。
 
 ## 2026-10-12 Windows 0.5.1 多行個人詞庫修正
 
