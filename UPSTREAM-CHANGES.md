@@ -2,6 +2,10 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-13 Windows 0.5.3：安裝清單、權限回復與診斷
+
+只修改 Windows 安裝器、登錄快照、版本標示與發佈文件。新增 language_list／journal／permissions 模組：以 Windows 內建 International 介面同步現行使用者語言清單；保留原生權限繼承旗標；依舊 checkpoint 精確辨識並修復 0.5.2 的旗標遺失；先保存原始錯誤再嘗試回復。PowerShell 輔助腳本編入執行檔，資料以 JSON 傳遞。上游子模組、platform 覆蓋、prepare 契約、詞庫、model-v5／classes-v3、解碼器及輸入／broker 政策不變。隔離原生 API 測試及實際安裝的界線見 VERIFICATION.md。
+
 ## 2026-10-13 Windows 0.5.2：前端可靠性與單一鍵盤安裝
 
 本輪只修改 Windows 前端、broker、個人資料保存、安裝器與 WinUI。上游子模組、platform 核心覆蓋、prepare 契約、詞庫、model-v5／classes-v3 及解碼器未更新。新增 request sequence／結果確認、可取消管線期限、焦點與世代復原，以及獨立的 installation／registry_snapshot／installer transaction 模組。原生安裝回復與前景 App 界線見 VERIFICATION.md。

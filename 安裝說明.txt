@@ -1,10 +1,11 @@
-善解 Windows v0.5.2 開發版
+善解 Windows v0.5.3 開發版
 
 1. 完整解壓 Shanjie-Windows.zip，雙擊 install.cmd。
    或右鍵「以系統管理員身分執行」。會要求 UAC。
    第一次／舊版遷移選擇標準注音或倚天，只安裝所選配置；取消不變更。
    之後升級沿用選擇；更換時執行「重新選擇鍵盤.cmd」。
-   使用者安裝不需要 PowerShell。支援 x64 Windows，含 x86 App 輸入法。
+   使用系統內建 Windows PowerShell 5.1 同步語言清單，不須另裝 PowerShell 7。
+   支援 x64 Windows，含 x86 App 輸入法。
 
 2. 登出再登入，選擇已安裝的「善解注音（標準）」或「善解注音（倚天）」。
    登入後會在背景啟動常駐核心，預先載入共用詞庫與模型。
@@ -28,4 +29,9 @@
 
 個人資料：%LOCALAPPDATA%\Shanjie
 安裝目錄：%ProgramFiles%\Shanjie
+安裝紀錄：%ProgramFiles%\Shanjie\.installer-recovery\<本次識別碼>
+早期錯誤：%LOCALAPPDATA%\Shanjie\installer-logs\<本次識別碼>
+error.txt 保存最初原因；events.jsonl 記錄階段及回復；validation.json 保存清單校驗。
+錯誤對話框會附紀錄位置。0.5.3 修正單一配置清單同步與繼承旗標回復。
+保留的 0.5.2 失敗紀錄可供安裝器比對，只修復本程式機碼已確認的旗標遺失。
 DLL 尚未簽章。背景驗證與實機驗收界線見 VERIFICATION.md。

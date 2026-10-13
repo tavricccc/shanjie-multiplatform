@@ -30,7 +30,7 @@ try {
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-Item "$root/RELEASE-NOTES-0.5.2.md" $output -Force
+    Copy-Item "$root/RELEASE-NOTES-0.5.3.md" $output -Force
     Copy-Item "$root/MODEL-SOURCES.json" $output -Force
     Copy-Item "$root/WINUI-MIGRATION.md","$root/MICROSOFT-IME-DIFFS.md","$root/DESIGN.md","$root/PERFORMANCE.md" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force

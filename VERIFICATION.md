@@ -1,6 +1,17 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-13。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.1 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-13。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-13 Windows 0.5.3 安裝清單與權限回復
+
+- 使用者實際安裝 0.5.2 失敗，最新對話框顯示「Windows 輸入法清單校驗失敗」。只讀檢查四次 `.installer-recovery` 紀錄，均到達 Validate 階段；0.5.2 沒有保存原始失敗原因。首次 checkpoint 與目前登錄比對，資料值及子機碼一致，但五個本程式根目錄下的 47 個安全描述元只缺 `SE_DACL_AUTO_INHERITED`，擁有者／群組／ACE 規則一致；後續 checkpoint 已採用旗標遺失後的狀態。診斷 JSON 位於工作區 `.build-tools`，含本機權限資訊，不放入來源或安裝包。
+- 新版 Windows crate release **14 項單元測試通過**，2 項原生測試另外執行。涵蓋新清單計畫、外部輸入法順序／拼字／手寫／預設保存、首次新增語言，以及原始錯誤先保存且不被回復錯誤覆蓋；沿用 152 個交易故障組合，並檢查原始錯誤仍保留。證據 `build/installer-0.5.3/unit-0.5.3-final.log`。
+- x64／x86 各 **2 項真正 Windows API 測試通過**。在唯一的 `HKCU\Software\ShanjieInstallerTest-<pid>-<stamp>` 測試機碼，核對未改權限、部分寫入、配置子機碼重建、舊 API 造成 AI 旗標遺失、新 API 精確回復、舊式無 AI 描述元保存，以及修復計畫保留當前資料值／拒絕其他權限差異。每次只清理該專用機碼。證據 `native-0.5.3-x64-final.log`、`native-0.5.3-x86-final.log`。
+- 同兩項原生測試以系統內建 Windows PowerShell 5.1／International 建立真正語言物件，核對標準、倚天、雙配置及移除四種計畫轉換；並只讀目前語言清單。x86 透過 Sysnative 啟動原生系統服務。測試模式呼叫 apply 明確拒絕，沒有呼叫真實 `Set-WinUserLanguageList` 或 `Set-WinDefaultInputMethodOverride`。
+- 0.5.3 正式 manager 的兩項早期錯誤測試通過：無效鍵盤參數及隔離模式拒絕 profiles，都在隔離 LOCALAPPDATA 留下版本／階段／原因，stderr 附紀錄路徑。證據 `manager-failure-results.txt`、`manager-error.txt`、`manager-test-guard.txt`。沒有安裝、註冊或前景視窗操作。
+- x64／x86 Rust release 建置成功，既有 LNK4104 COM export 訊息保留為建置警告。新輔助程式編入 manager／DLL，不增加獨立可變的安裝腳本。正式 WinUI、封裝雜湊、版本／來源一致與保護檔檢查結果另記於工作區的 `版本交付紀錄-0.5.3.md`。
+
+本輪使用工作區隔離檔案與專用測試機碼，沒有修改目前安裝的 0.5.1、47 個真實權限描述元、個人 profile／詞典／學習或實際輸入設定。原生權限回復已測試；真正語言清單寫入、0.5.1 雙配置至單一配置升級、UAC 互動、登入與解除安裝仍列在 TODO。0.5.2 的 80／64 項輸入及核心測試保留為歷史證據，不算本版重新執行。
 
 ## 2026-10-13 Windows 0.5.2 可靠性與安裝選擇
 

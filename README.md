@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.5.2**，修正 cmd 重複首字、核心忙碌／逾時復原、延後回呼與詞典完整保存，並支援只安裝標準注音或倚天。保留多行詞典、登入後常駐核心、頓號與混打 Caps Lock。新版說明見 [RELEASE-NOTES-0.5.2.md](RELEASE-NOTES-0.5.2.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.5.3**，修正單一鍵盤升級時的 Windows 清單同步、登錄權限繼承回復，並完整記錄原始安裝錯誤。保留 0.5.2 的 cmd 首字修正、核心復原、詞典保存、只安裝標準注音或倚天，以及多行詞典、登入後常駐核心、頓號與混打 Caps Lock。新版說明見 [RELEASE-NOTES-0.5.3.md](RELEASE-NOTES-0.5.3.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 建置與打包
 
@@ -19,9 +19,11 @@ pwsh -File scripts/package.ps1
 
 ## 安裝與解除安裝
 
-完整解壓後雙擊 `install.cmd`，或右鍵「以系統管理員身分執行」。Rust manager 透過 UAC 提權，使用者安裝不再需要 PowerShell。目標是 x64 Windows；先選標準注音或倚天，只註冊選定配置的 x64／x86 profile。已有選擇的升級沿用配置；沒有紀錄的舊版會先盤點並詢問，取消則保留現狀。ARM64 尚未支援。安裝後登出再登入，選已安裝的善解配置。更換配置可執行 `重新選擇鍵盤.cmd`；命令列支援 `--keyboard standard`／`--keyboard eten`。
+完整解壓後雙擊 `install.cmd`，或右鍵「以系統管理員身分執行」。Rust manager 透過 UAC 提權，背景使用系統內建 Windows PowerShell 5.1 同步語言清單，使用者不須另外安裝 PowerShell 7。目標是 x64 Windows；先選標準注音或倚天，只註冊選定配置的 x64／x86 profile。已有選擇的升級沿用配置；沒有紀錄的舊版會先盤點並詢問，取消則保留現狀。ARM64 尚未支援。安裝後登出再登入，選已安裝的善解配置。更換配置可執行 `重新選擇鍵盤.cmd`；命令列支援 `--keyboard standard`／`--keyboard eten`。
 
-更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI、核心與模型），核對實際 COM DLL 路徑及雜湊，才將舊版本與殘留移到各自原目錄旁的 `.deleted_files`。變更前保存註冊、配置、清單順序、啟動檔案、Installed Apps 與 Run，任一步驟失敗會嘗試完整回復。回復未完成時保留相關版本與 `.installer-recovery` 紀錄，明確列出失敗项目。使用中而不能移動的項目先保留，不安排永久刪除或自動重新啟動；已開啟 App 需要重新開啟才使用新版。
+更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI、核心與模型），核對實際 COM DLL 路徑及雜湊，才將舊版本與殘留移到各自原目錄旁的 `.deleted_files`。變更前保存註冊、配置、完整語言清單、啟動檔案、Installed Apps 與 Run，任一步驟失敗會嘗試完整回復。回復未完成時保留相關版本與 `.installer-recovery` 紀錄，明確列出失敗項目。使用中而不能移動的項目先保留，不安排永久刪除或自動重新啟動；已開啟 App 需要重新開啟才使用新版。
+
+安裝錯誤先存於 `%ProgramFiles%\Shanjie\.installer-recovery\<識別碼>\error.txt`，階段與回復結果見 `events.jsonl`，完整清單校驗見 `validation.json`；早期失敗另存於 `%LOCALAPPDATA%\Shanjie\installer-logs\<識別碼>\`。對話框會附紀錄位置。0.5.3 安裝時可根據已保留的 0.5.2 失敗 checkpoint 修復本程式機碼已確認的繼承旗標遺失；只在其餘權限內容完全相同時處理，詳見新版說明。
 
 安裝時設定 `ShanjieCore` 登入啟動項目，登入後在背景預先載入共用詞庫與模型，沒有主視窗。x64／x86 前端各使用獨立組字會話。登入啟動尚未執行時，前端會啟動同一核心並等待就緒；讀寫與復原均有期限。忙碌時按順序保留按鍵；核心連線中斷則確認請求結果，只重建已確認的未提交組字。結果未知時保留並提示，避免重複提交或學習。個人設定與學習位置沿用。
 
@@ -60,7 +62,7 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 
 ## 維護與授權
 
-`windows/src/` 按 engine、input、profile、candidate、native、registration、installer、tsf 分模組。Windows 產品的 TSF、按鍵、候選繪製、設定／詞庫／學習及安裝邏輯都是 Rust；`ui/` 的 C#／XAML 保留 WinUI 控制項與草稿綁定；`tests/support/` 的 C++ 僅是測試 ABI adapter，沒有產品 C++。CMD／PowerShell 安裝入口只呼叫 manager。
+`windows/src/` 按 engine、input、profile、candidate、native、registration、installer、tsf 分模組。Windows 的 TSF、按鍵、候選繪製、設定／詞庫／學習及安裝交易由 Rust 處理；`ui/` 的 C#／XAML 保留 WinUI 控制項與草稿綁定；`tests/support/` 的 C++ 僅是測試 ABI adapter，沒有產品 C++。CMD／PowerShell 安裝入口只呼叫 manager；`scripts/user-language-list.ps1` 編入 manager，專責呼叫 Windows International 語言設定介面。
 
 上游是固定 commit 子模組，核心差異保留在 `platform/` 與 prepare 腳本；`build/core` 為產生檔。更新前先讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)、[UPSTREAM.json](UPSTREAM.json)、[VERIFICATION.md](VERIFICATION.md)。架構見 [WINUI-MIGRATION.md](WINUI-MIGRATION.md)，資源量測見 [PERFORMANCE.md](PERFORMANCE.md)。
 
