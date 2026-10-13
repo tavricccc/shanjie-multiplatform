@@ -7,7 +7,7 @@ using Windows.Storage.Streams;
 namespace Shanjie_UI.Verification;
 internal static class VisualVerifier
 {
-    private static async Task Capture(FrameworkElement element, string path)
+    internal static async Task Capture(FrameworkElement element, string path)
     {
         element.UpdateLayout();
         var bitmap = new RenderTargetBitmap(); await bitmap.RenderAsync(element);

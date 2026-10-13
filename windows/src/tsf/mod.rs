@@ -1,6 +1,7 @@
 mod candidates;
 mod keys;
 mod mode;
+mod recovery;
 mod resident;
 mod service;
 use std::sync::{
@@ -23,7 +24,9 @@ use windows::{
 static MODULE: OnceLock<isize> = OnceLock::new();
 static OBJECTS: AtomicU32 = AtomicU32::new(0);
 #[no_mangle]
-pub extern "C" fn sj_tsf_objects() -> u32 { OBJECTS.load(Ordering::Relaxed) }
+pub extern "C" fn sj_tsf_objects() -> u32 {
+    OBJECTS.load(Ordering::Relaxed)
+}
 pub struct Count;
 impl Count {
     pub fn new() -> Self {

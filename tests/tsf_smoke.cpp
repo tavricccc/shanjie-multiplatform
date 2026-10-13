@@ -105,7 +105,9 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<IClassFactory> factory; require(SUCCEEDED(factoryFn(ServiceId,IID_PPV_ARGS(&factory))),5);
     ComPtr<ITfTextInputProcessorEx> service; require(SUCCEEDED(factory->CreateInstance(nullptr,IID_PPV_ARGS(&service))),6);
     ComPtr<ITfThreadMgr> thread; require(SUCCEEDED(CoCreateInstance(CLSID_TF_ThreadMgr,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&thread))),7);
-    TfClientId client; require(SUCCEEDED(thread->Activate(&client)),8);
+    TfClientId client;
+    if(visual) {require(SUCCEEDED(thread->Activate(&client)),8);}
+    else {ComPtr<ITfThreadMgrEx> extended;require(SUCCEEDED(thread.As(&extended))&&SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),8);}
     ComPtr<ITfDocumentMgr> document; require(SUCCEEDED(thread->CreateDocumentMgr(&document)),9);
     ComPtr<Store> store; store.Attach(new Store);
     if (visual) {
@@ -174,11 +176,11 @@ int wmain(int argc, wchar_t** argv) {
         // focus loss and shortcuts must succeed even if background loading fails.
         BOOL test=FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'S',0,&test)) && test,366);
         waitPreload();
-        BOOL unavailableEaten=TRUE;
-        require(SUCCEEDED(keys->OnKeyDown(context.Get(),'S',0,&unavailableEaten)) && !unavailableEaten,469);
-        require(store->text.empty(),470); // Missing core passes the physical key to the App.
-        BOOL eaten=TRUE; require(SUCCEEDED(keys->OnKeyDown(context.Get(),'S',0,&eaten)) && !eaten,462);
-        require((residentStatus() & 0xffffffffULL)==1,463); // No synchronous retry on a key.
+        BOOL unavailableEaten=FALSE;
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(),'S',0,&unavailableEaten)) && unavailableEaten,469);
+        require(store->text.empty(),470); // Failed core retains input for bounded recovery.
+        BOOL eaten=FALSE; require(SUCCEEDED(keys->OnKeyDown(context.Get(),'S',0,&eaten)) && eaten,462);
+        require((residentStatus() & 0xffffffffULL)<=2,463); // Following keys join the retained queue.
         require(SUCCEEDED(service->Deactivate()),367); keys.Reset(); service.Reset();
         thread->SetFocus(nullptr); document->Pop(TF_POPF_ALL); context.Reset(); document.Reset();
         store.Reset(); proxy.Reset(); identifiers.Reset(); thread->Deactivate(); thread.Reset(); factory.Reset();

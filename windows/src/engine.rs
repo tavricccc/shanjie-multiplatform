@@ -36,6 +36,17 @@ pub struct Engine {
     epoch: String,
     learning_stamp: Option<(u64, u64)>,
     learning_loaded: bool,
+    failure: Option<Failure>,
+    attempt: Vec<(crate::broker::Op, Snapshot)>,
+    attempt_cursor: Option<usize>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Failure {
+    Busy,
+    Disconnected,
+    Timeout,
+    Ambiguous,
+    Failed,
 }
 // The core owns its allocations/mappings and has no thread-affine UI or COM
 // objects. Move exclusive ownership only; never share an Engine concurrently.
@@ -51,6 +62,9 @@ impl Default for Engine {
             epoch: String::new(),
             learning_stamp: None,
             learning_loaded: false,
+            failure: None,
+            attempt: Vec::new(),
+            attempt_cursor: None,
         }
     }
 }
@@ -163,6 +177,11 @@ impl Engine {
             };
             let result = WaitForSingleObject(m, 250);
             if result != WAIT_OBJECT_0 && result != WAIT_ABANDONED {
+                self.failure = Some(if result == windows::Win32::Foundation::WAIT_TIMEOUT {
+                    Failure::Busy
+                } else {
+                    Failure::Failed
+                });
                 return false;
             }
             let epoch = std::fs::read_to_string(self.folder.join("learning.epoch"))
@@ -283,6 +302,48 @@ impl Engine {
         self.perform(crate::broker::Op::Reset(discard))
     }
     pub fn perform(&mut self, op: crate::broker::Op) -> Option<Snapshot> {
+        if let Some(at) = self.attempt_cursor {
+            if let Some((old, result)) = self.attempt.get(at) {
+                if old != &op {
+                    self.failure = Some(Failure::Ambiguous);
+                    return None;
+                }
+                self.attempt_cursor = Some(at + 1);
+                return Some(result.clone());
+            }
+        }
+        self.failure = None;
+        let result = self.perform_uncached(op.clone());
+        if let Some(remote) = self.remote.as_ref() {
+            self.failure = remote.failure;
+        }
+        if result.is_none() && self.failure.is_none() {
+            self.failure = Some(Failure::Failed);
+        }
+        if let (Some(at), Some(snapshot)) = (self.attempt_cursor, result.as_ref()) {
+            self.attempt.push((op, snapshot.clone()));
+            self.attempt_cursor = Some(at + 1);
+        }
+        result
+    }
+    pub fn failure(&self) -> Option<Failure> {
+        self.failure
+    }
+    pub fn begin_attempt(&mut self) {
+        self.attempt_cursor = Some(0);
+        self.failure = None;
+    }
+    pub fn finish_attempt(&mut self, succeeded: bool) {
+        self.attempt_cursor = None;
+        if succeeded {
+            self.attempt.clear();
+            self.failure = None;
+        }
+    }
+    pub fn recovery_pending(&self) -> bool {
+        !self.attempt.is_empty() || self.failure.is_some_and(|f| f != Failure::Failed)
+    }
+    fn perform_uncached(&mut self, op: crate::broker::Op) -> Option<Snapshot> {
         if let Some(remote) = self.remote.as_mut() {
             return remote.perform(op);
         }

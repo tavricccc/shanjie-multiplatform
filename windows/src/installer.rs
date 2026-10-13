@@ -14,8 +14,8 @@ use windows::{
         UI::{TextServices::*, WindowsAndMessaging::*},
     },
 };
+mod transaction;
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
-const TIPS:&str="0x0404:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}{AC59A613-F813-4DAD-BA97-D221A87A6ACE};0x0404:{8912696E-8A31-4DF3-A7BC-0261F3B6A147}{338145B4-047A-4564-A0DE-223DC22C1AE1}";
 pub fn install_root() -> PathBuf {
     PathBuf::from(std::env::var_os("ProgramFiles").expect("Program Files")).join("Shanjie")
 }
@@ -43,16 +43,24 @@ pub fn remove_tree(root: &Path) -> Result<usize> {
         return Ok(0);
     }
     safe_tree(root)?;
-    let archive=root.parent().ok_or("不可清理根目錄。")?.join(".deleted_files");
+    let archive = root
+        .parent()
+        .ok_or("不可清理根目錄。")?
+        .join(".deleted_files");
     safe_tree(&archive)?;
     fs::create_dir_all(&archive)?;
-    let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
-    let destination=archive.join(format!("{stamp:x}-{}",root.file_name().ok_or("缺少檔名。")?.to_string_lossy()));
-    match fs::rename(root,&destination) {
-        Ok(())=>Ok(0),
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let destination = archive.join(format!(
+        "{stamp:x}-{}",
+        root.file_name().ok_or("缺少檔名。")?.to_string_lossy()
+    ));
+    match fs::rename(root, &destination) {
+        Ok(()) => Ok(0),
         // Keep a busy payload in place; no reboot-time permanent deletion.
-        Err(e) if [Some(5),Some(32),Some(33)].contains(&e.raw_os_error())=>Ok(1),
-        Err(e)=>Err(e.into()),
+        Err(e) if [Some(5), Some(32), Some(33)].contains(&e.raw_os_error()) => Ok(1),
+        Err(e) => Err(e.into()),
     }
 }
 fn files(root: &Path) -> Result<Vec<PathBuf>> {
@@ -114,6 +122,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     Ok(listed)
 }
 fn regsvr(dll: &Path, arch: &str, remove: bool) -> Result<()> {
+    regsvr_selected(dll, arch, remove, 3)
+}
+fn regsvr_selected(dll: &Path, arch: &str, remove: bool, keyboards: u32) -> Result<()> {
     let system = if arch == "x64" {
         "System32"
     } else {
@@ -123,6 +134,7 @@ fn regsvr(dll: &Path, arch: &str, remove: bool) -> Result<()> {
         .join(system)
         .join("regsvr32.exe");
     let mut command = Command::new(executable);
+    command.env("SHANJIE_INSTALL_KEYBOARDS", keyboards.to_string());
     command.creation_flags(0x08000000).arg("/s");
     if remove {
         command.arg("/u");
@@ -168,6 +180,19 @@ fn registry_dll(view: REG_SAM_FLAGS) -> Result<Option<PathBuf>> {
     }
 }
 pub fn profiles(remove: bool) -> Result<()> {
+    let mask = if remove {
+        3
+    } else {
+        crate::installation::load(&install_root())?
+            .and_then(|state| state.keyboards)
+            .ok_or("請先透過安裝工具選擇鍵盤配置。")?
+    };
+    profiles_selected(mask, remove)
+}
+fn profiles_selected(mask: u32, remove: bool) -> Result<()> {
+    if mask == 0 {
+        return Ok(());
+    }
     unsafe {
         use windows::{
             core::PCSTR,
@@ -179,7 +204,10 @@ pub fn profiles(remove: bool) -> Result<()> {
         let address = GetProcAddress(module, PCSTR(c"InstallLayoutOrTip".as_ptr().cast()))
             .ok_or("Windows 缺少 InstallLayoutOrTip。")?;
         let install: unsafe extern "system" fn(PCWSTR, u32) -> BOOL = std::mem::transmute(address);
-        let result = install(PCWSTR(wide(TIPS).as_ptr()), remove as u32);
+        let result = install(
+            PCWSTR(wide(&crate::installation::tips(mask)).as_ptr()),
+            remove as u32,
+        );
         FreeLibrary(module)?;
         if !result.as_bool() {
             return Err("Windows 無法更新善解輸入法清單。".into());
@@ -187,25 +215,47 @@ pub fn profiles(remove: bool) -> Result<()> {
     }
     Ok(())
 }
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Installed {
-    version: String,
-}
 const APP_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Shanjie";
 const RUN_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
 unsafe fn core_login(executable: Option<&Path>) -> Result<()> {
     let mut key = HKEY::default();
-    RegCreateKeyExW(HKEY_LOCAL_MACHINE, PCWSTR(wide(RUN_KEY).as_ptr()), Some(0), None,
-        REG_OPTION_NON_VOLATILE, KEY_SET_VALUE | KEY_WOW64_64KEY, None, &mut key, None).ok()?;
+    RegCreateKeyExW(
+        HKEY_LOCAL_MACHINE,
+        PCWSTR(wide(RUN_KEY).as_ptr()),
+        Some(0),
+        None,
+        REG_OPTION_NON_VOLATILE,
+        KEY_SET_VALUE | KEY_WOW64_64KEY,
+        None,
+        &mut key,
+        None,
+    )
+    .ok()?;
     let result = if let Some(exe) = executable {
         let command = format!("\"{}\" --serve", exe.display());
-        if command.len() > 260 { let _ = RegCloseKey(key); return Err("常駐核心啟動路徑過長。".into()); }
+        if command.len() > 260 {
+            let _ = RegCloseKey(key);
+            return Err("常駐核心啟動路徑過長。".into());
+        }
         let value = wide(&command);
-        RegSetValueExW(key, w!("ShanjieCore"), Some(0), REG_SZ,
-            Some(std::slice::from_raw_parts(value.as_ptr().cast(), value.len()*2))).ok()
+        RegSetValueExW(
+            key,
+            w!("ShanjieCore"),
+            Some(0),
+            REG_SZ,
+            Some(std::slice::from_raw_parts(
+                value.as_ptr().cast(),
+                value.len() * 2,
+            )),
+        )
+        .ok()
     } else {
         let status = RegDeleteValueW(key, w!("ShanjieCore"));
-        if status == ERROR_FILE_NOT_FOUND { Ok(()) } else { status.ok() }
+        if status == ERROR_FILE_NOT_FOUND {
+            Ok(())
+        } else {
+            status.ok()
+        }
     };
     let _ = RegCloseKey(key);
     result.map_err(Into::into)
@@ -272,15 +322,76 @@ unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
     RegCloseKey(key).ok()?;
     result
 }
-pub fn install(package: &Path, target: &Path) -> Result<usize> {
+pub fn choose_keyboard(target: &Path, explicit: Option<u32>, choose: bool) -> Result<Option<u32>> {
+    if let Some(mask) = explicit {
+        if !matches!(mask, 1 | 2) {
+            return Err("請選擇 standard 或 eten。".into());
+        }
+        return Ok(Some(mask));
+    }
+    if !choose {
+        if let Some(mask) = crate::installation::load(target)?
+            .and_then(|state| state.keyboards)
+            .filter(|mask| matches!(mask, 1 | 2))
+        {
+            return Ok(Some(mask));
+        }
+    }
+    let standard = crate::installation::registered(KEY_WOW64_64KEY)?;
+    let eten = crate::installation::registered(KEY_WOW64_32KEY)?;
+    let user = crate::registry_snapshot::capture(transaction::locations()[6].clone())?;
+    let listed = crate::installation::listed(&user);
+    let current = if standard != eten {
+        "目前鍵盤註冊不一致，這次會依你的選擇修復。"
+    } else if listed == 3 {
+        "目前清單有標準注音與倚天。"
+    } else if listed == 1 {
+        "目前清單有標準注音。"
+    } else if listed == 2 {
+        "目前清單有倚天。"
+    } else {
+        "請選擇要安裝的鍵盤配置。"
+    };
+    let text=wide(&format!("{current}\n\n是：安裝標準注音\n否：安裝倚天注音\n取消：維持現有安裝\n\n只安裝選定的配置，個人詞庫與輸入偏好會保留。"));
+    Ok(unsafe {
+        match MessageBoxW(
+            None,
+            PCWSTR(text.as_ptr()),
+            w!("選擇善解鍵盤配置"),
+            MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON3,
+        ) {
+            IDYES => Some(1),
+            IDNO => Some(2),
+            _ => None,
+        }
+    })
+}
+pub fn install(
+    package: &Path,
+    target: &Path,
+    explicit: Option<u32>,
+    choose: bool,
+) -> Result<Option<usize>> {
     if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
         return Err("請以系統管理員身分安裝善解。".into());
     }
+    let _owner = install_owner()?;
     let entries = verified_package(package)?;
+    let Some(keyboards) = choose_keyboard(target, explicit, choose)? else {
+        return Ok(None);
+    };
     safe_tree(target)?;
     safe_tree(&target.join("versions"))?;
+    // Reject external registrations before staging any version.
+    for view in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
+        if registry_dll(view)?
+            .as_ref()
+            .is_some_and(|path| !path.starts_with(target))
+        {
+            return Err("既有善解 DLL 路徑超出安裝目錄。".into());
+        }
+    }
     fs::create_dir_all(target)?;
-    // A fresh directory prevents old PendingFileRenameOperations from deleting a later reinstall.
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
@@ -290,82 +401,42 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
     );
     let binaries = target.join("versions").join(&version);
     fs::create_dir_all(&binaries)?;
-    for relative in &entries {
-        let destination = binaries.join(relative);
-        fs::create_dir_all(destination.parent().unwrap())?;
-        fs::copy(package.join(relative), &destination)?;
-    }
-    let previous: Vec<_> = [("x64", KEY_WOW64_64KEY), ("x86", KEY_WOW64_32KEY)]
-        .into_iter()
-        .map(|(arch, view)| Ok((arch, registry_dll(view)?)))
-        .collect::<Result<_>>()?;
-    for (_, path) in &previous {
-        if path.as_ref().is_some_and(|p| !p.starts_with(target)) {
-            return Err("既有善解 DLL 路徑超出安裝目錄。".into());
+    let staging = (|| -> Result<()> {
+        for relative in &entries {
+            let destination = binaries.join(relative);
+            fs::create_dir_all(destination.parent().unwrap())?;
+            fs::copy(package.join(relative), destination)?;
         }
-    }
-    let mut registered = Vec::new();
-    let registration = (|| -> Result<()> {
-        for arch in ["x64", "x86"] {
-            let dll = binaries.join(arch).join("Shanjie.dll");
-            regsvr(&dll, arch, false)?;
-            registered.push(arch);
-            let view = if arch == "x64" {
-                KEY_WOW64_64KEY
-            } else {
-                KEY_WOW64_32KEY
-            };
-            if registry_dll(view)?.as_ref() != Some(&dll) {
-                return Err(format!("TSF {arch} 註冊路徑校驗失敗。").into());
-            }
-            if digest(&dll)? != digest(&package.join(arch).join("Shanjie.dll"))? {
-                return Err("已註冊 DLL 校驗失敗。".into());
-            }
-        }
-        profiles(false)
+        fs::copy(
+            package.join("SHA256SUMS.txt"),
+            binaries.join("SHA256SUMS.txt"),
+        )?;
+        Ok(())
     })();
-    if let Err(error) = registration {
-        let mut failures = Vec::new();
-        for (arch, path) in &previous {
-            let result = if let Some(path) = path {
-                regsvr(path, arch, false)
-            } else if registered.contains(arch) {
-                regsvr(&binaries.join(arch).join("Shanjie.dll"), arch, true)
-            } else {
-                Ok(())
-            };
-            if let Err(error) = result {
-                failures.push(error.to_string());
-            }
+    if let Err(error) = staging {
+        let _ = remove_tree(&binaries);
+        return Err(error);
+    }
+    let backup = target
+        .join(".installer-recovery")
+        .join(format!("{stamp:x}"));
+    safe_tree(&target.join(".installer-recovery"))?;
+    let result = transaction::execute(&mut transaction::Native {
+        target,
+        package,
+        binaries: &binaries,
+        version: &version,
+        keyboards,
+        backup: &backup,
+        previous: None,
+    });
+    if let Err(error) = result {
+        if transaction::rolled_back(&backup) {
+            let _ = remove_tree(&binaries);
         }
-        if failures.is_empty() {
-            remove_tree(&binaries)?;
-            return Err(error);
-        }
-        return Err(format!("{error}；回復註冊未完成：{}", failures.join("；")).into());
+        return Err(error);
     }
-    fs::write(
-        target.join("ui-path.txt"),
-        format!("versions\\{version}\\ui\\Shanjie.UI.exe"),
-    )?;
-    fs::write(
-        target.join("manager-path.txt"),
-        format!("versions\\{version}\\tools\\shanjie-manager.exe"),
-    )?;
-    fs::write(
-        target.join("installed.json"),
-        serde_json::to_vec_pretty(&Installed {
-            version: version.clone(),
-        })?,
-    )?;
-    for launcher in ["settings.cmd", "uninstall.cmd"] {
-        fs::copy(package.join(launcher), target.join(launcher))?;
-    }
-    unsafe {
-        app_entry(target, &binaries)?;
-        core_login(Some(&binaries.join("tools/shanjie-core.exe")))?;
-    }
-    // Sweep the entire retired payload, including old shared data, scripts and WinUI hosts.
+    // Only a fully validated transaction may retire an old version.
     let mut pending = 0;
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
@@ -383,28 +454,35 @@ pub fn install(package: &Path, target: &Path) -> Result<usize> {
             "settings.cmd",
             "uninstall.cmd",
             ".deleted_files",
+            ".installer-recovery",
         ]
         .contains(&entry.file_name().to_string_lossy().as_ref())
         {
             pending += remove_tree(&entry.path())?;
         }
     }
-    let profile = crate::profile::path();
-    if profile.exists() {
-        crate::profile::load(&profile)?;
-        for retired in [
-            "profile.ini.schema1.bak",
-            "profile.ini.schema2.bak",
-            "profile.ini.before-model-v4.bak",
-            "profile.ini.before-model-v5.bak",
-        ] {
-            let path = profile.parent().unwrap().join(retired);
-            if path.exists() {
-                pending += remove_tree(&path)?;
-            }
+    Ok(Some(pending))
+}
+fn install_owner() -> Result<InstallOwner> {
+    use windows::Win32::System::Threading::*;
+    let handle = unsafe { CreateMutexW(None, false, w!("Global\\ShanjieWindowsInstaller"))? };
+    let status = unsafe { WaitForSingleObject(handle, 0) };
+    if status != WAIT_OBJECT_0 && status != WAIT_ABANDONED {
+        unsafe {
+            CloseHandle(handle)?;
+        }
+        return Err("另一個善解安裝或移除作業正在進行，請稍後重試。".into());
+    }
+    Ok(InstallOwner(handle))
+}
+struct InstallOwner(HANDLE);
+impl Drop for InstallOwner {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::System::Threading::ReleaseMutex(self.0);
+            let _ = CloseHandle(self.0);
         }
     }
-    Ok(pending)
 }
 pub enum UserData {
     Ask,
@@ -529,16 +607,24 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
         return Err("請以系統管理員身分解除安裝善解。".into());
     }
+    let _owner = install_owner()?;
     let Some(delete) = choose_data(policy) else {
         return Ok(None);
     };
-    unsafe { core_login(None)?; }
-    if let Ok(entries)=fs::read_dir(target.join("versions")) {
+    unsafe {
+        core_login(None)?;
+    }
+    if let Ok(entries) = fs::read_dir(target.join("versions")) {
         for entry in entries.flatten() {
-            if entry.file_name()==".deleted_files" {continue;}
-            let core=entry.path().join("tools/shanjie-core.exe");
+            if entry.file_name() == ".deleted_files" {
+                continue;
+            }
+            let core = entry.path().join("tools/shanjie-core.exe");
             if core.exists() {
-                let _=Command::new(core).arg("--stop").creation_flags(0x08000000).status();
+                let _ = Command::new(core)
+                    .arg("--stop")
+                    .creation_flags(0x08000000)
+                    .status();
             }
         }
     }

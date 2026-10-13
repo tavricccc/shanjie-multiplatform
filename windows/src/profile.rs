@@ -191,6 +191,9 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
             PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )?;
+        if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+            return Ok(());
+        }
         let message =
             RegisterWindowMessageW(PCWSTR(crate::wide("Shanjie.ProfileChanged.v1").as_ptr()));
         SendNotifyMessageW(
@@ -203,6 +206,9 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
     Ok(())
 }
 pub fn restart() -> Result<()> {
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+        return Ok(());
+    }
     unsafe {
         SendNotifyMessageW(
             HWND(0xffffusize as _),
@@ -217,11 +223,7 @@ pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
     let content = dictionary_content(text)?;
     let name = format!("dictionary-{:x}.tsv", Sha256::digest(content.as_bytes()));
-    fs::create_dir_all(folder)?;
-    let target = folder.join(&name);
-    if !target.exists() {
-        fs::write(&target, content)?;
-    }
+    crate::dictionary_store::publish(folder, &name, content.as_bytes())?;
     Ok(name)
 }
 fn dictionary_content(text: &str) -> Result<String> {
@@ -274,7 +276,12 @@ pub fn clear_learning() -> Result<()> {
             for name in ["learning.tsv", "learning.tsv.tmp", "learning.tsv.corrupt"] {
                 let p = folder.join(name);
                 if p.exists() {
-                    fs::remove_file(p)?;
+                    if !fs::symlink_metadata(&p)?.is_file() {
+                        return Err("學習資料的檔案類型異常，清除操作未完成。".into());
+                    }
+                    if crate::installer::remove_tree(&p)? != 0 {
+                        return Err("部分學習資料仍在使用中，清除操作未完成；請稍後重試。".into());
+                    }
                 }
             }
             fs::write(

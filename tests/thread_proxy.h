@@ -1,4 +1,5 @@
 #pragma once
+#include "support/input_compartments.h"
 // Only keyboard-sink registration is substituted: Windows requires a registered
 // active TIP for AdviseKeyEventSink. Everything else uses the real TSF manager.
 class ThreadProxy final : public ITfThreadMgr, public ITfKeystrokeMgr {
@@ -6,11 +7,13 @@ class ThreadProxy final : public ITfThreadMgr, public ITfKeystrokeMgr {
     ComPtr<ITfThreadMgr> real_;
     ComPtr<ITfKeystrokeMgr> keys_;
     ComPtr<ITfKeyEventSink> sink_;
+    ComPtr<InputCompartments> input_;
 public:
-    ThreadProxy(ITfThreadMgr* real) : real_(real) { real->QueryInterface(IID_PPV_ARGS(&keys_)); }
+    ThreadProxy(ITfThreadMgr* real,bool isolateInput=false) : real_(real) { real->QueryInterface(IID_PPV_ARGS(&keys_));if(isolateInput)input_.Attach(new InputCompartments(real)); }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** out) override {
         if (iid == IID_IUnknown || iid == IID_ITfThreadMgr) *out = static_cast<ITfThreadMgr*>(this);
         else if (iid == IID_ITfKeystrokeMgr) *out = static_cast<ITfKeystrokeMgr*>(this);
+        else if(iid==IID_ITfCompartmentMgr&&input_)return input_.CopyTo(reinterpret_cast<ITfCompartmentMgr**>(out));
         else return real_->QueryInterface(iid,out);
         AddRef(); return S_OK;
     }

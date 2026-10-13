@@ -1,6 +1,6 @@
 //! Per-user, per-session resident core. The pipe transports composition state;
 //! it never writes keystrokes to disk. Immutable data is shared inside the core.
-use crate::engine::{Engine, Snapshot};
+use crate::engine::{Engine, Failure, Snapshot};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -63,7 +63,7 @@ struct Security {
     descriptor: Raw,
     inherit: i32,
 }
-fn user_sid() -> io::Result<String> {
+pub(crate) fn user_sid() -> io::Result<String> {
     unsafe {
         let mut token = std::ptr::null_mut();
         if OpenProcessToken(GetCurrentProcess(), 8, &mut token) == 0 {
@@ -140,7 +140,7 @@ fn read<T: DeserializeOwned>(pipe: &mut File) -> io::Result<T> {
     pipe.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub layout: u32,
     pub ranking: u32,
@@ -150,7 +150,7 @@ pub struct Config {
     pub dictionary: String,
     pub prediction: bool,
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Op {
     Key {
         kind: u32,
@@ -173,12 +173,22 @@ pub enum Op {
 }
 #[derive(Serialize, Deserialize)]
 enum Request {
-    Open(Config, Vec<Op>),
-    Apply(Op),
+    Open {
+        id: String,
+        config: Config,
+        replay: Vec<Op>,
+        sequence: u64,
+    },
+    Resume(String),
+    Apply {
+        sequence: u64,
+        op: Op,
+    },
+    Close,
     Status,
     Stop,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Reply {
     pub snapshot: Option<Snapshot>,
     pub pending: bool,
@@ -186,6 +196,9 @@ pub struct Reply {
     pub pid: u32,
     pub lexicon_loads: u64,
     pub model_loads: u64,
+    pub sequence: u64,
+    pub found: bool,
+    pub failure: Option<Failure>,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -195,17 +208,22 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         pid: std::process::id(),
         lexicon_loads: shanjie_core::ffi::shanjie_windows_resource_loads(0),
         model_loads: shanjie_core::ffi::shanjie_windows_resource_loads(1),
+        sequence: 0,
+        found: false,
+        failure: if ok { None } else { Some(Failure::Failed) },
     }
 }
-fn connect(data: &Path, start: bool) -> io::Result<File> {
+fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {
+    use std::os::windows::fs::OpenOptionsExt;
     let name = endpoint(data)?;
     let expected = executable(data).canonicalize()?;
-    let deadline = Instant::now() + Duration::from_secs(if start { 30 } else { 1 });
     let mut launched = false;
+    let mut full_since: Option<Instant> = None;
     loop {
         match std::fs::OpenOptions::new()
             .read(true)
             .write(true)
+            .custom_flags(0x40000000)
             .open(&name)
         {
             Ok(file) => unsafe {
@@ -228,15 +246,21 @@ fn connect(data: &Path, start: bool) -> io::Result<File> {
                 {
                     return Err(io::Error::other("Unexpected core server"));
                 }
-                return Ok(file);
+                return Ok(crate::pipe_io::Pipe(file));
             },
             Err(error) => {
+                if error.raw_os_error() == Some(231) {
+                    let since = *full_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= Duration::from_secs(1) {
+                        return Err(error);
+                    }
+                }
                 if ![Some(2), Some(231)].contains(&error.raw_os_error())
                     || Instant::now() >= deadline
                 {
                     return Err(error);
                 }
-                if start && !launched {
+                if start && !launched && error.raw_os_error() == Some(2) {
                     start_core(&expected)?;
                     launched = true;
                 }
@@ -277,127 +301,55 @@ fn start_core(executable: &Path) -> io::Result<()> {
     }
     Ok(())
 }
-pub struct Client {
-    pipe: File,
-    data: PathBuf,
-    config: Config,
-    journal: Vec<Op>,
-    settings: Vec<Op>,
-    pub pending: bool,
-}
-impl Client {
-    pub fn open(data: &Path, config: Config) -> Option<Self> {
-        let mut pipe = connect(data, true).ok()?;
-        write(&mut pipe, &Request::Open(config.clone(), Vec::new())).ok()?;
-        if !read::<Reply>(&mut pipe).ok()?.ok {
-            return None;
-        }
-        Some(Self {
-            pipe,
-            data: data.into(),
-            config,
-            journal: Vec::new(),
-            settings: Vec::new(),
-            pending: false,
-        })
-    }
-    fn request(&mut self, op: Op) -> io::Result<Reply> {
-        write(&mut self.pipe, &Request::Apply(op))?;
-        read(&mut self.pipe)
-    }
-    pub fn perform(&mut self, op: Op) -> Option<Snapshot> {
-        let result = self
-            .request(op.clone())
-            .or_else(|_| {
-                self.pipe = connect(&self.data, true)?;
-                let mut replay = self.settings.clone();
-                replay.extend(self.journal.clone());
-                write(&mut self.pipe, &Request::Open(self.config.clone(), replay))?;
-                if !read::<Reply>(&mut self.pipe)?.ok {
-                    return Err(io::Error::other("Core recovery failed"));
-                }
-                self.request(op.clone())
-            })
-            .ok()?;
-        if !result.ok {
-            return None;
-        }
-        self.pending = result.pending;
-        match &op {
-            Op::Options(_) | Op::Mixed(_) | Op::Prediction(_) | Op::Demote(_) => {
-                self.settings
-                    .retain(|old| std::mem::discriminant(old) != std::mem::discriminant(&op));
-                self.settings.push(op);
-            }
-            Op::Context(_) => {
-                self.journal.retain(|old| !matches!(old, Op::Context(_)));
-                self.journal.push(op);
-            }
-            _ => {
-                if result
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|s| s.preedit.is_empty())
-                {
-                    self.journal.clear();
-                } else {
-                    self.journal.push(op);
-                }
-            }
-        }
-        result.snapshot
-    }
-}
+mod client;
+mod session;
+pub mod verification;
+pub use client::Client;
 pub fn control(data: &Path, stop: bool) -> io::Result<Reply> {
-    let mut pipe = connect(data, false)?;
-    write(
-        &mut pipe,
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let pipe = connect(data, false, deadline)?;
+    pipe.send(
         &if stop { Request::Stop } else { Request::Status },
+        deadline,
     )?;
-    read(&mut pipe)
-}
-fn session(mut pipe: File, data: PathBuf) {
-    let mut engine: Option<Engine> = None;
-    while let Ok(request) = read::<Request>(&mut pipe) {
-        let response = match request {
-            Request::Open(config, replay) => {
-                if Path::new(&config.dictionary).components().count() != 1
-                    || !config.dictionary.ends_with(".tsv")
-                {
-                    reply(None, None, false)
-                } else {
-                    engine = Engine::open_local(
-                        &data,
-                        config.layout,
-                        config.ranking,
-                        config.right,
-                        config.learning,
-                        config.big5,
-                        &config.dictionary,
-                        config.prediction,
-                    );
-                    let ok = engine.as_mut().is_some_and(|e| e.replay(&replay));
-                    reply(engine.as_ref(), None, ok)
-                }
-            }
-            Request::Apply(op) => {
-                let snapshot = engine.as_mut().and_then(|e| e.perform(op));
-                let ok = snapshot.is_some();
-                reply(engine.as_ref(), snapshot, ok)
-            }
-            Request::Status => reply(None, None, true),
-            Request::Stop => {
-                let _ = write(&mut pipe, &reply(None, None, true));
-                std::process::exit(0);
-            }
-        };
-        if write(&mut pipe, &response).is_err() {
-            break;
-        }
-    }
+    pipe.receive(deadline)
 }
 pub fn serve(data: &Path) -> io::Result<()> {
-    let name = crate::wide(&endpoint(data)?);
+    let endpoint = endpoint(data)?;
+    use windows::{
+        core::PCWSTR,
+        Win32::{
+            Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0},
+            System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+        },
+    };
+    let owner_name = crate::wide(&format!(
+        "Local\\ShanjieCoreOwner-{:x}",
+        Sha256::digest(endpoint.as_bytes())
+    ));
+    let owner = unsafe { CreateMutexW(None, false, PCWSTR(owner_name.as_ptr())) }
+        .map_err(|e| io::Error::other(e.to_string()))?;
+    let acquired = unsafe { WaitForSingleObject(owner, 0) };
+    if acquired != WAIT_OBJECT_0 && acquired != WAIT_ABANDONED {
+        unsafe {
+            CloseHandle(owner.0);
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "Core already running",
+        ));
+    }
+    struct Owner(windows::Win32::Foundation::HANDLE);
+    impl Drop for Owner {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = ReleaseMutex(self.0);
+                CloseHandle(self.0 .0);
+            }
+        }
+    }
+    let _owner = Owner(owner);
+    let name = crate::wide(&endpoint);
     let descriptor = crate::wide(&format!("D:P(A;;GA;;;{})S:(ML;;NW;;;LW)", user_sid()?));
     let mut sd = std::ptr::null_mut();
     unsafe {
@@ -447,7 +399,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
     let p = crate::profile::load(&crate::profile::path())
         .map_err(|e| io::Error::other(e.to_string()))?;
     let keyboard = p.number("input", "keyboard", 0);
-    let layout = if keyboard == 2 { 1 } else { 0 };
+    let layout = crate::installation::layout(keyboard, 0, crate::installation::available());
     let warm = Engine::open_local(
         data,
         layout,
@@ -460,17 +412,37 @@ pub fn serve(data: &Path) -> io::Result<()> {
     )
     .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.
+    let sessions: session::Sessions = Default::default();
     loop {
-        unsafe {
+        let connected = unsafe {
             if ConnectNamedPipe(pipe.as_raw_handle(), std::ptr::null_mut()) == 0
                 && io::Error::last_os_error().raw_os_error() != Some(535)
             {
-                return Err(io::Error::last_os_error());
+                false
+            } else {
+                true
             }
-        }
-        let next = create(false)?;
+        };
         let data = data.to_owned();
-        std::thread::spawn(move || session(pipe, data));
-        pipe = next;
+        let clients = sessions.clone();
+        // Serve the accepted client before trying to allocate another listener.
+        // A full instance pool must not terminate existing sessions or the core.
+        if connected {
+            let _ = std::thread::Builder::new()
+                .name("Shanjie core session".into())
+                .spawn(move || session::run(pipe, data, clients));
+        } else {
+            drop(pipe);
+        }
+        let mut backoff = 20;
+        pipe = loop {
+            match create(false) {
+                Ok(next) => break next,
+                Err(_) => {
+                    std::thread::sleep(Duration::from_millis(backoff));
+                    backoff = (backoff * 2).min(500);
+                }
+            }
+        };
     }
 }

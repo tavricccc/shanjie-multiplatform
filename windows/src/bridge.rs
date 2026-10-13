@@ -67,7 +67,15 @@ pub unsafe extern "C" fn sj_document_json(content: *const c_char) -> *mut c_char
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_profile_save(content: *const c_char) -> bool {
-    match profile::save(&profile::path(), text(content)) {
+    let result = (|| -> profile::Result<()> {
+        let document = Document::parse(text(content))?;
+        let keyboard = document.number("input", "keyboard", 0);
+        if crate::installation::keyboard(keyboard, crate::installation::available()) != keyboard {
+            return Err("此鍵盤配置尚未安裝，請選擇可用配置。".into());
+        }
+        profile::save(&profile::path(), text(content))
+    })();
+    match result {
         Ok(()) => true,
         Err(e) => {
             failure(e);
@@ -84,6 +92,10 @@ pub extern "C" fn sj_clear_learning() -> bool {
             false
         }
     }
+}
+#[no_mangle]
+pub extern "C" fn sj_installed_keyboards() -> u32 {
+    crate::installation::available()
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_profile_preset(content: *const c_char, windows: bool) -> *mut c_char {
@@ -266,7 +278,9 @@ pub unsafe extern "C" fn sj_engine_action(
         7 => e.perform(crate::broker::Op::Punctuation(text(string).into())),
         8 => e.perform(crate::broker::Op::Cycle),
         9 => {
-            if e.perform(crate::broker::Op::Mixed(value != 0)).is_none() { return ptr::null_mut(); }
+            if e.perform(crate::broker::Op::Mixed(value != 0)).is_none() {
+                return ptr::null_mut();
+            }
             e.reset(true)
         }
         _ => None,
@@ -275,7 +289,9 @@ pub unsafe extern "C" fn sj_engine_action(
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_engine_context(p: *mut Engine, value: *const c_char) {
-    if !p.is_null() { (*p).perform(crate::broker::Op::Context(text(value).into())); }
+    if !p.is_null() {
+        (*p).perform(crate::broker::Op::Context(text(value).into()));
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_engine_options(p: *mut Engine, value: u32) -> bool {

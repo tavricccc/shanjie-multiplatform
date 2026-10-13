@@ -1,0 +1,563 @@
+//! Checkpoint every install effect before touching registration or launch paths.
+use super::*;
+use crate::registry_snapshot::{self, Location, Saved};
+use serde::{Deserialize, Serialize};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Phase {
+    Register64,
+    Register32,
+    Profiles,
+    LaunchPaths,
+    AppEntry,
+    Login,
+    Validate,
+}
+const PHASES: [Phase; 7] = [
+    Phase::Register64,
+    Phase::Register32,
+    Phase::Profiles,
+    Phase::LaunchPaths,
+    Phase::AppEntry,
+    Phase::Login,
+    Phase::Validate,
+];
+pub trait Effects {
+    type Checkpoint;
+    fn checkpoint(&mut self) -> Result<Self::Checkpoint>;
+    fn apply(&mut self, phase: Phase) -> Result<()>;
+    fn restore(&mut self, checkpoint: &Self::Checkpoint) -> Result<()>;
+}
+pub fn execute<E: Effects>(effects: &mut E) -> Result<()> {
+    let checkpoint = effects.checkpoint()?;
+    for phase in PHASES {
+        if let Err(error) = effects.apply(phase) {
+            return match effects.restore(&checkpoint) {
+                Ok(()) => Err(format!("安裝未完成，已回復安裝前狀態：{error}").into()),
+                Err(rollback) => Err(format!(
+                    "安裝未完成：{error}；回復仍有失敗項目：{rollback}。相關版本與回復紀錄已保留。"
+                )
+                .into()),
+            };
+        }
+    }
+    Ok(())
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct FileState {
+    path: PathBuf,
+    bytes: Option<Vec<u8>>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Checkpoint {
+    registry: Vec<Saved>,
+    files: Vec<FileState>,
+}
+pub struct Native<'a> {
+    pub target: &'a Path,
+    pub package: &'a Path,
+    pub binaries: &'a Path,
+    pub version: &'a str,
+    pub keyboards: u32,
+    pub backup: &'a Path,
+    pub previous: Option<Checkpoint>,
+}
+pub fn locations() -> Vec<Location> {
+    let mut paths = Vec::new();
+    for view in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
+        paths.push(Location::tree(
+            false,
+            view,
+            format!("SOFTWARE\\Classes\\CLSID\\{SERVICE}"),
+        ));
+        paths.push(Location::tree(
+            false,
+            view,
+            format!("SOFTWARE\\Microsoft\\CTF\\TIP\\{SERVICE}"),
+        ));
+        paths.push(Location::tree(
+            true,
+            view,
+            format!("SOFTWARE\\Microsoft\\CTF\\TIP\\{SERVICE}"),
+        ));
+    }
+    paths.push(Location::tree(
+        true,
+        REG_SAM_FLAGS(0),
+        "Control Panel\\International\\User Profile",
+    ));
+    paths.push(Location::tree(false, KEY_WOW64_64KEY, APP_KEY));
+    paths.push(Location::value(
+        false,
+        KEY_WOW64_64KEY,
+        RUN_KEY,
+        "ShanjieCore",
+    ));
+    paths
+}
+pub fn atomic_file(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let temporary = path.with_extension(format!("tmp-{}-{stamp:x}", std::process::id()));
+    let result = (|| -> Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, path)?;
+        Ok(())
+    })();
+    if temporary.exists() {
+        let _ = remove_tree(&temporary);
+    }
+    result
+}
+fn save_files(target: &Path) -> Result<Vec<FileState>> {
+    [
+        "installed.json",
+        "ui-path.txt",
+        "manager-path.txt",
+        "settings.cmd",
+        "uninstall.cmd",
+    ]
+    .iter()
+    .map(|name| {
+        let path = target.join(name);
+        safe_tree(&path)?;
+        let bytes = if path.try_exists()? {
+            Some(fs::read(&path)?)
+        } else {
+            None
+        };
+        Ok(FileState { path, bytes })
+    })
+    .collect()
+}
+fn restore_file(state: &FileState) -> Result<()> {
+    let actual = if state.path.try_exists()? {
+        Some(fs::read(&state.path)?)
+    } else {
+        None
+    };
+    if actual == state.bytes {
+        return Ok(());
+    }
+    if state.path.exists() && remove_tree(&state.path)? != 0 {
+        return Err(format!("啟動檔案仍在使用中：{}", state.path.display()).into());
+    }
+    if let Some(bytes) = &state.bytes {
+        atomic_file(&state.path, bytes)?;
+    }
+    let actual = if state.path.try_exists()? {
+        Some(fs::read(&state.path)?)
+    } else {
+        None
+    };
+    if actual != state.bytes {
+        return Err("安裝檔案回復校驗失敗。".into());
+    }
+    Ok(())
+}
+fn other_order(saved: &Saved) -> Vec<(String, String)> {
+    fn visit(tree: &registry_snapshot::Tree, path: &str, out: &mut Vec<(String, String)>) {
+        let mut tips = tree
+            .values
+            .iter()
+            .filter(|(name, _)| name.contains(':') && !name.to_uppercase().contains(SERVICE))
+            .collect::<Vec<_>>();
+        tips.sort_by_key(|(_, value)| {
+            if value.bytes.len() == 4 {
+                u32::from_le_bytes(value.bytes[..4].try_into().unwrap())
+            } else {
+                u32::MAX
+            }
+        });
+        for (name, _) in tips {
+            out.push((path.into(), name.clone()));
+        }
+        for (name, child) in &tree.children {
+            visit(child, &format!("{path}\\{name}"), out);
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(tree) = &saved.tree {
+        visit(tree, "", &mut out);
+    }
+    out
+}
+impl Effects for Native<'_> {
+    type Checkpoint = Checkpoint;
+    fn checkpoint(&mut self) -> Result<Checkpoint> {
+        let registry = locations()
+            .into_iter()
+            .map(registry_snapshot::capture)
+            .collect::<Result<Vec<_>>>()?;
+        let checkpoint = Checkpoint {
+            registry,
+            files: save_files(self.target)?,
+        };
+        fs::create_dir_all(self.backup)?;
+        atomic_file(
+            &self.backup.join("checkpoint.json"),
+            &serde_json::to_vec_pretty(&checkpoint)?,
+        )?;
+        self.previous = Some(checkpoint.clone());
+        Ok(checkpoint)
+    }
+    fn apply(&mut self, phase: Phase) -> Result<()> {
+        atomic_file(
+            &self.backup.join("phase.txt"),
+            format!("{phase:?}").as_bytes(),
+        )?;
+        match phase {
+            Phase::Register64 | Phase::Register32 => {
+                let arch = if phase == Phase::Register64 {
+                    "x64"
+                } else {
+                    "x86"
+                };
+                // The checkpoint precedes the attempt, including partial regsvr failure.
+                regsvr_selected(
+                    &self.binaries.join(arch).join("Shanjie.dll"),
+                    arch,
+                    false,
+                    self.keyboards,
+                )?;
+            }
+            Phase::Profiles => {
+                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
+                let listed = crate::installation::listed(&previous.registry[6]);
+                let removed = listed & !self.keyboards;
+                if removed != 0 {
+                    profiles_selected(removed, true)?;
+                }
+                if listed & self.keyboards != self.keyboards {
+                    profiles_selected(self.keyboards, false)?;
+                }
+            }
+            Phase::LaunchPaths => {
+                atomic_file(
+                    &self.target.join("ui-path.txt"),
+                    format!("versions\\{}\\ui\\Shanjie.UI.exe", self.version).as_bytes(),
+                )?;
+                atomic_file(
+                    &self.target.join("manager-path.txt"),
+                    format!("versions\\{}\\tools\\shanjie-manager.exe", self.version).as_bytes(),
+                )?;
+                for name in ["settings.cmd", "uninstall.cmd"] {
+                    atomic_file(&self.target.join(name), &fs::read(self.package.join(name))?)?;
+                }
+                let installed = crate::installation::Installed {
+                    version: self.version.into(),
+                    keyboards: Some(self.keyboards),
+                };
+                atomic_file(
+                    &self.target.join("installed.json"),
+                    &serde_json::to_vec_pretty(&installed)?,
+                )?;
+            }
+            Phase::AppEntry => unsafe {
+                app_entry(self.target, self.binaries)?;
+            },
+            Phase::Login => unsafe {
+                core_login(Some(&self.binaries.join("tools/shanjie-core.exe")))?;
+            },
+            Phase::Validate => {
+                for (arch, view) in [("x64", KEY_WOW64_64KEY), ("x86", KEY_WOW64_32KEY)] {
+                    let dll = self.binaries.join(arch).join("Shanjie.dll");
+                    if registry_dll(view)?.as_ref() != Some(&dll)
+                        || crate::installation::registered(view)? != self.keyboards
+                        || digest(&dll)? != digest(&self.package.join(arch).join("Shanjie.dll"))?
+                    {
+                        return Err(format!("{arch} 安裝註冊校驗失敗。").into());
+                    }
+                }
+                let user = registry_snapshot::capture(locations()[6].clone())?;
+                if crate::installation::listed(&user) != self.keyboards {
+                    return Err("Windows 輸入法清單校驗失敗。".into());
+                }
+                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
+                if other_order(&user) != other_order(&previous.registry[6]) {
+                    return Err("其他輸入法的順序發生變更，已停止安裝。".into());
+                }
+                let state = crate::installation::load(self.target)?.ok_or("安裝配置尚未保存。")?;
+                if state.version != self.version || state.keyboards != Some(self.keyboards) {
+                    return Err("安裝配置校驗失敗。".into());
+                }
+                for (name, expected) in [
+                    (
+                        "ui-path.txt",
+                        format!("versions\\{}\\ui\\Shanjie.UI.exe", self.version),
+                    ),
+                    (
+                        "manager-path.txt",
+                        format!("versions\\{}\\tools\\shanjie-manager.exe", self.version),
+                    ),
+                ] {
+                    if fs::read_to_string(self.target.join(name))? != expected
+                        || !self.target.join(expected).is_file()
+                    {
+                        return Err("啟動程式路徑校驗失敗。".into());
+                    }
+                }
+                let app =
+                    registry_snapshot::capture(Location::tree(false, KEY_WOW64_64KEY, APP_KEY))?;
+                if app
+                    .tree
+                    .as_ref()
+                    .and_then(|tree| tree.values.get("DisplayVersion"))
+                    .map(|v| v.bytes.clone())
+                    != Some(
+                        crate::wide(env!("CARGO_PKG_VERSION"))
+                            .into_iter()
+                            .flat_map(u16::to_le_bytes)
+                            .collect(),
+                    )
+                {
+                    return Err("Installed Apps 版本校驗失敗。".into());
+                }
+                let run = registry_snapshot::capture(Location::value(
+                    false,
+                    KEY_WOW64_64KEY,
+                    RUN_KEY,
+                    "ShanjieCore",
+                ))?;
+                let expected = crate::wide(&format!(
+                    "\"{}\" --serve",
+                    self.binaries.join("tools/shanjie-core.exe").display()
+                ))
+                .into_iter()
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>();
+                if run
+                    .tree
+                    .as_ref()
+                    .and_then(|tree| tree.values.get("ShanjieCore"))
+                    .map(|v| &v.bytes)
+                    != Some(&expected)
+                {
+                    return Err("登入啟動路徑校驗失敗。".into());
+                }
+                atomic_file(&self.backup.join("completed.txt"), b"committed")?;
+            }
+        }
+        Ok(())
+    }
+    fn restore(&mut self, checkpoint: &Checkpoint) -> Result<()> {
+        let mut failures = Vec::new();
+        // Remove current membership first; restore exact registration and user
+        // ordering afterwards, including installations with only partial profiles.
+        match registry_snapshot::capture(locations()[6].clone()) {
+            Ok(user) => {
+                if let Err(error) = profiles_selected(crate::installation::listed(&user), true) {
+                    failures.push(format!("清單通知：{error}"));
+                }
+            }
+            Err(error) => failures.push(format!("清單盤點：{error}")),
+        }
+        for saved in &checkpoint.registry {
+            if let Err(error) = registry_snapshot::restore(saved) {
+                failures.push(format!("{}：{error}", saved.location.path));
+            }
+        }
+        let old_listed = crate::installation::listed(&checkpoint.registry[6]);
+        if old_listed != 0 {
+            if let Err(error) = profiles_selected(old_listed, false) {
+                failures.push(format!("原清單通知：{error}"));
+            }
+        }
+        if let Err(error) = registry_snapshot::restore(&checkpoint.registry[6]) {
+            failures.push(format!("原清單順序：{error}"));
+        }
+        for file in &checkpoint.files {
+            if let Err(error) = restore_file(file) {
+                failures.push(error.to_string());
+            }
+        }
+        // Do not archive either version unless every rollback check succeeds.
+        if failures.is_empty() {
+            atomic_file(&self.backup.join("completed.txt"), b"rolled back")?;
+            Ok(())
+        } else {
+            atomic_file(
+                &self.backup.join("rollback-errors.txt"),
+                failures.join("\n").as_bytes(),
+            )?;
+            Err(failures.join("；").into())
+        }
+    }
+}
+pub fn rolled_back(backup: &Path) -> bool {
+    fs::read(backup.join("completed.txt")).ok().as_deref() == Some(b"rolled back")
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[derive(Clone, Default, PartialEq, Debug)]
+    struct State {
+        dlls: [Option<String>; 2],
+        profiles: [u32; 2],
+        categories: [u32; 2],
+        listed: Vec<String>,
+        ui: Option<String>,
+        manager: Option<String>,
+        apps: Option<String>,
+        run: Option<String>,
+        choice: Option<u32>,
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum Fault {
+        Phase(Phase),
+        Com(usize),
+        Profile(usize),
+        Category(usize, u32),
+    }
+    struct Fake {
+        state: State,
+        fail: Option<Fault>,
+        restore_fails: bool,
+        mask: u32,
+    }
+    impl Effects for Fake {
+        type Checkpoint = State;
+        fn checkpoint(&mut self) -> Result<State> {
+            Ok(self.state.clone())
+        }
+        fn apply(&mut self, phase: Phase) -> Result<()> {
+            match phase {
+                Phase::Register64 | Phase::Register32 => {
+                    let arch = if phase == Phase::Register64 { 0 } else { 1 };
+                    self.state.dlls[arch] = Some(format!("new{arch}"));
+                    if self.fail == Some(Fault::Com(arch)) {
+                        return Err("injected after COM write".into());
+                    }
+                    self.state.profiles[arch] = self.mask;
+                    if self.fail == Some(Fault::Profile(arch)) {
+                        return Err("injected during profile registration".into());
+                    }
+                    for category in 0..4 {
+                        self.state.categories[arch] |= 1 << category;
+                        if self.fail == Some(Fault::Category(arch, category)) {
+                            return Err("injected during category registration".into());
+                        }
+                    }
+                }
+                Phase::Profiles => {
+                    self.state.listed.retain(|s| s != "standard" && s != "eten");
+                    self.state
+                        .listed
+                        .push(if self.mask == 1 { "standard" } else { "eten" }.into());
+                }
+                Phase::LaunchPaths => {
+                    self.state.ui = Some("new ui".into());
+                    self.state.manager = Some("new manager".into());
+                    self.state.choice = Some(self.mask);
+                }
+                Phase::AppEntry => self.state.apps = Some("new app".into()),
+                Phase::Login => self.state.run = Some("new core".into()),
+                Phase::Validate => {}
+            }
+            if self.fail == Some(Fault::Phase(phase)) {
+                Err("injected partial write".into())
+            } else {
+                Ok(())
+            }
+        }
+        fn restore(&mut self, old: &State) -> Result<()> {
+            if self.restore_fails {
+                Err("injected rollback failure".into())
+            } else {
+                self.state = old.clone();
+                Ok(())
+            }
+        }
+    }
+    #[test]
+    fn every_failed_phase_restores_first_legacy_and_single_layout_installs() {
+        for previous in [None, Some(1), Some(2), Some(3)] {
+            let old = State {
+                dlls: if previous.is_some() {
+                    [Some("old64".into()), Some("old32".into())]
+                } else {
+                    [None, None]
+                },
+                profiles: [previous.unwrap_or(0); 2],
+                categories: if previous.is_some() { [15; 2] } else { [0; 2] },
+                listed: {
+                    let mut list = vec!["other one".into(), "other two".into()];
+                    if previous.unwrap_or(0) & 1 != 0 {
+                        list.push("standard".into());
+                    }
+                    if previous.unwrap_or(0) & 2 != 0 {
+                        list.push("eten".into());
+                    }
+                    list
+                },
+                choice: previous.filter(|mask| *mask != 3),
+                ui: previous.map(|_| "old ui".into()),
+                manager: previous.map(|_| "old manager".into()),
+                apps: previous.map(|_| "old app".into()),
+                run: previous.map(|_| "old core".into()),
+            };
+            let mut faults = PHASES.into_iter().map(Fault::Phase).collect::<Vec<_>>();
+            for arch in 0..2 {
+                faults.push(Fault::Com(arch));
+                faults.push(Fault::Profile(arch));
+                for category in 0..4 {
+                    faults.push(Fault::Category(arch, category));
+                }
+            }
+            for mask in [1, 2] {
+                for fault in &faults {
+                    let mut fake = Fake {
+                        state: old.clone(),
+                        fail: Some(*fault),
+                        restore_fails: false,
+                        mask,
+                    };
+                    assert!(execute(&mut fake).is_err());
+                    assert_eq!(fake.state, old);
+                }
+            }
+        }
+    }
+    #[test]
+    fn successful_install_changes_only_requested_membership_and_launchers() {
+        for mask in [1, 2] {
+            let mut fake = Fake {
+                state: State {
+                    listed: vec![
+                        "other one".into(),
+                        "other two".into(),
+                        "standard".into(),
+                        "eten".into(),
+                    ],
+                    ..Default::default()
+                },
+                fail: None,
+                restore_fails: false,
+                mask,
+            };
+            execute(&mut fake).unwrap();
+            assert_eq!(fake.state.profiles, [mask; 2]);
+            assert_eq!(&fake.state.listed[..2], &["other one", "other two"]);
+            assert_eq!(fake.state.choice, Some(mask));
+        }
+    }
+    #[test]
+    fn failed_rollback_reports_incomplete_state_instead_of_success() {
+        let mut fake = Fake {
+            state: State::default(),
+            fail: Some(Fault::Com(0)),
+            restore_fails: true,
+            mask: 1,
+        };
+        let error = execute(&mut fake).unwrap_err().to_string();
+        assert!(error.contains("回復仍有失敗"));
+        assert_eq!(fake.state.dlls[0].as_deref(), Some("new0"));
+    }
+}

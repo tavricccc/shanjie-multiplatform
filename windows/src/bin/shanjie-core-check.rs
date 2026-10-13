@@ -22,12 +22,22 @@ fn main() {
     };
     let open = || Engine::open(&data, 0, 0, true, false, false, "dictionary.tsv", false).unwrap();
     let key = |e: &mut Engine, ch: char| {
-        e.key(ShanjieKey {
+        let key = ShanjieKey {
             kind: 1,
             ch: ch as u32,
             modifiers: 0,
-        })
-        .unwrap()
+        };
+        for _ in 0..4 {
+            if let Some(result) = e.key(key) {
+                return result;
+            }
+            assert_ne!(
+                e.failure(),
+                Some(shanjie_windows::engine::Failure::Ambiguous)
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        panic!("key did not recover within bounded attempts")
     };
     if std::env::args().nth(2).as_deref() == Some("--peer") {
         let mut e = open();
