@@ -26,21 +26,53 @@ pub trait Effects {
     fn checkpoint(&mut self) -> Result<Self::Checkpoint>;
     fn apply(&mut self, phase: Phase) -> Result<()>;
     fn restore(&mut self, checkpoint: &Self::Checkpoint) -> Result<()>;
+    fn failed(&mut self, _phase: Option<Phase>, _message: &str) -> Result<()> {
+        Ok(())
+    }
+    fn succeeded(&mut self, _phase: Phase) -> Result<()> {
+        Ok(())
+    }
+    fn log_directory(&self) -> Option<&Path> {
+        None
+    }
 }
 pub fn execute<E: Effects>(effects: &mut E) -> Result<()> {
-    let checkpoint = effects.checkpoint()?;
+    let checkpoint = match effects.checkpoint() {
+        Ok(saved) => saved,
+        Err(error) => {
+            let logged = effects.failed(None, &error.to_string());
+            return Err(format!(
+                "安裝初始化未完成：{error}{}{}",
+                log_failure(logged),
+                log_path(effects)
+            )
+            .into());
+        }
+    };
     for phase in PHASES {
-        if let Err(error) = effects.apply(phase) {
+        if let Err(error) = effects.apply(phase).and_then(|_| effects.succeeded(phase)) {
+            let logged = effects.failed(Some(phase), &error.to_string());
+            let logging = log_failure(logged);
             return match effects.restore(&checkpoint) {
-                Ok(()) => Err(format!("安裝未完成，已回復安裝前狀態：{error}").into()),
+                Ok(()) => Err(format!("安裝未完成，已回復安裝前狀態：{error}{logging}{}",log_path(effects)).into()),
                 Err(rollback) => Err(format!(
-                    "安裝未完成：{error}；回復仍有失敗項目：{rollback}。相關版本與回復紀錄已保留。"
+                    "安裝未完成：{error}；回復仍有失敗項目：{rollback}。相關版本與回復紀錄已保留。{logging}{}",log_path(effects)
                 )
                 .into()),
             };
         }
     }
     Ok(())
+}
+fn log_failure(result: Result<()>) -> String {
+    result.err().map_or(String::new(), |error| {
+        format!("\n另有紀錄保存失敗：{error}")
+    })
+}
+fn log_path<E: Effects>(effects: &E) -> String {
+    effects
+        .log_directory()
+        .map_or(String::new(), |path| format!("\n紀錄：{}", path.display()))
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct FileState {
@@ -51,6 +83,7 @@ struct FileState {
 pub struct Checkpoint {
     registry: Vec<Saved>,
     files: Vec<FileState>,
+    languages: language_list::State,
 }
 pub struct Native<'a> {
     pub target: &'a Path,
@@ -92,6 +125,15 @@ pub fn locations() -> Vec<Location> {
         RUN_KEY,
         "ShanjieCore",
     ));
+    // International settings and legacy TSF notifications maintain these lists.
+    for path in [
+        "Keyboard Layout\\Preload",
+        "Keyboard Layout\\Substitutes",
+        "SOFTWARE\\Microsoft\\CTF\\SortOrder",
+        "SOFTWARE\\Microsoft\\CTF\\Assemblies",
+    ] {
+        paths.push(Location::tree(true, REG_SAM_FLAGS(0), path));
+    }
     paths
 }
 pub fn atomic_file(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -162,43 +204,24 @@ fn restore_file(state: &FileState) -> Result<()> {
     }
     Ok(())
 }
-fn other_order(saved: &Saved) -> Vec<(String, String)> {
-    fn visit(tree: &registry_snapshot::Tree, path: &str, out: &mut Vec<(String, String)>) {
-        let mut tips = tree
-            .values
-            .iter()
-            .filter(|(name, _)| name.contains(':') && !name.to_uppercase().contains(SERVICE))
-            .collect::<Vec<_>>();
-        tips.sort_by_key(|(_, value)| {
-            if value.bytes.len() == 4 {
-                u32::from_le_bytes(value.bytes[..4].try_into().unwrap())
-            } else {
-                u32::MAX
-            }
-        });
-        for (name, _) in tips {
-            out.push((path.into(), name.clone()));
-        }
-        for (name, child) in &tree.children {
-            visit(child, &format!("{path}\\{name}"), out);
-        }
-    }
-    let mut out = Vec::new();
-    if let Some(tree) = &saved.tree {
-        visit(tree, "", &mut out);
-    }
-    out
-}
 impl Effects for Native<'_> {
     type Checkpoint = Checkpoint;
     fn checkpoint(&mut self) -> Result<Checkpoint> {
+        journal::event(
+            self.backup,
+            "Checkpoint",
+            "started",
+            "保存註冊、語言清單及啟動檔案",
+        )?;
         let registry = locations()
             .into_iter()
             .map(registry_snapshot::capture)
             .collect::<Result<Vec<_>>>()?;
+        let registry = permissions::repair(self.target, self.backup, registry)?;
         let checkpoint = Checkpoint {
             registry,
             files: save_files(self.target)?,
+            languages: language_list::read(self.backup)?,
         };
         fs::create_dir_all(self.backup)?;
         atomic_file(
@@ -206,6 +229,7 @@ impl Effects for Native<'_> {
             &serde_json::to_vec_pretty(&checkpoint)?,
         )?;
         self.previous = Some(checkpoint.clone());
+        journal::event(self.backup, "Checkpoint", "succeeded", "")?;
         Ok(checkpoint)
     }
     fn apply(&mut self, phase: Phase) -> Result<()> {
@@ -213,6 +237,7 @@ impl Effects for Native<'_> {
             &self.backup.join("phase.txt"),
             format!("{phase:?}").as_bytes(),
         )?;
+        journal::event(self.backup, &format!("{phase:?}"), "started", "")?;
         match phase {
             Phase::Register64 | Phase::Register32 => {
                 let arch = if phase == Phase::Register64 {
@@ -230,14 +255,18 @@ impl Effects for Native<'_> {
             }
             Phase::Profiles => {
                 let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
-                let listed = crate::installation::listed(&previous.registry[6]);
+                let listed = language_list::mask(&previous.languages);
                 let removed = listed & !self.keyboards;
                 if removed != 0 {
                     profiles_selected(removed, true)?;
                 }
-                if listed & self.keyboards != self.keyboards {
-                    profiles_selected(self.keyboards, false)?;
-                }
+                profiles_selected(self.keyboards, false)?;
+                let desired = language_list::plan(&previous.languages, self.keyboards);
+                atomic_file(
+                    &self.backup.join("expected-language-list.json"),
+                    &serde_json::to_vec_pretty(&desired)?,
+                )?;
+                language_list::apply(self.backup, &previous.languages, &desired)?;
             }
             Phase::LaunchPaths => {
                 atomic_file(
@@ -267,6 +296,17 @@ impl Effects for Native<'_> {
                 core_login(Some(&self.binaries.join("tools/shanjie-core.exe")))?;
             },
             Phase::Validate => {
+                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
+                let languages = language_list::read(self.backup)?;
+                let expected = language_list::plan(&previous.languages, self.keyboards);
+                let registered64 = crate::installation::registered(KEY_WOW64_64KEY)?;
+                let registered32 = crate::installation::registered(KEY_WOW64_32KEY)?;
+                atomic_file(
+                    &self.backup.join("validation.json"),
+                    &serde_json::to_vec_pretty(
+                        &serde_json::json!({"expected_keyboards":self.keyboards,"registered64":registered64,"registered32":registered32,"expected_languages":expected,"actual_languages":languages,"dll64":registry_dll(KEY_WOW64_64KEY)?,"dll32":registry_dll(KEY_WOW64_32KEY)?}),
+                    )?,
+                )?;
                 for (arch, view) in [("x64", KEY_WOW64_64KEY), ("x86", KEY_WOW64_32KEY)] {
                     let dll = self.binaries.join(arch).join("Shanjie.dll");
                     if registry_dll(view)?.as_ref() != Some(&dll)
@@ -276,13 +316,8 @@ impl Effects for Native<'_> {
                         return Err(format!("{arch} 安裝註冊校驗失敗。").into());
                     }
                 }
-                let user = registry_snapshot::capture(locations()[6].clone())?;
-                if crate::installation::listed(&user) != self.keyboards {
-                    return Err("Windows 輸入法清單校驗失敗。".into());
-                }
-                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
-                if other_order(&user) != other_order(&previous.registry[6]) {
-                    return Err("其他輸入法的順序發生變更，已停止安裝。".into());
+                if languages != expected {
+                    return Err(format!("Windows 語言清單校驗失敗：預期善解配置 {}，實際 {}；完整清單見 validation.json。",self.keyboards,language_list::mask(&languages)).into());
                 }
                 let state = crate::installation::load(self.target)?.ok_or("安裝配置尚未保存。")?;
                 if state.version != self.version || state.keyboards != Some(self.keyboards) {
@@ -349,46 +384,75 @@ impl Effects for Native<'_> {
     }
     fn restore(&mut self, checkpoint: &Checkpoint) -> Result<()> {
         let mut failures = Vec::new();
-        // Remove current membership first; restore exact registration and user
-        // ordering afterwards, including installations with only partial profiles.
-        match registry_snapshot::capture(locations()[6].clone()) {
-            Ok(user) => {
-                if let Err(error) = profiles_selected(crate::installation::listed(&user), true) {
-                    failures.push(format!("清單通知：{error}"));
-                }
-            }
-            Err(error) => failures.push(format!("清單盤點：{error}")),
-        }
-        for saved in &checkpoint.registry {
+        journal::event(self.backup, "Rollback", "started", "")?;
+        // Restore available machine profiles before notifying the language service.
+        for saved in &checkpoint.registry[..6] {
             if let Err(error) = registry_snapshot::restore(saved) {
                 failures.push(format!("{}：{error}", saved.location.path));
             }
         }
-        let old_listed = crate::installation::listed(&checkpoint.registry[6]);
+        let old_listed = language_list::mask(&checkpoint.languages);
         if old_listed != 0 {
             if let Err(error) = profiles_selected(old_listed, false) {
                 failures.push(format!("原清單通知：{error}"));
             }
         }
-        if let Err(error) = registry_snapshot::restore(&checkpoint.registry[6]) {
-            failures.push(format!("原清單順序：{error}"));
+        let attempted = language_list::plan(&checkpoint.languages, self.keyboards);
+        let language_restored =
+            match language_list::restore(self.backup, &checkpoint.languages, &attempted) {
+                Ok(_) => true,
+                Err(error) => {
+                    failures.push(format!("原語言清單：{error}"));
+                    false
+                }
+            };
+        // Preserve exact registry metadata after the documented service notification.
+        for (index, saved) in checkpoint.registry.iter().enumerate().skip(6) {
+            if !language_restored && (index == 6 || index >= 9) {
+                continue;
+            }
+            if let Err(error) = registry_snapshot::restore(saved) {
+                failures.push(format!("{}：{error}", saved.location.path));
+            }
         }
         for file in &checkpoint.files {
             if let Err(error) = restore_file(file) {
                 failures.push(error.to_string());
             }
         }
+        if language_restored {
+            match language_list::read(self.backup) {
+                Ok(actual) if actual == checkpoint.languages => {}
+                Ok(_) => failures.push("回復後 Windows 語言清單仍與安裝前不同。".into()),
+                Err(error) => failures.push(format!("回復後語言清單校驗：{error}")),
+            }
+        }
         // Do not archive either version unless every rollback check succeeds.
         if failures.is_empty() {
             atomic_file(&self.backup.join("completed.txt"), b"rolled back")?;
+            journal::event(self.backup, "Rollback", "succeeded", "")?;
             Ok(())
         } else {
             atomic_file(
                 &self.backup.join("rollback-errors.txt"),
                 failures.join("\n").as_bytes(),
             )?;
+            journal::event(self.backup, "Rollback", "failed", &failures.join("；"))?;
             Err(failures.join("；").into())
         }
+    }
+    fn failed(&mut self, phase: Option<Phase>, message: &str) -> Result<()> {
+        journal::error(
+            self.backup,
+            &phase.map_or("Checkpoint".into(), |phase| format!("{phase:?}")),
+            message,
+        )
+    }
+    fn succeeded(&mut self, phase: Phase) -> Result<()> {
+        journal::event(self.backup, &format!("{phase:?}"), "succeeded", "")
+    }
+    fn log_directory(&self) -> Option<&Path> {
+        Some(self.backup)
     }
 }
 pub fn rolled_back(backup: &Path) -> bool {
@@ -421,6 +485,7 @@ mod tests {
         fail: Option<Fault>,
         restore_fails: bool,
         mask: u32,
+        errors: Vec<String>,
     }
     impl Effects for Fake {
         type Checkpoint = State;
@@ -475,6 +540,10 @@ mod tests {
                 Ok(())
             }
         }
+        fn failed(&mut self, phase: Option<Phase>, message: &str) -> Result<()> {
+            self.errors.push(format!("{phase:?}: {message}"));
+            Ok(())
+        }
     }
     #[test]
     fn every_failed_phase_restores_first_legacy_and_single_layout_installs() {
@@ -518,9 +587,12 @@ mod tests {
                         fail: Some(*fault),
                         restore_fails: false,
                         mask,
+                        errors: Vec::new(),
                     };
                     assert!(execute(&mut fake).is_err());
                     assert_eq!(fake.state, old);
+                    assert_eq!(fake.errors.len(), 1);
+                    assert!(fake.errors[0].contains("injected"));
                 }
             }
         }
@@ -541,6 +613,7 @@ mod tests {
                 fail: None,
                 restore_fails: false,
                 mask,
+                errors: Vec::new(),
             };
             execute(&mut fake).unwrap();
             assert_eq!(fake.state.profiles, [mask; 2]);
@@ -555,9 +628,11 @@ mod tests {
             fail: Some(Fault::Com(0)),
             restore_fails: true,
             mask: 1,
+            errors: Vec::new(),
         };
         let error = execute(&mut fake).unwrap_err().to_string();
         assert!(error.contains("回復仍有失敗"));
         assert_eq!(fake.state.dlls[0].as_deref(), Some("new0"));
+        assert!(fake.errors[0].contains("after COM write"));
     }
 }

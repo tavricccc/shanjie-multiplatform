@@ -14,6 +14,9 @@ use windows::{
         UI::{TextServices::*, WindowsAndMessaging::*},
     },
 };
+mod journal;
+mod language_list;
+mod permissions;
 mod transaction;
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
 pub fn install_root() -> PathBuf {
@@ -180,6 +183,7 @@ fn registry_dll(view: REG_SAM_FLAGS) -> Result<Option<PathBuf>> {
     }
 }
 pub fn profiles(remove: bool) -> Result<()> {
+    reject_live_test_mutation()?;
     let mask = if remove {
         3
     } else {
@@ -187,7 +191,26 @@ pub fn profiles(remove: bool) -> Result<()> {
             .and_then(|state| state.keyboards)
             .ok_or("請先透過安裝工具選擇鍵盤配置。")?
     };
-    profiles_selected(mask, remove)
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let folder =
+        std::env::temp_dir().join(format!("Shanjie-language-{}-{stamp:x}", std::process::id()));
+    let before = language_list::read(&folder)?;
+    profiles_selected(mask, remove)?;
+    let desired = language_list::plan(&before, if remove { 0 } else { mask });
+    match language_list::apply(&folder, &before, &desired) {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let restored = language_list::restore(&folder, &before, &desired);
+            Err(format!(
+                "{error}；語言清單回復：{}；紀錄：{}",
+                restored.map_or_else(|e| e.to_string(), |_| "完成".into()),
+                folder.display()
+            )
+            .into())
+        }
+    }
 }
 fn profiles_selected(mask: u32, remove: bool) -> Result<()> {
     if mask == 0 {
@@ -372,6 +395,7 @@ pub fn install(
     explicit: Option<u32>,
     choose: bool,
 ) -> Result<Option<usize>> {
+    reject_live_test_mutation()?;
     if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
         return Err("請以系統管理員身分安裝善解。".into());
     }
@@ -604,6 +628,7 @@ unsafe fn remove_user_profiles() -> Result<()> {
     result
 }
 pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
+    reject_live_test_mutation()?;
     if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {
         return Err("請以系統管理員身分解除安裝善解。".into());
     }
@@ -694,6 +719,24 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         }
     }
     Ok(Some(pending))
+}
+fn reject_live_test_mutation() -> Result<()> {
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+        return Err("隔離驗證不可變更真實輸入法安裝或語言清單。".into());
+    }
+    Ok(())
+}
+pub fn record_manager_failure(message: &str) -> Result<PathBuf> {
+    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or("個人紀錄位置無法辨識。")?)
+        .join("Shanjie/installer-logs");
+    safe_tree(&root)?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let folder = root.join(format!("{}-{stamp:x}", std::process::id()));
+    fs::create_dir_all(&folder)?;
+    journal::error(&folder, "Manager", message)?;
+    Ok(folder)
 }
 
 #[cfg(test)]

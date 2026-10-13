@@ -130,12 +130,22 @@ fn run() -> Result<()> {
 }
 fn main() {
     if let Err(error) = run() {
-        eprintln!("{error}");
+        let message = match installer::record_manager_failure(&error.to_string()) {
+            Ok(folder) => {
+                if error.to_string().contains("紀錄：") {
+                    error.to_string()
+                } else {
+                    format!("{error}\n紀錄：{}", folder.display())
+                }
+            }
+            Err(log) => format!("{error}\n另有紀錄保存失敗：{log}"),
+        };
+        eprintln!("{message}");
         if std::env::args().any(|s| s == "--dialog") {
             unsafe {
                 MessageBoxW(
                     None,
-                    PCWSTR(wide(&error.to_string()).as_ptr()),
+                    PCWSTR(wide(&message).as_ptr()),
                     w!("善解操作未完成"),
                     MB_OK | MB_ICONERROR,
                 );
