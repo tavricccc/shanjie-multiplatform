@@ -529,6 +529,12 @@ pub unsafe extern "C" fn sj_host_free(p: *mut Host) {
     }
 }
 #[no_mangle]
+pub unsafe extern "C" fn sj_host_vertical(p: *mut Host, vertical: bool) {
+    if !p.is_null() {
+        (*p).vertical = vertical;
+    }
+}
+#[no_mangle]
 pub unsafe extern "C" fn sj_host_publish(
     p: *mut Host,
     s: *const Frame,

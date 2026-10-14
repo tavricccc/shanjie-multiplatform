@@ -9,9 +9,10 @@ HMODULE module = nullptr;
 long objects = 0;
 unsigned picks = 0;
 LONG pickedSequence = 0;
-LRESULT CALLBACK receive(HWND window,UINT message,WPARAM,LPARAM lp) {
-    if (message == WM_APP+42) { ++picks; pickedSequence = (LONG)lp; return 0; }
-    return DefWindowProcW(window,message,0,lp);
+WPARAM pickedIndex = 0;
+LRESULT CALLBACK receive(HWND window,UINT message,WPARAM wp,LPARAM lp) {
+    if (message == WM_APP+42) { ++picks; pickedSequence = (LONG)lp; pickedIndex = wp; return 0; }
+    return DefWindowProcW(window,message,wp,lp);
 }
 double clockMs() { LARGE_INTEGER value{},frequency{}; QueryPerformanceCounter(&value); QueryPerformanceFrequency(&frequency); return value.QuadPart*1000.0/frequency.QuadPart; }
 PROCESS_MEMORY_COUNTERS_EX memory() { PROCESS_MEMORY_COUNTERS_EX m{}; m.cb = sizeof(m); assert(GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&m,sizeof(m))); return m; }
@@ -33,7 +34,16 @@ int wmain(int argc,wchar_t** argv) {
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
         std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
-        assert(picks == 1 && pickedSequence == presenter.sequence()); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
+        assert(picks == 1 && pickedSequence == presenter.sequence());
+        // Vertical layout: nine rows, narrower than the pill, and a click on row three picks index 2.
+        presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
+        RECT tall{}; GetClientRect(presenter.window(),&tall);
+        assert(tall.bottom > client.bottom*5 && tall.right < client.right);
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(tall.right/2,(LONG)(tall.bottom*(2.5/9.0))));
+        while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+        assert(picks == 2 && pickedIndex == 2);
+        std::printf("Vertical candidates: client=%ldx%ld\n",tall.right,tall.bottom);
+        presenter.vertical(false); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
         for (auto notification : {WM_SETTINGCHANGE,WM_THEMECHANGED,WM_DWMCOLORIZATIONCOLORCHANGED}) {
             SendMessageW(presenter.window(),notification,0,0);
             assert(!presenter.shown());
@@ -49,6 +59,8 @@ int wmain(int argc,wchar_t** argv) {
                 preferences.theme = theme; preferences.fontSize = 16;
                 frame.columns = 0; presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal.bmp"));
+                presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-vertical.bmp")); presenter.vertical(false);
                 frame.candidates = {L"比方",L"彼方",L"比訪"}; frame.selected = 0;
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"reference-"+std::to_wstring(theme)+L"-conversion.bmp"));

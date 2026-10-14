@@ -77,7 +77,8 @@
                         <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
                         <ComboBox Header="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="↓ 下鍵"/><ComboBoxItem Content="空白鍵"/><ComboBoxItem Content="↓ 或空白鍵"/></ComboBox>
                         <ComboBox Header="選字位置" SelectedIndex="{x:Bind Vm.Anchor, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="游標右側的字／詞"/><ComboBoxItem Content="游標左側的字／詞"/></ComboBox>
-                        <TextBlock Style="{StaticResource HelpText}" Text="候選採 macOS 樣式的橫向膠囊列，每頁最多九項。"/>
+                        <ComboBox Header="候選排列" SelectedIndex="{x:Bind Vm.CandidateLayout, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="橫向（善解膠囊列）"/><ComboBoxItem Content="直式（微軟注音）"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="每頁最多九項；直式一列一個候選，與微軟注音相同。"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="{x:Bind Vm.CandidateHelp, Mode=OneWay}"/>
                         <controls:SettingToggle x:Name="CandidateKeyOptions" Label="候選中 Enter 選字並提交整句" Description="關閉時只確認候選，繼續留在組字區。" IsOn="{x:Bind Vm.EnterCommits, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="未開候選時，↑ 直接換下一個候選" IsOn="{x:Bind Vm.UpCycles, Mode=TwoWay}"/>

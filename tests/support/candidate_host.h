@@ -6,5 +6,5 @@ class CandidateHost {
 public:
     ~CandidateHost(); bool start(HWND);
     void publish(const shanjie::Snapshot&,const Preferences&,const RECT&,UINT,bool);
-    void hide(); LONG sequence() const; bool shown() const; HWND window() const;
+    void vertical(bool); void hide(); LONG sequence() const; bool shown() const; HWND window() const;
 };

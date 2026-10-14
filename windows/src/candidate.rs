@@ -109,6 +109,8 @@ pub struct Host {
     start: usize,
     end: usize,
     work_width: f32,
+    /// Microsoft IME style: one candidate per row instead of the horizontal pill.
+    pub vertical: bool,
 }
 impl Host {
     pub fn start(callback: HWND) -> Result<Box<Self>> {
@@ -146,6 +148,7 @@ impl Host {
                 start: 0,
                 end: 0,
                 work_width: 0.0,
+                vertical: false,
             });
             let module = crate::tsf::module();
             let wc = WNDCLASSW {
@@ -319,13 +322,36 @@ impl Host {
     fn top(&self) -> f32 {
         3.0 * self.size as f32 / 16.0 + self.reading_height
     }
+    fn row_top(&self, index: usize) -> f32 {
+        if self.vertical {
+            self.top() + (index - self.start) as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
+        } else {
+            self.top()
+        }
+    }
     fn height(&self) -> f32 {
-        let rows = if self.items.is_empty() { 0.0 } else { self.row };
+        let lines = if self.vertical { self.end - self.start } else { 1 };
+        let rows = if self.items.is_empty() {
+            0.0
+        } else {
+            lines as f32 * self.row + lines.saturating_sub(1) as f32 * 2.0 * self.size as f32 / 16.0
+        };
         self.top() + rows + 3.0 * self.size as f32 / 16.0
     }
     fn fit_view(&mut self, selected: Option<usize>) -> f32 {
         let ratio = self.size as f32 / 16.0;
         let count = self.items.len();
+        if self.vertical {
+            // A page holds at most nine candidates, so every row is shown; rows share one width.
+            self.start = 0;
+            self.end = count;
+            let widest = self.items.iter().map(|i| i.natural).fold(0.0, f32::max);
+            let width = widest.min((self.work_width - 6.0 * ratio).max(1.0));
+            for item in &mut self.items {
+                item.width = width;
+            }
+            return (width + 6.0 * ratio).min(self.work_width);
+        }
         self.start = self.start.min(count.saturating_sub(1));
         if let Some(selected) = selected {
             if selected < self.start {
@@ -557,7 +583,11 @@ impl Host {
         };
         let ratio = self.size as f32 / 16.0;
         // Large corners: one row stays a full pill; two rows keep the same generous radius.
-        let radius = (height / 2.0).min(20.0 * ratio);
+        let radius = if self.vertical {
+            12.0 * ratio
+        } else {
+            (height / 2.0).min(20.0 * ratio)
+        };
         self.brush.SetColor(&self.palette.background);
         self.target
             .FillRoundedRectangle(&rounded(0.0, 0.0, width, height, radius), &self.brush);
@@ -591,7 +621,6 @@ impl Host {
             );
         }
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
-        let y = self.top();
         for (i, item) in self
             .items
             .iter()
@@ -600,6 +629,7 @@ impl Host {
             .skip(self.start)
         {
             let selected = self.state.selected == Some(i);
+            let y = self.row_top(i);
             if selected {
                 self.brush.SetColor(&self.palette.accent);
                 self.target.FillRoundedRectangle(
@@ -645,7 +675,9 @@ impl Host {
                 D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT,
             );
             self.target.PopAxisAlignedClip();
-            x += item.width + 2.0 * ratio;
+            if !self.vertical {
+                x += item.width + 2.0 * ratio;
+            }
         }
         self.brush.SetColor(&self.palette.text);
         for (present, center, direction) in [
@@ -743,7 +775,7 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
                 .take(host.end)
                 .skip(host.start)
             {
-                let top = host.top();
+                let top = host.row_top(i);
                 if x >= left
                     && x < left + item.width
                     && y >= top
@@ -757,7 +789,9 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
                     );
                     break;
                 }
-                left += item.width + 2.0 * ratio;
+                if !host.vertical {
+                    left += item.width + 2.0 * ratio;
+                }
             }
             return LRESULT(0);
         }

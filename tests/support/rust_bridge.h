@@ -26,7 +26,7 @@ bool sj_pinyin_enabled(const void*); bool sj_pinyin_active(const void*);
 bool sj_pinyin_handles(const void*,ShanjieKey); void sj_pinyin_clear(void*);
 WinFrame* sj_pinyin_key(void*,ShanjieKey,void*,const WinFrame*,bool,bool);
 void* sj_host_new(intptr_t); void sj_host_free(void*);
-void sj_host_publish(void*,const WinFrame*,unsigned,unsigned,RECT,bool);void sj_host_hide(void*);
+void sj_host_publish(void*,const WinFrame*,unsigned,unsigned,RECT,bool);void sj_host_vertical(void*,bool);void sj_host_hide(void*);
 bool sj_host_shown(const void*); intptr_t sj_host_window(const void*); int sj_host_sequence(const void*);
 void* sj_document_open(const char*);void sj_document_free(void*);
 char* sj_document_get(const void*,const char*,const char*,const char*);

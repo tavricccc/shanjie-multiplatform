@@ -800,6 +800,9 @@ impl Data {
                 c.data
                     .size
                     .set(current.number("appearance", "font_size", 18));
+                c.data
+                    .vertical
+                    .set(current.get("candidates", "layout", "horizontal") == "vertical");
             }
         }
         self.prepare_engine()?;
@@ -1031,6 +1034,10 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 preferences.number("appearance", "theme", 0),
                 preferences.number("appearance", "font_size", 18),
             )?;
+            candidates
+                .data
+                .vertical
+                .set(preferences.get("candidates", "layout", "horizontal") == "vertical");
             self.data.state.borrow_mut().candidates = Some(candidates);
             let keys: ITfKeystrokeMgr = thread.cast()?;
             keys.AdviseKeyEventSink(client, &self.to_interface::<ITfKeyEventSink>(), true)?;

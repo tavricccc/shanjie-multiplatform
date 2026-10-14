@@ -32,6 +32,7 @@ public partial class SettingsViewModel
             Interaction = profile.Read("profile", "interaction", "windows") == "windows" ? 0 : 1;
             Trigger = Array.IndexOf(new[] { "down", "space", "both" }, profile.Read("candidates", "open", "down"));
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
+            CandidateLayout = profile.Read("candidates", "layout", "horizontal") == "vertical" ? 1 : 0;
             Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
@@ -129,7 +130,7 @@ public partial class SettingsViewModel
         }) profile.Set(section, key, value);
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
-        profile.Set("candidates", "layout", "horizontal");
+        profile.Set("candidates", "layout", CandidateLayout == 1 ? "vertical" : "horizontal");
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }

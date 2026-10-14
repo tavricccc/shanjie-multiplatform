@@ -5,6 +5,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
+    [ObservableProperty] public partial int CandidateLayout { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
     public int Model => 5;
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
