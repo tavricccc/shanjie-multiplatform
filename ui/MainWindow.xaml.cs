@@ -26,13 +26,14 @@ public sealed partial class MainWindow : Window
     internal void SetMixedInputForVerification(bool mixed) => MixedInputToggle.SetToggleForVerification(mixed);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
-    internal void ShowSpaceOptions() { ShowSection(2); Root.UpdateLayout(); SpaceCommitsToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceCommitsToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal static class Pages { public const int General = 0, Keys = 1, Punctuation = 2, Composition = 3, Candidates = 4, Appearance = 5, Dictionary = 6, About = 7, Count = 8; }
     internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
-    internal void ShowAdvancedKeys() { ShowSection(1); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
-    internal void ShowCandidateKeys() { ShowSection(3); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
-    internal void ShowAppearance() { ShowSection(3); Root.UpdateLayout(); AppearanceOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
-    internal void ShowDictionary() { ShowSection(4); Root.UpdateLayout(); PersonalDictionaryEditor.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowAdvancedKeys() { ShowSection(Pages.Punctuation); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowCandidateKeys() { ShowSection(Pages.Candidates); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowAppearance() { ShowSection(Pages.Appearance); Root.UpdateLayout(); AppearanceOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowDictionary() { ShowSection(Pages.Dictionary); Root.UpdateLayout(); PersonalDictionaryEditor.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void SetDictionaryForVerification(string text) => PersonalDictionaryEditor.Text = text;
     internal string DictionaryForVerification => PersonalDictionaryEditor.Text;
     internal (bool standard, bool eten) InstalledOptionsForVerification => (StandardKeyboardOption.IsEnabled, EtenKeyboardOption.IsEnabled);
@@ -42,12 +43,8 @@ public sealed partial class MainWindow : Window
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        General.Visibility = tag == "general" ? Visibility.Visible : Visibility.Collapsed;
-        Composition.Visibility = tag == "composition" ? Visibility.Visible : Visibility.Collapsed;
-        Keys.Visibility = tag == "keys" ? Visibility.Visible : Visibility.Collapsed;
-        Candidates.Visibility = tag == "candidates" ? Visibility.Visible : Visibility.Collapsed;
-        Dictionary.Visibility = tag == "dictionary" ? Visibility.Visible : Visibility.Collapsed;
-        About.Visibility = tag == "about" ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var (name, panel) in new (string, StackPanel)[] { ("general", General), ("keys", Keys), ("punctuation", Punctuation), ("composition", Composition), ("candidates", Candidates), ("appearance", Appearance), ("dictionary", Dictionary), ("about", About) })
+            panel.Visibility = tag == name ? Visibility.Visible : Visibility.Collapsed;
         ContentScroll.ChangeView(null, 0, null, true);
     }
     private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);
