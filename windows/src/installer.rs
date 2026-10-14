@@ -688,12 +688,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         let _ = p.Unregister(&id);
         let categories: ITfCategoryMgr =
             CoCreateInstance(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER)?;
-        for category in [
-            GUID_TFCAT_TIP_KEYBOARD,
-            GUID_TFCAT_TIPCAP_UIELEMENTENABLED,
-            GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT,
-            GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
-        ] {
+        for category in crate::registration::CATEGORIES {
             let _ = categories.UnregisterCategory(&id, &category, &id);
         }
         if initialized.is_ok() {

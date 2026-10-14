@@ -9,11 +9,14 @@ use windows::{
 pub const SERVICE: GUID = GUID::from_u128(0x8912696e8a314df3a7bc0261f3b6a147);
 const STANDARD: GUID = GUID::from_u128(0xac59a613f8134dadba97d221a87a6ace);
 const ETEN: GUID = GUID::from_u128(0x338145b4047a4564a0de223dc22c1ae1);
-const CATEGORIES: [GUID; 4] = [
+// Immersive/COM-less are required before WinUI, Store and Windows Terminal hosts list the TIP.
+pub(crate) const CATEGORIES: [GUID; 6] = [
     GUID_TFCAT_TIP_KEYBOARD,
     GUID_TFCAT_TIPCAP_UIELEMENTENABLED,
     GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT,
     GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+    GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
+    GUID_TFCAT_TIPCAP_COMLESS,
 ];
 unsafe fn value(path: &str, name: PCWSTR, text: &str) -> Result<()> {
     let mut key = HKEY::default();

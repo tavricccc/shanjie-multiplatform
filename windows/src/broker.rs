@@ -98,6 +98,21 @@ pub(crate) fn user_sid() -> io::Result<String> {
         Ok(result)
     }
 }
+/// Sandboxed WinUI/Store hosts cannot spawn or inspect the medium-integrity core.
+pub(crate) fn app_container() -> bool {
+    unsafe {
+        let mut token = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), 8, &mut token) == 0 {
+            return false;
+        }
+        let mut value = 0u32;
+        let mut needed = 0;
+        // TokenIsAppContainer = 29.
+        let ok = GetTokenInformation(token, 29, (&mut value as *mut u32).cast(), 4, &mut needed);
+        CloseHandle(token);
+        ok != 0 && value != 0
+    }
+}
 fn executable(data: &Path) -> PathBuf {
     data.parent().unwrap_or(data).join("tools/shanjie-core.exe")
 }
@@ -233,6 +248,11 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
                 }
                 let process = OpenProcess(0x1000, 0, pid);
                 if process.is_null() {
+                    // The core's default DACL excludes AppContainers; the pipe DACL still
+                    // limits servers to this user, so sandboxed hosts trust the endpoint.
+                    if app_container() {
+                        return Ok(crate::pipe_io::Pipe(file));
+                    }
                     return Err(io::Error::last_os_error());
                 }
                 let mut path = vec![0u16; 32768];
@@ -260,7 +280,7 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
                 {
                     return Err(error);
                 }
-                if start && !launched && error.raw_os_error() == Some(2) {
+                if start && !launched && error.raw_os_error() == Some(2) && !app_container() {
                     start_core(&expected)?;
                     launched = true;
                 }
@@ -350,7 +370,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
     }
     let _owner = Owner(owner);
     let name = crate::wide(&endpoint);
-    let descriptor = crate::wide(&format!("D:P(A;;GA;;;{})S:(ML;;NW;;;LW)", user_sid()?));
+    let descriptor = crate::wide(&format!("D:P(A;;GA;;;{})(A;;GRGW;;;AC)S:(ML;;NW;;;LW)", user_sid()?));
     let mut sd = std::ptr::null_mut();
     unsafe {
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(

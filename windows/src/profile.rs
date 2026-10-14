@@ -153,6 +153,12 @@ impl Document {
     }
 }
 pub fn folder() -> PathBuf {
+    // AppContainer LOCALAPPDATA is the package folder; the core endpoint uses the user's.
+    if crate::broker::app_container() {
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            return PathBuf::from(home).join("AppData").join("Local").join("Shanjie");
+        }
+    }
     PathBuf::from(std::env::var_os("LOCALAPPDATA").expect("LOCALAPPDATA")).join("Shanjie")
 }
 pub fn path() -> PathBuf {
@@ -162,7 +168,13 @@ pub fn load(path: &Path) -> Result<Document> {
     if !path.exists() {
         return Document::parse(include_str!("../../profiles/windows.ini"));
     }
-    let original = fs::read_to_string(path)?;
+    let original = match fs::read_to_string(path) {
+        // Sandboxed hosts cannot read the user profile; type with defaults instead of failing.
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            return Document::parse(include_str!("../../profiles/windows.ini"));
+        }
+        other => other?,
+    };
     let mut doc = Document::parse(&original)?;
     let before = doc.content();
     let schema = doc.number("profile", "schema", 1);
