@@ -2,3 +2,7 @@
 /dist/
 /.impeccable/
 /windows/target/
+/handoff/
+/src/
+/ui/bin/
+/ui/obj/

@@ -166,7 +166,7 @@ x64／x86 重建與 TSF 背景 harness 通過；兩架構原生候選、模式�
 - `download-asset.ps1` 的實際 classes-v2 範圍下載完成，組合後 SHA-256 與官方值一致；模型轉換另外核對六份快取原檔。模型與詞類授權補充在包內 `LICENSES/windows-models.md`。
 - 獨立 impeccable reviewer 核對 22 張設定 PNG 與 8 張兩架構預測 BMP；初輪其他視覺項為 match，要求確認 Caps Lock 開關及深色詞庫的導覽殘留。複查相同三張畫面確認開關可見、殘留消失，兩項均 resolved，disposition 為 **ship，限定該兩項 fix list**。擷取先 render 一幀再等待原生 transition 靜定，未變更使用者的控制項動畫或外觀。
 
-Windows 新安裝預設 v4，兩種預測皆關閉；schema 1／2 保留現有個別選項與未指定模型時的 v1，設定窗讀取時備份原檔再遷移。完整操作／設定索引在 `MICROSOFT-IME-DIFFS.md`。這些結果是背景整合與離屏驗證；本輪沒有系統安裝、前景 App 操作、讀屏、高對比或實際多螢幕驗收，也未重開先前已停止的 Shift 日常除錯。
+Windows 新安裝預設 v4，兩種預測皆關閉；schema 1／2 保留現有個別選項與未指定模型時的 v1，設定窗讀取時備份原檔再遷移。完整操作／設定索引在 `docs/MICROSOFT-IME-DIFFS.md`。這些結果是背景整合與離屏驗證；本輪沒有系統安裝、前景 App 操作、讀屏、高對比或實際多螢幕驗收，也未重開先前已停止的 Shift 日常除錯。
 
 ## 2026-10-07 WinUI 3 版本
 
@@ -176,7 +176,7 @@ Windows 新安裝預設 v4，兩種預測皆關閉；schema 1／2 保留現有�
 
 最新架構：依使用者確認，候選改為 DLL 內 Win32／Direct2D software DC／DirectWrite；WinUI 只保留設定頁。移除匿名 mapping/event、候選 IPC、XAML 候選與其 interop，啟用時建立隱藏原生視窗。保持原密度、系統 AccentDark1／AccentLight2、字體、字級與三排列；受限工作區逐格裁切，不會畫入下一個候選。彩色中／A ICO 嵌入兩架構 DLL，來源見 `assets/mode/README.md`；游標旁提示不搶焦點，1400 ms、開始打字或失去焦點後隱藏。
 
-量測與方法界線見 `PERFORMANCE.md`：新候選介面增加約 11.6–11.8 MiB Private Bytes，原生資源初始化約 13 ms，初始化後首繪約 7–9 ms；舊獨立 WinUI host 約 96 MiB。這些不是完整 App 或整個輸入法記憶體，也不是螢幕刷新延遲。本次尚未自動安裝、未終止既有 App；下方舊 WinUI 候選／IPC 驗證記錄保留為歷史，不能當作新版原生實作的證據。
+量測與方法界線見 `docs/PERFORMANCE.md`：新候選介面增加約 11.6–11.8 MiB Private Bytes，原生資源初始化約 13 ms，初始化後首繪約 7–9 ms；舊獨立 WinUI host 約 96 MiB。這些不是完整 App 或整個輸入法記憶體，也不是螢幕刷新延遲。本次尚未自動安裝、未終止既有 App；下方舊 WinUI 候選／IPC 驗證記錄保留為歷史，不能當作新版原生實作的證據。
 
 最終 x64／x86 建置通過；兩架構原生候選 harness 通過同程序、滑鼠 sequence、NOACTIVATE、單框、隱藏／重開。Windows／Shanjie 兩種背景 TSF 操作回歸通過。兩架構中英圖示與 96／144 DPI 提示大小、手動隱藏／1400 ms 自動隱藏通過。獨立 impeccable reviewer 逐張核對 24 張一般、4 張 720 px 窄工作區候選與模式提示 BMP；跨格修正及文件來源兩項均 resolved，最後 disposition 為 ship，限定該 fix list。窄畫面只證明每格裁切，不宣稱省略號可見。WinUI 設定離屏保存／重讀與五頁 captures 通過。
 

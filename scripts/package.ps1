@@ -29,9 +29,9 @@ try {
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-Item "$root/RELEASE-NOTES-0.6.0.md" $output -Force
+    Copy-Item "$root/docs/releases/RELEASE-NOTES-0.6.0.md" $output -Force
     Copy-Item "$root/MODEL-SOURCES.json" $output -Force
-    Copy-Item "$root/WINUI-MIGRATION.md","$root/MICROSOFT-IME-DIFFS.md","$root/DESIGN.md","$root/PERFORMANCE.md" $output -Force
+    Copy-Item "$root/docs/WINUI-MIGRATION.md","$root/docs/MICROSOFT-IME-DIFFS.md","$root/docs/DESIGN.md","$root/docs/PERFORMANCE.md" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)

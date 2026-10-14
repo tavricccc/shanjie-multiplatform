@@ -18,7 +18,7 @@ Rust cdylib 使用靜態 CRT，SDK rc 嵌入 ICO 資源 101／102。核心由 pr
 
 ## 候選契約
 
-完整契約見 [docs/candidate-surface.md](docs/candidate-surface.md)。正文純白不透明，邊線 #D3D3D8／0.5 DIP；字詞 16／序號 9 DIP，選取高至少 24／表面至少 30 DIP，內距 3 DIP。設定介面淺深主題不改候選白底，高對比仍採系統色。
+完整契約見 [docs/candidate-surface.md](candidate-surface.md)。正文純白不透明，邊線 #D3D3D8／0.5 DIP；字詞 16／序號 9 DIP，選取高至少 24／表面至少 30 DIP，內距 3 DIP。設定介面淺深主題不改候選白底，高對比仍採系統色。
 
 只有單一 Win32 layered popup，alpha 只供外角抗鋸齒；backdrop.rs、額外背景窗、private acrylic API 與透明度配方皆移除。NOACTIVATE、無陰影、無動畫；自然詞寬、窄區箭頭、mouse sequence、revision、失焦與取消規則保持。被動預測無序號，Tab 進入後才顯示。模式提示保留 tiny-skia SVG 幾何、28 DIP、1400 ms。
 

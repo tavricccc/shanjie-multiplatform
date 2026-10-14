@@ -101,7 +101,7 @@ Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型�
 
 2026-10-07 新增 `platform/input_windows.rs`、`input_windows_ffi.rs`：Big5 候選篩選、個人詞庫 constructor、聯想詞查詢及注音原文提交，經 `prepare-candidates.ps1` 追加到建置副本。候選方向與這些功能都屬於核心擴充；上游 C header 及子模組未修改。覆蓋還核對兩處 `Cands::new`、個人詞庫合併與排序錨點。
 
-Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，淺／深實色、0.5 DIP 細邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 5 範本、舊版遷移及開關索引見 `profiles/`、`MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
+Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`engine.rs` 協調學習與 epoch。`candidate.rs` 在兩架構 DLL 內直接建立單一 layered Win32 橫向膠囊，淺／深實色、0.5 DIP 細邊線、藍色反白與系統高對比；alpha 只供外角抗鋸齒，沒有毛玻璃、第二背景窗或候選子程序。schema 5 範本、舊版遷移及開關索引見 `profiles/`、`docs/MICROSOFT-IME-DIFFS.md`。命令列與 WinUI 共用 Rust parser／範本／保存；操作預設保留資料與外觀偏好。
 
 設定存於 `%LOCALAPPDATA%/Shanjie/profile.ini`；兩份範本在 `profiles/`。
 
@@ -111,7 +111,7 @@ Windows 拼音、符號／字碼與聯想操作在 `windows/src/input.rs`；`eng
 - `[candidates] layout=horizontal`：唯一排列。舊直向／格狀設定遷移；窄工作區以箭頭瀏覽同頁候選。
 - `[shortcuts] shift_toggle`、`ctrl_space_toggle`、`shift_space_toggle`、`ctrl_punctuation`：1 開啟、0 關閉。
 - `[engine] ranking=chat|formal`、`prediction`、`demote`：上游既有權重／即時預測／降權 API；Windows 範本停用即時預測與 `[input] associations`。
-- `[input] escape`、`space_after_commit`、`pinyin_space_converts`，以及候選 Enter、↑、Backspace、翻頁開關：各自選擇已實作的政策。Tab／方向鍵不再展開格狀，完整對照以 `MICROSOFT-IME-DIFFS.md` 為準。
+- `[input] escape`、`space_after_commit`、`pinyin_space_converts`，以及候選 Enter、↑、Backspace、翻頁開關：各自選擇已實作的政策。Tab／方向鍵不再展開格狀，完整對照以 `docs/MICROSOFT-IME-DIFFS.md` 為準。
 
 修改設定只會選擇**已經寫好的功能**，不是靠 INI 自動產生新的核心邏輯。設定窗不直接改 Rust 或上游檔案。
 
