@@ -11,7 +11,18 @@ public partial class SettingsViewModel
             if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp))) HasChanges = true;
         };
     }
-    public void Load() { profile = ProfileStore.Load(); ApplyDocument(true); HasChanges = false; Status = ""; }
+    public void Load() { profile = ProfileStore.Load(); ApplyDocument(true); HasChanges = false; Status = ""; ApplyInstalledKeyboards(Interop.Native.sj_installed_keyboards()); }
+    internal void ApplyInstalledKeyboards(uint mask)
+    {
+        loading = true;
+        try {
+            int previousKeyboard = Keyboard;
+            StandardInstalled = (mask & 1) != 0; EtenInstalled = (mask & 2) != 0;
+            InstalledKeyboardHelp = mask switch { 1 => "本機只安裝標準注音。要改用倚天，請執行安裝包的「重新選擇鍵盤.cmd」。", 2 => "本機只安裝倚天注音。要改用標準注音，請執行安裝包的「重新選擇鍵盤.cmd」。", 0 => "鍵盤註冊狀態不一致，請重新執行安裝以修復。", _ => "本機提供標準注音與倚天注音。" };
+            if (previousKeyboard == 1 && !StandardInstalled || previousKeyboard == 2 && !EtenInstalled) { Keyboard = 0; HasChanges = true; Status = "先前的鍵盤配置尚未安裝，已改為跟隨已安裝配置；按儲存後更新偏好。"; }
+        }
+        finally { loading = false; }
+    }
     private void ApplyDocument(bool readDictionary)
     {
         loading = true;
@@ -56,6 +67,7 @@ public partial class SettingsViewModel
         WriteDocument(); var preset = ProfileDocument.Parse(Interop.Native.Take(Interop.Native.sj_profile_preset(profile.ToString(), windows)));
         profile = preset; ApplyDocument(false); HasChanges = true;
         Status = "已載入操作預設，按儲存後套用。詞庫、學習與外觀已保留。";
+        ApplyInstalledKeyboards(Interop.Native.sj_installed_keyboards());
     }
     private void WriteDocument()
     {
@@ -83,8 +95,10 @@ public partial class SettingsViewModel
     }
     public void Save()
     {
-        if (Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Keyboard is < 0 or > 4 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
+        if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
+            throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");
         string dictionary = PersonalDictionary.Save(DictionaryText, Path.GetDirectoryName(ProfileStore.Path)!);
         WriteDocument(); profile.Set("input", "dictionary", dictionary); ProfileStore.Save(profile.ToString()); HasChanges = false;
         Status = "已儲存並通知善解立即套用。切換鍵盤或詞庫時會先提交目前組字。";

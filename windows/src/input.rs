@@ -57,7 +57,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
             if shift {
                 "＂"
             } else {
-                "＇"
+                "、"
             }
         }
         '=' => {
@@ -78,9 +78,10 @@ pub fn is_punctuation(k: ShanjieKey) -> bool {
         && (!"190".contains(k.ch as u8 as char) || k.modifiers == 3)
 }
 pub fn pending(s: &Snapshot) -> bool {
-    s.reading_hint || s.preedit
-        .chars()
-        .any(|c| ('\u{3105}'..='\u{312f}').contains(&c))
+    s.reading_hint
+        || s.preedit
+            .chars()
+            .any(|c| ('\u{3105}'..='\u{312f}').contains(&c))
 }
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
@@ -98,7 +99,7 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
 }
 const SYMBOLS: &str =
     "，。？！；：、（）「」『』【】《》〈〉—…～·「」＋－×÷＝≠≤≥±∞√％‰℃℉°′″→←↑↓★☆○●□■△▲◎※〒＄€£¥";
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Special {
     pub mode: u32,
     digits: String,
@@ -263,7 +264,7 @@ impl Special {
         self.view()
     }
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Associated {
     words: Vec<String>,
     selected: usize,
@@ -355,9 +356,9 @@ struct Entry {
     keys: String,
     score: f64,
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Pinyin {
-    index: HashMap<String, Entry>,
+    index: std::sync::Arc<HashMap<String, Entry>>,
     pub pending: String,
     base: Snapshot,
 }
@@ -448,7 +449,7 @@ impl Pinyin {
     }
     fn add(&mut self, roman: String, keys: &str, score: f64) {
         if !self.index.get(&roman).is_some_and(|e| e.score >= score) {
-            self.index.insert(
+            std::sync::Arc::make_mut(&mut self.index).insert(
                 roman,
                 Entry {
                     keys: keys.into(),

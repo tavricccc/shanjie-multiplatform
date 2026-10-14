@@ -2,6 +2,22 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-13 Windows 0.5.3：安裝清單、權限回復與診斷
+
+只修改 Windows 安裝器、登錄快照、版本標示與發佈文件。新增 language_list／journal／permissions 模組：以 Windows 內建 International 介面同步現行使用者語言清單；保留原生權限繼承旗標；依舊 checkpoint 精確辨識並修復 0.5.2 的旗標遺失；先保存原始錯誤再嘗試回復。PowerShell 輔助腳本編入執行檔，資料以 JSON 傳遞。上游子模組、platform 覆蓋、prepare 契約、詞庫、model-v5／classes-v3、解碼器及輸入／broker 政策不變。隔離原生 API 測試及實際安裝的界線見 VERIFICATION.md。
+
+## 2026-10-13 Windows 0.5.2：前端可靠性與單一鍵盤安裝
+
+本輪只修改 Windows 前端、broker、個人資料保存、安裝器與 WinUI。上游子模組、platform 核心覆蓋、prepare 契約、詞庫、model-v5／classes-v3 及解碼器未更新。新增 request sequence／結果確認、可取消管線期限、焦點與世代復原，以及獨立的 installation／registry_snapshot／installer transaction 模組。原生安裝回復與前景 App 界線見 VERIFICATION.md。
+
+## 2026-10-12 Windows 0.5.0：共用資源與大小寫顯示
+
+上游 pin、模型格式、評分器與上游檔案不變。`prepare-resident.ps1` 在產生核心時，將個人詞庫建構及模型載入分成原始路徑與快取入口；`platform/resident_windows.rs` 以 Arc 分享不可變 Lexicon／LmState，最多保留四份詞庫及四組模型，依資料路徑、檔案版本與詞庫實例區分。組字與學習政策仍屬於各 Engine。
+
+`prepare-smart-input.ps1` 注入英文顯示字元欄位；`smart_input_windows.rs` 新增 `key_with_latin`，將英文原文大小寫與注音解析分開。`smart_input_windows_ffi.rs` 新增同名 Windows FFI。TSF 輸入路徑使用 Windows 實際字元狀態，並讓混打 Shift 字母走組字路徑；原始 `key` 與上游 ABI 仍可使用。
+
+Windows 外層新增本機管道 broker 與 x64 核心程序；x86／x64 前端共用相同核心。權限、會話隔離、重啟及重播屬 Windows 平台功能。登入啟動由安裝程式註冊，未改上游 macOS/Linux 啟動流程。
+
 ## 2026-10-11 後續：移除簡拼、原文組字與深色候選
 
 依最新要求移除 Windows `smart_zhuyin` 欄位、免聲調／簡拼按鍵政策、設定控制項與強制 prediction。profile 遷移直接刪除舊設定，不保留兼容開關。上游既有 abbreviation API 未改動，也未在 Windows 啟用。

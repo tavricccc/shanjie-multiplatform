@@ -32,17 +32,12 @@ pub(super) struct Config {
 }
 impl Config {
     pub fn new(data: &Path, p: &Document, profile_layout: u32) -> Self {
-        let keyboard = p.number("input", "keyboard", 0);
+        let available = crate::installation::available();
+        let keyboard = crate::installation::keyboard(p.number("input", "keyboard", 0), available);
         Self {
             data: data.to_owned(),
             keyboard,
-            layout: if keyboard == 0 {
-                profile_layout
-            } else if keyboard == 2 {
-                1
-            } else {
-                0
-            },
+            layout: crate::installation::layout(keyboard, profile_layout, available),
             ranking: (p.get("engine", "ranking", "chat") == "formal") as u32,
             right: p.get("candidates", "anchor", "right") == "right",
             learning: p.flag("input", "learning", true),

@@ -60,7 +60,8 @@ int wmain(int argc,wchar_t** argv) {
     auto different = std::find_if(pending.candidates.begin(),pending.candidates.end(),[&pending](const auto& word) { return word != pending.preedit; });
     assert(different != pending.candidates.end()); assert(first.pick((unsigned)(different - pending.candidates.begin()),pending));
     std::ofstream(path.parent_path() / L"learning.epoch") << "cleared";
-    std::filesystem::remove(path);
+    auto archive=path.parent_path()/L".deleted_files"; std::filesystem::create_directory(archive);
+    std::filesystem::rename(path,archive/L"learning-before-clear.tsv");
     shanjie::Snapshot clearOutput; key.kind = 3; assert(first.key(key,clearOutput)); assert(!clearOutput.commit.empty()); assert(!std::filesystem::exists(path));
     shanjie::Snapshot suggestions; assert(first.associate(L"你",suggestions)); assert(!suggestions.candidates.empty());
     AssociatedCandidates associated; associated.open(suggestions); key.kind = 1; key.ch = '1'; key.modifiers = 1;
@@ -139,6 +140,10 @@ int wmain(int argc,wchar_t** argv) {
     assert(!wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
     std::filesystem::copy_file(modelRoot / L"model-v5/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
     assert(wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
+    std::ofstream(wrongModel / L"classes.sjc") << "changed after cache warmup";
+    shanjie::Engine invalidCached; assert(!invalidCached.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
+    std::filesystem::copy_file(modelRoot / L"model-v5/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
+    assert(invalidCached.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
     std::cout << "PASS: latest model, required class pairing, passive/entered prediction, live off, key options and composed punctuation\n";
     std::cout << "PASS: candidate policy, Unicode/Big5/symbols, interleaved learning, personal dictionary, associations, pinyin\n";
 }

@@ -37,7 +37,12 @@ fn plain_shortcut(vk: WPARAM, modifier: VIRTUAL_KEY, other: VIRTUAL_KEY) -> bool
     vk.0 == 32 && held(modifier) && !held(other) && !held(VK_MENU)
 }
 impl Data {
-    fn wants(self: &Rc<Self>, context: &ITfContext, vk: WPARAM, flags: LPARAM) -> Result<bool> {
+    pub(super) fn wants(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        vk: WPARAM,
+        flags: LPARAM,
+    ) -> Result<bool> {
         if system_shortcut(vk) {
             return Ok(false);
         }
@@ -126,7 +131,12 @@ impl Data {
                         && input::is_punctuation(key))))
         }
     }
-    fn key_down(self: &Rc<Self>, context: &ITfContext, vk: WPARAM, flags: LPARAM) -> Result<bool> {
+    pub(super) fn key_down(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        vk: WPARAM,
+        flags: LPARAM,
+    ) -> Result<bool> {
         if system_shortcut(vk) {
             return Ok(false);
         }
@@ -231,9 +241,9 @@ impl Data {
                     }
                     s.raw_reading.clear();
                     s.associated.clear();
-                    let mut out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_core::ffi::shanjie_windows_punctuation(h, mark.as_ptr(), o)
-                    }))?;
+                    let mut out = output(s.engine.perform(crate::broker::Op::Punctuation(
+                        mark.to_str().unwrap().into(),
+                    )))?;
                     out.commit = converted.commit + &out.commit;
                     out
                 };
@@ -242,8 +252,13 @@ impl Data {
             return Ok(true);
         }
         let space_candidates = p.flag("candidates", "space_operates", false);
-        let trigger = if space_candidates { p.get("candidates", "open", "down") } else { "down" };
-        if key.kind == 2 && key.modifiers == 0
+        let trigger = if space_candidates {
+            p.get("candidates", "open", "down")
+        } else {
+            "down"
+        };
+        if key.kind == 2
+            && key.modifiers == 0
             && self.state.borrow().special.mode == 0
             && self.state.borrow().pinyin.pending.is_empty()
             && !input::pending(&state)
@@ -261,10 +276,12 @@ impl Data {
                     if p.flag("input", "space_commits", false) {
                         let mut out = output(s.engine.reset(false))?;
                         out.handled = true;
-                        if p.flag("input", "space_after_commit", false) { out.commit.push(' '); }
+                        if p.flag("input", "space_after_commit", false) {
+                            out.commit.push(' ');
+                        }
                         out
                     } else {
-                        output(s.engine.operation(|h, o| unsafe { shanjie_core::ffi::shanjie_windows_insert_space(h, o) }))?
+                        output(s.engine.perform(crate::broker::Op::Space))?
                     }
                 };
                 data.apply(&current, cookie, out, false)
@@ -364,7 +381,35 @@ impl Data {
             && key.modifiers & 16 != 0
             && key.modifiers & 14 == 0
             && [1, 2].contains(&key.kind);
-        let ascii = key.kind == 1
+        let mixed_letter = p.flag("input", "mixed_input", false)
+            && p.number("input", "keyboard", 0) < 3
+            && key.kind == 1
+            && (key.ch as u8).is_ascii_alphabetic()
+            && key.modifiers & 14 == 0
+            && !english;
+        let latin = if mixed_letter {
+            let mut keyboard = [0u8; 256];
+            let mut text = [0u16; 4];
+            unsafe {
+                GetKeyboardState(&mut keyboard)?;
+                let n = ToUnicodeEx(
+                    vk.0 as u32,
+                    ((flags.0 >> 16) & 255) as u32,
+                    &keyboard,
+                    &mut text,
+                    4,
+                    Some(GetKeyboardLayout(0)),
+                );
+                (n == 1)
+                    .then(|| char::from_u32(text[0] as u32))
+                    .flatten()
+                    .filter(|ch| ch.is_ascii_alphabetic())
+            }
+        } else {
+            None
+        };
+        let ascii = !mixed_letter
+            && key.kind == 1
             && key.modifiers == 1
             && (!p.flag("input", "shift_punctuation", false)
                 || !",./1;[]90`\\'=".contains(key.ch as u8 as char));
@@ -417,7 +462,8 @@ impl Data {
             && !state.preedit.is_empty()
             && !input::pending(&state)
             && !mixed_pending
-            && key.kind == 10 && trigger == "space";
+            && key.kind == 10
+            && trigger == "space";
         let cycle = p.flag("candidates", "up_cycles", true)
             && key.kind == 9
             && key.modifiers == 0
@@ -454,10 +500,12 @@ impl Data {
                         String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?,
                     )
                     .unwrap();
-                    shanjie_core::ffi::shanjie_engine_set_left_context(
-                        data.state.borrow().engine.handle,
-                        value.as_ptr(),
-                    );
+                    output(
+                        data.state
+                            .borrow_mut()
+                            .engine
+                            .perform(crate::broker::Op::Context(value.to_str().unwrap().into())),
+                    )?;
                 }
                 let out = {
                     let mut s = data.state.borrow_mut();
@@ -467,9 +515,7 @@ impl Data {
                             key.kind == 2 && !p.flag("input", "space_after_commit", false);
                         out
                     } else if cycle {
-                        output(s.engine.operation(|h, o| {
-                            shanjie_core::ffi::shanjie_windows_cycle_candidate(h, o)
-                        }))?
+                        output(s.engine.perform(crate::broker::Op::Cycle))?
                     } else {
                         let mut raw = s.raw_reading.clone();
                         if key.kind == 4 {
@@ -480,9 +526,14 @@ impl Data {
                         } else if key.kind == 2 && key.modifiers == 0 {
                             raw.push(' ');
                         }
-                        let out = if let Some(out) = s.engine.key(key) {
+                        let out = if let Some(out) = s.engine.key_with_latin(key, latin) {
                             out
                         } else {
+                            // Raw-reading fallback is only for invalid phonetic input.
+                            // Transport failure or a busy learning writer retains the key.
+                            if s.engine.failure() != Some(crate::engine::Failure::Failed) {
+                                return Err(E_FAIL.into());
+                            }
                             if !p.flag("input", "alphanumeric", true)
                                 || raw.is_empty()
                                 || !input::pending(&s.snapshot)
@@ -566,12 +617,9 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         if system_shortcut(key) {
             return Ok(false.into());
         }
-        match self.data.key_down(context.ok()?, key, flags) {
+        match self.data.dispatch_key(context.ok()?, key, flags) {
             Ok(handled) => Ok(handled.into()),
-            Err(_) => {
-                self.data.cancel()?;
-                Ok(false.into())
-            }
+            Err(_) => Ok(true.into()),
         }
     }
     fn OnKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, _: LPARAM) -> Result<BOOL> {

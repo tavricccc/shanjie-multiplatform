@@ -8,14 +8,14 @@ use windows::{
 };
 pub struct ControlChannel {
     window: HWND,
-    callback: unsafe extern "C" fn(*mut std::ffi::c_void, bool),
+    callback: unsafe extern "C" fn(*mut std::ffi::c_void, u32),
     context: *mut std::ffi::c_void,
     message: u32,
     restart: u32,
 }
 impl ControlChannel {
     pub unsafe fn new(
-        callback: unsafe extern "C" fn(*mut std::ffi::c_void, bool),
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, u32),
         context: *mut std::ffi::c_void,
     ) -> Result<Box<Self>> {
         let mut w = Box::new(Self {
@@ -49,6 +49,16 @@ impl ControlChannel {
         )?;
         Ok(w)
     }
+    pub fn retry(&self) {
+        unsafe {
+            SetTimer(Some(self.window), 42, 50, None);
+        }
+    }
+    pub fn stop_retry(&self) {
+        unsafe {
+            let _ = KillTimer(Some(self.window), 42);
+        }
+    }
 }
 impl Drop for ControlChannel {
     fn drop(&mut self) {
@@ -73,7 +83,12 @@ unsafe extern "system" fn watcher_proc(
         SetWindowLongPtrW(window, GWLP_USERDATA, p as _);
     }
     if !p.is_null() && (message == (*p).message || message == (*p).restart) {
-        ((*p).callback)((*p).context, message == (*p).restart);
+        ((*p).callback)((*p).context, (message == (*p).restart) as u32);
+        return LRESULT(0);
+    }
+    if !p.is_null() && message == WM_TIMER && wp.0 == 42 {
+        let _ = KillTimer(Some(window), 42);
+        ((*p).callback)((*p).context, 2);
         return LRESULT(0);
     }
     DefWindowProcW(window, message, wp, lp)

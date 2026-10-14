@@ -1,5 +1,6 @@
 # 維護入口
 
+- 開始下次功能更新前，先讀 [TODO.md](TODO.md)，確認待處理需求與驗收條件。
 - 更新／merge 善解上游之前，先讀 `UPSTREAM-CHANGES.md`、`UPSTREAM.json` 與 `VERIFICATION.md`。
 - 上游是固定 commit 的子模組。保持 `upstream/shanjie` 的追蹤檔案乾淨；Windows 核心差異放在 `platform/` 與 prepare 腳本。
 - `build/core` 是產生檔，不在其中手改或保存修正。升版要同時更新子模組 pin 和 `UPSTREAM.json`，重新核對覆蓋契約。

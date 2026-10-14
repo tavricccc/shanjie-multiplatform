@@ -2,6 +2,7 @@
 param([switch]$UseExistingBuild)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/preserve-output.ps1"
 Push-Location $root
 try {
     if (!$UseExistingBuild) {
@@ -9,7 +10,7 @@ try {
     }
     $output = Join-Path $root 'dist/package'
     if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
-    if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
+    Preserve-Output $output
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     if (!$UseExistingBuild) { & "$PSScriptRoot/prepare-models.ps1" }
     & "$PSScriptRoot/prepare-licenses.ps1"
@@ -23,9 +24,12 @@ try {
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/ui" $output -Recurse -Force
-    Copy-Item "$root/dist/tools" $output -Recurse -Force
+    New-Item -ItemType Directory -Path "$output/tools" -Force | Out-Null
+    Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
+    Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
+    Copy-Item "$root/RELEASE-NOTES-0.5.3.md" $output -Force
     Copy-Item "$root/MODEL-SOURCES.json" $output -Force
     Copy-Item "$root/WINUI-MIGRATION.md","$root/MICROSOFT-IME-DIFFS.md","$root/DESIGN.md","$root/PERFORMANCE.md" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force
@@ -36,5 +40,6 @@ try {
     Set-Content "$output/SHA256SUMS.txt" $hashes -Encoding utf8NoBOM
     & "$output/tools/shanjie-manager.exe" verify-package $output
     if ($LASTEXITCODE) { throw 'Native package verification failed.' }
-    Compress-Archive -Path "$output/*" -DestinationPath "$root/dist/Shanjie-Windows.zip" -Force
+    Preserve-Output "$root/dist/Shanjie-Windows.zip"
+    Compress-Archive -Path "$output/*" -DestinationPath "$root/dist/Shanjie-Windows.zip"
 } finally { Pop-Location }

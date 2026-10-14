@@ -34,6 +34,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool MixedInput { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
+    [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
+    [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
+    [ObservableProperty] public partial string InstalledKeyboardHelp { get; set; } = "";
     [ObservableProperty] public partial bool Big5 { get; set; }
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
     [ObservableProperty] public partial bool ShiftPunctuation { get; set; }

@@ -27,7 +27,8 @@
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
-                        <ComboBox Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows 標準／倚天 profile"/><ComboBoxItem Content="標準注音"/><ComboBoxItem Content="倚天注音"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
+                        <ComboBox x:Name="KeyboardSelector" Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨已安裝的 Windows 配置"/><ComboBoxItem x:Name="StandardKeyboardOption" Content="標準注音" IsEnabled="{x:Bind Vm.StandardInstalled, Mode=OneWay}"/><ComboBoxItem x:Name="EtenKeyboardOption" Content="倚天注音" IsEnabled="{x:Bind Vm.EtenInstalled, Mode=OneWay}"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
+                        <TextBlock Text="{x:Bind Vm.InstalledKeyboardHelp, Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}"/>
                         <controls:SettingToggle Label="預設輸入模式" OnText="中文" OffText="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="預設字元寬度" OnText="全形" OffText="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/>
                     </StackPanel>

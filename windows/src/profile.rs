@@ -191,6 +191,9 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
             PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )?;
+        if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+            return Ok(());
+        }
         let message =
             RegisterWindowMessageW(PCWSTR(crate::wide("Shanjie.ProfileChanged.v1").as_ptr()));
         SendNotifyMessageW(
@@ -203,6 +206,9 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
     Ok(())
 }
 pub fn restart() -> Result<()> {
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+        return Ok(());
+    }
     unsafe {
         SendNotifyMessageW(
             HWND(0xffffusize as _),
@@ -215,8 +221,19 @@ pub fn restart() -> Result<()> {
 }
 pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
+    let content = dictionary_content(text)?;
+    let name = format!("dictionary-{:x}.tsv", Sha256::digest(content.as_bytes()));
+    crate::dictionary_store::publish(folder, &name, content.as_bytes())?;
+    Ok(name)
+}
+fn dictionary_content(text: &str) -> Result<String> {
     let mut content = String::new();
-    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+    // WinUI TextBox returns CR; accept it alongside LF and Windows CRLF.
+    for line in text
+        .split(['\r', '\n'])
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+    {
         let f: Vec<_> = line.split_whitespace().collect();
         if !(2..=3).contains(&f.len())
             || f[0].split('-').count() != f[1].chars().count()
@@ -235,13 +252,7 @@ pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
         }
         content += &format!("{}\t{}\t{score}\n", f[0], f[1]);
     }
-    let name = format!("dictionary-{:x}.tsv", Sha256::digest(content.as_bytes()));
-    fs::create_dir_all(folder)?;
-    let target = folder.join(&name);
-    if !target.exists() {
-        fs::write(&target, content)?;
-    }
-    Ok(name)
+    Ok(content)
 }
 pub fn clear_learning() -> Result<()> {
     use windows::Win32::{
@@ -265,7 +276,12 @@ pub fn clear_learning() -> Result<()> {
             for name in ["learning.tsv", "learning.tsv.tmp", "learning.tsv.corrupt"] {
                 let p = folder.join(name);
                 if p.exists() {
-                    fs::remove_file(p)?;
+                    if !fs::symlink_metadata(&p)?.is_file() {
+                        return Err("學習資料的檔案類型異常，清除操作未完成。".into());
+                    }
+                    if crate::installer::remove_tree(&p)? != 0 {
+                        return Err("部分學習資料仍在使用中，清除操作未完成；請稍後重試。".into());
+                    }
                 }
             }
             fs::write(
@@ -347,6 +363,44 @@ pub fn apply_preset(source: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dictionary_newlines_preserve_rows_and_scores() {
+        let rows = ["ㄋㄧˇ  你", "ㄏㄠˇ\t好\t-1.25"];
+        let expected = "ㄋㄧˇ\t你\t-0.01\nㄏㄠˇ\t好\t-1.25\n";
+        for newline in ["\n", "\r\n", "\r"] {
+            let input = format!(
+                "{newline} {}{newline}{newline}{} {newline}",
+                rows[0], rows[1]
+            );
+            assert_eq!(dictionary_content(&input).unwrap(), expected);
+            assert_eq!(
+                dictionary_content(&expected.replace('\n', newline)).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(
+            dictionary_content("ㄋㄧˇ 你\rㄏㄠˇ 好\nㄕㄢˋ-ㄐㄧㄝˇ 善解\r\n")
+                .unwrap()
+                .lines()
+                .count(),
+            3
+        );
+    }
+    #[test]
+    fn dictionary_newlines_do_not_relax_validation() {
+        for invalid in [
+            "ㄋㄧˇ 你好",
+            "invalid 你",
+            "ㄋㄧˇ 你 0.5",
+            "ㄋㄧˇ 你 NaN",
+            "ㄋㄧˇ 你 -inf",
+            "ㄋㄧˇ 你 -0.01 extra",
+        ] {
+            for newline in ["\n", "\r\n", "\r"] {
+                assert!(dictionary_content(&format!("ㄏㄠˇ 好{newline}{invalid}")).is_err());
+            }
+        }
+    }
     #[test]
     fn migration_preserves_personal_data_and_removes_retired_choices() {
         let mut doc=Document::parse("[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=1\n[input]\nlearning=1\ndictionary=custom.tsv\nescape_clears=0\n[candidates]\nlayout=grid\ntab_expands=1\n[appearance]\nfont_size=22\n").unwrap();

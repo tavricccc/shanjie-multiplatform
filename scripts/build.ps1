@@ -8,6 +8,7 @@ if ($Architecture -eq 'all') {
     return
 }
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/preserve-output.ps1"
 Push-Location $root
 try {
     $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
@@ -37,7 +38,7 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
     if ($Architecture -eq 'x64' -and !$SkipSettings) {
         $uiOutput = [IO.Path]::GetFullPath((Join-Path $root 'dist/ui'))
         if ($uiOutput -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','ui')) { throw 'Unexpected UI output path.' }
-        if (Test-Path -LiteralPath $uiOutput) { Remove-Item -LiteralPath $uiOutput -Recurse -Force }
+        Preserve-Output $uiOutput
         dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o $uiOutput --nologo
         if ($LASTEXITCODE) { throw 'WinUI settings build failed.' }
     }
@@ -45,6 +46,8 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
         if (Test-Path "$root/dist/ui") { Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force }
         New-Item -ItemType Directory "$root/dist/tools" -Force | Out-Null
         Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
+        Preserve-Output "$root/dist/tools/shanjie-core.exe"
+        Copy-Item "$root/windows/target/$target/release/shanjie-core.exe" "$root/dist/tools" -Force
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force

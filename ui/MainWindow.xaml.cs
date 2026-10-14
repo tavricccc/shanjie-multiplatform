@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
+        ShowLoadFeedback();
     }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
@@ -32,6 +33,12 @@ public sealed partial class MainWindow : Window
     internal void ShowCandidateKeys() { ShowSection(3); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAppearance() { ShowSection(3); Root.UpdateLayout(); AppearanceOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowDictionary() { ShowSection(4); Root.UpdateLayout(); PersonalDictionaryEditor.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void SetDictionaryForVerification(string text) => PersonalDictionaryEditor.Text = text;
+    internal string DictionaryForVerification => PersonalDictionaryEditor.Text;
+    internal (bool standard, bool eten) InstalledOptionsForVerification => (StandardKeyboardOption.IsEnabled, EtenKeyboardOption.IsEnabled);
+    internal InfoBarSeverity FeedbackForVerification => StatusBar.Severity;
+    internal void SetInstalledForVerification(uint mask) { Vm.ApplyInstalledKeyboards(mask); ShowLoadFeedback(); }
+    private void ShowLoadFeedback() { StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = !string.IsNullOrWhiteSpace(Vm.Status); }
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
@@ -52,14 +59,18 @@ public sealed partial class MainWindow : Window
     {
         Vm.Preset(windows); StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = true;
     }
-    private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); Preset.SelectedIndex = 0; StatusBar.IsOpen = false; }
+    private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); Preset.SelectedIndex = 0; ShowLoadFeedback(); }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
     private async void ClearLearning(object sender, RoutedEventArgs args)
     {
-        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "清除選字學習？", Content = "會刪除本帳號已儲存的選字偏好，個人詞庫與設定會保留。", PrimaryButtonText = "清除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "清除選字學習？", Content = "會清除本帳號已儲存的選字偏好，個人詞庫與設定會保留。", PrimaryButtonText = "清除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        await ClearLearningConfirmed();
+    }
+    internal async Task ClearLearningConfirmed()
+    {
         try { await Task.Run(Models.ProfileStore.ClearLearning); Vm.Status = "已清除選字學習。"; StatusBar.Severity = InfoBarSeverity.Success; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or TimeoutException) { Vm.Status = "無法清除學習：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException or TimeoutException) { Vm.Status = "無法清除學習：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
         StatusBar.IsOpen = true;
     }
     private void Save(object sender, RoutedEventArgs args)

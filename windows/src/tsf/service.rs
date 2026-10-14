@@ -57,7 +57,7 @@ pub struct State {
     pub candidates: Option<candidates::Handle>,
     button: Option<ITfLangBarItemButton>,
     bar: Option<ITfLangBarItemMgr>,
-    watcher: Option<Box<ControlChannel>>,
+    pub(super) watcher: Option<Box<ControlChannel>>,
     pub engine: Engine,
     preload: Option<resident::Pending>,
     pub pinyin: Pinyin,
@@ -112,16 +112,21 @@ impl State {
         resident::Config::new(&self.data, &self.prefs, self.profile_layout)
     }
     fn park_engine(&mut self) {
-        if !self.engine.handle.is_null() {
-            resident::park(self.core_config(), std::mem::take(&mut self.engine),
-                std::mem::take(&mut self.pinyin));
+        if self.engine.is_open() {
+            resident::park(
+                self.core_config(),
+                std::mem::take(&mut self.engine),
+                std::mem::take(&mut self.pinyin),
+            );
         } else if let Some(pending) = self.preload.take() {
             pending.park();
         }
     }
 }
 impl Drop for State {
-    fn drop(&mut self) { self.park_engine(); }
+    fn drop(&mut self) {
+        self.park_engine();
+    }
 }
 pub struct Data {
     pub state: RefCell<State>,
@@ -129,6 +134,10 @@ pub struct Data {
     pub editing: Cell<bool>,
     pub mode_revision: Cell<u64>,
     profile_revision: Cell<u64>,
+    pub(super) generation: Cell<u64>,
+    pub(super) recovery: RefCell<super::recovery::Recovery>,
+    pub(super) application_written: Cell<bool>,
+    pub(super) retiring: RefCell<Vec<(u64, ITfContext)>>,
     pub indicator: RefCell<Box<Indicator>>,
     watcher_context: RefCell<Option<Box<std::rc::Weak<Data>>>>,
     owner: Cell<*mut c_void>,
@@ -153,6 +162,10 @@ pub fn new() -> ITfTextInputProcessorEx {
         editing: Cell::new(false),
         mode_revision: Cell::new(0),
         profile_revision: Cell::new(0),
+        generation: Cell::new(0),
+        recovery: RefCell::new(Default::default()),
+        application_written: Cell::new(false),
+        retiring: RefCell::new(Vec::new()),
         indicator: RefCell::new(Box::new(Indicator::default())),
         watcher_context: RefCell::new(None),
         owner: Cell::new(std::ptr::null_mut()),
@@ -207,6 +220,26 @@ impl Data {
             .as_ref()
             .is_some_and(|t| unsafe { compartment(t, &GUID_COMPARTMENT_KEYBOARD_OPENCLOSE) })
     }
+    // Delayed work may use the current engine only while both identities match.
+    // Finishing a captured old composition deliberately uses request instead.
+    pub fn request_current(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        flags: TF_CONTEXT_EDIT_CONTEXT_FLAGS,
+        operation: impl FnOnce(u32) -> Result<()> + 'static,
+    ) -> Result<()> {
+        let generation = self.generation.get();
+        let current = context.clone();
+        let data = self.clone();
+        self.request(context, flags, move |cookie| {
+            if data.generation.get() != generation
+                || data.state.borrow().context.as_ref() != Some(&current)
+            {
+                return Ok(());
+            }
+            operation(cookie)
+        })
+    }
     pub fn settings(&self) {
         let path = self.state.borrow().binary.join("ui/Shanjie.UI.exe");
         unsafe {
@@ -253,6 +286,11 @@ impl Data {
         Ok(())
     }
     pub fn cancel(self: &Rc<Self>) -> Result<()> {
+        self.generation.set(self.generation.get().wrapping_add(1));
+        self.recovery.borrow_mut().clear();
+        if let Some(watcher) = self.state.borrow().watcher.as_ref() {
+            watcher.stop_retry();
+        }
         self.mode_revision.set(self.mode_revision.get() + 1);
         unsafe {
             self.indicator.borrow_mut().hide();
@@ -280,18 +318,42 @@ impl Data {
                 let _ = s.engine.reset(true);
                 final_text
             } else {
-                s.engine.reset(false).map(|o| o.commit).unwrap_or_default()
+                s.engine
+                    .reset(false)
+                    .map(|o| o.commit)
+                    .unwrap_or_else(|| s.snapshot.preedit.clone())
             };
+            if s.engine.recovery_pending() {
+                s.engine = Engine::default();
+                s.preload = None;
+            }
             (s.context.clone(), s.composition.take(), final_text)
         };
         if let (Some(context), Some(composition)) = (context, composition) {
+            let retirement = self.generation.get();
+            self.retiring
+                .borrow_mut()
+                .push((retirement, context.clone()));
+            let data = self.clone();
             self.request(
                 &context,
                 TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
                 move |cookie| unsafe {
+                    if !data
+                        .retiring
+                        .borrow()
+                        .iter()
+                        .any(|(id, _)| *id == retirement)
+                    {
+                        return Ok(());
+                    }
                     let range = composition.GetRange()?;
                     range.SetText(cookie, 0, &final_text.encode_utf16().collect::<Vec<_>>())?;
-                    composition.EndComposition(cookie)
+                    composition.EndComposition(cookie)?;
+                    data.retiring
+                        .borrow_mut()
+                        .retain(|(id, _)| *id != retirement);
+                    Ok(())
                 },
             )?;
         }
@@ -369,36 +431,44 @@ impl Data {
         };
         let data = self.clone();
         let current = context.clone();
-        self.request(
+        self.request_current(
             &context,
             TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
             move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    if s.snapshot.reading_hint || s.context.as_ref() != Some(&current)
+                {
+                    let s = data.state.borrow();
+                    if s.snapshot.reading_hint
+                        || s.context.as_ref() != Some(&current)
                         || s.candidates
                             .as_ref()
                             .is_none_or(|c| c.data.revision.get() != revision)
                     {
                         return Ok(());
                     }
-                    if s.associated.active() {
-                        pick_associated(&mut s, index)?
-                    } else if s.special.mode != 0 {
-                        s.special.pick(index as usize)
-                    } else {
-                        output(
-                            s.engine
-                                .operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
-                        )?
-                    }
-                };
-                let conversion = !data.state.borrow().snapshot.prediction
-                    && !out.associated
-                    && !out.preedit.is_empty();
-                data.apply(&current, cookie, out, conversion)
+                }
+                data.dispatch_pick(&current, cookie, index)
             },
         )
+    }
+    pub(super) fn pick_at(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        cookie: u32,
+        index: u32,
+    ) -> Result<()> {
+        let out = {
+            let mut s = self.state.borrow_mut();
+            if s.associated.active() {
+                pick_associated(&mut s, index)?
+            } else if s.special.mode != 0 {
+                s.special.pick(index as usize)
+            } else {
+                output(s.engine.perform(crate::broker::Op::Pick(index)))?
+            }
+        };
+        let conversion =
+            !self.state.borrow().snapshot.prediction && !out.associated && !out.preedit.is_empty();
+        self.apply(context, cookie, out, conversion)
     }
     pub fn apply(
         self: &Rc<Self>,
@@ -411,7 +481,7 @@ impl Data {
             if !out.handled && out.commit.is_empty() && out.preedit.is_empty() {
                 return Ok(());
             }
-            let composition = self.state.borrow().composition.clone();
+            let mut composition = self.state.borrow().composition.clone();
             let range = if let Some(c) = &composition {
                 c.GetRange()?
             } else {
@@ -436,40 +506,44 @@ impl Data {
             } else {
                 out.commit.clone()
             };
-            let text = committed + &out.preedit;
-            range.SetText(cookie, 0, &text.encode_utf16().collect::<Vec<_>>())?;
             if !out.commit.is_empty() {
-                let mut moved = 0;
-                range.ShiftStart(
-                    cookie,
-                    out.commit.encode_utf16().count() as i32,
-                    &mut moved,
-                    std::ptr::null(),
-                )?;
-                if let Some(c) = composition {
+                // Commit only the final prefix. A remaining preedit gets its
+                // own composition and must not be sent as committed text.
+                range.SetText(cookie, 0, &committed.encode_utf16().collect::<Vec<_>>())?;
+                if let Some(c) = composition.take() {
                     self.ending.set(true);
                     let result = c.EndComposition(cookie);
                     self.ending.set(false);
                     self.state.borrow_mut().composition = None;
                     result?;
                 }
+                range.Collapse(cookie, TF_ANCHOR_END)?;
             }
-            if !out.preedit.is_empty() && self.state.borrow().composition.is_none() {
-                let sink: ITfCompositionSink = self.owner().cast()?;
-                let composition = context
-                    .cast::<ITfContextComposition>()?
-                    .StartComposition(cookie, &range, &sink)?;
-                self.state.borrow_mut().composition = Some(composition);
-            }
-            if out.preedit.is_empty() {
-                let composition = self.state.borrow_mut().composition.take();
-                if let Some(c) = composition {
-                    self.ending.set(true);
-                    let result = c.EndComposition(cookie);
-                    self.ending.set(false);
-                    result?;
+            if !out.preedit.is_empty() {
+                if composition.is_none() {
+                    let sink: ITfCompositionSink = self.owner().cast()?;
+                    let created = context
+                        .cast::<ITfContextComposition>()?
+                        .StartComposition(cookie, &range, &sink)?;
+                    self.state.borrow_mut().composition = Some(created);
                 }
+                // Start before the first write, avoiding TSF's temporary
+                // composition that otherwise commits the first character.
+                range.SetText(cookie, 0, &out.preedit.encode_utf16().collect::<Vec<_>>())?;
+            } else if let Some(c) = composition {
+                range.SetText(cookie, 0, &[])?;
+                self.state.borrow_mut().composition = None;
+                self.ending.set(true);
+                let result = c.EndComposition(cookie);
+                self.ending.set(false);
+                result?;
             }
+            if out.preedit.is_empty() && !self.state.borrow().snapshot.preedit.is_empty() {
+                self.generation.set(self.generation.get().wrapping_add(1));
+            }
+            // If a later caret update fails, do not repeat text already sent.
+            self.application_written.set(true);
+            self.state.borrow_mut().snapshot = out.clone();
             let caret = range.Clone()?;
             caret.Collapse(cookie, TF_ANCHOR_START)?;
             let mut moved = 0;
@@ -505,16 +579,15 @@ impl Data {
                     let mut chars: Vec<_> = text.chars().rev().take(2).collect();
                     chars.reverse();
                     let prefix = CString::new(chars.iter().collect::<String>()).unwrap();
-                    let mut suggestions = output(
-                        s.engine
-                            .operation(|h, o| shanjie_windows_associate(h, prefix.as_ptr(), o)),
-                    )?;
+                    let mut suggestions = output(s.engine.perform(crate::broker::Op::Associate(
+                        prefix.to_str().unwrap().into(),
+                    )))?;
                     if suggestions.candidates.is_empty() && chars.len() == 2 {
                         let last = CString::new(chars[1].to_string()).unwrap();
-                        suggestions = output(
-                            s.engine
-                                .operation(|h, o| shanjie_windows_associate(h, last.as_ptr(), o)),
-                        )?;
+                        suggestions =
+                            output(s.engine.perform(crate::broker::Op::Associate(
+                                last.to_str().unwrap().into(),
+                            )))?;
                     }
                     s.associated.open(suggestions.candidates, out);
                     s.snapshot = s.associated.view();
@@ -550,7 +623,7 @@ impl Data {
         let context = context.ok_or(E_FAIL)?;
         let current = context.clone();
         let data = self.clone();
-        self.request(
+        self.request_current(
             &context,
             TF_ES_ASYNCDONTCARE | TF_ES_READWRITE,
             move |cookie| {
@@ -647,7 +720,7 @@ impl Data {
         }
         let data = self.clone();
         let current = context.clone();
-        self.request(
+        self.request_current(
             context,
             TF_ES_READ | TF_ES_ASYNCDONTCARE,
             move |cookie| unsafe {
@@ -671,6 +744,10 @@ impl Data {
         )
     }
     pub fn refresh(self: &Rc<Self>) -> Result<()> {
+        if !self.recovery.borrow().is_empty() {
+            self.recovery.borrow_mut().refresh = true;
+            return Ok(());
+        }
         let current = profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
         let revision = self.profile_revision.get() + 1;
         self.profile_revision.set(revision);
@@ -726,41 +803,33 @@ impl Data {
             }
         }
         self.prepare_engine()?;
-        if !self.state.borrow().engine.handle.is_null() && (prediction_changed || demote_changed) {
-            let configure = move |s: &mut State| -> Result<Snapshot> {
-                let mut out = Snapshot::default();
-                if demote_changed {
-                    out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_engine_set_demote(
-                            h,
-                            current.flag("engine", "demote", true) as u32,
-                            o,
-                        )
-                    }))?;
-                }
-                if prediction_changed {
-                    out = output(s.engine.operation(|h, o| unsafe {
-                        shanjie_engine_set_prediction(
-                            h,
-                            current.flag("engine", "prediction", false) as u32,
-                            o,
-                        )
-                    }))?;
-                }
-                Ok(out)
-            };
+        if self.state.borrow().engine.is_open() && (prediction_changed || demote_changed) {
+            let configure =
+                move |s: &mut State| -> Result<Snapshot> {
+                    let mut out = Snapshot::default();
+                    if demote_changed {
+                        out = output(s.engine.perform(crate::broker::Op::Demote(
+                            current.flag("engine", "demote", true),
+                        )))?;
+                    }
+                    if prediction_changed {
+                        out = output(s.engine.perform(crate::broker::Op::Prediction(
+                            current.flag("engine", "prediction", false),
+                        )))?;
+                    }
+                    Ok(out)
+                };
             let context = self.state.borrow().context.clone();
             if let Some(context) = context {
                 let current_context = context.clone();
                 let data = self.clone();
-                self.request(
+                self.request_current(
                     &context,
                     TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
                     move |cookie| {
                         let out = {
                             let mut s = data.state.borrow_mut();
-                            if data.profile_revision.get() != revision || s.engine.handle.is_null()
-                            {
+                            if data.profile_revision.get() != revision || !s.engine.is_open() {
                                 return Ok(());
                             }
                             s.associated.clear();
@@ -800,7 +869,7 @@ impl Data {
     }
     fn prepare_engine(&self) -> Result<()> {
         let mut s = self.state.borrow_mut();
-        if s.engine.handle.is_null() {
+        if !s.engine.is_open() {
             let config = s.core_config();
             if !s.preload.as_ref().is_some_and(|p| p.matches(&config)) {
                 s.preload = Some(resident::prepare(config)?);
@@ -809,8 +878,9 @@ impl Data {
         Ok(())
     }
     pub fn ensure_engine(&self) -> Result<()> {
+        self.prepare_engine()?;
         let mut s = self.state.borrow_mut();
-        if s.engine.handle.is_null() {
+        if !s.engine.is_open() {
             // Activation already started the load. An unusually early key joins
             // that same job; it never starts another copy on the input thread.
             let (engine, pinyin) = s.preload.take().and_then(|p| p.take()).ok_or(E_FAIL)?;
@@ -818,10 +888,7 @@ impl Data {
             s.pinyin = pinyin;
             configure_options(&mut s)?;
             let demote = s.prefs.flag("engine", "demote", true);
-            output(
-                s.engine
-                    .operation(|h, o| unsafe { shanjie_engine_set_demote(h, demote as u32, o) }),
-            )?;
+            output(s.engine.perform(crate::broker::Op::Demote(demote)))?;
         }
         Ok(())
     }
@@ -865,32 +932,44 @@ unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
     Ok(())
 }
 fn configure_options(s: &mut State) -> Result<()> {
-    if s.engine.handle.is_null() {
+    if !s.engine.is_open() {
         return Ok(());
     }
     let p = &s.prefs;
     let flags = p.flag("input", "shift_punctuation", false) as u32
         | ((p.flag("input", "plain_punctuation", false) as u32) << 1)
         | ((p.flag("input", "standalone_tones", false) as u32) << 2);
-    if unsafe { shanjie_windows_set_input_options(s.engine.handle, flags) } != 0 {
+    if s.engine
+        .perform(crate::broker::Op::Options(flags))
+        .is_none()
+    {
         return Err(E_FAIL.into());
     }
     let flags = if p.number("input", "keyboard", 0) < 3 {
         p.flag("input", "mixed_input", false) as u32
-    } else { 0 };
-    if unsafe { shanjie_windows_set_mixed_input(s.engine.handle, flags) } != 0 {
+    } else {
+        0
+    };
+    if s.engine
+        .perform(crate::broker::Op::Mixed(flags != 0))
+        .is_none()
+    {
         return Err(E_FAIL.into());
     }
     Ok(())
 }
-unsafe extern "C" fn changed(context: *mut c_void, restart: bool) {
+unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
     let weak = &*(context as *const std::rc::Weak<Data>);
     if let Some(data) = weak.upgrade() {
-        let _ = if restart {
-            data.restart()
-        } else {
-            data.refresh()
-        };
+        match kind {
+            1 => {
+                let _ = data.restart();
+            }
+            2 => data.retry_pending(),
+            _ => {
+                let _ = data.refresh();
+            }
+        }
     }
 }
 impl ITfTextInputProcessor_Impl for Service_Impl {

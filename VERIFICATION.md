@@ -1,6 +1,50 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-12。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；本輪結束前亦核對遠端 main 未移動。下方舊日期均為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-13。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-13 Windows 0.5.3 安裝清單與權限回復
+
+- 使用者實際安裝 0.5.2 失敗，最新對話框顯示「Windows 輸入法清單校驗失敗」。只讀檢查四次 `.installer-recovery` 紀錄，均到達 Validate 階段；0.5.2 沒有保存原始失敗原因。首次 checkpoint 與目前登錄比對，資料值及子機碼一致，但五個本程式根目錄下的 47 個安全描述元只缺 `SE_DACL_AUTO_INHERITED`，擁有者／群組／ACE 規則一致；後續 checkpoint 已採用旗標遺失後的狀態。診斷 JSON 位於工作區 `.build-tools`，含本機權限資訊，不放入來源或安裝包。
+- 新版 Windows crate release **14 項單元測試通過**，2 項原生測試另外執行。涵蓋新清單計畫、外部輸入法順序／拼字／手寫／預設保存、首次新增語言，以及原始錯誤先保存且不被回復錯誤覆蓋；沿用 152 個交易故障組合，並檢查原始錯誤仍保留。證據 `build/installer-0.5.3/unit-0.5.3-final.log`。
+- x64／x86 各 **2 項真正 Windows API 測試通過**。在唯一的 `HKCU\Software\ShanjieInstallerTest-<pid>-<stamp>` 測試機碼，核對未改權限、部分寫入、配置子機碼重建、舊 API 造成 AI 旗標遺失、新 API 精確回復、舊式無 AI 描述元保存，以及修復計畫保留當前資料值／拒絕其他權限差異。每次只清理該專用機碼。證據 `native-0.5.3-x64-final.log`、`native-0.5.3-x86-final.log`。
+- 同兩項原生測試以系統內建 Windows PowerShell 5.1／International 建立真正語言物件，核對標準、倚天、雙配置及移除四種計畫轉換；並只讀目前語言清單。x86 透過 Sysnative 啟動原生系統服務。測試模式呼叫 apply 明確拒絕，沒有呼叫真實 `Set-WinUserLanguageList` 或 `Set-WinDefaultInputMethodOverride`。
+- 0.5.3 正式 manager 的兩項早期錯誤測試通過：無效鍵盤參數及隔離模式拒絕 profiles，都在隔離 LOCALAPPDATA 留下版本／階段／原因，stderr 附紀錄路徑。證據 `manager-failure-results.txt`、`manager-error.txt`、`manager-test-guard.txt`。沒有安裝、註冊或前景視窗操作。
+- x64／x86 Rust release 建置成功，既有 LNK4104 COM export 訊息保留為建置警告。新輔助程式編入 manager／DLL，不增加獨立可變的安裝腳本。正式 WinUI、封裝雜湊、版本／來源一致與保護檔檢查結果另記於工作區的 `版本交付紀錄-0.5.3.md`。
+
+本輪使用工作區隔離檔案與專用測試機碼，沒有修改目前安裝的 0.5.1、47 個真實權限描述元、個人 profile／詞典／學習或實際輸入設定。原生權限回復已測試；真正語言清單寫入、0.5.1 雙配置至單一配置升級、UAC 互動、登入與解除安裝仍列在 TODO。0.5.2 的 80／64 項輸入及核心測試保留為歷史證據，不算本版重新執行。
+
+## 2026-10-13 Windows 0.5.2 可靠性與安裝選擇
+
+- Windows crate release 11 項單元測試通過：包含詞典原子發布／截斷修復／併發／發布前後失敗、格式与遷移、可用配置，以及安裝交易。安裝交易以替代系統作用的 adapter 注入 152 個失敗組合（首次、舊版雙配置、標準、倚天 × 兩種選擇 × 19 個部分寫入或階段失敗），核對恢復原狀；另驗证成功選擇、其他輸入法順序與回復失敗保留引用。這是交易邏輯驗證，未在真正 COM／登錄／InstallLayoutOrTip 中注入故障。證據 `build/reliability-0.5.2/unit-final.log`。
+- 新提交 harness **80 項通過**，涵蓋 x64／x86、標準／倚天；同時核對最後文字與每次組字結束通知。包含 adb、xyz、中文／中英混合、96 個字母、取消、失焦、延後模式／連續設定更新、同 context 返回、取消世代、停用再啟用，以及學習鎖忙碌後普通按鍵、數字／UIElement 選字、取消、失焦、5 秒期限與 epoch 更新。證據 `build/reliability-0.5.2/submission-queue-initialized/results.json`。
+- 提交 harness 使用真正 Windows TSF context、range、組字及延後授鎖；手動啟用測試 DLL，以 proxy 替代必須系統註冊的 keyboard sink，並隔離兩個輸入模式 compartment。按鍵 fixture 初始化個別按鍵快取，避免目前桌面的 Win 鍵／輸入模式通知污染背景案例；無 SendInput、前景視窗操作或系統註冊。初輪干擾與修正過程保留於同目錄其他子資料夾，不計入通過數。
+- x64／x86 核心各 8 項隔離檢查通過：已連線無回覆與阻塞寫入的取消、處理前／後逾時與丟回覆、Busy、重啟重建、結果未知且學習不重播、64 個會話與第 65 個明確拒絕／容量恢復。初輪 x86 在重建並更換測試核心時失敗，固定檔案後通過；初輪學習 fixture 沒有足夠前文而未產生紀錄，改用公開前文與選字後已核對實際學習檔。證據 `core-outside-sandbox`、`core-remaining-final`、`core-x86` 與 `core-x86-serial` 子資料夾。
+- 公開兩行詞條透過發佈 DLL 的 C ABI 首次保存、截斷修復、檔名 SHA-256 與 x64／x86 兩程序同時共 200 次保存通過；損壞檔以原內容留在 `.deleted_files`。證據 `build/reliability-0.5.2/dictionary-abi-final/results.txt`。詞典發布寫入及發布前／後的故障另由上述單元測試覆蓋。
+- 實際 WinUI 多行 TextBox、可用鍵盤反灰／退回說明、無效鍵盤保存拒絕、原生學習 mutex 逾時、部分清除失敗與成功重試通過；未儲存草稿與 profile 保留、成功時 epoch 更新。使用原清除確認後的共用處理路徑，不操作真實確認對話框；取消分支沒有更動。淺／深設定及錯誤截圖已檢視，證據 `build/reliability-0.5.2/ui-first/`。
+- 既有 **64 項** Caps Lock／Shift、頓號、中文、首鍵、欄位切換及跨程序核心回歸通過，`build/reliability-0.5.2/existing-update-fixed/results.json`。核心重啟測試改為明確重试同一鍵，符合現在有期限的回傳規則；沒有改寫上游或模型。
+- x64／x86 Windows profile TSF 組字、游標、候選、提交、取消、設定、英文／空白、COM 生命周期與無模型啟動通過，`smoke-x64-recovery.log`／`smoke-x86-recovery.log`。無模型時按鍵現在保留供復原，測試依新規則核對，不再期待直接放行；系統快捷鍵仍立即放行。
+
+測試使用隔離 LOCALAPPDATA、公開 fixture 與自行啟動的核心；測試保存／重啟不廣播到其他程序。沙箱禁止命名管線存取的初輪 AccessDenied 不作產品缺陷判斷，隔離 IPC 在獲准的沙箱外執行。未安裝到目前系統、未清除真實學習或控制前景 cmd；原生安裝／回復、真正登入、解除安裝與前景 App 仍待實機驗收。已完成開發項目移出 TODO，保留實機驗收界線。
+
+## 2026-10-12 Windows 0.5.1 多行個人詞庫修正
+
+- 已定位為 WinUI TextBox 使用 CR 換行，而 Rust `str::lines()` 不拆分單獨 CR 的相容性問題。原生儲存 parser 統一接受 LF、CRLF、CR；格式與分數規則不放寬。
+- Windows crate release 單元測試 4 項通過，其中新增 2 項涵蓋三種換行、混合換行、空白行、預設／明確分數、重載，以及無效注音、字音數量不符、正數／NaN／無限大分數及多餘欄位仍拒絕。
+- x64／x86 release DLL 分別透過公開 C ABI，以外部 117 筆有效詞條測試 LF、CRLF、CR，共 6 組全部通過。保存後皆為相同的 LF／Tab 內容，重載再儲存的內容雜湊名稱一致。外部輸入與輸出留在原始碼庫以外的私人測試目錄。
+- 新增 `--verify-dictionary <output> [input]` 設定程式隔離驗證入口。使用真正 WinUI 個人詞庫文字框，檢查草稿綁定、原生儲存及重載；三種換行的公開兩行案例均通過。外部 117 行測試實際從文字框取得 116 個 CR、0 個 LF，全部保存成功，重載後再儲存一致。無效兩行案例仍拒絕。此入口不呼叫個人設定保存／廣播，不變更目前安裝的 profile。
+- DLL、manager、無視窗 x64 core 與 self-contained WinUI 設定程式版本均為 0.5.1；上游 pin、model-v5／classes-v3 與內建詞庫沿用 0.5.0。
+
+本輪驗證聚焦此次個人詞庫儲存修正，未重新宣稱執行下方 0.5.0 全套輸入測試。未安裝到系統、未修改目前使用者設定或個人詞庫／學習資料；外部詞典及私人比對報告均不屬於安裝包或 Git bundle。實際前景 App、登入與解除安裝的驗收界線沿用 0.5.0。
+
+## 2026-10-12 Windows 0.5.0 三項更新
+
+- x64／x86 release DLL、manager、無視窗 x64 core 與 0.5.0 WinUI 發佈完成。WinUI 使用快取套件成功建置；NuGet 線上漏洞資料查詢因當時無法連線產生 NU1900 警告，未聲稱完成相依套件安全稽核。
+- `verify-update.ps1` 64 項原生案例通過：兩架構各鍵盤含 11 項 Caps Lock／Shift／途中切換／中文前綴案例、兩項 Ctrl 單引號頓號、一項 Caps Lock 下中文組字，以及一項不等待背景核心就立即輸入的案例。涵蓋標準及倚天鍵盤，另測試同一服務在兩個文字欄位間切換，組字不串接。不依賴桌面目前 profile。證據 `build/update-checks-20261012-222719/results.json`。
+- 常駐核心通過跨程序、獨立會話、核心中斷重播以及四個會話同時首次啟動。各自的輸入不串接；詞庫及模型重建計數各為 1。證據同目錄 `resident.log`、`resident-status.json`。
+- 既有 TSF x64／x86 Windows profile 組字、游標、候選、提交、取消、設定切換、英文／空白、COM 生命週期與無模型啟動通過。使用新的隔離學習資料及固定標準鍵盤；測試通知只送到本程序的控制視窗。證據 `build/version-0.5.0-tsf-{x64,x86}.log`。
+- 既有 Windows interaction harness 通過：候選政策、Unicode／Big5、標點、交錯學習、個人詞庫、關聯詞、拼音及模型配對。fixture 使用本機 Engine，broker 另由上述整合測試覆蓋。Windows crate 兩項單元測試通過。
+
+未安裝到系統、未修改目前使用者設定或個人詞庫／學習資料、未進行實際登入或前景 App 驗收。登入 Run 註冊與解除安裝流程完成實作，但未在目前系統實際執行；核心登入初始化與首鍵改善仍需安裝後實測。安裝及建置清理改成 `.deleted_files` 保留，不安排永久刪除或自動重新啟動。
 
 ## 2026-10-12 中英混打保留英文與空白鍵行為
 

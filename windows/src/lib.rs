@@ -1,11 +1,16 @@
 mod bridge;
+pub mod broker;
 pub mod candidate;
+mod dictionary_store;
 pub mod engine;
 pub mod input;
+pub mod installation;
 pub mod installer;
 pub mod native;
+mod pipe_io;
 pub mod profile;
 pub mod registration;
+mod registry_snapshot;
 mod tsf;
 
 pub fn wide(value: &str) -> Vec<u16> {

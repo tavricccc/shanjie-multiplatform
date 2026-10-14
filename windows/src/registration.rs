@@ -57,6 +57,18 @@ pub unsafe fn register(module: HMODULE, remove: bool) -> Result<()> {
             return Err(windows::core::Error::from_thread());
         }
         let file = String::from_utf16(&buffer[..count as usize]).unwrap();
+        let mask = std::env::var("SHANJIE_INSTALL_KEYBOARDS")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|mask| *mask <= 3)
+            .unwrap_or(1);
+        let view = if cfg!(target_pointer_width = "32") {
+            KEY_WOW64_32KEY
+        } else {
+            KEY_WOW64_64KEY
+        };
+        let previous = crate::installation::registered(view)
+            .map_err(|_| windows::core::Error::from_hresult(E_FAIL))?;
         value(&path, PCWSTR::null(), "善解 Windows")?;
         value(&(path.clone() + "\\InprocServer32"), PCWSTR::null(), &file)?;
         value(
@@ -65,8 +77,16 @@ pub unsafe fn register(module: HMODULE, remove: bool) -> Result<()> {
             "Apartment",
         )?;
         profiles.Register(&SERVICE)?;
-        for (id, description) in [(STANDARD, "善解注音（標準）"), (ETEN, "善解注音（倚天）")]
-        {
+        for (bit, id, description) in [
+            (1, STANDARD, "善解注音（標準）"),
+            (2, ETEN, "善解注音（倚天）"),
+        ] {
+            if mask & bit == 0 {
+                if previous & bit != 0 {
+                    profiles.RemoveLanguageProfile(&SERVICE, 0x0404, &id)?;
+                }
+                continue;
+            }
             profiles.AddLanguageProfile(
                 &SERVICE,
                 0x0404,
