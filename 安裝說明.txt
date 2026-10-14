@@ -1,4 +1,4 @@
-善解 Windows v0.5.3 開發版
+善解 Windows v0.6.0 開發版
 
 1. 完整解壓 Shanjie-Windows.zip，雙擊 install.cmd。
    或右鍵「以系統管理員身分執行」。會要求 UAC。
@@ -33,5 +33,7 @@
 早期錯誤：%LOCALAPPDATA%\Shanjie\installer-logs\<本次識別碼>
 error.txt 保存最初原因；events.jsonl 記錄階段及回復；validation.json 保存清單校驗。
 錯誤對話框會附紀錄位置。0.5.3 修正單一配置清單同步與繼承旗標回復。
+0.6.0 新增逐鍵標點開關、操作預設匯入／匯出、直式候選與混打亂序注音，並補 WinUI／Windows Terminal 相容註冊。
+操作預設：%LOCALAPPDATA%\Shanjie\presets；匯出檔只含按鍵與選字操作。
 保留的 0.5.2 失敗紀錄可供安裝器比對，只修復本程式機碼已確認的旗標遺失。
 DLL 尚未簽章。背景驗證與實機驗收界線見 VERIFICATION.md。

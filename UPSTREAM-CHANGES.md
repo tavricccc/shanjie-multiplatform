@@ -28,7 +28,7 @@ Windows 外層新增本機管道 broker 與 x64 核心程序；x86／x64 前端�
 
 ## 2026-10-11 可選中英混打與簡拼（初版，簡拼已移除）
 
-`platform/smart_input_windows.rs` 與 `prepare-smart-input.ps1` 新增 Windows 組字政策：本機常用英文詞辨識、英文／帶聲調中文分界、英文逐字刪除，以及免聲調／部分注音候選的空白、Enter、↓ 操作。簡拼沿用上游 prediction、abbreviation 與原模型排名，補上由較後注音欄回到較前欄時的新音節分界。這是核心擴充，不是只改設定，也不是華碩的私有模型。
+`platform/smart_input_windows.rs` 與 `prepare-smart-input.ps1` 新增 Windows 組字政策：本機常用英文詞辨識、英文／帶聲調中文分界、英文逐字刪除，以及免聲調／部分注音候選的空白、Enter、↓ 操作。混打的英文／注音判斷：以英文字母開頭的序列仍須照聲母→介音→韻母；以數字或符號開頭的序列（如 `0d4`）可以亂序，但同一欄不可重複（0.6.0）。簡拼沿用上游 prediction、abbreviation 與原模型排名，補上由較後注音欄回到較前欄時的新音節分界。這是核心擴充，不是只改設定，也不是華碩的私有模型。
 
 `[input] mixed_input`、`smart_zhuyin` 預設均為 0，適用標準／倚天注音。簡拼開啟時，Windows 讓有效 prediction 為開啟，不改使用者保存的 prediction 偏好；切換任一新選項先保留組字再重建核心。舊 schema 5 由既有缺省值遷移補入兩個關閉值，不改個人資料。拼音保留設定值但不啟用這兩項政策。
 
@@ -75,7 +75,7 @@ Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型�
 | `core/src/learn.rs` | Windows 日期改用 Win32 API；原有學習計分與衰減維持上游 | `platform/clock_windows.rs` |
 | `core/src/lm.rs` | 9 個模型與 3 個詞類陣列改為可持有唯讀映射；`.winmap` 加入專用讀取路徑與來源配對驗證 | `scripts/prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` | 右側候選範圍、↑ 循環換字並保留游標；個人詞庫、Big5 篩選、聯想與預測列種類查詢；預測停用時不建索引 | `scripts/prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
-| `core/src/engine.rs` 按鍵處理 | 可關閉 Shift／直接中文標點與單獨聲調；中文標點插入既有組字 | `scripts/prepare-keys.ps1`、`platform/key_options_windows.rs` |
+| `core/src/engine.rs` 按鍵處理 | Shift／直接中文標點逐鍵遮罩（0.6.0 起每個符號獨立，取代整列開關）與可關閉的單獨聲調；中文標點插入既有組字 | `scripts/prepare-keys.ps1`、`platform/key_options_windows.rs` |
 | `core/src/ffi.rs` | 追加 Windows 專用候選、輸入選項、標點及預測列查詢 ABI；不改上游既有函式簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
 | `core/Cargo.toml` | 讓產生的 core 可獨立建置，加入打包時使用的模型轉換工具 | `prepare-core.ps1`、`platform/map_model.rs` |
 

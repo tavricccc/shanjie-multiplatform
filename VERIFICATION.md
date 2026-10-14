@@ -1,6 +1,17 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-13。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-14。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3、0.6.0 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-14 Windows 0.6.0 按鍵自訂、操作預設、直式候選與亂序注音
+
+- 先將朋友交付的 0.5.3 bundle（`codex/winui3` 3629f2d，SHA-256 與附檔一致）merge 進本機 `codex/winui3`，沒有衝突；合併後的 x64 建置、14 項單元測試與 TSF smoke 先通過，再開始 0.6.0 的修改。
+- x64／x86 release 建置成功（只有既有的 LNK4104）。Windows crate **16 項**單元測試通過，新增 schema 5→6 逐鍵標點遷移，以及操作預設的匯出排除個人資料、匯入保留個人資料、無效值拒絕。證據 `build/verify-0.6.0/unit.log`。
+- 產生後的 core lib **49 項**通過，新增 `0d4`／`d04`→看、`/j5 `→中，在混打開、關兩種模式都測。證據 `core-lib.log`。
+- Windows interaction harness 3 段 PASS：透過 FFI 只開直接按鍵的 `[`，`[` 輸入「，`\` 不會變成頓號；`d04`／`0d4` 都得到 U+770B。證據 `interaction.log`。
+- x64／x86 TSF smoke（組字、游標、候選、提交、取消、混打、空白、COM 生命週期、無模型啟動）通過，證據 `tsf-{x64,x86}.log`。`verify-update.ps1` **64 項** Caps Lock／Shift／頓號／首鍵回歸通過，證據 `build/update-checks-20261014-144840`。
+- 原生候選 host x64／x86：直式九列的大小、第三列點選回傳索引 2、淺色／深色擷取（`build/native-review/*/candidates-*-vertical.bmp`）均已人工檢視。WinUI `--verify-ui` PASS，新增逐鍵標點與直式設定的保存／重讀、匯出不含 font_size／dictionary、匯入保留字級並存入 presets、無效預設拒絕；8 個設定頁的淺色／深色截圖已抽查。
+
+未安裝到系統、未修改目前的個人設定。WinUI／Windows Terminal 的修正（IMMERSIVESUPPORT／COMLESS 類別、AppContainer profile／管道／不自行啟動核心）只完成建置與既有回歸，**沒有在實際 Windows Terminal 或 AppContainer 宿主中重現或驗收**；原因判斷來自程式碼比對，列在 TODO。沒有獨立的 reviewer 審查。
 
 ## 2026-10-13 Windows 0.5.3 安裝清單與權限回復
 

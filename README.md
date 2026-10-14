@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.5.3**，修正單一鍵盤升級時的 Windows 清單同步、登錄權限繼承回復，並完整記錄原始安裝錯誤。保留 0.5.2 的 cmd 首字修正、核心復原、詞典保存、只安裝標準注音或倚天，以及多行詞典、登入後常駐核心、頓號與混打 Caps Lock。新版說明見 [RELEASE-NOTES-0.5.3.md](RELEASE-NOTES-0.5.3.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.6.0**：逐鍵標點開關、操作預設匯入／匯出、直式候選、中英混打亂序注音、重新分類的設定頁，以及 WinUI／Windows Terminal 相容註冊（尚待實機驗收），見 [RELEASE-NOTES-0.6.0.md](RELEASE-NOTES-0.6.0.md)。0.5.3 修正單一鍵盤升級時的 Windows 清單同步、登錄權限繼承回復，並完整記錄原始安裝錯誤。保留 0.5.2 的 cmd 首字修正、核心復原、詞典保存、只安裝標準注音或倚天，以及多行詞典、登入後常駐核心、頓號與混打 Caps Lock。新版說明見 [RELEASE-NOTES-0.5.3.md](RELEASE-NOTES-0.5.3.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 建置與打包
 
