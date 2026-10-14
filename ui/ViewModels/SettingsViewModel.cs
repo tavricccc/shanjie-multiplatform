@@ -39,8 +39,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string InstalledKeyboardHelp { get; set; } = "";
     [ObservableProperty] public partial bool Big5 { get; set; }
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
-    [ObservableProperty] public partial bool ShiftPunctuation { get; set; }
-    [ObservableProperty] public partial bool PlainPunctuation { get; set; }
+    public Models.PunctuationKey[] ShiftKeys { get; } = Models.PunctuationKey.ShiftRow();
+    public Models.PunctuationKey[] PlainKeys { get; } = Models.PunctuationKey.PlainRow();
+    public bool ShiftPunctuation => ShiftKeys.Any(k => k.IsOn);
     [ObservableProperty] public partial bool StandaloneTones { get; set; }
     [ObservableProperty] public partial bool CtrlBackslash { get; set; }
     [ObservableProperty] public partial bool ForgetCandidate { get; set; }

@@ -50,6 +50,10 @@ public sealed partial class MainWindow : Window
         About.Visibility = tag == "about" ? Visibility.Visible : Visibility.Collapsed;
         ContentScroll.ChangeView(null, 0, null, true);
     }
+    private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);
+    private void ShiftAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, false);
+    private void PlainAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, true);
+    private void PlainAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, false);
     private void LoadPreset(object sender, SelectionChangedEventArgs args)
     {
         int index = ((ComboBox)sender).SelectedIndex;

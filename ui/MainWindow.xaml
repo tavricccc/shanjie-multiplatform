@@ -1,4 +1,4 @@
-<Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls" Title="善解設定">
+<Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls" xmlns:models="using:Shanjie_UI.Models" Title="善解設定">
     <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
     <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
         <Grid.Resources>
@@ -43,8 +43,20 @@
                         <controls:SettingToggle Label="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="Ctrl＋Alt＋逗號開啟符號鍵盤" IsOn="{x:Bind Vm.SymbolKeyboard, Mode=TwoWay}"/>
                         <TextBlock x:Name="AdvancedKeys" FontFamily="Microsoft JhengHei UI" Text="善解的額外標點操作" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
-                        <controls:SettingToggle Label="Shift＋符號直接輸入中文標點" Description="善解／Apple 式操作，例如 Shift＋逗號輸入 ，。Windows 預設關閉。" IsOn="{x:Bind Vm.ShiftPunctuation, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="直接按括號等鍵輸入中文標點" Description="不按 Ctrl，直接用 [、] 等鍵輸入「」。只影響不是注音鍵的按鍵。" IsOn="{x:Bind Vm.PlainPunctuation, Mode=TwoWay}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="Shift＋符號直接輸入中文標點"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="善解／Apple 式操作，每個符號可分別開關。關閉的按鍵輸出原本的英文符號。Windows 預設全部關閉。"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="全部開啟" Click="ShiftAllOn"/><Button Content="全部關閉" Click="ShiftAllOff"/></StackPanel>
+                        <ItemsControl ItemsSource="{x:Bind Vm.ShiftKeys}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label}" IsChecked="{x:Bind IsOn, Mode=TwoWay}" FontFamily="Microsoft JhengHei UI"/></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="直接按鍵輸入中文標點" Margin="0,8,0,0"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="不按 Ctrl，直接按鍵輸入標點；每個按鍵分別設定，例如只開「」而不讓 \ 變成頓號。注音鍵（如倚天的 ' 與 =）不受影響。"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="全部開啟" Click="PlainAllOn"/><Button Content="全部關閉" Click="PlainAllOff"/></StackPanel>
+                        <ItemsControl ItemsSource="{x:Bind Vm.PlainKeys}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label}" IsChecked="{x:Bind IsOn, Mode=TwoWay}" FontFamily="Microsoft JhengHei UI"/></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <controls:SettingToggle Label="Ctrl＋反斜線輸入頓號" Description="善解原有操作；Ctrl 標點開啟時也能輸入頓號。" IsOn="{x:Bind Vm.CtrlBackslash, Mode=TwoWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="Windows 標誌鍵與一般 App 的 Ctrl／Alt 快捷鍵交由系統及 App 處理。"/>
                     </StackPanel>

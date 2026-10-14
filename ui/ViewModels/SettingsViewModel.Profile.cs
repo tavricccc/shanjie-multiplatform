@@ -6,6 +6,7 @@ public partial class SettingsViewModel
     private bool loading;
     public SettingsViewModel()
     {
+        foreach (var key in ShiftKeys.Concat(PlainKeys)) key.PropertyChanged += (_, _) => { if (!loading) HasChanges = true; };
         Load(); PropertyChanged += (_, e) =>
         {
             if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp))) HasChanges = true;
@@ -50,7 +51,7 @@ public partial class SettingsViewModel
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
             MixedInput = profile.Flag("input", "mixed_input", false);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
-            ShiftPunctuation = profile.Flag("input", "shift_punctuation", Interaction == 1); PlainPunctuation = profile.Flag("input", "plain_punctuation", Interaction == 1);
+            foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
             EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
             BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
@@ -71,7 +72,7 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
-        profile.Set("profile", "schema", 5); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
+        profile.Set("profile", "schema", 6); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 5);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
@@ -80,7 +81,7 @@ public partial class SettingsViewModel
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
             ("input","mixed_input",MixedInput),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
-            ("input","shift_punctuation",ShiftPunctuation), ("input","plain_punctuation",PlainPunctuation), ("input","standalone_tones",StandaloneTones),
+            ("input","standalone_tones",StandaloneTones),
             ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
@@ -88,11 +89,13 @@ public partial class SettingsViewModel
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
             ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator)
         }) profile.Set(section, key, value);
+        foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
         profile.Set("candidates", "layout", "horizontal");
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }
+    public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {
         if (Keyboard is < 0 or > 4 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
