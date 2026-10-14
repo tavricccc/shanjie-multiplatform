@@ -11,6 +11,6 @@ bool Engine::reset(bool discard,Snapshot& out){return action(2,out,{},discard);}
 bool Engine::commitReading(Snapshot& out){return action(4,out);} bool Engine::prediction(bool value,Snapshot& out){return action(5,out,{},value);}
 bool Engine::demote(bool value,Snapshot& out){return action(6,out,{},value);} bool Engine::punctuation(const std::wstring& text,Snapshot& out){return action(7,out,{},0,utf8(text).c_str());}
 bool Engine::cycleCandidate(Snapshot& out){return action(8,out);} void Engine::context(const std::wstring& text){sj_engine_context(handle_,utf8(text).c_str());}
-bool Engine::inputOptions(bool shift,bool plain,bool tones){return sj_engine_options(handle_,(shift?1u:0u)|(plain?2u:0u)|(tones?4u:0u));}
+bool Engine::inputOptions(bool shift,bool plain,bool tones){return sj_engine_options(handle_,(tones?1u:0u)|(shift?0x1fffu<<1:0u)|(plain?0x3fu<<14:0u));}
 bool translate(WPARAM key,LPARAM flags,ShanjieKey& out){return sj_translate(key,flags,&out);}
 }

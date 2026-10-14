@@ -126,6 +126,23 @@ impl Document {
                 }
             }
         }
+        if schema < 6 {
+            // One switch used to cover every mark of a row (e.g. 「」 also turned \ into 、).
+            for (old, prefix, names) in [
+                ("shift_punctuation", "shift", SHIFT_KEYS.map(|(_, n)| n).to_vec()),
+                ("plain_punctuation", "plain", PLAIN_KEYS.map(|(_, n)| n).to_vec()),
+            ] {
+                if let Some(value) = self.0.get("input").and_then(|s| s.get(old)).cloned() {
+                    for n in names {
+                        let key = format!("{prefix}_{n}");
+                        if !self.0.get("punctuation").is_some_and(|s| s.contains_key(&key)) {
+                            self.set("punctuation", &key, &value);
+                        }
+                    }
+                }
+                self.remove("input", old);
+            }
+        }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
         } else {
@@ -137,7 +154,7 @@ impl Document {
                 self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
         }
-        self.set("profile", "schema", 5);
+        self.set("profile", "schema", 6);
         self.set("engine", "model", 5);
         self.set("candidates", "layout", "horizontal");
         for key in [
@@ -150,6 +167,47 @@ impl Document {
         }
         self.remove("input", "escape_clears");
         self.remove("input", "smart_zhuyin");
+    }
+}
+/// Same order as the core's SHIFT_PUNCT; one `[punctuation] shift_<name>` switch each.
+pub const SHIFT_KEYS: [(char, &str); 13] = [
+    (',', "comma"),
+    ('.', "period"),
+    ('/', "slash"),
+    ('1', "1"),
+    (';', "semicolon"),
+    ('[', "lbracket"),
+    (']', "rbracket"),
+    ('9', "9"),
+    ('0', "0"),
+    ('`', "backquote"),
+    ('\\', "backslash"),
+    ('\'', "quote"),
+    ('=', "equal"),
+];
+/// Same order as the core's PLAIN_PUNCT; one `[punctuation] plain_<name>` switch each.
+pub const PLAIN_KEYS: [(char, &str); 6] = [
+    ('[', "lbracket"),
+    (']', "rbracket"),
+    ('\\', "backslash"),
+    ('\'', "quote"),
+    ('=', "equal"),
+    ('`', "backquote"),
+];
+impl Document {
+    pub fn shift_punctuation(&self, ch: char) -> bool {
+        SHIFT_KEYS.iter().any(|(c, n)| *c == ch && self.flag("punctuation", &format!("shift_{n}"), false))
+    }
+    /// Core option bits: standalone tones, then each Shift and plain punctuation switch.
+    pub fn input_options(&self) -> u32 {
+        let mut flags = self.flag("input", "standalone_tones", false) as u32;
+        for (i, (_, n)) in SHIFT_KEYS.iter().enumerate() {
+            flags |= (self.flag("punctuation", &format!("shift_{n}"), false) as u32) << (1 + i);
+        }
+        for (i, (_, n)) in PLAIN_KEYS.iter().enumerate() {
+            flags |= (self.flag("punctuation", &format!("plain_{n}"), false) as u32) << (14 + i);
+        }
+        flags
     }
 }
 pub fn folder() -> PathBuf {
@@ -412,6 +470,19 @@ mod tests {
                 assert!(dictionary_content(&format!("ㄏㄠˇ 好{newline}{invalid}")).is_err());
             }
         }
+    }
+    #[test]
+    fn schema5_punctuation_rows_split_into_per_key_switches() {
+        let mut doc = Document::parse("[profile]\nschema=5\ninteraction=windows\n[input]\nshift_punctuation=1\nplain_punctuation=0\nstandalone_tones=1\n").unwrap();
+        doc.migrate();
+        assert!(!doc.0["input"].contains_key("shift_punctuation"));
+        assert!(!doc.0["input"].contains_key("plain_punctuation"));
+        assert!(SHIFT_KEYS.iter().all(|(c, _)| doc.shift_punctuation(*c)));
+        assert_eq!(doc.input_options(), 1 | 0x1fff << 1);
+        // Each mark is now independent: 「 on, 、 (backslash) still off.
+        doc.set("punctuation", "plain_lbracket", 1);
+        assert_eq!(doc.input_options() >> 14, 1);
+        assert!(!doc.shift_punctuation('a'));
     }
     #[test]
     fn migration_preserves_personal_data_and_removes_retired_choices() {

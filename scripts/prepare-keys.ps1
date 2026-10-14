@@ -8,18 +8,19 @@ function Replace-KeyContract([string]$old,[string]$replacement) {
     if ([regex]::Matches($script:content,[regex]::Escape($old)).Count -ne 1) { throw "Upstream key contract changed: $old" }
     $script:content = $script:content.Replace($old,$replacement)
 }
-Replace-KeyContract '    candidate_big5: bool,' "    candidate_big5: bool,`n    shift_punctuation: bool,`n    plain_punctuation: bool,`n    standalone_tones: bool,"
-Replace-KeyContract '            candidate_big5: false,' "            candidate_big5: false,`n            shift_punctuation: true,`n            plain_punctuation: true,`n            standalone_tones: true,"
-Replace-KeyContract '} else if is_char && m == MOD_SHIFT {' '} else if is_char && m == MOD_SHIFT && self.shift_punctuation {'
-Replace-KeyContract '} else if is_char && m == 0 && self.layout.symbol_of(k.ch).is_none()' '} else if is_char && m == 0 && self.plain_punctuation && self.layout.symbol_of(k.ch).is_none()'
+Replace-KeyContract '    candidate_big5: bool,' "    candidate_big5: bool,`n    shift_punctuation: u32,`n    plain_punctuation: u32,`n    standalone_tones: bool,"
+Replace-KeyContract '            candidate_big5: false,' "            candidate_big5: false,`n            shift_punctuation: 0x1fff,`n            plain_punctuation: 0x3f,`n            standalone_tones: true,"
+Replace-KeyContract '} else if is_char && m == MOD_SHIFT {' '} else if is_char && m == MOD_SHIFT && self.windows_shift_punct(k.ch) {'
+Replace-KeyContract '} else if is_char && m == 0 && self.layout.symbol_of(k.ch).is_none()' '} else if is_char && m == 0 && self.windows_plain_punct(k.ch) && self.layout.symbol_of(k.ch).is_none()'
 Replace-KeyContract 'if let (KeyKind::Char, Some(t)) = (k.kind, tone) {' 'if let (KeyKind::Char, Some(t), true) = (k.kind, tone, self.standalone_tones) {'
 $old = @'
             } else {
                 self.pred = old; // the key does nothing
 '@
 $new = @'
-            } else if is_char && ((m == MOD_SHIFT && !self.shift_punctuation)
-                || (plain && !self.plain_punctuation && PLAIN_PUNCT.iter().any(|(ch,_)| *ch == k.ch))) {
+            } else if is_char && ((m == MOD_SHIFT && !self.windows_shift_punct(k.ch)
+                    && (self.shift_punctuation == 0 || SHIFT_PUNCT.iter().any(|(ch,_)| *ch == k.ch)))
+                || (plain && !self.windows_plain_punct(k.ch) && PLAIN_PUNCT.iter().any(|(ch,_)| *ch == k.ch))) {
                 let commit = self.take_commit();
                 return self.passthrough(commit);
             } else {

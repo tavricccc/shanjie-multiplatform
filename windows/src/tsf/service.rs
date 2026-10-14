@@ -936,9 +936,7 @@ fn configure_options(s: &mut State) -> Result<()> {
         return Ok(());
     }
     let p = &s.prefs;
-    let flags = p.flag("input", "shift_punctuation", false) as u32
-        | ((p.flag("input", "plain_punctuation", false) as u32) << 1)
-        | ((p.flag("input", "standalone_tones", false) as u32) << 2);
+    let flags = p.input_options();
     if s.engine
         .perform(crate::broker::Op::Options(flags))
         .is_none()

@@ -411,8 +411,7 @@ impl Data {
         let ascii = !mixed_letter
             && key.kind == 1
             && key.modifiers == 1
-            && (!p.flag("input", "shift_punctuation", false)
-                || !",./1;[]90`\\'=".contains(key.ch as u8 as char));
+            && !p.shift_punctuation(key.ch as u8 as char);
         if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
             let mut keyboard = [0u8; 256];
             let mut text = [0u16; 4];

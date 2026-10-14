@@ -3,6 +3,7 @@
 #include "special_input.h"
 #include "pinyin_input.h"
 #include "associated_candidates.h"
+#include "rust_bridge.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -107,6 +108,10 @@ int wmain(int argc,wchar_t** argv) {
         assert(engine.cycleCandidate(out)); assert(out.preedit != cycled && out.candidates.empty() && out.cursor == 1);
         assert(engine.reset(true,out)); key.ch = 's'; assert(engine.key(key,out)); key.ch = 'u'; assert(engine.key(key,out)); key.ch = '3'; assert(engine.key(key,out));
         assert(engine.punctuation(L"「",out)); assert(out.preedit == L"你「" && out.commit.empty());
+        // Per-key switches: plain [ alone must not also turn \ into 、.
+        assert(engine.reset(true,out)); assert(sj_engine_options(engine.native(),1u<<14));
+        key.ch = '['; assert(engine.key(key,out)); assert(out.handled && out.preedit == L"「");
+        key.ch = '\\'; assert(engine.key(key,out)); assert(out.preedit.find(L"、") == std::wstring::npos);
     }
     auto modelRoot = std::filesystem::path(argv[1]) / L"models";
     {
