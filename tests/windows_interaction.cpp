@@ -108,6 +108,12 @@ int wmain(int argc,wchar_t** argv) {
         assert(engine.cycleCandidate(out)); assert(out.preedit != cycled && out.candidates.empty() && out.cursor == 1);
         assert(engine.reset(true,out)); key.ch = 's'; assert(engine.key(key,out)); key.ch = 'u'; assert(engine.key(key,out)); key.ch = '3'; assert(engine.key(key,out));
         assert(engine.punctuation(L"「",out)); assert(out.preedit == L"你「" && out.commit.empty());
+        // Zhuyin order: final before initial (0d4) must reach the same syllable as d04 (看).
+        for (auto keys : {std::string("d04"), std::string("0d4")}) {
+            assert(engine.reset(true,out));
+            for (auto ch : keys) { key.ch = ch; assert(engine.key(key,out)); }
+            assert(out.preedit == L"看");
+        }
         // Per-key switches: plain [ alone must not also turn \ into 、.
         assert(engine.reset(true,out)); assert(sj_engine_options(engine.native(),1u<<14));
         key.ch = '['; assert(engine.key(key,out)); assert(out.handled && out.preedit == L"「");

@@ -62,6 +62,22 @@ mod windows_smart_tests {
     }
 
     #[test]
+    fn zhuyin_order_does_not_matter_unless_it_looks_english() {
+        let lex = Arc::new(Lexicon::parse("ㄎㄢˋ 看 -0.1\nㄓㄨㄥ 中 -0.1\n").unwrap());
+        for mixed in [false, true] {
+            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            e.set_mixed_input(mixed);
+            for keys in ["d04", "0d4"] {
+                assert_eq!(type_keys(&mut e, keys).preedit, "看", "mixed={mixed} {keys}");
+                e.reset(ResetMode::Discard);
+            }
+            // Final, medial, initial (/j5) still reaches 中 when the run starts with a symbol.
+            assert_eq!(type_keys(&mut e, "/j5 ").preedit, "中", "mixed={mixed}");
+            e.reset(ResetMode::Discard);
+        }
+    }
+
+    #[test]
     fn english_before_chinese_keeps_the_word_and_spaces() {
         let lex = Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄓㄜˋ 這 -0.1\nㄕˋ 是 -0.1\nㄓㄨㄥ 中 -0.1\nㄨㄣˊ 文 -0.1\n").unwrap();
         let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
@@ -99,19 +115,23 @@ impl Engine {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
     }
 
-    // A normal syllable must follow initial -> medial -> final without replacement.
-    // This prevents an English word from winning over an explicitly typed Chinese syllable.
+    // Each column (initial, medial, final) appears at most once. A run starting with an
+    // English letter must also follow initial -> medial -> final, so an English word does
+    // not win over typed text; one starting with a digit or symbol (e.g. 0d4 = ㄎㄢˋ) is not
+    // English and may be typed in any order, as in non-mixed composition.
     fn mixed_reading(&self, raw: &str) -> Option<String> {
+        let ordered = raw.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
         let mut last = None;
-        let mut reading = String::new();
+        let mut columns: [Option<char>; 3] = [None; 3];
         for ch in raw.chars() {
             let (column, symbol) = self.layout.symbol_of(ch.to_ascii_lowercase())?;
-            if last.is_some_and(|previous| previous >= column) {
+            if columns[column].is_some() || ordered && last.is_some_and(|previous| previous >= column) {
                 return None;
             }
             last = Some(column);
-            reading.push(symbol);
+            columns[column] = Some(symbol);
         }
+        let reading: String = columns.iter().flatten().collect();
         (!reading.is_empty()).then_some(reading)
     }
 
