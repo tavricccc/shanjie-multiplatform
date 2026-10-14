@@ -108,6 +108,26 @@ pub unsafe extern "C" fn sj_profile_preset(content: *const c_char, windows: bool
     }
 }
 #[no_mangle]
+pub unsafe extern "C" fn sj_profile_import(content: *const c_char, preset: *const c_char) -> *mut c_char {
+    match profile::import_preset(text(content), text(preset)) {
+        Ok(s) => CString::new(s).unwrap().into_raw(),
+        Err(e) => {
+            failure(e);
+            ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+pub unsafe extern "C" fn sj_profile_export(content: *const c_char, name: *const c_char) -> *mut c_char {
+    match profile::export_preset(text(content), text(name)) {
+        Ok(s) => CString::new(s).unwrap().into_raw(),
+        Err(e) => {
+            failure(e);
+            ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
 pub unsafe extern "C" fn sj_dictionary_save(
     content: *const c_char,
     folder: *const c_char,

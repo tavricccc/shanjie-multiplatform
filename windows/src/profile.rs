@@ -156,7 +156,9 @@ impl Document {
         }
         self.set("profile", "schema", 6);
         self.set("engine", "model", 5);
-        self.set("candidates", "layout", "horizontal");
+        if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
+            self.set("candidates", "layout", "horizontal");
+        }
         for key in [
             "reading",
             "tab_expands",
@@ -368,37 +370,94 @@ pub fn clear_learning() -> Result<()> {
         result
     }
 }
-pub fn preset(content: &str, windows: bool) -> Result<String> {
-    let previous = Document::parse(content)?;
-    let mut preset = Document::parse(if windows {
-        include_str!("../../profiles/windows.ini")
-    } else {
-        include_str!("../../profiles/shanjie.ini")
-    })?;
-    for (section, keys) in [
-        ("engine", &["ranking", "demote"][..]),
-        (
-            "input",
-            &[
-                "dictionary",
-                "keyboard",
-                "learning",
-                "context",
-                "chinese",
-                "full_width",
-            ][..],
-        ),
-        ("candidates", &["big5"][..]),
-        ("appearance", &["theme", "font_size", "mode_indicator"][..]),
-    ] {
+/// Personal choices a preset never carries: they stay with the user when loading one.
+const PERSONAL: [(&str, &[&str]); 4] = [
+    ("engine", &["ranking", "demote"]),
+    (
+        "input",
+        &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],
+    ),
+    ("candidates", &["big5"]),
+    ("appearance", &["theme", "font_size", "mode_indicator"]),
+];
+const CHOICES: [(&str, &str, &[&str]); 6] = [
+    ("profile", "interaction", &["windows", "shanjie"]),
+    ("engine", "ranking", &["chat", "formal"]),
+    ("input", "escape", &["staged", "clear", "ignore"]),
+    ("candidates", "layout", &["horizontal", "vertical"]),
+    ("candidates", "anchor", &["right", "left"]),
+    ("candidates", "open", &["down", "space", "both"]),
+];
+fn merge_preset(previous: &Document, mut preset: Document) -> String {
+    for (section, keys) in PERSONAL {
         for key in keys {
-            if let Some(value) = previous.0.get(section).and_then(|s| s.get(*key)) {
-                preset.set(section, key, value);
+            match previous.0.get(section).and_then(|s| s.get(*key)) {
+                Some(value) => preset.set(section, key, value),
+                None => preset.remove(section, key),
             }
         }
     }
     preset.migrate();
-    Ok(preset.content())
+    preset.content()
+}
+pub fn preset(content: &str, windows: bool) -> Result<String> {
+    let preset = Document::parse(if windows {
+        include_str!("../../profiles/windows.ini")
+    } else {
+        include_str!("../../profiles/shanjie.ini")
+    })?;
+    Ok(merge_preset(&Document::parse(content)?, preset))
+}
+/// Validates someone else's preset file: only known operation keys with valid values survive.
+fn shared_preset(text: &str) -> Result<Document> {
+    let mut source = Document::parse(text)?;
+    source.migrate();
+    let windows = source.get("profile", "interaction", "windows") == "windows";
+    let defaults = Document::parse(if windows {
+        include_str!("../../profiles/windows.ini")
+    } else {
+        include_str!("../../profiles/shanjie.ini")
+    })?;
+    let mut out = defaults.clone();
+    for (section, fields) in &defaults.0 {
+        for (key, default) in fields {
+            if PERSONAL.iter().any(|(s, k)| s == section && k.contains(&key.as_str())) {
+                continue;
+            }
+            let Some(value) = source.0.get(section).and_then(|s| s.get(key)) else {
+                continue;
+            };
+            let valid = match CHOICES.iter().find(|(s, k, _)| s == section && k == key) {
+                Some((_, _, allowed)) => allowed.contains(&value.as_str()),
+                None if default == "0" || default == "1" => value == "0" || value == "1",
+                None => default.parse::<u32>().is_ok() && value.parse::<u8>().is_ok(),
+            };
+            if !valid {
+                return Err(format!("操作預設的 [{section}] {key}={value} 無效").into());
+            }
+            out.set(section, key, value);
+        }
+    }
+    if let Some(name) = source.0.get("preset").and_then(|s| s.get("name")) {
+        out.set("preset", "name", name.chars().filter(|c| !c.is_control()).take(40).collect::<String>());
+    }
+    Ok(out)
+}
+/// Loads a shared preset into the current profile while keeping personal choices.
+pub fn import_preset(content: &str, preset: &str) -> Result<String> {
+    Ok(merge_preset(&Document::parse(content)?, shared_preset(preset)?))
+}
+/// Writes only the operation keys, so a shared file never carries dictionaries or looks.
+pub fn export_preset(content: &str, name: &str) -> Result<String> {
+    let mut doc = shared_preset(content)?;
+    for (section, keys) in PERSONAL {
+        for key in keys {
+            doc.remove(section, key);
+        }
+    }
+    doc.0.remove("appearance");
+    doc.set("preset", "name", name.chars().filter(|c| !c.is_control()).take(40).collect::<String>());
+    Ok(doc.content())
 }
 pub fn apply_preset(source: &Path) -> Result<()> {
     let mut preset = Document::parse(&fs::read_to_string(source)?)?;
@@ -469,6 +528,28 @@ mod tests {
             for newline in ["\n", "\r\n", "\r"] {
                 assert!(dictionary_content(&format!("ㄏㄠˇ 好{newline}{invalid}")).is_err());
             }
+        }
+    }
+    #[test]
+    fn shared_presets_keep_personal_choices_and_reject_bad_values() {
+        let mine = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=mine.tsv\nkeyboard=2\n[appearance]\nfont_size=24\n";
+        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nlayout=vertical\n";
+        let shared = export_preset(source, "朋友\n").unwrap();
+        assert!(!shared.contains("dictionary") && !shared.contains("\nkeyboard=") && !shared.contains("[appearance]"));
+        let merged = Document::parse(&import_preset(mine, &shared).unwrap()).unwrap();
+        assert_eq!(merged.get("input", "dictionary", ""), "mine.tsv");
+        assert_eq!(merged.number("input", "keyboard", 0), 2);
+        assert_eq!(merged.number("appearance", "font_size", 0), 24);
+        assert!(merged.flag("punctuation", "plain_lbracket", false));
+        assert_eq!(merged.get("candidates", "layout", ""), "vertical");
+        assert_eq!(merged.get("preset", "name", ""), "朋友");
+        for bad in [
+            // Legacy values (e.g. layout=grid) are migrated first; unknown ones are refused.
+            "[candidates]\nanchor=middle\n",
+            "[input]\nescape_x=1\nmixed_input=2\n",
+            "[shortcuts]\nshift_side=x\n",
+        ] {
+            assert!(import_preset(mine, bad).is_err(), "{bad}");
         }
     }
     #[test]

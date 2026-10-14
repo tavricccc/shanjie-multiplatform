@@ -17,7 +17,7 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
-        ShowLoadFeedback();
+        RefreshPresets(); ShowLoadFeedback();
     }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
@@ -54,16 +54,61 @@ public sealed partial class MainWindow : Window
     private void ShiftAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, false);
     private void PlainAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, true);
     private void PlainAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, false);
+    private List<(string Name, string File)> savedPresets = [];
+    private bool refreshingPresets;
+    internal void RefreshPresets()
+    {
+        refreshingPresets = true;
+        try {
+            savedPresets = SettingsViewModel.SavedPresets();
+            Preset.Items.Clear();
+            foreach (var name in new[] { "選擇操作預設…", "Windows／微軟注音按鍵（預測關閉）", "善解上游操作" }.Concat(savedPresets.Select(p => p.Name))) Preset.Items.Add(name);
+            Preset.SelectedIndex = 0;
+        }
+        finally { refreshingPresets = false; }
+    }
     private void LoadPreset(object sender, SelectionChangedEventArgs args)
     {
-        int index = ((ComboBox)sender).SelectedIndex;
-        if (index > 0) { LoadProfile(index == 1); ((ComboBox)sender).SelectedIndex = 0; }
+        int index = Preset.SelectedIndex;
+        if (refreshingPresets || index <= 0) return;
+        if (index <= 2) LoadProfile(index == 1);
+        else ShowResult(() => Vm.ApplySavedPreset(savedPresets[index - 3].File, savedPresets[index - 3].Name), InfoBarSeverity.Informational);
+        refreshingPresets = true; Preset.SelectedIndex = 0; refreshingPresets = false;
+    }
+    private void ShowResult(Action action, InfoBarSeverity success)
+    {
+        try { action(); StatusBar.Severity = success; }
+        catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException) { Vm.Status = error.Message; StatusBar.Severity = InfoBarSeverity.Error; }
+        StatusBar.IsOpen = true;
+    }
+    private async void ImportPreset(object sender, RoutedEventArgs args)
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker(); picker.FileTypeFilter.Add(".ini");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var file = await picker.PickSingleFileAsync(); if (file is null) return;
+        string text;
+        try { text = await File.ReadAllTextAsync(file.Path); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Vm.Status = "無法讀取操作預設：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; return; }
+        ShowResult(() => Vm.ImportPreset(text, Path.GetFileNameWithoutExtension(file.Path)), InfoBarSeverity.Informational);
+        RefreshPresets();
+    }
+    private async void ExportPreset(object sender, RoutedEventArgs args)
+    {
+        var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedFileName = "我的善解操作" };
+        picker.FileTypeChoices.Add("善解操作預設", [".ini"]);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var file = await picker.PickSaveFileAsync(); if (file is null) return;
+        string? text = null;
+        ShowResult(() => { text = Vm.ExportPreset(Path.GetFileNameWithoutExtension(file.Path)); Vm.Status = $"已匯出到 {file.Path}。檔案只包含按鍵與選字操作。"; }, InfoBarSeverity.Success);
+        if (text is null) return;
+        try { await File.WriteAllTextAsync(file.Path, text); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Vm.Status = "無法寫入檔案：" + error.Message; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; }
     }
     internal void LoadProfile(bool windows)
     {
         Vm.Preset(windows); StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = true;
     }
-    private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); Preset.SelectedIndex = 0; ShowLoadFeedback(); }
+    private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); RefreshPresets(); ShowLoadFeedback(); }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
     private async void ClearLearning(object sender, RoutedEventArgs args)
     {

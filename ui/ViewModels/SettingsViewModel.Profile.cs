@@ -70,6 +70,44 @@ public partial class SettingsViewModel
         Status = "已載入操作預設，按儲存後套用。詞庫、學習與外觀已保留。";
         ApplyInstalledKeyboards(Interop.Native.sj_installed_keyboards());
     }
+    public static string PresetFolder => Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, "presets");
+    /// Saved presets shown under 一般, as (display name, file path).
+    public static List<(string Name, string File)> SavedPresets()
+    {
+        var list = new List<(string, string)>();
+        if (!Directory.Exists(PresetFolder)) return list;
+        foreach (var file in Directory.GetFiles(PresetFolder, "*.ini").Order(StringComparer.OrdinalIgnoreCase))
+        {
+            try { list.Add((ProfileDocument.Parse(File.ReadAllText(file)).Read("preset", "name", Path.GetFileNameWithoutExtension(file)), file)); }
+            catch (InvalidDataException) { } // A damaged file is skipped, not fatal for the settings page.
+        }
+        return list;
+    }
+    /// Validates someone else's preset, keeps a copy under presets\, and loads it as an unsaved draft.
+    public string ImportPreset(string text, string fallbackName)
+    {
+        WriteDocument();
+        var merged = Interop.Native.Take(Interop.Native.sj_profile_import(profile.ToString(), text));
+        var name = ProfileDocument.Parse(merged).Read("preset", "name", fallbackName);
+        var clean = Interop.Native.Take(Interop.Native.sj_profile_export(merged, name));
+        Directory.CreateDirectory(PresetFolder);
+        var safe = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
+        File.WriteAllText(Path.Combine(PresetFolder, (safe.Length == 0 ? "preset" : safe) + ".ini"), clean);
+        LoadDraft(merged, $"已匯入「{name}」，按儲存後套用。詞庫、學習、鍵盤配置與外觀已保留。");
+        return name;
+    }
+    public void ApplySavedPreset(string file, string name)
+    {
+        WriteDocument();
+        LoadDraft(Interop.Native.Take(Interop.Native.sj_profile_import(profile.ToString(), File.ReadAllText(file))), $"已載入「{name}」，按儲存後套用。詞庫、學習與外觀已保留。");
+    }
+    /// The current draft's operation keys only; personal dictionary and appearance are never exported.
+    public string ExportPreset(string name) { WriteDocument(); return Interop.Native.Take(Interop.Native.sj_profile_export(profile.ToString(), name)); }
+    private void LoadDraft(string content, string status)
+    {
+        profile = ProfileDocument.Parse(content); ApplyDocument(false); HasChanges = true; Status = status;
+        ApplyInstalledKeyboards(Interop.Native.sj_installed_keyboards());
+    }
     private void WriteDocument()
     {
         profile.Set("profile", "schema", 6); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");

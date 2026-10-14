@@ -19,10 +19,9 @@
                 <StackPanel Padding="20,16,20,20" Spacing="12" MaxWidth="800" HorizontalAlignment="Stretch">
                     <StackPanel x:Name="General" Spacing="12">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="一般" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ComboBox Header="載入操作預設" x:Name="Preset" HorizontalAlignment="Stretch" SelectionChanged="LoadPreset" SelectedIndex="0">
-                            <ComboBoxItem Content="選擇操作預設…"/><ComboBoxItem Content="Windows／微軟注音按鍵（預測關閉）"/><ComboBoxItem Content="善解上游操作"/>
-                        </ComboBox>
-                        <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。詞句偏好、詞庫、學習與外觀會保留。"/>
+                        <ComboBox Header="載入操作預設" x:Name="Preset" HorizontalAlignment="Stretch" SelectionChanged="LoadPreset"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="匯入操作預設…" Click="ImportPreset"/><Button Content="匯出目前操作…" Click="ExportPreset"/></StackPanel>
+                        <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。詞句偏好、詞庫、學習、鍵盤配置與外觀會保留；匯出的檔案也不包含這些內容，可以放心分享。"/>
                         <TextBlock x:Name="ModelSelector" Text="語言模型：model-v5＋classes-v3" FontFamily="Microsoft JhengHei UI"/>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"/>

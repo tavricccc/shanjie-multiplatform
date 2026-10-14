@@ -8,6 +8,8 @@ internal static class Native
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] [return: MarshalAs(UnmanagedType.I1)] internal static extern bool sj_profile_save([MarshalAs(UnmanagedType.LPUTF8Str)] string content);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_document_json([MarshalAs(UnmanagedType.LPUTF8Str)] string content);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_preset([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.I1)] bool windows);
+    [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_import([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.LPUTF8Str)] string preset);
+    [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_export([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_dictionary_save([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.LPUTF8Str)] string folder);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] [return: MarshalAs(UnmanagedType.I1)] internal static extern bool sj_clear_learning();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern uint sj_installed_keyboards();
