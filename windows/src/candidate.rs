@@ -261,12 +261,33 @@ impl Host {
                     label_height: nm.height,
                 });
             }
-            // The reading row shows uncommitted text above candidates; a mixed hint shows its pending Zhuyin.
-            let reading = if self.state.reading_hint {
-                self.state.candidates.first().cloned().unwrap_or_default()
-            } else {
-                self.state.preedit.clone()
-            };
+            // The row shows the whole sentence with the character being chosen (or the Zhuyin being typed,
+            // swapped in for its Latin keys) in the accent colour.
+            let units: Vec<u16> = self.state.preedit.encode_utf16().collect();
+            let cursor = (self.state.cursor as usize).min(units.len());
+            let mut mark: Option<(usize, usize)> = None;
+            let mut text = units.clone();
+            if self.state.reading_hint {
+                let hint: Vec<u16> = self.state.candidates.first().map(|h| h.encode_utf16().collect()).unwrap_or_default();
+                let raw: Vec<u16> = self.state.candidates.get(1).map(|h| h.encode_utf16().collect()).unwrap_or_default();
+                let end = (raw.len()..=cursor).rev().find(|&e| units[e - raw.len()..e] == raw[..]);
+                if let (Some(end), false) = (end, hint.is_empty()) {
+                    let start = end - raw.len();
+                    text.splice(start..end, hint.iter().copied());
+                    mark = Some((start, hint.len()));
+                } else {
+                    text = hint.clone();
+                    mark = Some((0, hint.len()));
+                }
+            } else if !units.is_empty() && cursor < units.len() {
+                let mut start = cursor.saturating_sub(1);
+                if start > 0 && (0xdc00..0xe000).contains(&units[start]) {
+                    start -= 1;
+                }
+                let len = if (0xd800..0xdc00).contains(&units[start]) { 2 } else { 1 };
+                mark = Some((start, len.min(units.len() - start)));
+            }
+            let reading = String::from_utf16_lossy(&text);
             self.reading = None;
             self.reading_width = 0.0;
             self.reading_height = 0.0;
@@ -282,7 +303,7 @@ impl Host {
                 )?;
                 format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
                 let layout = self.text_factory.CreateTextLayout(
-                    &reading.encode_utf16().collect::<Vec<_>>(),
+                    &text,
                     &format,
                     10000.0,
                     1000.0,
@@ -301,6 +322,13 @@ impl Host {
                     },
                     &self.text_factory.CreateEllipsisTrimmingSign(&format)?,
                 )?;
+                if let Some((start, length)) = mark.filter(|&(_, n)| n > 0) {
+                    let blue = self.target.CreateSolidColorBrush(&self.palette.accent, None)?;
+                    let _ = layout.SetDrawingEffect(
+                        &blue,
+                        DWRITE_TEXT_RANGE { startPosition: start as u32, length: length as u32 },
+                    );
+                }
                 self.reading = Some(layout);
             }
             self.work_width = work_width;
@@ -605,58 +633,16 @@ impl Host {
             None,
         );
         if let Some(reading) = &self.reading {
-            self.brush.SetColor(if self.state.reading_hint {
-                &self.palette.accent
-            } else {
-                &self.palette.label
-            });
-            let origin = Vector2 {
-                X: 14.0 * ratio,
-                Y: 6.0 * ratio,
-            };
-            let options = D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
-            // With the cursor inside the text, mark the character whose candidates are listed (the one before the cursor).
-            let units: Vec<u16> = self.state.preedit.encode_utf16().collect();
-            let cursor = self.state.cursor as usize;
-            let mark = (!self.state.reading_hint && !units.is_empty() && cursor < units.len())
-                .then(|| {
-                    let mut start = cursor.saturating_sub(1);
-                    if start > 0 && (0xdc00..0xe000).contains(&units[start]) {
-                        start -= 1;
-                    }
-                    let end = if (0xd800..0xdc00).contains(&units[start]) { start + 2 } else { start + 1 };
-                    (start as u32, (end.min(units.len()) - start) as u32)
-                });
-            let mut spot = None;
-            if let Some((start, length)) = mark {
-                let mut metrics = [DWRITE_HIT_TEST_METRICS::default()];
-                let mut count = 0;
-                let _ = reading.HitTestTextRange(start, length, origin.X, origin.Y, Some(&mut metrics), &mut count);
-                let m = metrics[0];
-                if count > 0 {
-                    spot = Some(D2D_RECT_F {
-                        left: m.left,
-                        top: m.top,
-                        right: m.left + m.width,
-                        bottom: m.top + m.height,
-                    });
-                }
-            }
-            if let Some(rect) = &spot {
-                self.brush.SetColor(&self.palette.accent);
-                self.target.FillRoundedRectangle(
-                    &rounded(rect.left - 1.0 * ratio, rect.top, rect.right + 1.0 * ratio, rect.bottom, 3.0 * ratio),
-                    &self.brush,
-                );
-                self.brush.SetColor(&self.palette.label);
-            }
-            self.target.DrawTextLayout(origin, reading, &self.brush, options);
-            if let Some(rect) = spot {
-                self.target.PushAxisAlignedClip(&rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-                self.brush.SetColor(&self.palette.selected);
-                self.target.DrawTextLayout(origin, reading, &self.brush, options);
-                self.target.PopAxisAlignedClip();
-            }
+            self.brush.SetColor(&self.palette.label);
+            self.target.DrawTextLayout(
+                Vector2 {
+                    X: 14.0 * ratio,
+                    Y: 6.0 * ratio,
+                },
+                reading,
+                &self.brush,
+                D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT,
+            );
         }
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
         for (i, item) in self
