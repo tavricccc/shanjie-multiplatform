@@ -1,7 +1,7 @@
 #Requires -Version 7
-# Regenerates the mode icons: a flat solid-colour squircle with a bold sans glyph (no gradient, no inner frame).
-# Chinese is a vermilion tile with 解 (the upstream seal colour); English is a deep slate tile with A.
-# Needs the Noto Sans TC font; glyphs are rasterized, no font is shipped.
+# Regenerates the icons, all monochrome: a flat dark squircle with a white bold sans glyph (no gradient, frame
+# or colour). shanjie = 解 (the input method itself: profile icon, settings app, tiles), chinese = 中 and
+# english = A (mode switch). Needs the Noto Sans TC font; glyphs are rasterized, no font is shipped.
 param([string]$Font = 'Noto Sans TC')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
@@ -60,8 +60,9 @@ function Save-Ico([string]$path, $bitmaps) {
 
 $sizes = 16, 20, 24, 32, 40, 48, 64, 256
 $modes = @(
-    @{ Name = 'chinese'; Glyph = '解'; Fill = [Drawing.Color]::FromArgb(0xD9, 0x3F, 0x35) },
-    @{ Name = 'english'; Glyph = 'A'; Fill = [Drawing.Color]::FromArgb(0x3D, 0x4B, 0x63) })
+    @{ Name = 'chinese'; Glyph = '中'; Fill = [Drawing.Color]::FromArgb(0x2B, 0x2B, 0x2B) },
+    @{ Name = 'english'; Glyph = 'A'; Fill = [Drawing.Color]::FromArgb(0x2B, 0x2B, 0x2B) },
+    @{ Name = 'shanjie'; Glyph = '解'; Fill = [Drawing.Color]::FromArgb(0x2B, 0x2B, 0x2B) })
 foreach ($mode in $modes) {
     $bitmaps = @(foreach ($s in $sizes) { New-Icon $s $mode.Glyph $mode.Fill })
     Save-Ico (Join-Path $out "$($mode.Name).ico") $bitmaps
@@ -76,8 +77,8 @@ foreach ($mode in $modes) {
 
 # The settings app, Installed Apps entry and tile assets use the same Chinese-mode artwork as the input method.
 $ui = Join-Path (Split-Path $PSScriptRoot -Parent) 'ui/Assets'
-$zh = $modes[0]
-Copy-Item (Join-Path $out 'chinese.ico') (Join-Path $ui 'AppIcon.ico') -Force
+$zh = $modes[2]
+Copy-Item (Join-Path $out 'shanjie.ico') (Join-Path $ui 'AppIcon.ico') -Force
 function Save-Canvas([string]$name, [int]$width, [int]$height, [double]$fraction) {
     $canvas = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [Drawing.Graphics]::FromImage($canvas)
