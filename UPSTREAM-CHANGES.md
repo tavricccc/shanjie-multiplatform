@@ -1,6 +1,14 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游固定於 `feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（2026-10-15；基於 main `76dc7ac`，作者表示 model-v6 即將發佈，尚未合入 main），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-15 同步上游並換 model-v6／classes-v4
+
+上游 pin 由 `368eebc`（main）更新到 `feat/model-v6-switch` 的 `f8ea0bb`（約 1,040 個 commit，含 main 的 `76dc7ac`）。該分支尚未合入 main，待作者發佈後再改回 main 的對應 commit。內建模型換成 model-v6＋classes-v4（`MODEL-SOURCES.json`、安裝包驗證與 UI 文案同步）；model-v5／classes-v3 不再打包。
+
+prepare 契約只需調整兩處：`prepare-candidates.ps1` 的 `Fixed` 新增 `pick_key` 欄位；`prepare-core.ps1` 的 Windows 學習儲存匯入新增 `is_full_context`、`NEXT_PREFIX`。`platform/resident_windows.rs` 改用完整路徑的 atomic 型別，避免與上游 engine.rs 已有的匯入重複。
+
+**未接入**：kn-v1 Kneser–Ney 側檔、tinylm-v5 與重排強度設定、名單層只靠內建詞庫目錄一併複製，Windows 沒有新增對應設定或載入。上游測試期待 kn.sjkn，驗證腳本僅為測試下載，不打包。
 
 ## 2026-10-15 Windows 0.7.0：字面輸入、亂序辨識與注音候選
 

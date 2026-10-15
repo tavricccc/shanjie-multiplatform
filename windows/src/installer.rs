@@ -107,8 +107,8 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "x64/Shanjie.dll",
         "x86/Shanjie.dll",
         "ui/Shanjie.UI.exe",
-        "data/models/model-v5/bigram.winmap",
-        "data/models/model-v5/classes.sjc",
+        "data/models/model-v6/bigram.winmap",
+        "data/models/model-v6/classes.sjc",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
     ] {
@@ -118,9 +118,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     }
     if listed
         .iter()
-        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v5"))
+        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v6"))
     {
-        return Err("安裝包只允許最新 model-v5＋classes-v3。".into());
+        return Err("安裝包只允許最新 model-v6＋classes-v4。".into());
     }
     Ok(listed)
 }

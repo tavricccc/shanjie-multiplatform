@@ -142,7 +142,7 @@ impl Engine {
                 return None;
             }
             e.operation(|h, o| shanjie_engine_set_prediction(h, prediction as u32, o))?;
-            let lm = CString::new(data.join("models/model-v5/bigram.winmap").to_str()?).ok()?;
+            let lm = CString::new(data.join("models/model-v6/bigram.winmap").to_str()?).ok()?;
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }

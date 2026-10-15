@@ -1,11 +1,8 @@
 // Only immutable lexicon/model resources are shared. Composition and learning
 // policy stay in each Engine, so two clients cannot see each other's text.
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Mutex, OnceLock,
-};
-static WINDOWS_LEX_LOADS: AtomicU64 = AtomicU64::new(0);
-static WINDOWS_MODEL_LOADS: AtomicU64 = AtomicU64::new(0);
+use std::sync::{Mutex, OnceLock};
+static WINDOWS_LEX_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 type LexCache = Vec<(
     Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>,
     Arc<Lexicon>,
@@ -54,7 +51,7 @@ impl Engine {
             return Ok(engine);
         }
         let engine = Engine::new_with_personal_uncached(data, layout, personal)?;
-        WINDOWS_LEX_LOADS.fetch_add(1, Ordering::Relaxed);
+        WINDOWS_LEX_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if cache.len() == 4 {
             cache.remove(0);
         }
@@ -104,7 +101,7 @@ impl Engine {
             return Ok(());
         }
         self.load_lm_uncached(path)?;
-        WINDOWS_MODEL_LOADS.fetch_add(1, Ordering::Relaxed);
+        WINDOWS_MODEL_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if cache.len() == 4 {
             cache.remove(0);
         }

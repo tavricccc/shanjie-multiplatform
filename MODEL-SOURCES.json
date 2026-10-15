@@ -2,18 +2,18 @@
   "repository": "https://github.com/Nanako0129/shanjie",
   "models": [
     {
-      "id": 5,
-      "release": "model-v5",
-      "source": "bigram-v5.sjlm",
-      "mapped": "models/model-v5/bigram.winmap",
-      "sha256": "f81a021e5dea08dc48dbca1db0d0f63517bb6f0f3e1b20fdac631542d13f45af",
+      "id": 6,
+      "release": "model-v6",
+      "source": "bigram-v6.sjlm",
+      "mapped": "models/model-v6/bigram.winmap",
+      "sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
       "classes": {
-        "release": "classes-v3",
-        "source": "classes-v3.sjc",
-        "sha256": "75a5efb3d050a9b0d21bca707ff6b1fd71945a8e059b869aa856618290e55827",
-        "size": 5575836
+        "release": "classes-v4",
+        "source": "classes-v4.sjc",
+        "sha256": "efac3184170e9795cef35855fc6615cf5672882bc0e20c624b620597aeab7a56",
+        "size": 5656826
       },
-      "size": 82535147
+      "size": 83445569
     }
   ]
 }

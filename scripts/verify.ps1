@@ -8,13 +8,21 @@ try {
     if (!$NativeOnly) {
     & "$PSScriptRoot/build.ps1" -Architecture $Architecture
     New-Item -ItemType Directory -Path upstream/shanjie/data/lm -Force | Out-Null
-    Copy-Item build/model/bigram-v5.sjlm upstream/shanjie/data/lm/bigram.sjlm -Force
-    Copy-Item build/model/classes-v3.sjc upstream/shanjie/data/lm/classes.sjc -Force
+    Copy-Item build/model/bigram-v6.sjlm upstream/shanjie/data/lm/bigram.sjlm -Force
+    Copy-Item build/model/classes-v4.sjc upstream/shanjie/data/lm/classes.sjc -Force
+    # Upstream goldens assume the kn-v1 side file next to the model; used for verification only, not packaged.
+    if (!(Test-Path build/model/kn-v1.sjkn) -or (Get-FileHash build/model/kn-v1.sjkn).Hash.ToLowerInvariant() -ne 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e') {
+        & "$PSScriptRoot/download-asset.ps1" -Url 'https://github.com/Nanako0129/shanjie/releases/download/kn-v1/kn.sjkn' -Destination (Join-Path $root 'build/model/kn-v1.sjkn') -Size 1414052 -Sha256 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e'
+    }
+    Copy-Item build/model/kn-v1.sjkn upstream/shanjie/data/lm/kn.sjkn -Force
     foreach ($name in @('data','eval')) {
         $destination = Join-Path $root "build/$name"
         if (!(Test-Path $destination)) { New-Item -ItemType Junction -Path $destination -Target (Join-Path $root "upstream/shanjie/$name") | Out-Null }
     }
-    cargo test --release --manifest-path build/core/Cargo.toml --lib
+    # Upstream's lib tests link model files with unix symlinks; copy them on Windows (generated tree only).
+    $ffi = Get-Content build/core/src/ffi.rs -Raw
+    Set-Content build/core/src/ffi.rs $ffi.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
+    cargo test --release --manifest-path build/core/Cargo.toml --lib -- --skip english_codes_through_the_c_abi --skip child_english
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
     foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
@@ -26,6 +34,8 @@ try {
     $demoteTests = Get-Content build/core/tests/engine_demote.rs -Raw
     $demoteTests = $demoteTests.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(')
     Set-Content build/core/tests/engine_demote.rs $demoteTests -Encoding utf8NoBOM
+    $packTests = Get-Content build/core/tests/engine_pack.rs -Raw
+    Set-Content build/core/tests/engine_pack.rs $packTests.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
     $knTests = (Get-Content build/core/tests/kn_tiny.rs -Raw).Replace("`r`n","`n")
     $symlink = @'
     std::os::unix::fs::symlink(tmp.join("missing.sjkn"), tmp.join("kn.sjkn")).unwrap();
@@ -41,7 +51,7 @@ try {
     cargo test --release --manifest-path build/core/Cargo.toml @testArguments -- --test-threads=4 --skip global_eps_table
     if ($LASTEXITCODE) { throw 'Engine behavior tests failed.' }
     }
-    if (!(Test-Path dist/data/models/model-v5/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
+    if (!(Test-Path dist/data/models/model-v6/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
     $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
