@@ -111,6 +111,8 @@ pub struct Host {
     work_width: f32,
     /// Microsoft IME style: one candidate per row instead of the horizontal pill.
     pub vertical: bool,
+    /// The candidate target is the character right of the cursor (profile `anchor=right`).
+    pub anchor_right: bool,
 }
 impl Host {
     pub fn start(callback: HWND) -> Result<Box<Self>> {
@@ -149,6 +151,7 @@ impl Host {
                 end: 0,
                 work_width: 0.0,
                 vertical: false,
+                anchor_right: true,
             });
             let module = crate::tsf::module();
             let wc = WNDCLASSW {
@@ -279,7 +282,11 @@ impl Host {
                     text = hint.clone();
                     mark = Some((0, hint.len()));
                 }
-            } else if !units.is_empty() && cursor < units.len() {
+            } else if self.anchor_right && cursor < units.len() {
+                // Right anchor: the character after the cursor is the one being chosen.
+                let len = if (0xd800..0xdc00).contains(&units[cursor]) { 2 } else { 1 };
+                mark = Some((cursor, len.min(units.len() - cursor)));
+            } else if !self.anchor_right && !units.is_empty() && cursor < units.len() {
                 let mut start = cursor.saturating_sub(1);
                 if start > 0 && (0xdc00..0xe000).contains(&units[start]) {
                     start -= 1;

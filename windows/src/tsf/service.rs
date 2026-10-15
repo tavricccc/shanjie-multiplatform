@@ -804,6 +804,9 @@ impl Data {
                 c.data
                     .vertical
                     .set(current.get("candidates", "layout", "horizontal") == "vertical");
+                c.data
+                    .anchor_right
+                    .set(current.get("candidates", "anchor", "right") == "right");
             }
         }
         self.prepare_engine()?;
@@ -1039,6 +1042,10 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 .data
                 .vertical
                 .set(preferences.get("candidates", "layout", "horizontal") == "vertical");
+            candidates
+                .data
+                .anchor_right
+                .set(preferences.get("candidates", "anchor", "right") == "right");
             self.data.state.borrow_mut().candidates = Some(candidates);
             let keys: ITfKeystrokeMgr = thread.cast()?;
             keys.AdviseKeyEventSink(client, &self.to_interface::<ITfKeyEventSink>(), true)?;
