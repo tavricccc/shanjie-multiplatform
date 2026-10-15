@@ -27,4 +27,4 @@
 
 ## 驗證界線
 
-隔離的真正 Windows TSF context、核心程序、公開小型詞典與實際 WinUI 綁定用於回歸。細節、案例數與證據見 [VERIFICATION.md](../../VERIFICATION.md)。本版未安裝到目前系統，未控制前景 cmd，未執行真實登入／解除安裝或原生登錄故障注入；這些仍列於 [TODO.md](../../TODO.md)。
+隔離的真正 Windows TSF context、核心程序、公開小型詞典與實際 WinUI 綁定用於回歸。細節、案例數與證據見 [VERIFICATION.md](../../VERIFICATION.md)。本版未安裝到目前系統，未控制前景 cmd，未執行真實登入／解除安裝或原生登錄故障注入；這些仍列於 本機 `TODO.md`。

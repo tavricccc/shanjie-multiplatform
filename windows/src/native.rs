@@ -1,5 +1,5 @@
 use windows::{
-    core::{w, Result},
+    core::{w, PCWSTR, Result},
     Win32::{
         Foundation::*,
         Graphics::Gdi::*,
@@ -12,6 +12,8 @@ pub struct ControlChannel {
     context: *mut std::ffi::c_void,
     message: u32,
     restart: u32,
+    legacy_message: u32,
+    legacy_restart: u32,
 }
 impl ControlChannel {
     pub unsafe fn new(
@@ -22,14 +24,16 @@ impl ControlChannel {
             window: HWND::default(),
             callback,
             context,
-            message: RegisterWindowMessageW(w!("Shanjie.ProfileChanged.v1")),
-            restart: RegisterWindowMessageW(w!("Shanjie.Restart.v1")),
+            message: RegisterWindowMessageW(PCWSTR(crate::wide(crate::profile::CHANGED_MESSAGE).as_ptr())),
+            restart: RegisterWindowMessageW(PCWSTR(crate::wide(crate::profile::RESTART_MESSAGE).as_ptr())),
+            legacy_message: RegisterWindowMessageW(w!("Shanjie.ProfileChanged.v1")),
+            legacy_restart: RegisterWindowMessageW(w!("Shanjie.Restart.v1")),
         });
         let module = crate::tsf::module();
         let wc = WNDCLASSW {
             lpfnWndProc: Some(watcher_proc),
             hInstance: HINSTANCE(module.0),
-            lpszClassName: w!("ShanjieRustProfileControlChannel"),
+            lpszClassName: w!("ShanjieRustProfileControlChannel.v2"),
             ..Default::default()
         };
         RegisterClassW(&wc);
@@ -65,7 +69,7 @@ impl Drop for ControlChannel {
         unsafe {
             let _ = DestroyWindow(self.window);
             let _ = UnregisterClassW(
-                w!("ShanjieRustProfileControlChannel"),
+                w!("ShanjieRustProfileControlChannel.v2"),
                 Some(HINSTANCE(crate::tsf::module().0)),
             );
         }
@@ -82,8 +86,10 @@ unsafe extern "system" fn watcher_proc(
         p = (*(lp.0 as *const CREATESTRUCTW)).lpCreateParams.cast();
         SetWindowLongPtrW(window, GWLP_USERDATA, p as _);
     }
-    if !p.is_null() && (message == (*p).message || message == (*p).restart) {
-        ((*p).callback)((*p).context, (message == (*p).restart) as u32);
+    if !p.is_null()
+        && [(*p).message, (*p).restart, (*p).legacy_message, (*p).legacy_restart].contains(&message)
+    {
+        ((*p).callback)((*p).context, [(*p).restart, (*p).legacy_restart].contains(&message) as u32);
         return LRESULT(0);
     }
     if !p.is_null() && message == WM_TIMER && wp.0 == 42 {

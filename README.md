@@ -2,7 +2,9 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.6.0**：逐鍵標點開關、操作預設匯入／匯出、直式候選、中英混打亂序注音、重新分類的設定頁，以及 WinUI／Windows Terminal 相容註冊（尚待實機驗收），見 [RELEASE-NOTES-0.6.0.md](docs/releases/RELEASE-NOTES-0.6.0.md)。0.5.3 修正單一鍵盤升級時的 Windows 清單同步、登錄權限繼承回復，並完整記錄原始安裝錯誤。保留 0.5.2 的 cmd 首字修正、核心復原、詞典保存、只安裝標準注音或倚天，以及多行詞典、登入後常駐核心、頓號與混打 Caps Lock。新版說明見 [RELEASE-NOTES-0.5.3.md](docs/releases/RELEASE-NOTES-0.5.3.md)，背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.7.0**：改善混打的數字／標點輸入與組字保存，支援明確聲調後的英文字母亂序注音，新增空白鍵輸入注音符號開關及第一項注音候選，見 [docs/releases/RELEASE-NOTES-0.7.0.md](docs/releases/RELEASE-NOTES-0.7.0.md)。沿用 0.6.1 的設定共存與提權等待修正、0.6.0 的逐鍵標點／操作預設／直式候選，以及 0.5.x 的核心復原、安裝與詞典修正。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+
+版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
 ## 建置與打包
 
@@ -58,13 +60,13 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 
 「重新啟動輸入法」先保存未儲存草稿；沒有草稿時直接讀取磁碟設定，保留手動改檔的內容。它通知各 App 內已啟用的善解提交組字、清除備用核心並在背景重新載入，不終止 App。核心在 TSF 啟用時背景預載；失焦、提交與暫時停用後保留在 App 程序內，同設定重新啟用可重用。每個程序最多保留一個備用核心，各啟用實例的組字狀態獨立。全新 App 若在預載完成前立刻輸入，第一鍵仍須等待同一份載入工作；Win 快捷鍵與閒置失焦不等待。此按鈕不能換掉 App 已載入的舊版 DLL，安裝更新後仍須重新開啟 App。模型／詞類損壞明確拒絕載入。
 
-完整設定與鍵位見 [MICROSOFT-IME-DIFFS.md](docs/MICROSOFT-IME-DIFFS.md)，範本在 `profiles/`。未安裝鍵盤在設定中反灰；舊偏好退回跟隨已安裝配置並提示。個人詞庫採內容雜湊命名，先核對或完整原子發布詞庫再替換 INI；損壞檔移到同目錄 `.deleted_files` 後修復。學習以使用者範圍 mutex／epoch 協調多程序。
+完整設定與鍵位見 [docs/MICROSOFT-IME-DIFFS.md](docs/MICROSOFT-IME-DIFFS.md)，範本在 `profiles/`。未安裝鍵盤在設定中反灰；舊偏好退回跟隨已安裝配置並提示。個人詞庫採內容雜湊命名，先核對或完整原子發布詞庫再替換 INI；損壞檔移到同目錄 `.deleted_files` 後修復。學習以使用者範圍 mutex／epoch 協調多程序。
 
 ## 維護與授權
 
 `windows/src/` 按 engine、input、profile、candidate、native、registration、installer、tsf 分模組。Windows 的 TSF、按鍵、候選繪製、設定／詞庫／學習及安裝交易由 Rust 處理；`ui/` 的 C#／XAML 保留 WinUI 控制項與草稿綁定；`tests/support/` 的 C++ 僅是測試 ABI adapter，沒有產品 C++。CMD／PowerShell 安裝入口只呼叫 manager；`scripts/user-language-list.ps1` 編入 manager，專責呼叫 Windows International 語言設定介面。
 
-上游是固定 commit 子模組，核心差異保留在 `platform/` 與 prepare 腳本；`build/core` 為產生檔。更新前先讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)、[UPSTREAM.json](UPSTREAM.json)、[VERIFICATION.md](VERIFICATION.md)。架構見 [WINUI-MIGRATION.md](docs/WINUI-MIGRATION.md)，資源量測見 [PERFORMANCE.md](docs/PERFORMANCE.md)。
+上游是固定 commit 子模組，核心差異保留在 `platform/` 與 prepare 腳本；`build/core` 為產生檔。更新前先讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)、[UPSTREAM.json](UPSTREAM.json)、[VERIFICATION.md](VERIFICATION.md)。架構見 [docs/WINUI-MIGRATION.md](docs/WINUI-MIGRATION.md)，資源量測見 [docs/PERFORMANCE.md](docs/PERFORMANCE.md)。
 
 程式碼沿用 Apache-2.0；詞庫、模型與 icons 分別有資料授權。Rust 相依套件的鎖定版本與全文也保存在包內 `LICENSES/windows-rust/`，不能把整包稱為單一 Apache 授權。
 ## 可選智慧輸入

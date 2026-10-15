@@ -104,6 +104,13 @@ int wmain(int argc,wchar_t** argv) {
  KeyboardRestore restore; keyboardState(false,false);
  require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
  HMODULE dll=LoadLibraryW(argv[1]); require(dll!=nullptr,3);
+ if(mode.starts_with(L"input-")) {
+   auto load=(char* (__cdecl*)())GetProcAddress(dll,"sj_profile_load_text");
+   auto release=(void (__cdecl*)(char*))GetProcAddress(dll,"sj_string_free");
+   require(load&&release,73);char* profile=load();require(profile!=nullptr,74);
+   std::printf("FIXTURE symbols_off=%d mixed=%d\n",std::string(profile).find("space_inputs_zhuyin=0")!=std::string::npos,std::string(profile).find("mixed_input=1")!=std::string::npos);
+   release(profile);
+ }
  auto factoryFn=(HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject");require(factoryFn!=nullptr,4);
  auto resident=(unsigned long long (__cdecl*)())GetProcAddress(dll,"sj_resident_status");require(resident!=nullptr,5);
  ComPtr<IClassFactory> factory;require(SUCCEEDED(factoryFn(ServiceId,IID_PPV_ARGS(&factory))),6);
@@ -123,7 +130,15 @@ int wmain(int argc,wchar_t** argv) {
  ComPtr<ITfKeyEventSink> keys;require(SUCCEEDED(service.As(&keys)),16);
  auto context=firstContext;auto store=first;
  auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(5);}};
- auto press=[&](WPARAM vk){keyboardState(false,false);BOOL tested=FALSE,eaten=FALSE;LPARAM flags=(LPARAM(MapVirtualKeyW((UINT)vk,MAPVK_VK_TO_VSC))<<16)|1;
+ auto press=[&](WPARAM requested){WPARAM vk=requested;bool shifted=false;
+   if(mode.starts_with(L"input-")) {
+     if(requested==L'\\')vk=VK_OEM_5;
+     else if(requested==L'('){vk='9';shifted=true;}
+     else if(requested==L')'){vk='0';shifted=true;}
+     else if(requested==L'↓')vk=VK_DOWN;
+     else if(requested==L'⌂')vk=VK_HOME;
+   }
+   keyboardState(false,shifted);BOOL tested=FALSE,eaten=FALSE;LPARAM flags=(LPARAM(MapVirtualKeyW((UINT)vk,MAPVK_VK_TO_VSC))<<16)|1;
    require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&tested)),17);
    if(!tested) {
      ComPtr<ITfCompartmentMgr> manager;VARIANT value{};ComPtr<ITfCompartment> compartment;
@@ -132,11 +147,19 @@ int wmain(int argc,wchar_t** argv) {
      context.As(&manager);for(auto id:{GUID_COMPARTMENT_KEYBOARD_DISABLED,GUID_COMPARTMENT_EMPTYCONTEXT}){compartment.Reset();manager->GetCompartment(id,&compartment);compartment->GetValue(&value);std::printf("CONTEXT_DISABLED %ld\n",value.vt==VT_I4?value.lVal:-1);VariantClear(&value);}
    }
    if(tested)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),18);
-   if(!eaten && vk>=32 && vk<=126){std::wstring literal(1,(wchar_t)std::towlower((wchar_t)vk));store->text.replace(store->selection.acpStart,store->selection.acpEnd-store->selection.acpStart,literal);store->selection.acpStart=store->selection.acpEnd=store->selection.acpStart+1;}
+   if(!eaten && !mode.starts_with(L"input-") && vk>=32 && vk<=126){std::wstring literal(1,(wchar_t)std::towlower((wchar_t)vk));store->text.replace(store->selection.acpStart,store->selection.acpEnd-store->selection.acpStart,literal);store->selection.acpStart=store->selection.acpEnd=store->selection.acpStart+1;}
    std::printf("KEY vk=%llu tested=%d eaten=%d text=%s\n",(unsigned long long)vk,tested,eaten,utf8(store->text).c_str());
  };
  for(wchar_t vk:sequence)press(vk);
- if(mode.starts_with(L"busy")) {
+ if(mode.starts_with(L"input-")) {
+   if(mode==L"input-space-commit") {
+     require(store->text==expected && store->endedText==expected && !store->composing,70);
+   } else {
+     std::printf("INPUT composing=%d text=%s committed=%s\n",store->composing,utf8(store->text).c_str(),utf8(store->endedText).c_str());
+     require(store->text==expected && store->endedText.empty() && store->composing,71);
+     press(VK_RETURN);require(store->text==expected&&store->endedText==expected&&!store->composing,72);
+   }
+ } else if(mode.starts_with(L"busy")) {
    if(mode==L"busy-pick"||mode==L"busy-mouse")press(VK_DOWN);
    wchar_t local[32768]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768)>0,50);
    std::wstring folder=std::wstring(local)+L"\\Shanjie",name=folder;
@@ -182,8 +205,8 @@ int wmain(int argc,wchar_t** argv) {
      auto path=std::wstring(local)+L"\\Shanjie\\profile.ini";
      std::ifstream in(path,std::ios::binary);std::string content((std::istreambuf_iterator<char>(in)),{});in.close();
      auto at=content.find("prediction=1");require(at!=std::string::npos,24);content.replace(at,12,"prediction=0");
-     std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<content;out.close();localNotify(L"Shanjie.ProfileChanged.v1");
-     if(mode==L"refresh-twice") {content.replace(at,12,"prediction=1");std::ofstream again(path,std::ios::binary|std::ios::trunc);again<<content;again.close();localNotify(L"Shanjie.ProfileChanged.v1");}
+     std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<content;out.close();localNotify(L"Shanjie.ProfileChanged.v2");
+     if(mode==L"refresh-twice") {content.replace(at,12,"prediction=1");std::ofstream again(path,std::ios::binary|std::ios::trunc);again<<content;again.close();localNotify(L"Shanjie.ProfileChanged.v2");}
    }
    ComPtr<ITfDocumentMgr> second;require(SUCCEEDED(thread->CreateDocumentMgr(&second)),25);
    ComPtr<Store> other;other.Attach(new Store);ComPtr<ITfContext> otherContext;TfEditCookie otherCookie;

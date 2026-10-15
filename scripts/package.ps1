@@ -20,7 +20,7 @@ try {
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
     Copy-Item "$root/LICENSES/windows-models.md" "$output/LICENSES" -Force
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md" $output -Force
+    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md","$root/Changelog.md" $output -Force
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/ui" $output -Recurse -Force
@@ -29,9 +29,8 @@ try {
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-Item "$root/docs/releases/RELEASE-NOTES-0.6.0.md" $output -Force
+    Copy-Item "$root/docs" $output -Recurse -Force
     Copy-Item "$root/MODEL-SOURCES.json" $output -Force
-    Copy-Item "$root/docs/WINUI-MIGRATION.md","$root/docs/MICROSOFT-IME-DIFFS.md","$root/docs/DESIGN.md","$root/docs/PERFORMANCE.md" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)

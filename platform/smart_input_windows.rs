@@ -118,9 +118,14 @@ impl Engine {
     // Each column (initial, medial, final) appears at most once. A run starting with an
     // English letter must also follow initial -> medial -> final, so an English word does
     // not win over typed text; one starting with a digit or symbol (e.g. 0d4 = ㄎㄢˋ) is not
-    // English and may be typed in any order, as in non-mixed composition.
+    // English and may be typed in any order. An explicit tone also confirms
+    // full reordered alphabetic syllables in finish_latin.
     fn mixed_reading(&self, raw: &str) -> Option<String> {
         let ordered = raw.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+        self.mixed_reading_order(raw, ordered)
+    }
+
+    fn mixed_reading_order(&self, raw: &str, ordered: bool) -> Option<String> {
         let mut last = None;
         let mut columns: [Option<char>; 3] = [None; 3];
         for ch in raw.chars() {
@@ -164,6 +169,21 @@ impl Engine {
         if let Some(tone) =
             tone.filter(|_| key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
         {
+            // A tone explicitly confirms a complete syllable before the suffix heuristic.
+            if key.kind != KeyKind::Space {
+                if let Some(mut reading) = self.mixed_reading_order(&raw, false) {
+                    reading.push_str(TONE_MARKS[tone]);
+                    if !self.lex.entries(&[reading]).is_empty() {
+                        self.clear_pend();
+                        for ch in raw.chars() { self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?; }
+                        let out = self.key_original(key)?;
+                        if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                            self.typed_literals.insert(index, format!("{raw}{}", key.ch));
+                        }
+                        return Ok(out);
+                    }
+                }
+            }
             for split in raw.len().saturating_sub(3).max(1)..raw.len() {
                 let (word, tail) = raw.split_at(split);
                 if key.kind == KeyKind::Space
@@ -182,6 +202,10 @@ impl Engine {
                         self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?;
                     }
                     let mut out = self.key_original(key)?;
+                    let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                        self.typed_literals.insert(index, format!("{tail}{ending}"));
+                    }
                     out.commit = prefix + &out.commit;
                     return Ok(out);
                 }
@@ -213,7 +237,7 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
-        let out = self.mixed_key(key)?;
+        let out = self.windows_key(key)?;
         Ok(self.mixed_view(out))
     }
 

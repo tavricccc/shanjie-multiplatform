@@ -268,7 +268,8 @@ int wmain(int argc, wchar_t** argv) {
         auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"1",profile.c_str()),510);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"1",profile.c_str()),511);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
+        localNotify(L"Shanjie.ProfileChanged.v1"); // A legacy sender is safe: the receiver only reads.
         press('S',180); press('U',182); press(VK_SPACE,184);
         require(noCandidates(),186); // First-tone space completes reading without opening a list.
         press(VK_ESCAPE,187);
@@ -279,12 +280,12 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"candidates",L"open",L"space",profile.c_str()),158);
         press('S',370); press('U',372); press('3',374); press(VK_SPACE,376);
         require(noCandidates(),378); // Direct INI edits have no per-key polling.
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',159); press('U',161); press('3',163); press(VK_SPACE,165);
         require(!noCandidates(),167); // The same service sees the saved trigger without reactivation.
         press(VK_ESCAPE,168);
         require(WritePrivateProfileStringW(L"candidates",L"open",L"down",profile.c_str()),170);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press(VK_DOWN,171); require(!noCandidates(),173);
         ComPtr<ITfThreadFocusSink> focus; require(SUCCEEDED(service.As(&focus)),174);
         std::wstring folder = std::wstring(local) + L"\\Shanjie";
@@ -307,14 +308,14 @@ int wmain(int argc, wchar_t** argv) {
         press('S',190); press('U',192); press('3',194);
         auto beforeReload = store->text;
         require(WritePrivateProfileStringW(L"engine",L"ranking",L"formal",profile.c_str()),196);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforeReload && noCandidates(),197); // Engine replacement keeps pending text.
         require(WritePrivateProfileStringW(L"engine",L"model",L"2",profile.c_str()),198);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',200); press('U',202); press('3',204); press(VK_DOWN,206); press(VK_RETURN,208);
         require(noCandidates(),210);
         require(WritePrivateProfileStringW(L"engine",L"model",L"1",profile.c_str()),211);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('G',212); press('4',214); press(VK_DOWN,216); press(VK_RIGHT,218);
         UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 0 && tableCount <= 9,220);
         press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
@@ -323,50 +324,50 @@ int wmain(int argc, wchar_t** argv) {
         require(noCandidates(),254); // Windows defaults do not prompt associated phrases.
         press(VK_RETURN,258);
         require(WritePrivateProfileStringW(L"input",L"associations",L"1",profile.c_str()),260);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',262); press('U',264); press('3',266); press(VK_DOWN,268); press('1',270);
         require(!noCandidates(),272);
         require(WritePrivateProfileStringW(L"input",L"associations",L"0",profile.c_str()),228);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         require(noCandidates(),255); press(VK_RETURN,256);
         press('S',230); press('U',232); press('3',234); press(VK_DOWN,236); press('1',238);
         require(noCandidates(),240); press(VK_RETURN,241);
         for (const auto* model : {L"3",L"4"}) {
             require(WritePrivateProfileStringW(L"engine",L"model",model,profile.c_str()),280);
-            localNotify(L"Shanjie.ProfileChanged.v1");
+            localNotify(L"Shanjie.ProfileChanged.v2");
             press('S',282); require(noCandidates(),284);
             require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),285);
-            localNotify(L"Shanjie.ProfileChanged.v1");
+            localNotify(L"Shanjie.ProfileChanged.v2");
             require(!noCandidates(),286); press(VK_TAB,287);
             require(WritePrivateProfileStringW(L"engine",L"prediction",L"0",profile.c_str()),289);
-            localNotify(L"Shanjie.ProfileChanged.v1");
+            localNotify(L"Shanjie.ProfileChanged.v2");
             require(noCandidates(),290); press(VK_ESCAPE,291);
             press('S',293); press('U',295); press('3',297); press(VK_DOWN,299); press(VK_RETURN,301);
             require(noCandidates(),303);
         }
         require(WritePrivateProfileStringW(L"candidates",L"enter_commits",L"0",profile.c_str()),310);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',311); press('U',313); press('3',315); press(VK_DOWN,317); press(VK_RETURN,319);
         BOOL enterReady = FALSE; keys->OnTestKeyDown(context.Get(),VK_RETURN,0,&enterReady); require(enterReady,321);
         press(VK_RETURN,322);
         require(WritePrivateProfileStringW(L"input",L"space_after_commit",L"0",profile.c_str()),324);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',325); press('U',327); press('3',329); press(VK_SPACE,331); require(noCandidates(),333);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"3",profile.c_str()),334);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         press('Z',335); press('H',337); press('U',339); auto beforePinyinReload = store->text;
         require(WritePrivateProfileStringW(L"engine",L"model",L"3",profile.c_str()),341);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforePinyinReload && noCandidates(),342);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),380);
-        localNotify(L"Shanjie.Restart.v1");
+        localNotify(L"Shanjie.Restart.v2");
         require(store->text == beforePinyinReload && noCandidates(),381);
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"0",profile.c_str()),512);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"0",profile.c_str()),513);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         for (int spaces : {0,1,2}) {
             for (wchar_t key : std::wstring(L"SU3CL35K4G4")) press(key,514);
             auto beforeEnglish = store->text; auto englishCaret = store->selection.acpStart;
@@ -394,7 +395,7 @@ int wmain(int argc, wchar_t** argv) {
         press('H',438); press('E',440); press('L',442); press('L',444); press('O',446);
         auto beforeSmartOff = store->text;
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"0",profile.c_str()),448);
-        localNotify(L"Shanjie.ProfileChanged.v1");
+        localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforeSmartOff && noCandidates(),450);
         press('S',452); require(noCandidates(),454); press(VK_ESCAPE,456);
         std::puts("Mixed input: raw English with reading hint, tone composition, live off preserves English passed");

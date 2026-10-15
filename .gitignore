@@ -6,3 +6,6 @@
 /src/
 /ui/bin/
 /ui/obj/
+
+# Local backups and private working notes
+.deleted_files/

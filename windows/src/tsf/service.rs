@@ -761,6 +761,7 @@ impl Data {
             ("input", "dictionary"),
             ("input", "context"),
             ("input", "mixed_input"),
+            ("input", "space_inputs_zhuyin"),
         ]
         .iter()
         .any(|(s, k)| current.get(s, k, "") != old.get(s, k, ""));

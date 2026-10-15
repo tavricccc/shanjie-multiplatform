@@ -7,11 +7,14 @@ use windows::{
     core::PCWSTR,
     Win32::{
         Foundation::HWND,
-        UI::WindowsAndMessaging::{RegisterWindowMessageW, SendNotifyMessageW},
+        UI::WindowsAndMessaging::{PostMessageW, RegisterWindowMessageW},
     },
 };
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub const SCHEMA: u32 = 6;
+pub(crate) const CHANGED_MESSAGE: &str = "Shanjie.ProfileChanged.v2";
+pub(crate) const RESTART_MESSAGE: &str = "Shanjie.Restart.v2";
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
@@ -77,6 +80,10 @@ impl Document {
     }
     pub fn migrate(&mut self) {
         let schema = self.number("profile", "schema", 1);
+        // A future reader must never turn a newer format back into this one.
+        if schema > SCHEMA {
+            return;
+        }
         let windows = self.get("profile", "interaction", "windows") == "windows";
         if schema < 4
             && !self
@@ -154,7 +161,7 @@ impl Document {
                 self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
         }
-        self.set("profile", "schema", 6);
+        self.set("profile", "schema", SCHEMA);
         self.set("engine", "model", 5);
         if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
             self.set("candidates", "layout", "horizontal");
@@ -209,6 +216,7 @@ impl Document {
         for (i, (_, n)) in PLAIN_KEYS.iter().enumerate() {
             flags |= (self.flag("punctuation", &format!("plain_{n}"), false) as u32) << (14 + i);
         }
+        flags |= (!self.flag("input", "space_inputs_zhuyin", true) as u32) << 20;
         flags
     }
 }
@@ -236,20 +244,32 @@ pub fn load(path: &Path) -> Result<Document> {
         other => other?,
     };
     let mut doc = Document::parse(&original)?;
-    let before = doc.content();
-    let schema = doc.number("profile", "schema", 1);
+    // TSF reads this on notification callbacks. Persisting a migration here
+    // makes old/new DLLs rewrite each other's schema and broadcast forever.
     doc.migrate();
-    if doc.content() != before {
-        let backup = path.with_extension(format!("ini.schema{}.bak", schema));
-        if !backup.exists() {
-            fs::copy(path, &backup)?;
-        }
-        save(path, &doc.content())?;
-    }
     Ok(doc)
 }
-pub fn save(path: &Path, text: &str) -> Result<()> {
+fn write_profile(path: &Path, text: &str) -> Result<()> {
     let mut doc = Document::parse(text)?;
+    if doc.number("profile", "schema", 1) > SCHEMA {
+        return Err("設定檔由較新版本建立，請更新善解後再儲存。".into());
+    }
+    if path.exists() {
+        let original = fs::read_to_string(path)?;
+        let schema = Document::parse(&original)
+            .map(|d| d.number("profile", "schema", 1))
+            .unwrap_or(0);
+        if schema > SCHEMA {
+            return Err("設定檔已由較新版本更新，請更新善解後再儲存。".into());
+        }
+        // Back up the on-disk legacy settings only when the user saves.
+        if schema < SCHEMA {
+            let backup = path.with_extension(format!("ini.schema{}.bak", schema));
+            if !backup.exists() {
+                fs::copy(path, backup)?;
+            }
+        }
+    }
     doc.migrate();
     fs::create_dir_all(path.parent().unwrap())?;
     let temporary = path.with_extension("ini.tmp");
@@ -263,13 +283,19 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
             PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )?;
-        if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
-            return Ok(());
-        }
-        let message =
-            RegisterWindowMessageW(PCWSTR(crate::wide("Shanjie.ProfileChanged.v1").as_ptr()));
-        SendNotifyMessageW(
-            HWND(0xffffusize as _),
+    }
+    Ok(())
+}
+fn notify(name: &str) -> Result<()> {
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+        return Ok(());
+    }
+    unsafe {
+        let message = RegisterWindowMessageW(PCWSTR(crate::wide(name).as_ptr()));
+        // Old DLLs must not receive a save/restart that makes them migrate back.
+        // Post even to our own thread to avoid re-entering the settings callback.
+        PostMessageW(
+            Some(HWND(0xffffusize as _)),
             message,
             Default::default(),
             Default::default(),
@@ -277,19 +303,12 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
     }
     Ok(())
 }
+pub fn save(path: &Path, text: &str) -> Result<()> {
+    write_profile(path, text)?;
+    notify(CHANGED_MESSAGE)
+}
 pub fn restart() -> Result<()> {
-    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
-        return Ok(());
-    }
-    unsafe {
-        SendNotifyMessageW(
-            HWND(0xffffusize as _),
-            RegisterWindowMessageW(PCWSTR(crate::wide("Shanjie.Restart.v1").as_ptr())),
-            Default::default(),
-            Default::default(),
-        )?;
-    }
-    Ok(())
+    notify(RESTART_MESSAGE)
 }
 pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
@@ -492,6 +511,52 @@ pub fn apply_preset(source: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn fixture(name: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("shanjie-profile-{name}-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        root.join("profile.ini")
+    }
+    #[test]
+    fn load_migrates_in_memory_without_rewriting_or_backing_up() {
+        let path = fixture("read-only");
+        let legacy = "[profile]\nschema=5\n[input]\nplain_punctuation=1\ndictionary=mine.tsv\n[appearance]\nfont_size=24\n";
+        fs::write(&path, legacy).unwrap();
+        for _ in 0..32 {
+            let doc = load(&path).unwrap();
+            assert_eq!(doc.number("profile", "schema", 0), SCHEMA);
+            assert_eq!(doc.get("input", "dictionary", ""), "mine.tsv");
+            assert_eq!(doc.number("appearance", "font_size", 0), 24);
+            assert_eq!(fs::read_to_string(&path).unwrap(), legacy);
+        }
+        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+    #[test]
+    fn explicit_save_backs_up_legacy_profile_and_preserves_first_backup() {
+        let path = fixture("explicit-save");
+        let legacy = "[profile]\nschema=5\n[input]\nplain_punctuation=1\ndictionary=mine.tsv\n";
+        fs::write(&path, legacy).unwrap();
+        let draft = load(&path).unwrap();
+        write_profile(&path, &draft.content()).unwrap();
+        let backup = path.with_extension("ini.schema5.bak");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), legacy);
+        assert_eq!(Document::parse(&fs::read_to_string(&path).unwrap()).unwrap().number("profile", "schema", 0), SCHEMA);
+        fs::write(&path, "[profile]\nschema=5\n").unwrap();
+        write_profile(&path, &draft.content()).unwrap();
+        assert_eq!(fs::read_to_string(&backup).unwrap(), legacy);
+    }
+    #[test]
+    fn future_schema_is_not_downgraded_or_overwritten() {
+        let path = fixture("future");
+        let future = "[profile]\nschema=7\n[future]\nchoice=keep\n";
+        fs::write(&path, future).unwrap();
+        let doc = load(&path).unwrap();
+        assert_eq!(doc.number("profile", "schema", 0), 7);
+        assert_eq!(doc.get("future", "choice", ""), "keep");
+        assert!(write_profile(&path, future).is_err());
+        assert!(write_profile(&path, "[profile]\nschema=6\n").is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), future);
+    }
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {
         let rows = ["ㄋㄧˇ  你", "ㄏㄠˇ\t好\t-1.25"];
@@ -564,6 +629,19 @@ mod tests {
         doc.set("punctuation", "plain_lbracket", 1);
         assert_eq!(doc.input_options() >> 14, 1);
         assert!(!doc.shift_punctuation('a'));
+    }
+    #[test]
+    fn space_symbol_toggle_defaults_and_preset_round_trip() {
+        let mut old = Document::parse("[profile]\nschema=6\ninteraction=windows\n").unwrap();
+        old.migrate();
+        assert!(old.flag("input", "space_inputs_zhuyin", false));
+        assert_eq!(old.input_options() & (1 << 20),0);
+        old.set("input", "space_inputs_zhuyin",0);
+        let shared = export_preset(&old.content(),"注音候選").unwrap();
+        let imported = Document::parse(&import_preset("[profile]\nschema=6\n",&shared).unwrap()).unwrap();
+        assert!(!imported.flag("input", "space_inputs_zhuyin",true));
+        assert_ne!(imported.input_options() & (1 << 20),0);
+        assert!(import_preset(&old.content(),"[input]\nspace_inputs_zhuyin=2\n").is_err());
     }
     #[test]
     fn migration_preserves_personal_data_and_removes_retired_choices() {

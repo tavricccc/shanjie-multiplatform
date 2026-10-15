@@ -48,3 +48,9 @@ pub unsafe extern "C" fn shanjie_windows_is_mixed_pending(engine: *const Shanjie
     if engine.is_null() { return 0; }
     unsafe { &(*engine).0 }.is_mixed_pending() as u32
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_phonetic_pending(engine: *const ShanjieEngine) -> u32 {
+    if engine.is_null() { return 0; }
+    unsafe { (*engine).0.windows_phonetic_pending() as u32 }
+}

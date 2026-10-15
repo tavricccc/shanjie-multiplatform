@@ -2,6 +2,16 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 2026-10-11 main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-15 Windows 0.7.0：字面輸入、亂序辨識與注音候選
+
+新增 Windows 組字政策 `platform/composition_windows.rs`，並擴充 smart-input／key-options／candidate 覆蓋與 prepare 契約。字面數字及標點留在核心組字；明確聲調先辨識完整亂序音節；原始按鍵及注音候選有獨立的選取種類。關閉空白注音開關時，只有注音文字候選的音節還原原始按鍵與空格，有效第一聲照常轉換。Windows snapshot 額外傳遞未完成讀音的狀態，避免把字面注音誤認為未完成讀音。
+
+設定保存／分享、TSF 按鍵與候選操作及隔離驗證一起更新。所有核心變更位於 `platform/` 與 prepare 腳本，沒有手改 `build/core` 或上游追蹤檔；上游 pin、模型、內建詞庫及解碼評分不變。
+
+## 2026-10-14 Windows 0.6.1：設定共存與提權等待
+
+只修改 Windows profile 讀取／明確儲存、通知視窗、提權程序等待及相關驗證與文件。讀取僅在記憶體遷移；明確儲存才備份與寫回。v2 非同步通知不觸發舊 DLL，v1 接收端保持唯讀；未知新版 schema 不覆寫。提權等待改為訊息泵與 10 分鐘期限。上游 pin、platform 覆蓋、prepare 契約、詞庫、模型及解碼器不變。
+
 ## 2026-10-13 Windows 0.5.3：安裝清單、權限回復與診斷
 
 只修改 Windows 安裝器、登錄快照、版本標示與發佈文件。新增 language_list／journal／permissions 模組：以 Windows 內建 International 介面同步現行使用者語言清單；保留原生權限繼承旗標；依舊 checkpoint 精確辨識並修復 0.5.2 的旗標遺失；先保存原始錯誤再嘗試回復。PowerShell 輔助腳本編入執行檔，資料以 JSON 傳遞。上游子模組、platform 覆蓋、prepare 契約、詞庫、model-v5／classes-v3、解碼器及輸入／broker 政策不變。隔離原生 API 測試及實際安裝的界線見 VERIFICATION.md。

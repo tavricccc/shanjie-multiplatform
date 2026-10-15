@@ -5,7 +5,7 @@ inline void localNotify(const wchar_t* name) {
     EnumWindows([](HWND window, LPARAM value) -> BOOL {
         DWORD pid = 0; GetWindowThreadProcessId(window, &pid);
         wchar_t cls[96]{}; GetClassNameW(window, cls, 96);
-        if (pid == GetCurrentProcessId() && std::wstring(cls) == L"ShanjieRustProfileControlChannel")
+        if (pid == GetCurrentProcessId() && (std::wstring(cls) == L"ShanjieRustProfileControlChannel.v2" || std::wstring(cls) == L"ShanjieRustProfileControlChannel"))
             SendMessageW(window, static_cast<UINT>(value), 0, 0);
         return TRUE;
     }, message);

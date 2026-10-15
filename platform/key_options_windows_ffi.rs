@@ -1,7 +1,7 @@
 #[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_set_input_options(engine: *mut ShanjieEngine, flags: u32) -> i32 {
     guard(|| {
-        if engine.is_null() || flags >> 20 != 0 { return SHANJIE_ERR_INVALID; }
+        if engine.is_null() || flags >> 21 != 0 { return SHANJIE_ERR_INVALID; }
         unsafe { (*engine).0.set_windows_input_options(flags); }
         SHANJIE_OK
     })

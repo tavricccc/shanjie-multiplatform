@@ -433,9 +433,14 @@ impl Data {
             let data = self.clone();
             let current = context.clone();
             self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let mut out = output(data.state.borrow_mut().engine.reset(false))?;
+                let mut out = if ascii && !english && data.chinese() {
+                    output(data.state.borrow_mut().engine.perform(crate::broker::Op::Punctuation(ch.to_string())))?
+                } else {
+                    let mut out = output(data.state.borrow_mut().engine.reset(false))?;
+                    out.commit.push(ch);
+                    out
+                };
                 out.handled = true;
-                out.commit.push(ch);
                 data.apply(&current, cookie, out, false)
             })?;
             return Ok(true);
@@ -564,6 +569,14 @@ impl Data {
                     };
                     if delete {
                         out = output(s.engine.key(key))?;
+                    }
+                    if key.kind == 2 && key.modifiers == 0
+                        && !p.flag("input", "space_inputs_zhuyin", true)
+                        && p.flag("input", "space_commits", false)
+                        && !input::pending(&out) && out.preedit.ends_with(' ') {
+                        let committed = out.commit;
+                        out = output(s.engine.reset(false))?;
+                        out.commit = committed + &out.commit;
                     }
                     if p.flag("candidates", "enter_commits", true)
                         && selected

@@ -1,6 +1,28 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-14。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3、0.6.0 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-15。上游 pin：main 的 `368eebc426981852094d8c0c49b8b0618143bd2b`，與子模組／UPSTREAM.json 一致；0.5.3–0.7.0 未更新上游。下方舊段落的遠端查核、日期與結果皆為歷史證據，不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-15 Windows 0.7.0 混打、字面輸入與注音候選
+
+- x64／x86 release 原生建置成功。產生後的核心 lib **57 項測試通過**，包含可靠字面輸入、未完成讀音後的標點、關閉空白注音後還原原始按鍵／刪字同步、第一聲、`ij3 → 我`、原始按鍵候選、多字注音、Big5 注音候選與組字容量邊界。Windows crate 兩架構各 **25 項通過、2 項原生系統測試 ignored**；新開關的缺值預設、保存／操作預設往返及無效值拒絕通過。
+- `verify-input-features.ps1`：兩架構共 **70 個隔離 TSF 案例**通過；使用真正 Windows context／edit session、代理 keyboard sink，停用宿主按鍵回補，確認每個字面按鍵由輸入法處理且文字留在組字中。標準／倚天、混打開／關、括號／反斜線、未完成讀音、`1＋空白 → 1 `、第一聲、單字／詞的注音選取、原始字串選取、空白提交及 Big5 皆有覆蓋。測試配置提供兩種鍵盤的可攜安裝紀錄，不改真實註冊。
+- 兩架構另有 **22 個背景核心／TSF 案例**通過，涵蓋字面輸入、第一聲、亂序、注音與原始字串候選。受限執行環境會拒絕測試具名管道的存取，背景通訊改在一般使用者環境、同樣使用隔離設定驗證；不能把該權限拒絕當成產品缺陷。候選替換改為一個字面詞項後，兩架構 **10 個相關 TSF 案例**重新通過，核心長組字測試確認沒有自動提交結果遺失。
+- 原有 x64／x86 TSF smoke 與無模型啟動通過，包括組字、游標、候選、提交、取消、混打、可編輯空格、COM 生命週期及背景核心。Windows interaction harness 三段 PASS，涵蓋候選／學習／詞典／聯想／拼音；單獨數字的舊 passthrough 期望更新為由輸入法插入字面文字，另保留獨立聲調符號測試。
+- x64 WinUI `--verify-ui` 通過：新開關真實控制項的雙向綁定、保存與重新載入，以及既有遷移、逐鍵標點、操作預設及介面擷取。新開關淺／深色畫面已檢視；兩架構原生橫／直式候選、滑鼠索引、過期點擊與不搶焦點測試通過。UI 用既有鎖定套件 `--no-restore` 發佈；保留既有 NU1900、WUI2011、LNK4104 及 harness C4701 警告，NuGet 弱點資料查詢未完成。
+
+本輪沒有安裝或更動輸入法註冊／語言清單。實際 `profile.ini` 與 `installed.json` 的前後雜湊一致；`learning.tsv` 在本輪早期、原生整合測試之前已有變動，未還原或覆寫，不能宣稱整輪雜湊不變。上述測試各自使用隔離資料，不把私人詞典或學習檔放入產品包。Thorium／AyuGram 實際前景欄位與既有 UAC／共存更新／AppContainer 驗收仍保留於 TODO。
+
+證據：`build/release-0.7.0-20261015/` 的 `core-lib.log`、`unit-{x64,x86}.log`、`native-build.log`、`input-features-validated/`、`input-resident-validated/`、`literal-candidate-limit-validated/`、`tsf-{x64,x86}.log`、`interaction.log` 及 `ui-verify.log`。介面擷取在 `build/ui-review-final/` 與 `build/native-review/`；最終封裝／來源雜湊見工作區交付紀錄及該證據目錄的 `package-audit.json`。
+
+## 2026-10-14 Windows 0.6.1 設定共存與提權等待
+
+- 0.6.0 實際安裝紀錄在 16:46:53 完成校驗；16:46:50 產生 schema 6 備份，後續多個 App 無回應。舊／新 DLL 的隔離重現證明 schema 5／6 反覆改寫；沒有卡死當下 dump，不將完整桌面死鎖稱為已取得堆疊的根因。
+- x64／x86 release 建置成功。Windows crate 各 **24 項單元測試通過、2 項原生系統測試 ignored**。新增唯讀遷移、明確儲存及原始備份保存、未知新版 schema 保護，以及真實子程序退出碼、訊息處理、短期限逾時、無效 handle、WM_QUIT 保留。等待測試只對自己的隱藏 message-only 視窗送訊息，沒有提權或操作系統安裝。
+- 使用原 0.5.3／0.6.0 發佈 DLL，分別與新版 x64／x86 做 **四種組合、各 64 組交替讀取**。初始讀取及明確保存後再由舊版讀取，皆不恢復 schema 循環；原有備份、公開範例詞典路徑及外觀值保留。`SHANJIE_TEST_PROFILE=1` 阻止全系統通知。證據：`build/release-0.6.1-20261014/coexistence-*`。
+- x64／x86 背景 TSF 與無模型啟動通過。測試程序內 v2 設定／重啟通知，以及 v1 相容接收通過，無廣播。兩架構原生橫／直式候選與滑鼠測試通過。WinUI 真實控制項、唯讀 schema 2 遷移、明確保存後的備份、逐鍵標點／預設分享／直式選項保存及重讀通過；離屏擷取保存於 `build/ui-review-final/`。
+- NuGet 線上還原卡在網路等待後，只停止本輪建置的已核對 dotnet 程序；使用既有鎖定套件與 `--no-restore` 完成 WinUI publish，未升級相依版本。LNK4104、WUI2011、NU1900 及 TSF harness C4701 警告保留；弱點資料查詢未完成。
+
+沒有安裝 0.6.1、修改真正的輸入法註冊／語言清單或停止使用者核心。私人 profile、learning.tsv 與已安裝版本紀錄的前後雜湊一致。背景測試不能替代真實 UAC、已註冊 App 共存升級、Windows Terminal／AppContainer 驗收；這些保留於 TODO。最終封裝／來源雜湊見工作區交付紀錄與 `build/release-0.6.1-20261014/package-audit.json`。
 
 ## 2026-10-14 Windows 0.6.0 按鍵自訂、操作預設、直式候選與亂序注音
 
@@ -70,7 +92,7 @@
 
 - x64／x86 release DLL 與 manager 建置通過；WinUI 原始碼與 UI payload 沿用，僅同步它使用的新版 Rust DLL。上游 pin 與 `platform/` 覆蓋未改。
 - `resident.rs` 將核心／拼音載入移到專屬背景執行緒。TSF 停用或服務釋放後保留一份備用核心，設定相符時重用；尚未完成的預載也可以移交。核心只有單一擁有者，COM／HWND 不跨執行緒。移交前清除組字、預測及拼音暫存。
-- x64／x86 Windows profile 與 x64 善解 profile 背景 harness 通過。新增計數斷言確認服務釋放／重建前後只載入一次；預載後首組字與再次啟用耗時見 PERFORMANCE.md。原有 commit／cancel／caret、設定重載、拼音保留、中英混打與忙碌學習鎖檢查仍通過。
+- x64／x86 Windows profile 與 x64 善解 profile 背景 harness 通過。新增計數斷言確認服務釋放／重建前後只載入一次；預載後首組字與再次啟用耗時見 docs/PERFORMANCE.md。原有 commit／cancel／caret、設定重載、拼音保留、中英混打與忙碌學習鎖檢查仍通過。
 - DLL 採程序生命週期常駐，因此 `DllCanUnloadNow` 在啟動預載後為 S_FALSE；另外讀取 COM 物件計數，確認服務／factory 清理後為零。沒有把刻意保留的核心當成 COM 洩漏，也不在 worker 尚存時卸載 DLL。
 - 無模型 fixture 的預載失敗不阻擋啟用、Win 快捷鍵或閒置失焦；實際按鍵放行且不再次同步載入。初輪 fixture 曾錯誤預期 OnKeyDown 回傳失敗 HRESULT，已改成符合既有錯誤政策的「成功回傳且不吃鍵」，重跑通過。
 - 證據：`build/resident-build-{x64,x86}.log`、`build/resident-tsf-{x64,x86}.log`、`build/resident-tsf-shanjie-x64.log`。未重跑與生命週期無關的完整核心／模型或 UI 截圖測試。
@@ -93,7 +115,7 @@
 - 本輪相關核心回歸 **144 項通過**：lib 47、engine 33、prediction 64；8 個既有 ignored 量測沒有執行。沒有重跑與本功能無關的整套模型／學習長 fixture。記錄 `build/smart-core-regression.log`。
 - 使用正式 model-v5 的 interaction harness 通過 `sucl`、`sc` 候選包含「你好」、滑鼠 pick API、Enter／空白轉換、兩項關閉，以及 `callsu3` →「call你」、`hello world`、`hello123`、`hello,su3` →「hello,你」。另有小詞庫單元檢查中文接英文、失焦 reset、Esc、未提交與已確認英文的逐字刪除。記錄 `build/smart-interaction.log`。
 - x64／x86 TSF 背景 harness 均通過：實際游標位置插入中英組字、簡拼候選／數字選詞、儲存通知關閉功能時保留英文、關閉後不出現簡拼列；原有 composition、caret、commit、cancel、COM lifetime 與無模型啟用檢查仍通過。keyboard sink 仍用 ThreadProxy，不是註冊 TIP 的前景 App 驗收。記錄 `build/smart-tsf-x64.log`、`smart-tsf-x86.log`。
-- WinUI 原生 ToggleSwitch 的開／關、草稿保存與重讀通過；淺深兩張 `build/smart-ui-review/settings-{1,2}-2.png` 已打開檢查，新鮮 impeccable reviewer 的 disposition 為 **ship，限此次設定介面擴充**；documenter 確認沒有系統級設計變動，保留 DESIGN.md 與既有 sidecar。沒有使用生成影像或 web detector。`build/smart-ui-review/result.txt` 為 PASS。
+- WinUI 原生 ToggleSwitch 的開／關、草稿保存與重讀通過；淺深兩張 `build/smart-ui-review/settings-{1,2}-2.png` 已打開檢查，新鮮 impeccable reviewer 的 disposition 為 **ship，限此次設定介面擴充**；documenter 確認沒有系統級設計變動，保留 docs/DESIGN.md 與既有 sidecar。沒有使用生成影像或 web detector。`build/smart-ui-review/result.txt` 為 PASS。
 - `package.ps1 -UseExistingBuild` 已完成套件雜湊校驗與 ZIP；重用原有已核對的 model-v5／classes-v3，沒有再次下載模型。包內包含兩架構 DLL、更新後 WinUI、兩份預設、英文詞表及來源／授權文件。記錄 `build/smart-package.log`。
 
 本輪沒有安裝到系統、修改真實個人設定或操作使用者前景視窗。中英辨識是 4,960 個常用英文項目的本機規則；沒有宣稱等同華碩私有模型、支援任意未知英文或無分界的英文／簡拼整句。標準鍵盤新增案例已實際跑過；倚天共用解析路徑與上游配置回歸通過，新增智慧混打的倚天日常情境仍待驗收。資料來源及 LGPL 全文已隨包提供。
@@ -107,7 +129,7 @@
 - Windows profile 的忙碌學習鎖檢查通過：先確認測試握住的是引擎已有的同名 mutex，再從另一執行緒持鎖，失焦提交文字保持完整；x64 0.011 ms、x86 0.027 ms，沒有 250 ms 等待。reset 依上游「不學習／不寫檔」契約直接呼叫；閒置失焦也不重置空引擎。
 - interaction harness 通過缺少／錯配詞類拒絕、個人詞庫、Unicode／Big5、預測與聯想、拼音、標點、交錯引擎學習及 epoch 清除。學習 store 未變動時不重讀；自己的寫入在持鎖期間更新版本，保留跨實例同步。
 - 兩架構候選與模式 harness 通過 NOACTIVATE、滑鼠／過期點擊、隱藏／重開、DPI 與提示自動隱藏。候選繪圖資源改在第一次真正顯示時建立，純白細邊線與既有幾何保持。WinUI 離屏保存／重讀及淺深擷取通過，人工核對一般頁與儲存回饋中的新「重新啟動輸入法」按鈕；未儲存草稿先保存，沒有草稿則讀取磁碟設定。設定儲存主動通知保留，逐鍵 INI metadata API 已刪除。
-- 量測與首次輸入代價見 PERFORMANCE.md。證據在 build/verify-main-*-final.log、build/verify-main-kn-and-native.log、build/verify-main-x64.log、build/engine-v5-*-final.log、build/ui-final-check.log、build/ui-review-final/ 與 build/mode-final-check.log。完整回歸的初輪 KN 失敗是 CRLF fixture，修正後的定向結果才是最終 KN 證據。
+- 量測與首次輸入代價見 docs/PERFORMANCE.md。證據在 build/verify-main-*-final.log、build/verify-main-kn-and-native.log、build/verify-main-x64.log、build/engine-v5-*-final.log、build/ui-final-check.log、build/ui-review-final/ 與 build/mode-final-check.log。完整回歸的初輪 KN 失敗是 CRLF fixture，修正後的定向結果才是最終 KN 證據。
 
 本輪未更新系統安裝或終止使用者 App。Win＋R／E 真實開啟延遲、前景 App、實際工作列、多螢幕／讀屏仍未驗收；上述回呼量測不能當作檔案總管已實機修復。重啟按鈕只重載核心，無法替換 App 已載入的舊版 DLL。首次中文輸入與首次候選顯示仍承擔初始化成本，沒有宣稱消除所有冷啟動延遲。
 
@@ -142,10 +164,10 @@ x64／x86 重建與 TSF 背景 harness 通過；兩架構原生候選、模式�
 - x64 interaction 通過最新模型、缺少／錯配詞類拒絕、passive／entered 預測、即時停用、Big5、Ctrl 標點、拼音、字碼／符號、個人詞庫、交錯學習及清除 epoch。
 - x64／x86 原生候選與模式圖示 harness 通過同程序、NOACTIVATE、mouse sequence、隱藏／重開、client＝window、RGBA 角落透明與提示自動隱藏。候選 36 張實際原生擷取覆盖淺深、14／16／32 DIP、自然詞寬、720 px 工作區、聯想、emoji、被動／進入預測。當前環境 120 DPI；不是實際多螢幕验收。
 - WinUI 離屏保存／重讀通過舊設定備份、最新模型與 horizontal 遷移、保留詞庫／學習／外觀，以及實際 ToggleSwitch 草稿雙向綁定。設定淺深擷取包含六頁與長頁細節；Rust共用業務邏輯，新畫面不提供模型／排列選單。
-- 全部 PowerShell 7 腳本語法通過；Rust dependency licenses 從 Cargo.lock 鎖定版本收集全文。資源量測與端點界線見 PERFORMANCE.md。
+- 全部 PowerShell 7 腳本語法通過；Rust dependency licenses 從 Cargo.lock 鎖定版本收集全文。資源量測與端點界線見 docs/PERFORMANCE.md。
 - 最終套件的 native manager 校驗通過；ZIP 內 589 個檔案逐一 SHA-256 核對通過，僅有 model-v4＋classes-v2、沒有退休安裝腳本，WinUI 旁的 Rust DLL 與 x64 TSF DLL 相同。ZIP 約 111.68 MiB。
 
-候選擷取來源 `build/native-review/{x64,x86}`，36 張保留 alpha 的 PNG 副本在 `.impeccable/review/{x64,x86}`；WinUI 在 `build/ui-review-final`。沒有影像生成素材或 HTML detector。獨立 reviewer 已逐一核對 36 張候選與 6 張相關設定圖，可見畫面全部 match／adaptation；唯一 material fix 是舊 DESIGN.md 的世界與來源記錄。新鮮 documenter 已修正 DESIGN.md／sidecar，同一 reviewer 判定该項 resolved，最後 disposition 為 **ship，限定該文件 fix list**。
+候選擷取來源 `build/native-review/{x64,x86}`，36 張保留 alpha 的 PNG 副本在 `.impeccable/review/{x64,x86}`；WinUI 在 `build/ui-review-final`。沒有影像生成素材或 HTML detector。獨立 reviewer 已逐一核對 36 張候選與 6 張相關設定圖，可見畫面全部 match／adaptation；唯一 material fix 是舊 docs/DESIGN.md 的世界與來源記錄。新鮮 documenter 已修正 docs/DESIGN.md／sidecar，同一 reviewer 判定该項 resolved，最後 disposition 為 **ship，限定該文件 fix list**。
 
 安裝器已實作完整套件雜湊校驗、兩架構註冊與實際路徑／DLL 雜湊核對、註冊失敗回復、唯一版本 payload、舊版／舊根目錄清理及 reboot queue。解除安裝在任何刪除前詢問保留詞庫與學習、全刪或取消，清 COM／TSF／本帳號輸入法清單／Installed Apps／安裝目錄／所選個人資料。**本輪未執行系統安裝或解除安裝，管理員流程與重新啟動後清理尚未實測**；fixture 通過不能冒充實機結果。
 

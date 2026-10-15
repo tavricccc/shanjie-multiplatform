@@ -19,6 +19,8 @@ pub struct Snapshot {
     pub associated: bool,
     pub prediction: bool,
     pub reading_hint: bool,
+    #[serde(default)]
+    pub phonetic_pending: bool,
     pub commit: String,
     pub preedit: String,
     pub cursor: u32,
@@ -267,6 +269,7 @@ impl Engine {
                 prediction: shanjie_windows_is_prediction_row(self.handle) != 0
                     || shanjie_windows_is_mixed_hint(self.handle) != 0,
                 reading_hint: shanjie_windows_is_mixed_hint(self.handle) != 0,
+                phonetic_pending: shanjie_windows_phonetic_pending(self.handle) != 0,
                 candidates: (0..r.candidate_count)
                     .map(|i| string(*r.candidates.add(i as usize)))
                     .collect(),

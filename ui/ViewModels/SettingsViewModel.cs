@@ -21,6 +21,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool SpaceCommits { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp)), NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial bool SpaceOperates { get; set; }
     [ObservableProperty] public partial bool PinyinSpaceConverts { get; set; }
+    [ObservableProperty] public partial bool SpaceInputsZhuyin { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial bool SpacePages { get; set; }
     public bool CanWrapSpacePages => SpaceOperates && SpacePages;
     [ObservableProperty] public partial bool WrapPages { get; set; }

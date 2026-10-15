@@ -25,8 +25,9 @@ public sealed partial class MainWindow : Window
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedInputForVerification(bool mixed) => MixedInputToggle.SetToggleForVerification(mixed);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
+    internal void SetSpaceInputsZhuyinForVerification(bool value) => SpaceInputsZhuyinToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
-    internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceCommitsToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
+    internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceInputsZhuyinToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal static class Pages { public const int General = 0, Keys = 1, Punctuation = 2, Composition = 3, Candidates = 4, Appearance = 5, Dictionary = 6, About = 7, Count = 8; }
     internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }

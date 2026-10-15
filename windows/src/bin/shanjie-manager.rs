@@ -7,7 +7,6 @@ use windows::{
     core::{w, PCWSTR},
     Win32::{
         Foundation::*,
-        System::Threading::*,
         UI::{Shell::*, WindowsAndMessaging::*},
     },
 };
@@ -22,7 +21,7 @@ fn elevate(action: &str) -> Result<()> {
         let file = wide(&executable.to_string_lossy());
         let mut info = SHELLEXECUTEINFOW {
             cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-            fMask: SEE_MASK_NOCLOSEPROCESS,
+            fMask: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC,
             lpVerb: w!("runas"),
             lpFile: PCWSTR(file.as_ptr()),
             lpParameters: PCWSTR(arguments.as_ptr()),
@@ -30,10 +29,17 @@ fn elevate(action: &str) -> Result<()> {
             ..Default::default()
         };
         ShellExecuteExW(&mut info)?;
-        WaitForSingleObject(info.hProcess, INFINITE);
-        let mut code = 0;
-        GetExitCodeProcess(info.hProcess, &mut code)?;
-        CloseHandle(info.hProcess)?;
+        let process = info.hProcess; // SHELLEXECUTEINFOW is packed on x86.
+        // This thread may own Shell/TSF windows. Keep dispatching messages and
+        // stop waiting after ten minutes without terminating an active install.
+        let waited = shanjie_windows::process_wait::wait_for_exit(
+            process,
+            std::time::Duration::from_secs(600),
+        );
+        if !process.is_invalid() {
+            let _ = CloseHandle(process);
+        }
+        let code = waited?;
         if code != 0 {
             return Err(format!("操作未完成（退出碼 {code}）。").into());
         }

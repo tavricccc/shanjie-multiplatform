@@ -78,10 +78,7 @@ pub fn is_punctuation(k: ShanjieKey) -> bool {
         && (!"190".contains(k.ch as u8 as char) || k.modifiers == 3)
 }
 pub fn pending(s: &Snapshot) -> bool {
-    s.reading_hint
-        || s.preedit
-            .chars()
-            .any(|c| ('\u{3105}'..='\u{312f}').contains(&c))
+    s.reading_hint || s.phonetic_pending
 }
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {

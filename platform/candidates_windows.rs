@@ -55,7 +55,9 @@ impl Engine {
             let after = (0..end).map(|i| self.token_width(i)).sum::<usize>();
             shown[before..after].iter().collect::<String>() == *word
         });
-        let next = current.map_or(0,|i| (i+1) % cands.list.len());
+        let next = (1..=cands.list.len()).map(|offset| (current.unwrap_or(cands.list.len()-1)+offset) % cands.list.len())
+            .find(|i| !cands.literals.contains_key(i));
+        let Some(next) = next else { self.cands = None; self.cursor = cursor; return self.handled(); };
         self.choose(next)?; self.cursor = cursor;
         self.handled()
     }

@@ -54,6 +54,7 @@ public partial class SettingsViewModel
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
+            SpaceInputsZhuyin = profile.Flag("input", "space_inputs_zhuyin", true);
             EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
             BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
             if (readDictionary)
@@ -121,6 +122,7 @@ public partial class SettingsViewModel
             ("input","mixed_input",MixedInput),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
+            ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
             ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),

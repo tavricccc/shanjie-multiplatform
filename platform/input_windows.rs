@@ -58,8 +58,30 @@ impl Engine {
         self.clear_all(); self.view(true,commit)
     }
     fn make_candidates(&self, mut list: Vec<(String,usize)>) -> Option<Cands> {
+        let (_,length) = list.first()?.clone();
+        if !self.space_inputs_zhuyin { list.retain(|(word,_)| !windows_reading_text(word)); }
         if self.candidate_big5 { list.retain(|(word,_)| fits_big5(word)); }
-        (!list.is_empty()).then(|| Cands::new(list, self.cand_vertical))
+        let (start,end) = self.candidate_span(length);
+        let mut cands = Cands::new(list, self.cand_vertical);
+        if end <= self.syls.len() && !(start..end).any(|index| self.is_punct(index)) {
+            if !self.space_inputs_zhuyin {
+                let text = self.syls[start..end].concat();
+                let has_word = !cands.list.is_empty();
+                cands.list.insert(0,(text.clone(),length));
+                cands.literals.insert(0,WindowsLiteralCandidate { text,start,end });
+                cands.sel = usize::from(has_word);
+            }
+            if self.mixed_input {
+                let original: Option<Vec<_>> = (start..end).map(|i| self.typed_literals.get(&i).cloned()).collect();
+                if let Some(original) = original {
+                    let text = original.concat();
+                    let index = (cands.sel + 1).min(cands.list.len());
+                    cands.list.insert(index,(text.clone(),length));
+                    cands.literals.insert(index,WindowsLiteralCandidate { text,start,end });
+                }
+            }
+        }
+        (!cands.list.is_empty()).then_some(cands)
     }
 }
 fn fits_big5(word: &str) -> bool {

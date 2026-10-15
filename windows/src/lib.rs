@@ -8,6 +8,7 @@ pub mod installation;
 pub mod installer;
 pub mod native;
 mod pipe_io;
+pub mod process_wait;
 pub mod profile;
 pub mod registration;
 mod registry_snapshot;

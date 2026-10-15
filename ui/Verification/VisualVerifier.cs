@@ -28,9 +28,12 @@ internal static class VisualVerifier
         await Task.Delay(500);
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
         string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
-        File.Delete(Models.ProfileStore.Path + ".schema2.bak"); File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
-        if (settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path + ".schema2.bak") != legacy)
-            throw new InvalidDataException("Schema 2 migration did not preserve settings or original backup");
+        File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
+        if (settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path) != legacy)
+            throw new InvalidDataException("Read-only schema 2 migration did not preserve settings or original file");
+        settings.Vm.Save();
+        if (File.ReadAllText(Models.ProfileStore.Path + ".schema2.bak") != legacy)
+            throw new InvalidDataException("Explicit save did not retain the legacy profile backup");
         settings.Vm.Preset(true); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle || settings.Vm.CtrlSpaceToggle || settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.FontSize != 22 || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.ShiftPunctuation)
             throw new InvalidDataException("Windows preset/retained data round-trip failed");
@@ -66,10 +69,13 @@ internal static class VisualVerifier
         if (settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle off failed");
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
         foreach (bool enabled in new[] { true, false }) {
+            settings.SetSpaceInputsZhuyinForVerification(enabled); await Task.Delay(60);
+            if (settings.Vm.SpaceInputsZhuyin != enabled) throw new InvalidDataException("Space Zhuyin toggle binding failed");
             settings.ShowSection(MainWindow.Pages.Composition); settings.SetSpaceCommitsForVerification(enabled);
             settings.ShowSection(MainWindow.Pages.Candidates); settings.SetSpaceOperatesForVerification(enabled); await Task.Delay(60);
             if (settings.Vm.SpaceCommits != enabled || settings.Vm.SpaceOperates != enabled) throw new InvalidDataException("Space toggle binding failed");
             settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.SpaceInputsZhuyin != enabled) throw new InvalidDataException("Space Zhuyin toggle persistence failed");
             if (settings.Vm.SpaceCommits != enabled || settings.Vm.SpaceOperates != enabled) throw new InvalidDataException("Space toggle persistence failed");
         }
         settings.Vm.Ranking = 0; settings.Vm.Learning = false; settings.Vm.FontSize = 18; settings.Vm.DictionaryText = "";

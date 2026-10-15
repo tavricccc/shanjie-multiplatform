@@ -96,7 +96,8 @@ int wmain(int argc,wchar_t** argv) {
     for (unsigned model : {5u}) {
         shanjie::Engine engine; assert(engine.open(argv[1],0,0,true,false,false,L"dictionary.tsv",model));
         assert(engine.inputOptions(false,false,false)); key.kind = 1; key.modifiers = 0; key.ch = '3';
-        assert(engine.key(key,out)); assert(!out.handled && out.preedit.empty()); // Bare tone is the original digit.
+        assert(engine.key(key,out)); assert(out.handled && out.preedit == L"3" && out.commit.empty()); // IME inserts the original digit reliably.
+        assert(engine.reset(true,out));
         key.ch = 's'; assert(engine.key(key,out)); assert(out.candidates.empty());
         assert(engine.prediction(true,out)); assert(out.prediction && out.selected == -1 && !out.candidates.empty());
         assert(engine.key(tab,out)); assert(out.prediction && out.selected == 0 && !out.columns);

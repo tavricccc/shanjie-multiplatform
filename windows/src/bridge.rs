@@ -197,7 +197,7 @@ fn frame(s: Snapshot) -> *mut Frame {
     let raw = Frame {
         handled: s.handled as u32,
         associated: s.associated as u32,
-        prediction: s.prediction as u32 | ((s.reading_hint as u32) << 1),
+        prediction: s.prediction as u32 | ((s.reading_hint as u32) << 1) | ((s.phonetic_pending as u32) << 2),
         commit: strings[0].as_ptr(),
         preedit: strings[1].as_ptr(),
         cursor: s.cursor,
@@ -222,6 +222,7 @@ unsafe fn snapshot(r: *const Frame) -> Snapshot {
         associated: r.associated != 0,
         prediction: r.prediction & 1 != 0,
         reading_hint: r.prediction & 2 != 0,
+        phonetic_pending: r.prediction & 4 != 0,
         commit: text(r.commit).into(),
         preedit: text(r.preedit).into(),
         cursor: r.cursor,
