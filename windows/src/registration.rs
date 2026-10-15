@@ -94,8 +94,11 @@ pub unsafe fn register(module: HMODULE, remove: bool) -> Result<()> {
                 &SERVICE,
                 0x0404,
                 &id,
-                &description.encode_utf16().collect::<Vec<_>>(),
-                &buffer[..count as usize],
+                &description
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>(),
+                &buffer[..count as usize + 1],
                 0,
             )?;
             profiles.EnableLanguageProfile(&SERVICE, 0x0404, &id, true)?;
