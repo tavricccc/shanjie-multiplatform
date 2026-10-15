@@ -102,61 +102,24 @@ unsafe extern "system" fn watcher_proc(
 
 fn icon(size: u32, chinese: bool) -> tiny_skia::Pixmap {
     use tiny_skia::*;
-    let mut pixmap = Pixmap::new(size, size).unwrap();
-    let mut path = PathBuilder::new();
-    let k = 2.209139;
-    path.move_to(5.0, 1.0);
-    path.line_to(19.0, 1.0);
-    path.cubic_to(19.0 + k, 1.0, 23.0, 5.0 - k, 23.0, 5.0);
-    path.line_to(23.0, 19.0);
-    path.cubic_to(23.0, 19.0 + k, 19.0 + k, 23.0, 19.0, 23.0);
-    path.line_to(5.0, 23.0);
-    path.cubic_to(5.0 - k, 23.0, 1.0, 19.0 + k, 1.0, 19.0);
-    path.line_to(1.0, 5.0);
-    path.cubic_to(1.0, 5.0 - k, 5.0 - k, 1.0, 5.0, 1.0);
-    path.close();
-    let mut paint = Paint::default();
-    paint.set_color_rgba8(
-        if chinese { 0x24 } else { 0x47 },
-        if chinese { 0x61 } else { 0x55 },
-        if chinese { 0x78 } else { 0x69 },
-        255,
-    );
-    let scale = Transform::from_scale(size as f32 / 24.0, size as f32 / 24.0);
-    pixmap.fill_path(
-        &path.finish().unwrap(),
-        &paint,
-        FillRule::Winding,
-        scale,
-        None,
-    );
-    let mut path = PathBuilder::new();
-    if chinese {
-        path.move_to(12.0, 4.5);
-        path.line_to(12.0, 19.5);
-        path.move_to(5.5, 8.0);
-        path.line_to(18.5, 8.0);
-        path.line_to(18.5, 16.0);
-        path.line_to(5.5, 16.0);
-        path.close();
+    // Master artwork from scripts/make-icons.ps1, scaled to the DPI-sized hint.
+    let master = Pixmap::decode_png(if chinese {
+        include_bytes!("../../assets/mode/chinese.png")
     } else {
-        path.move_to(6.5, 18.0);
-        path.line_to(12.0, 5.5);
-        path.line_to(17.5, 18.0);
-        path.move_to(8.25, 14.0);
-        path.line_to(15.75, 14.0);
-    }
-    paint.set_color_rgba8(255, 255, 255, 255);
-    pixmap.stroke_path(
-        &path.finish().unwrap(),
-        &paint,
-        &Stroke {
-            width: 2.2,
-            line_cap: LineCap::Round,
-            line_join: LineJoin::Round,
+        include_bytes!("../../assets/mode/english.png")
+    })
+    .unwrap();
+    let mut pixmap = Pixmap::new(size, size).unwrap();
+    let scale = size as f32 / master.width() as f32;
+    pixmap.draw_pixmap(
+        0,
+        0,
+        master.as_ref(),
+        &PixmapPaint {
+            quality: FilterQuality::Bicubic,
             ..Default::default()
         },
-        scale,
+        Transform::from_scale(scale, scale),
         None,
     );
     pixmap

@@ -149,7 +149,7 @@ NavigationView 的「一般」、「按鍵」、「組字與提交」、「選�
 
 ### 中英模式提示
 
-工作列模式按鈕保留 `rime/icons/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示由 Rust tiny-skia 依 `assets/mode/chinese.svg`／`english.svg` 的既有 24×24 幾何繪製中／A，不縮放 ICO；原始 MIT 授權保留於 `assets/mode/LICENSE`。`windows/src/native.rs` 使用 layered alpha、NOACTIVATE 與原生計時器；模式按鈕來源為 `windows/src/tsf/mode.rs`，兩者均在 TSF 同程序內。
+工作列模式按鈕使用依上游印章圖示（`site/favicon.svg`）重繪的 `assets/mode/chinese.ico`／`english.ico`，嵌入 DLL resource 101／102。游標旁提示由 Rust tiny-skia 載入同一組 128 px 母圖 `chinese.png`／`english.png`，依實際 DPI 縮放。圖示由 `scripts/make-icons.ps1` 產生，說明見 `assets/mode/README.md`。`windows/src/native.rs` 使用 layered alpha、NOACTIVATE 與原生計時器；模式按鈕來源為 `windows/src/tsf/mode.rs`，兩者均在 TSF 同程序內。
 
 ### 原生解除安裝詢問
 
