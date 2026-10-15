@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "shanjie-windows"
-version = "0.8.1"
+version = "0.8.3"
 dependencies = [
  "core",
  "serde",
