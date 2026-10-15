@@ -256,7 +256,7 @@ impl Engine {
 
     fn mixed_view(&self, mut out: Output) -> Output {
         if self.is_mixed_hint() {
-            out.candidates = vec![self.pending()];
+            out.candidates = vec![self.pending(), self.mixed_raw.clone()];
             out.selected = None;
             out.columns = 0;
             out.first = 0;
