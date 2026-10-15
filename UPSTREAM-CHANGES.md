@@ -2,7 +2,7 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 `feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（2026-10-15；基於 main `76dc7ac`，作者表示 model-v6 即將發佈，尚未合入 main），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
-## 2026-10-15 同步上游並換 model-v6／classes-v4
+## 2026-10-15 Windows 0.8.0：同步上游並換 model-v6／classes-v4
 
 上游 pin 由 `368eebc`（main）更新到 `feat/model-v6-switch` 的 `f8ea0bb`（約 1,040 個 commit，含 main 的 `76dc7ac`）。該分支尚未合入 main，待作者發佈後再改回 main 的對應 commit。內建模型換成 model-v6＋classes-v4（`MODEL-SOURCES.json`、安裝包驗證與 UI 文案同步）；model-v5／classes-v3 不再打包。
 

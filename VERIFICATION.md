@@ -2,10 +2,11 @@
 
 最新日期：2026-10-15。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
 
-## 2026-10-15 同步上游 f8ea0bb（model-v6／classes-v4）
+## 2026-10-15 Windows 0.8.0 同步上游 f8ea0bb（model-v6／classes-v4）
 
 - x64／x86 release 與 WinUI 建置成功，`package.ps1` 產生 `dist/Shanjie-Windows.zip`（606 個檔案通過包內驗證，只含最新模型）。
 - `verify.ps1`：產生後的核心 lib 60 項、engine／learn／replay／lm／demote／predict／pack／vertical／kn_tiny／tinylm_tiny 等上游整合測試、Windows interaction 與 TSF smoke 通過。為 Windows 調整：略過 `english_codes_through_the_c_abi`（用到 Unix 的 mkfifo）、測試中的 unix symlink 改為複製，並為驗證下載 kn-v1（雜湊核對）。
+- 安裝程式改動（輸入法描述補結尾 NUL、鍵盤選擇改用工作對話框並嵌入 comctl32 v6 manifest）：x64／x86 release 建置成功，x64 `shanjie-manager.exe` 內確認含 manifest 依賴，`package.ps1 -UseExistingBuild` 重新打包通過（607 個檔案）。**未實機驗證：** 沒有安裝，語言清單名稱是否不再亂碼、對話框實際畫面都待確認。
 - 沒有重跑 `verify-update.ps1`、x86 TSF smoke、WinUI `--verify-ui`，沒有安裝或實機驗收；上游 pin 是未合入 main 的分支。
 
 ## 2026-10-15 Windows 0.7.0 混打、字面輸入與注音候選

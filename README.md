@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.7.0**：改善混打的數字／標點輸入與組字保存，支援明確聲調後的英文字母亂序注音，新增空白鍵輸入注音符號開關及第一項注音候選，見 [docs/releases/RELEASE-NOTES-0.7.0.md](docs/releases/RELEASE-NOTES-0.7.0.md)。沿用 0.6.1 的設定共存與提權等待修正、0.6.0 的逐鍵標點／操作預設／直式候選，以及 0.5.x 的核心復原、安裝與詞典修正。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.8.0**：上游同步到 `feat/model-v6-switch`（model-v6＋classes-v4，尚未合入 main），修正語言清單輸入法名稱後的亂碼，安裝時以按鈕選擇標準或倚天注音，並更換單色「解」與中／A 圖示，見 [docs/releases/RELEASE-NOTES-0.8.0.md](docs/releases/RELEASE-NOTES-0.8.0.md)。沿用 0.7.0 的混打數字／標點、亂序注音與空白鍵輸入注音符號開關、0.6.1 的設定共存與提權等待、0.6.0 的逐鍵標點／操作預設／直式候選，以及 0.5.x 的核心復原、安裝與詞典修正。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
