@@ -610,15 +610,53 @@ impl Host {
             } else {
                 &self.palette.label
             });
-            self.target.DrawTextLayout(
-                Vector2 {
-                    X: 14.0 * ratio,
-                    Y: 6.0 * ratio,
-                },
-                reading,
-                &self.brush,
-                D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT,
-            );
+            let origin = Vector2 {
+                X: 14.0 * ratio,
+                Y: 6.0 * ratio,
+            };
+            let options = D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
+            // With the cursor inside the text, mark the character whose candidates are listed (the one before the cursor).
+            let units: Vec<u16> = self.state.preedit.encode_utf16().collect();
+            let cursor = self.state.cursor as usize;
+            let mark = (!self.state.reading_hint && !units.is_empty() && cursor < units.len())
+                .then(|| {
+                    let mut start = cursor.saturating_sub(1);
+                    if start > 0 && (0xdc00..0xe000).contains(&units[start]) {
+                        start -= 1;
+                    }
+                    let end = if (0xd800..0xdc00).contains(&units[start]) { start + 2 } else { start + 1 };
+                    (start as u32, (end.min(units.len()) - start) as u32)
+                });
+            let mut spot = None;
+            if let Some((start, length)) = mark {
+                let mut metrics = [DWRITE_HIT_TEST_METRICS::default()];
+                let mut count = 0;
+                let _ = reading.HitTestTextRange(start, length, origin.X, origin.Y, Some(&mut metrics), &mut count);
+                let m = metrics[0];
+                if count > 0 {
+                    spot = Some(D2D_RECT_F {
+                        left: m.left,
+                        top: m.top,
+                        right: m.left + m.width,
+                        bottom: m.top + m.height,
+                    });
+                }
+            }
+            if let Some(rect) = &spot {
+                self.brush.SetColor(&self.palette.accent);
+                self.target.FillRoundedRectangle(
+                    &rounded(rect.left - 1.0 * ratio, rect.top, rect.right + 1.0 * ratio, rect.bottom, 3.0 * ratio),
+                    &self.brush,
+                );
+                self.brush.SetColor(&self.palette.label);
+            }
+            self.target.DrawTextLayout(origin, reading, &self.brush, options);
+            if let Some(rect) = spot {
+                self.target.PushAxisAlignedClip(&rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+                self.brush.SetColor(&self.palette.selected);
+                self.target.DrawTextLayout(origin, reading, &self.brush, options);
+                self.target.PopAxisAlignedClip();
+            }
         }
         let mut x = (3.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
         for (i, item) in self
