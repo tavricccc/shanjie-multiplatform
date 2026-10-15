@@ -1,5 +1,5 @@
 #Requires -Version 7
-# Regenerates the mode icons: a flat, modern squircle with a soft gradient and a bold sans glyph (no inner frame).
+# Regenerates the mode icons: a flat solid-colour squircle with a bold sans glyph (no gradient, no inner frame).
 # Chinese is a vermilion tile with 解 (the upstream seal colour); English is a deep slate tile with A.
 # Needs the Noto Sans TC font; glyphs are rasterized, no font is shipped.
 param([string]$Font = 'Noto Sans TC')
@@ -19,16 +19,15 @@ function New-RoundedPath([single]$x, [single]$y, [single]$w, [single]$h, [single
     return $path
 }
 
-function New-Icon([int]$size, [string]$glyph, [Drawing.Color]$top, [Drawing.Color]$bottom) {
+function New-Icon([int]$size, [string]$glyph, [Drawing.Color]$fill) {
     $bitmap = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [Drawing.Graphics]::FromImage($bitmap)
     $g.SmoothingMode = 'AntiAlias'
     $g.Clear([Drawing.Color]::Transparent)
     $g.ScaleTransform($size / 64.0, $size / 64.0)
-    # Soft diagonal gradient on a generously rounded tile; no frame, no serif.
+    # Flat solid tile with generous rounding; no gradient, frame or serif.
     $tile = New-RoundedPath 2 2 60 60 16
-    $gradient = [Drawing.Drawing2D.LinearGradientBrush]::new([Drawing.PointF]::new(10, 2), [Drawing.PointF]::new(54, 62), $top, $bottom)
-    $g.FillPath($gradient, $tile)
+    $g.FillPath([Drawing.SolidBrush]::new($fill), $tile)
     $text = [Drawing.Drawing2D.GraphicsPath]::new([Drawing.Drawing2D.FillMode]::Winding)
     $family = [Drawing.FontFamily]::new($Font)
     $em = if ($glyph -eq 'A') { 40 } else { 37 }
@@ -61,17 +60,16 @@ function Save-Ico([string]$path, $bitmaps) {
 
 $sizes = 16, 20, 24, 32, 40, 48, 64, 256
 $modes = @(
-    @{ Name = 'chinese'; Glyph = '解'; Top = [Drawing.Color]::FromArgb(0xF0, 0x5A, 0x44); Bottom = [Drawing.Color]::FromArgb(0xB4, 0x2B, 0x2B) },
-    @{ Name = 'english'; Glyph = 'A'; Top = [Drawing.Color]::FromArgb(0x5B, 0x6B, 0x86); Bottom = [Drawing.Color]::FromArgb(0x2B, 0x35, 0x4A) })
+    @{ Name = 'chinese'; Glyph = '解'; Fill = [Drawing.Color]::FromArgb(0xD9, 0x3F, 0x35) },
+    @{ Name = 'english'; Glyph = 'A'; Fill = [Drawing.Color]::FromArgb(0x3D, 0x4B, 0x63) })
 foreach ($mode in $modes) {
-    $bitmaps = @(foreach ($s in $sizes) { New-Icon $s $mode.Glyph $mode.Top $mode.Bottom })
+    $bitmaps = @(foreach ($s in $sizes) { New-Icon $s $mode.Glyph $mode.Fill })
     Save-Ico (Join-Path $out "$($mode.Name).ico") $bitmaps
     # 128 px master for the cursor-side hint, which scales it to the actual DPI.
-    (New-Icon 128 $mode.Glyph $mode.Top $mode.Bottom).Save((Join-Path $out "$($mode.Name).png"), [Drawing.Imaging.ImageFormat]::Png)
-    $a = '#{0:X2}{1:X2}{2:X2}' -f $mode.Top.R, $mode.Top.G, $mode.Top.B
-    $b = '#{0:X2}{1:X2}{2:X2}' -f $mode.Bottom.R, $mode.Bottom.G, $mode.Bottom.B
+    (New-Icon 128 $mode.Glyph $mode.Fill).Save((Join-Path $out "$($mode.Name).png"), [Drawing.Imaging.ImageFormat]::Png)
+    $hex = '#{0:X2}{1:X2}{2:X2}' -f $mode.Fill.R, $mode.Fill.G, $mode.Fill.B
     $svg = @"
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="10" y1="2" x2="54" y2="62"><stop offset="0" stop-color="$a"/><stop offset="1" stop-color="$b"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g)"/><text x="32" y="32" text-anchor="middle" dominant-baseline="central" font-family="'Noto Sans TC','Microsoft JhengHei UI',sans-serif" font-weight="700" font-size="37" fill="#fff">$($mode.Glyph)</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="$hex"/><text x="32" y="32" text-anchor="middle" dominant-baseline="central" font-family="'Noto Sans TC','Microsoft JhengHei UI',sans-serif" font-weight="700" font-size="37" fill="#fff">$($mode.Glyph)</text></svg>
 "@
     Set-Content (Join-Path $out "$($mode.Name).svg") $svg.Trim() -Encoding utf8NoBOM
 }
@@ -85,7 +83,7 @@ function Save-Canvas([string]$name, [int]$width, [int]$height, [double]$fraction
     $g = [Drawing.Graphics]::FromImage($canvas)
     $g.InterpolationMode = 'HighQualityBicubic'
     $side = [int]([Math]::Min($width, $height) * $fraction)
-    $g.DrawImage((New-Icon 256 $zh.Glyph $zh.Top $zh.Bottom), [int](($width - $side) / 2), [int](($height - $side) / 2), $side, $side)
+    $g.DrawImage((New-Icon 256 $zh.Glyph $zh.Fill), [int](($width - $side) / 2), [int](($height - $side) / 2), $side, $side)
     $g.Dispose()
     $canvas.Save((Join-Path $ui $name), [Drawing.Imaging.ImageFormat]::Png)
 }
