@@ -11,7 +11,7 @@ use windows::{
     Win32::{
         Foundation::*,
         System::{Com::*, Registry::*},
-        UI::{TextServices::*, WindowsAndMessaging::*},
+        UI::{Controls::*, TextServices::*, WindowsAndMessaging::*},
     },
 };
 mod journal;
@@ -375,18 +375,39 @@ pub fn choose_keyboard(target: &Path, explicit: Option<u32>, choose: bool) -> Re
     } else {
         "請選擇要安裝的鍵盤配置。"
     };
-    let text=wide(&format!("{current}\n\n是：安裝標準注音\n否：安裝倚天注音\n取消：維持現有安裝\n\n只安裝選定的配置，個人詞庫與輸入偏好會保留。"));
-    Ok(unsafe {
-        match MessageBoxW(
-            None,
-            PCWSTR(text.as_ptr()),
-            w!("選擇善解鍵盤配置"),
-            MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON3,
-        ) {
-            IDYES => Some(1),
-            IDNO => Some(2),
-            _ => None,
-        }
+    let content = wide(&format!(
+        "{current}\n只安裝選定的配置，個人詞庫與輸入偏好會保留。"
+    ));
+    let standard_label = wide("標準注音\n大千式排列，一般注音鍵盤");
+    let eten_label = wide("倚天注音\n倚天式排列");
+    let buttons = [
+        TASKDIALOG_BUTTON {
+            nButtonID: 101,
+            pszButtonText: PCWSTR(standard_label.as_ptr()),
+        },
+        TASKDIALOG_BUTTON {
+            nButtonID: 102,
+            pszButtonText: PCWSTR(eten_label.as_ptr()),
+        },
+    ];
+    let config = TASKDIALOGCONFIG {
+        cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
+        dwFlags: TDF_USE_COMMAND_LINKS | TDF_ALLOW_DIALOG_CANCELLATION,
+        dwCommonButtons: TDCBF_CANCEL_BUTTON,
+        pszWindowTitle: w!("安裝善解"),
+        pszMainInstruction: w!("選擇要安裝的鍵盤配置"),
+        pszContent: PCWSTR(content.as_ptr()),
+        cButtons: buttons.len() as u32,
+        pButtons: buttons.as_ptr(),
+        nDefaultButton: 101,
+        ..Default::default()
+    };
+    let mut pressed = 0;
+    unsafe { TaskDialogIndirect(&config, Some(&mut pressed), None, None)? };
+    Ok(match pressed {
+        101 => Some(1),
+        102 => Some(2),
+        _ => None,
     })
 }
 pub fn install(
