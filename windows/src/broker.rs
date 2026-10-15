@@ -113,6 +113,22 @@ pub(crate) fn app_container() -> bool {
         ok != 0 && value != 0
     }
 }
+/// An elevated host (installer dialog, admin console) must not start the core: the core
+/// would inherit the admin token and every ordinary app would then talk to it.
+pub(crate) fn elevated() -> bool {
+    unsafe {
+        let mut token = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), 8, &mut token) == 0 {
+            return false;
+        }
+        let mut value = 0u32;
+        let mut needed = 0;
+        // TokenElevation = 20.
+        let ok = GetTokenInformation(token, 20, (&mut value as *mut u32).cast(), 4, &mut needed);
+        CloseHandle(token);
+        ok != 0 && value != 0
+    }
+}
 fn executable(data: &Path) -> PathBuf {
     data.parent().unwrap_or(data).join("tools/shanjie-core.exe")
 }
@@ -285,7 +301,12 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
                 {
                     return Err(error);
                 }
-                if start && !launched && error.raw_os_error() == Some(2) && !app_container() {
+                if start
+                    && !launched
+                    && error.raw_os_error() == Some(2)
+                    && !app_container()
+                    && !elevated()
+                {
                     start_core(&expected)?;
                     launched = true;
                 }
@@ -293,6 +314,69 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
             }
         }
     }
+}
+/// After an update: stop this session's cores from retired versions and start the current
+/// one, so sandboxed hosts (which cannot start a core) find it. Runs unelevated.
+pub fn retire_and_start(data: &Path) -> io::Result<()> {
+    if elevated() {
+        return Err(io::Error::other("Elevated process cannot start the user core"));
+    }
+    let current = executable(data).canonicalize()?;
+    let mut session = 0;
+    unsafe {
+        if ProcessIdToSessionId(GetCurrentProcessId(), &mut session) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    let prefix = format!("Shanjie-{}-{session}-", user_sid()?);
+    let ours = endpoint(data)?;
+    for entry in std::fs::read_dir(r"\\.\pipe\")?.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let path = format!(r"\\.\pipe\{name}");
+        if !name.starts_with(&prefix) || path == ours {
+            continue;
+        }
+        let _ = stop_retired(&path, &current);
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    connect(data, true, deadline).map(|_| ())
+}
+fn stop_retired(path: &str, current: &Path) -> io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(0x40000000)
+        .open(path)?;
+    let image = unsafe {
+        let mut pid = 0;
+        if GetNamedPipeServerProcessId(file.as_raw_handle(), &mut pid) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let process = OpenProcess(0x1000, 0, pid);
+        if process.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        let mut buffer = vec![0u16; 32768];
+        let mut len = buffer.len() as u32;
+        let ok = QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut len);
+        CloseHandle(process);
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        PathBuf::from(String::from_utf16_lossy(&buffer[..len as usize]))
+    };
+    // Only Shanjie cores, never the current one or an unrelated server on a similar name.
+    if image.file_name().is_none_or(|n| !n.eq_ignore_ascii_case("shanjie-core.exe"))
+        || image.canonicalize().ok().as_deref() == Some(current)
+    {
+        return Ok(());
+    }
+    let pipe = crate::pipe_io::Pipe(file);
+    let deadline = Instant::now() + Duration::from_secs(1);
+    pipe.send(&Request::Stop, deadline)?;
+    let _ = pipe.receive::<Reply>(deadline);
+    Ok(())
 }
 /// Sandboxed hosts read the profile through the already running core.
 pub(crate) fn remote_profile() -> Option<String> {

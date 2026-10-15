@@ -648,6 +648,86 @@ unsafe fn remove_user_profiles() -> Result<()> {
     RegCloseKey(root).ok()?;
     result
 }
+/// Version folder that TSF currently loads, from the 64-bit registration.
+pub fn current_binaries() -> Result<Option<PathBuf>> {
+    Ok(registry_dll(KEY_WOW64_64KEY)?
+        .and_then(|dll| Some(dll.parent()?.parent()?.to_owned())))
+}
+/// Shell hosts that never exit on their own and restart themselves when ended.
+const SHELL_HOSTS: [&str; 4] = [
+    "SearchHost.exe",
+    "StartMenuExperienceHost.exe",
+    "TextInputHost.exe",
+    "ShellExperienceHost.exe",
+];
+/// Ends this user's shell hosts that still hold a retired Shanjie DLL. Runs unelevated.
+pub fn restart_stale_hosts(current: &Path) -> Result<Vec<String>> {
+    use windows::Win32::System::Diagnostics::ToolHelp::*;
+    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    let session = |pid: u32| {
+        let mut id = 0;
+        unsafe { windows::Win32::System::RemoteDesktop::ProcessIdToSessionId(pid, &mut id) }
+            .ok()
+            .map(|_| id)
+    };
+    let mine = session(std::process::id());
+    let mut ended = Vec::new();
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(0);
+            let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+            let pid = entry.th32ProcessID;
+            if SHELL_HOSTS.iter().any(|h| h.eq_ignore_ascii_case(&name))
+                && session(pid) == mine
+                && holds_retired(pid, current)
+            {
+                if let Ok(process) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+                    if TerminateProcess(process, 0).is_ok() {
+                        ended.push(name);
+                    }
+                    let _ = CloseHandle(process);
+                }
+            }
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    Ok(ended)
+}
+unsafe fn holds_retired(pid: u32, current: &Path) -> bool {
+    use windows::Win32::System::Diagnostics::ToolHelp::*;
+    let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid)
+    else {
+        return false;
+    };
+    let mut module = MODULEENTRY32W {
+        dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32,
+        ..Default::default()
+    };
+    let mut retired = false;
+    let mut more = Module32FirstW(snapshot, &mut module).is_ok();
+    while more {
+        let len = module.szExePath.iter().position(|&c| c == 0).unwrap_or(0);
+        let path = PathBuf::from(String::from_utf16_lossy(&module.szExePath[..len]));
+        if path
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case("Shanjie.dll"))
+            && !path.starts_with(current)
+        {
+            retired = true;
+            break;
+        }
+        more = Module32NextW(snapshot, &mut module).is_ok();
+    }
+    let _ = CloseHandle(snapshot);
+    retired
+}
 pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     reject_live_test_mutation()?;
     if !unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().as_bool() } {

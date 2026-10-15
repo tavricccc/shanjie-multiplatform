@@ -46,6 +46,20 @@ fn elevate(action: &str) -> Result<()> {
         Ok(())
     }
 }
+/// Unelevated follow-up: the elevated installer cannot start a user-level core.
+fn after_update() {
+    let Ok(Some(binaries)) = installer::current_binaries() else {
+        return;
+    };
+    if let Err(error) = shanjie_windows::broker::retire_and_start(&binaries.join("data")) {
+        eprintln!("常駐核心未能啟動：{error}");
+    }
+    match installer::restart_stale_hosts(&binaries) {
+        Ok(ended) if !ended.is_empty() => println!("已重新啟動仍使用舊版的系統元件：{}", ended.join("、")),
+        Err(error) => eprintln!("未能重新啟動系統元件：{error}"),
+        _ => {}
+    }
+}
 fn announce(text: &str, dialog: bool) {
     println!("{text}");
     if dialog {
@@ -86,10 +100,12 @@ fn run() -> Result<()> {
                 announce("已取消安裝，現有安裝及資料已保留。", true);
                 return Ok(());
             };
-            return elevate(&format!(
+            elevate(&format!(
                 "install --keyboard {} --dialog",
                 if mask == 1 { "standard" } else { "eten" }
-            ));
+            ))?;
+            after_update();
+            return Ok(());
         }
         return elevate(&(args[1..].join(" ") + " --dialog"));
     }
@@ -113,6 +129,7 @@ fn run() -> Result<()> {
             profile::apply_preset(std::path::Path::new(path))?;
             announce("已套用操作設定；詞庫、學習與外觀已保留。",dialog);
         }
+        Some("refresh-runtime") => after_update(),
         Some("profiles") => installer::profiles(args.iter().any(|s|s=="--remove"))?,
         Some("install") => {
             let package=std::env::current_exe()?.parent().unwrap().parent().unwrap().to_owned();
@@ -130,7 +147,7 @@ fn run() -> Result<()> {
                 None=>announce("已取消解除安裝，沒有修改任何資料。",dialog),
             }
         }
-        _=>return Err("用法：shanjie-manager [--elevate] install [--keyboard standard|eten|--choose-keyboard]；uninstall [--keep-user-data|--delete-user-data]；另支援 verify-package、apply-profile、profiles。".into()),
+        _=>return Err("用法：shanjie-manager [--elevate] install [--keyboard standard|eten|--choose-keyboard]；uninstall [--keep-user-data|--delete-user-data]；另支援 verify-package、apply-profile、profiles、refresh-runtime。".into()),
     }
     Ok(())
 }
