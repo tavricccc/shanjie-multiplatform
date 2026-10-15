@@ -8,4 +8,3 @@
 
 - 改動在 `windows/src/candidate.rs` 的讀音列繪製，以 DirectWrite 的 `HitTestTextRange` 取得該字範圍。
 - 按左鍵不會自動展開候選，仍須按下鍵（行為沒有改動）。
-- 尚未實機驗收：只通過編譯與打包，畫面效果待安裝後確認。
