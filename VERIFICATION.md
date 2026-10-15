@@ -7,6 +7,7 @@
 - x64／x86 release 與 WinUI 建置成功，`package.ps1` 產生 `dist/Shanjie-Windows.zip`（606 個檔案通過包內驗證，只含最新模型）。
 - `verify.ps1`：產生後的核心 lib 60 項、engine／learn／replay／lm／demote／predict／pack／vertical／kn_tiny／tinylm_tiny 等上游整合測試、Windows interaction 與 TSF smoke 通過。為 Windows 調整：略過 `english_codes_through_the_c_abi`（用到 Unix 的 mkfifo）、測試中的 unix symlink 改為複製，並為驗證下載 kn-v1（雜湊核對）。
 - 安裝程式改動（輸入法描述補結尾 NUL、鍵盤選擇改用工作對話框並嵌入 comctl32 v6 manifest）：x64／x86 release 建置成功，x64 `shanjie-manager.exe` 內確認含 manifest 依賴，`package.ps1 -UseExistingBuild` 重新打包通過（607 個檔案）。**未實機驗證：** 沒有安裝，語言清單名稱是否不再亂碼、對話框實際畫面都待確認。
+- 與 0.7.0 合併後重新 prepare／建置通過（上游 `Cands` 新增 `english` 欄位，prepare-smart-input 契約已同步），`package.ps1` 產生 620 個檔案的包並通過驗證。完整 `cargo test`（`--no-fail-fast`）**有 4 項失敗，尚未處理**：`engine::row2_punctuation_goes_into_the_composition`（0.7.0 讓未完成讀音留在標點前，上游期望丟棄）、prediction 的 `abbreviation_keys_with_two_units`、`another_key_leaves_and_is_handled_as_usual`，以及既知的 Unix 專用 `english_codes_through_the_c_abi`。前三項來源（0.7.0 的刻意行為、新上游測試或兩者合併）尚未區分；`verify.ps1` 因此在 engine 階段停止，之後的階段沒有跑。其餘 lib 69、learning、lm 等測試通過。
 - 沒有重跑 `verify-update.ps1`、x86 TSF smoke、WinUI `--verify-ui`，沒有安裝或實機驗收；上游 pin 是未合入 main 的分支。
 
 ## 2026-10-15 Windows 0.7.0 混打、字面輸入與注音候選
