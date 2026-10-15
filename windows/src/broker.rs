@@ -202,6 +202,7 @@ enum Request {
     Close,
     Status,
     Stop,
+    Profile,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Reply {
@@ -214,6 +215,9 @@ pub struct Reply {
     pub sequence: u64,
     pub found: bool,
     pub failure: Option<Failure>,
+    /// Profile text for sandboxed hosts, which cannot read the user's folder.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -226,6 +230,7 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         sequence: 0,
         found: false,
         failure: if ok { None } else { Some(Failure::Failed) },
+        profile: None,
     }
 }
 fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {
@@ -288,6 +293,14 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
             }
         }
     }
+}
+/// Sandboxed hosts read the profile through the already running core.
+pub(crate) fn remote_profile() -> Option<String> {
+    let data = crate::tsf::binary()?.join("data");
+    let deadline = Instant::now() + Duration::from_millis(500);
+    let pipe = connect(&data, false, deadline).ok()?;
+    pipe.send(&Request::Profile, deadline).ok()?;
+    pipe.receive::<Reply>(deadline).ok()?.profile
 }
 fn start_core(executable: &Path) -> io::Result<()> {
     use windows::{
@@ -370,7 +383,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
     }
     let _owner = Owner(owner);
     let name = crate::wide(&endpoint);
-    let descriptor = crate::wide(&format!("D:P(A;;GA;;;{})(A;;GRGW;;;AC)S:(ML;;NW;;;LW)", user_sid()?));
+    let descriptor = crate::wide(&format!("D:P(A;;GA;;;{})(A;;GRGW;;;AC)(A;;GRGW;;;S-1-15-2-2)S:(ML;;NW;;;LW)", user_sid()?));
     let mut sd = std::ptr::null_mut();
     unsafe {
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(

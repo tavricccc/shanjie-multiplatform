@@ -187,6 +187,9 @@ impl ITfEditSession_Impl for Edit_Impl {
         let already_editing = self.data.editing.replace(true);
         let result = self.operation.borrow_mut().take().unwrap()(cookie);
         self.data.editing.set(already_editing);
+        if let Err(e) = &result {
+            super::trace(format_args!("edit session: {e}"));
+        }
         result
     }
 }
@@ -1083,7 +1086,8 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
             self.data.prepare_engine()?;
             Ok(())
         })();
-        if result.is_err() {
+        if let Err(e) = &result {
+            super::trace(format_args!("ActivateEx: {e}"));
             let _ = self.data.deactivate();
         }
         result

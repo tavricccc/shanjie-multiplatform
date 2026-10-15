@@ -51,6 +51,34 @@ pub fn module() -> HMODULE {
         module.0 as isize
     }) as _)
 }
+/// Failures only, never input: sandboxed hosts give no other way to see TSF errors,
+/// and their package temp folder is writable.
+pub fn trace(message: impl std::fmt::Display) {
+    if !crate::broker::app_container() {
+        return;
+    }
+    use std::io::Write;
+    let path = std::env::temp_dir().join("shanjie-tsf.log");
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > 256 * 1024) {
+        return;
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{} {} {message}", std::process::id(), std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis()));
+    }
+}
+/// Version folder that holds this DLL's architecture folder, data and tools.
+pub fn binary() -> Option<std::path::PathBuf> {
+    let mut path = [0u16; 32768];
+    let length =
+        unsafe { windows::Win32::System::LibraryLoader::GetModuleFileNameW(Some(module()), &mut path) };
+    if length == 0 {
+        return None;
+    }
+    let file = std::path::PathBuf::from(String::from_utf16(&path[..length as usize]).ok()?);
+    Some(file.parent()?.parent()?.to_owned())
+}
 #[implement(IClassFactory)]
 struct Factory {
     _count: Count,

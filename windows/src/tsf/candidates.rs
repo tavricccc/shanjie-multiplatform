@@ -29,6 +29,7 @@ pub struct Candidates {
     pub vertical: Cell<bool>,
     pub anchor_right: Cell<bool>,
     owner: Weak<Data>,
+    view: Cell<HWND>,
     _count: Count,
 }
 #[implement(ITfCandidateListUIElementBehavior)]
@@ -61,6 +62,7 @@ pub unsafe fn new(
         vertical: Cell::new(false),
         anchor_right: Cell::new(true),
         owner,
+        view: Cell::new(HWND::default()),
         _count: Count::new(),
     });
     // The interface owns data; data only keeps a borrowed raw pointer during TSF Begin/Update calls.
@@ -154,15 +156,24 @@ impl Candidates {
         let view = context.GetActiveView()?;
         let mut rect = RECT::default();
         let mut clipped = BOOL::default();
-        if view
-            .GetTextExt(cookie, range, &mut rect, &mut clipped)
-            .is_err()
-            || clipped.as_bool()
-        {
-            self.show(false)?;
-            return Ok(());
+        let extent = view.GetTextExt(cookie, range, &mut rect, &mut clipped);
+        if let Err(e) = &extent {
+            super::trace(format_args!("GetTextExt: {:?}", e.code()));
+        }
+        if extent.is_err() || (clipped.as_bool() && rect == RECT::default()) {
+            // WinUI/XAML hosts often report no layout; keep the panel at the last caret or the view.
+            let screen = view.GetScreenExt().unwrap_or_default();
+            if self.caret.get() != RECT::default() {
+                rect = self.caret.get();
+            } else if screen != RECT::default() {
+                rect = RECT { left: screen.left, top: screen.top, right: screen.left, bottom: screen.top };
+            } else {
+                self.show(false)?;
+                return Ok(());
+            }
         }
         let owner = view.GetWnd()?;
+        self.view.set(owner);
         if !owner.is_invalid()
             && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner))
                 != DPI_AWARENESS_PER_MONITOR_AWARE
@@ -185,10 +196,30 @@ impl Candidates {
             };
         }
         self.caret.set(rect);
-        self.show(true)
+        let shown = self.show(true);
+        if let Err(e) = &shown {
+            super::trace(format_args!("show: {e}"));
+        }
+        shown
     }
     fn show(&self, visible: bool) -> Result<()> {
         let mut host = self.host.borrow_mut();
+        // Immersive hosts only show IME windows owned by the app window (Microsoft IME
+        // requirements); the owner is fixed at creation, so recreate when it changes.
+        let owner = if crate::broker::app_container() {
+            let view = self.view.get();
+            Some(if view.is_invalid() { unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetFocus() } } else { view })
+                .filter(|w| !w.is_invalid())
+        } else {
+            None
+        };
+        if owner.is_some()
+            && host
+                .as_ref()
+                .is_some_and(|h| unsafe { GetWindow(h.window, GW_OWNER) }.ok() != owner)
+        {
+            *host = None;
+        }
         if visible
             && self.native.get()
             && !self.window.get().is_invalid()
@@ -198,7 +229,7 @@ impl Candidates {
             }
             && host.is_none()
         {
-            *host = Some(Host::start(self.window.get())?);
+            *host = Some(Host::start(self.window.get(), owner)?);
         }
         if let Some(host) = host.as_mut() {
             host.vertical = self.vertical.get();

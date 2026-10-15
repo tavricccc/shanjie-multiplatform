@@ -162,6 +162,11 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 break;
             }
             Request::Status => reply(None, None, true),
+            Request::Profile => {
+                let mut r = reply(None, None, true);
+                r.profile = std::fs::read_to_string(crate::profile::path()).ok();
+                r
+            }
             Request::Stop => {
                 let _ = write(&mut pipe, &reply(None, None, true));
                 std::process::exit(0);

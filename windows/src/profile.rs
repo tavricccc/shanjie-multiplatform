@@ -233,6 +233,15 @@ pub fn path() -> PathBuf {
     folder().join("profile.ini")
 }
 pub fn load(path: &Path) -> Result<Document> {
+    // Sandboxed hosts cannot see the user folder (exists() is false there), so the core supplies it.
+    if path == self::path() && crate::broker::app_container() {
+        if let Some(text) = crate::broker::remote_profile() {
+            if let Ok(mut doc) = Document::parse(&text) {
+                doc.migrate();
+                return Ok(doc);
+            }
+        }
+    }
     if !path.exists() {
         return Document::parse(include_str!("../../profiles/windows.ini"));
     }

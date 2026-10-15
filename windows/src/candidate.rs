@@ -115,7 +115,7 @@ pub struct Host {
     pub anchor_right: bool,
 }
 impl Host {
-    pub fn start(callback: HWND) -> Result<Box<Self>> {
+    pub fn start(callback: HWND, owner: Option<HWND>) -> Result<Box<Self>> {
         unsafe {
             let factory: ID2D1Factory = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
             let text_factory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
@@ -173,7 +173,7 @@ impl Host {
                 0,
                 1,
                 1,
-                None,
+                owner,
                 None,
                 Some(HINSTANCE(module.0)),
                 Some((&mut *host as *mut Self).cast()),

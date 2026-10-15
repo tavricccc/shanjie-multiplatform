@@ -631,7 +631,10 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         }
         match self.data.dispatch_key(context.ok()?, key, flags) {
             Ok(handled) => Ok(handled.into()),
-            Err(_) => Ok(true.into()),
+            Err(e) => {
+                super::trace(format_args!("key: {e}"));
+                Ok(true.into())
+            }
         }
     }
     fn OnKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, _: LPARAM) -> Result<BOOL> {

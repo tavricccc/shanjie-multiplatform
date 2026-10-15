@@ -515,7 +515,7 @@ pub unsafe extern "C" fn sj_pinyin_key(
 
 #[no_mangle]
 pub extern "C" fn sj_host_new(callback: isize) -> *mut Host {
-    match Host::start(HWND(callback as _)) {
+    match Host::start(HWND(callback as _), None) {
         Ok(h) => Box::into_raw(h),
         Err(e) => {
             failure(e);
