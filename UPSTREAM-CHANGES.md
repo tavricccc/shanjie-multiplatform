@@ -4,6 +4,10 @@
 
 ## 2026-10-16 Windows 0.9.0：Windows 輸入政策與 classes-v5
 
+續修只涉及 Windows 設定通知／IPC／程序啟動與測試契約。`tsf/profile_refresh.rs` 逐一確認即時設定操作，逾時時從未確認操作續接，阻止後續按鍵越過它；edit session、取消與失焦依 context／generation 隔離。常駐程序以 STARTUPINFOEX 的 HANDLE_LIST 只允許繼承 NUL，保留原有不自動啟動管理員／AppContainer 核心的限制。沒有新增上游演算法覆蓋。
+
+Windows interaction 的學習 fixture 改用兩字前文（上游不記錄單字前文下的單字選擇），並選擇改變原解碼的漢字，保留兩份持久化紀錄校驗。混打提示契約校驗注音及第二項原始按鍵資料，且禁止選取提示。標準／倚天輸入回歸使用獨立可攜 installed.json，不依賴實機安裝了幾種鍵盤。
+
 核心程式 pin 沿用 `f8ea0bb`，沒有合入持續變動的 main。模型仍是 model-v6，官方配套詞類表預設 classes-v5，設定選單可切回 classes-v4；兩組原始配對雜湊、檔案大小及授權見 MODEL-SOURCES.json。classes-v4／v5 只有檔頭 μ 的 8-byte 欄位不同（0.8 → 0.2）；Windows 映射讀寫及等價校驗會保留並核對此權重。broker 會話及共用快取按所選配置區分。Windows 未自動啟用 KN／tiny-LM，測試側檔不打包。
 
 測試預期值由固定上游 Python 評測器及核對雜湊的原始資料獨立產生，公開保存於 `tests/fixtures/classes-v5/`；不以 Windows Engine 自己的輸出更新 golden。適配層另外處理新權重造成的 no-op 選字學習，以及固定範例的預期文字變化，保留對應斷言。出貨對應無 KN 配置的公開 dev302 首選為 v4 242/302、v5 238/302，前 64 名皆 300/302；使用者接受此取捨，並要求保留模型選單。

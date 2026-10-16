@@ -2,7 +2,32 @@
 
 最新日期：2026-10-16。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
 
-## 2026-10-16 Windows 0.9.0 測試包（尚有未通過項目）
+## 2026-10-16 Windows 0.9.0 續修與完整自動回歸
+
+本輪沒有安裝、修改輸入法註冊／語言清單或推送遠端。上游程式 pin、主模型與兩種詞類表保持不變。
+
+**定位界線：** 先前交付的原始 x86 DLL，在沒有診斷碼、三個全新隔離 profile 的 TSF smoke 都通過，無法據此確認上一輪 check 286 的完整觸發條件。另以固定故障注入穩定重現：預測設定請求在核心套用前延遲 1.2 秒，舊前端逾時後不再刷新候選（正常對照通過、延遲案例 check 819 失敗）。這是已確認並修復的缺口，不把兩者的因果關係說成完全證實。
+
+修正把即時設定拆成逐一確認的操作；只從未確認的一項續接，不重送已確認的選項。後續按鍵排隊，完成後依原欄位與 generation 處理；取消、失焦或過期 edit session 不套用舊結果。自動重試期限到達後保留狀態及顯示提示，新按鍵可重新喚起重試。[RequestEditSession 契約](https://learn.microsoft.com/en-us/windows/win32/api/msctf/nf-msctf-itfcontext-requesteditsession)允許同步或非同步執行，待執行操作有明確擁有權與生命週期。
+
+完整驗證同時發現測試核心保留呼叫程式輸出管線的問題；改用 STARTUPINFOEX、STARTF_USESTDHANDLES 與 HANDLE_LIST，只允許繼承 NUL。單純改為 Rust Command 的 null 標準輸出仍不足，因此最終採用明確的[控制代碼繼承清單](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)。驗證程式也改為等待已核對核心 PID 真正退出再重啟，並為輸出讀取設期限。
+
+已通過：
+
+- 完整 verify.ps1 核心 lib／整合測試 **296 項**，並確實進入及完成後續 x64 TSF smoke；最終 DLL 的 x64／x86 TSF smoke、check 286 及無模型啟動皆通過。
+- 設定刷新 **42 個真實 TSF／常駐 IPC 案例**：兩架構、正常／套用前延遲／套用後延遲／回覆中斷，分別測自動刷新、等待中輸入、最新設定、Esc、失焦（40）；另將核心狀態鎖住 6.5 秒，確認重試逾期提示、停止自動重試及新按鍵恢復（2）。延遲案例另外校驗實際經過至少 700 ms，避免只設定故障名稱卻未施加延遲。舊版前端的失敗對照保留於 refresh-baseline/。
+- Windows crate 兩架構各 **30 項通過、2 項既有原生系統測試 ignored**。
+- verify-update.ps1 **64 個標準／倚天、兩架構案例**通過，以及獨立會話／程序、Caps Lock、重啟重建、兩種詞類表與並行首次啟動。可攜 payload 指定兩鍵盤均可用，不改實機安裝選擇。程序退出後輸出可完整關閉，背景核心仍存活供下一案例使用。
+- verify-core-recovery.ps1 **16 項**通過，涵蓋讀寫期限與取消、套用前後／回覆中斷、學習鎖定、重啟、不明結果不重播、64 會話容量與恢復。
+- verify-input-features.ps1 **70 個兩架構隔離輸入案例**通過；verify-features-090.ps1 的雙 Ctrl 加詞、Shift 七種事件序列及相關取消／保護欄位回歸通過。
+- Windows interaction 三段 PASS：學習持久化／清除、個人詞庫、拼音、字面輸入、標點、混打、提示不可選取、模型與詞類配對、快取後資產遭修改時拒絕載入。學習 fixture 使用上游會記錄的兩字前文及改變原解碼的漢字，混打提示確認第二項原始按鍵資料；沒有刪除原有校驗。
+- WinUI --verify-reliability 通過，保留設定草稿、未安裝鍵盤反灰及詞庫／學習失敗處理；啟動前即設定隔離環境。UI 引起的舊 TIP 測試核心，依 profile 端點、PID、執行檔與啟動時間核對後清理。
+
+本輪證據：build/release-0.9.0-fix/ 下的 verify-full-x64.log、x86-original-{1,2,3}.log、refresh-baseline/、refresh-release.log（40 項）、refresh-deadline.log（2 項）、update-portable/results.json、core-recovery/results.json、input-release/results.json、unit-release-{x64,x86}.log、features-validated.log、interaction-complete.log、smoke-release-{x64,x86}.log 與 ui-reliability/result.txt。前輪模型選單、不同啟動路徑的唯一設定視窗及畫面擷取證據仍有效，相關 UI 原始碼本輪未改。
+
+**待實機：** 記事本、瀏覽器、Office、Codex 等已註冊前景 App，真正登入預載／UAC／升級／AppContainer 與螢幕縮放驗收仍未執行；歷史 x86 間歇觸發條件保留觀察。使用者已確認前輪 profile.ini 差異來自更新個人詞庫，可忽略，不列為異常。本輪保護檔與封裝稽核結果另存 protected-before/after.json 及 package-audit.json，私人詞庫／學習／本機 TODO 不納入包。
+
+## 2026-10-16 Windows 0.9.0 歷史測試包（當時尚有未通過項目）
 
 本輪依使用者要求收尾，沒有安裝、註冊輸入法、變更語言清單或發布遠端 release。下列結果屬隔離回歸；真實前景 App 與系統安裝驗收仍待進行。
 
@@ -17,7 +42,7 @@
 
 **模型取捨：** 固定 model-v6，無 KN 的 Windows 對應 Python 配置、公開 dev302：v4 首選 242/302、v5 238/302，前 64 名皆 300/302。使用者接受 v5 預設並要求可選 v4；不能把這組結果推廣到所有輸入或沿用上游含 KN／語意重排的改善幅度。KN 側檔只供整合測試，不打包。
 
-測試只用專案 build 內 profile、公開／合成字詞。沙箱會阻擋測試 IPC，相關通訊驗證在解除沙箱限制、相同隔離資料下執行。UI 測試曾使已註冊舊 TIP 在測試 profile 啟動核心；已逐一核對端點、PID、執行檔及啟動時間後清理，沒有停止日常核心。收尾核對 installed.json 雜湊相同；日常 profile.ini 的雜湊與起始不同（最後寫入 13:51:54，內容仍是 0.8.x 欄位，未帶入本版 class_table／mixed_tolerance），來源未確認，沒有自行覆寫或還原，不能宣稱整輪個人設定完全不變。原始雜湊見 protected-before/after.json；不宣稱正在使用中的學習檔整輪未變。
+測試只用專案 build 內 profile、公開／合成字詞。沙箱會阻擋測試 IPC，相關通訊驗證在解除沙箱限制、相同隔離資料下執行。UI 測試曾使已註冊舊 TIP 在測試 profile 啟動核心；已逐一核對端點、PID、執行檔及啟動時間後清理，沒有停止日常核心。收尾核對 installed.json 雜湊相同；日常 profile.ini 的差異，使用者後續確認是更新個人詞庫所致，屬預期變動，不列為異常，沒有自行還原。原始雜湊見 protected-before/after.json；不宣稱正在使用中的學習檔整輪未變。
 
 證據位於 build/release-0.9.0/：verify-v5-final.log、windows-unit-{x64,x86}.log、tsf-{x64,x86}/result.log、input-regression/results.json、smoke-x64-final.log、smoke-x86-local.log、smoke-x86-final-pass.log（名稱含 pass 但實際失敗，以內容為準）、model-switch.log、ui-final.log、instance-final.log、cleanup-test-cores*.log。UI 擷取在 build/ui-review-final/。LNK4104、WUI2011、C4701 既有警告保留；NU1900 表示 NuGet 弱點資料查詢未完成。
 

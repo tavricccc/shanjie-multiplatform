@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 `f8ea0bb`（feat/model-v6-switch），提供 model-v6，設定中可選 classes-v5（預設）或 classes-v4 配套。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.9.0**：設定視窗單一執行個體、Shift 組合鍵追蹤修正、可選的混打相鄰重複鍵容錯、反白字詞後雙 Ctrl 加詞浮層，以及 classes-v5 詞類權重更新。操作及支援範圍見 [0.9.0 版本說明](docs/releases/RELEASE-NOTES-0.9.0.md)，測試與實機驗收界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.9.0**：設定視窗單一執行個體、Shift 組合鍵追蹤修正、可選的混打相鄰重複鍵容錯、反白字詞後雙 Ctrl 加詞浮層、classes-v5／v4 配套選單，以及設定更新遇到核心延遲時的操作確認與重試。操作及支援範圍見 [0.9.0 版本說明](docs/releases/RELEASE-NOTES-0.9.0.md)，測試與實機驗收界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
