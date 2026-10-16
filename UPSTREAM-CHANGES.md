@@ -2,6 +2,10 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-16 「中英混打方式」三選一（關／Windows 版／上游行內英文）
+
+新增設定 `[input] upstream_english`（預設 0，與 `mixed_input` 互斥；設定頁合為單一下拉選單，`MixedMode` 0／1／2）。選上游時：`platform/smart_input_windows.rs` 的 `Engine::key` 在 `english` 開啟時直接走上游 `key_original`，Windows 組字政策（字面標點、混打判斷）整個旁路；`set_upstream_english` 清掉 Windows 混打狀態並呼叫上游 `set_english`／`set_english_inline`。英文詞表使用打包的 `data/english-common.txt`（已符合上游 [a-z]{3,32} 契約），由 `engine.rs` 開核心時載入，缺檔只讓此模式失效。新增 broker `Op::English`（置於 enum 尾端）、FFI `shanjie_windows_set_upstream_english`、bridge op 10。切換由 TSF 設定同步先送 English 再送 Mixed，並列入需重建核心的設定鍵。
+
 ## 2026-10-16 同步上游 main b2f5da8（v0.4.6、classes-v5、trigram 核心、行內英文）
 
 上游 pin 由 `feat/model-v6-switch` 的 `f8ea0bb` 改回 main `b2f5da8`（model-v6 已合入 main）。範圍：v0.4.4–v0.4.6、`classes-v5`（只把詞類權重 μ 從 0.8 降到 0.2，檔案其餘與 classes-v4 相同；`MODEL-SOURCES.json` 同步，`prepare-models.ps1` 退役 classes-v4 快取）、trigram 核心、zhen-mixed／zhen-inline 英文功能。

@@ -146,6 +146,11 @@ impl Engine {
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }
+            // The word list only matters when upstream inline English is switched on; a missing
+            // list leaves that mode inert instead of failing the engine.
+            if let Some(list) = data.join("english-common.txt").to_str().and_then(|p| CString::new(p).ok()) {
+                shanjie_engine_load_english(e.handle, list.as_ptr());
+            }
             e.operation(|h, o| shanjie_engine_set_profile(h, ranking, o))?;
             if shanjie_windows_set_candidate_anchor(e.handle, right as u32) != 0
                 || shanjie_windows_set_candidate_charset(e.handle, big5 as u32) != 0
@@ -401,6 +406,9 @@ impl Engine {
                     .then(Snapshot::default)
             }
             Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) }
+                == 0)
+                .then(Snapshot::default),
+            Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on as u32) }
                 == 0)
                 .then(Snapshot::default),
         }

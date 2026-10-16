@@ -71,7 +71,8 @@
                     <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英混打與英數" Style="{ThemeResource SubtitleTextBlockStyle}"/>
-                        <controls:SettingToggle x:Name="MixedInputToggle" Label="中英混打自動判斷" Description="組字區先顯示英文按鍵，下方提示注音；輸入聲調後轉成中文，Enter 保留英文。適用標準／倚天注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedInput, Mode=TwoWay}"/>
+                        <ComboBox x:Name="MixedModeSelector" Header="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="Windows 版自動判斷"/><ComboBoxItem Content="上游行內英文"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="Windows 版：組字區先顯示英文按鍵，下方提示注音；輸入聲調後轉成中文，Enter 保留英文。上游行內英文：Shift＋字母開始英文，英文留在組字區可接著打中文，兩者擇一，不會同時作用。適用標準／倚天注音。"/>
                         <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>

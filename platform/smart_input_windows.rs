@@ -62,6 +62,31 @@ mod windows_smart_tests {
     }
 
     #[test]
+    fn upstream_english_replaces_the_windows_policy_and_back() {
+        let mut e = engine();
+        let dir = std::env::temp_dir().join("shanjie-upstream-english-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let list = dir.join("english.txt");
+        std::fs::write(&list, "rust
+hello
+").unwrap();
+        e.load_english(&list).unwrap();
+        e.set_upstream_english(true).unwrap();
+        assert!(!e.mixed_input && e.english);
+        // Upstream owns the keys: Shift+letter opens its English run and the Windows raw state stays empty.
+        let out = e.key(Key::ch('r', MOD_SHIFT)).unwrap();
+        assert_eq!(out.english_run_utf16_len, 1);
+        assert!(e.mixed_raw.is_empty() && !e.is_mixed_pending());
+        e.reset(ResetMode::Discard);
+        // Switching back restores the Windows mixed policy with no upstream English left over.
+        e.set_upstream_english(false).unwrap();
+        e.set_mixed_input(true);
+        assert!(!e.english);
+        assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
+        assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "g");
+    }
+
+    #[test]
     fn zhuyin_order_does_not_matter_unless_it_looks_english() {
         let lex = Arc::new(Lexicon::parse("ㄎㄢˋ 看 -0.1\nㄓㄨㄥ 中 -0.1\n").unwrap());
         for mixed in [false, true] {
@@ -110,6 +135,20 @@ impl Engine {
     }
     pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
+    }
+    /// Switch to upstream inline English (zhen-mixed/zhen-inline). It replaces the Windows mixed
+    /// policy, so any Windows raw state is dropped first. Needs `load_english` for the word list.
+    pub fn set_upstream_english(&mut self, on: bool) -> Result<(), EngineError> {
+        if on {
+            self.mixed_input = false;
+            self.mixed_raw.clear();
+            self.mixed_latin = false;
+            self.windows_raw.clear();
+            self.pending_literal.clear();
+        }
+        self.set_english(on)?;
+        self.set_english_inline(on)?;
+        Ok(())
     }
     pub fn is_mixed_hint(&self) -> bool {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
@@ -237,6 +276,9 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // Upstream inline English (set_english) owns every key while it is on: the Windows
+        // mixed policy and literal handling stay out so the two designs never mix.
+        if self.english { return self.key_original(key); }
         let out = self.windows_key(key)?;
         Ok(self.mixed_view(out))
     }

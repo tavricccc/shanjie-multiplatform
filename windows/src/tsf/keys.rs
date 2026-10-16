@@ -382,6 +382,7 @@ impl Data {
             && key.modifiers & 14 == 0
             && [1, 2].contains(&key.kind);
         let mixed_letter = p.flag("input", "mixed_input", false)
+            && !p.flag("input", "upstream_english", false)
             && p.number("input", "keyboard", 0) < 3
             && key.kind == 1
             && (key.ch as u8).is_ascii_alphabetic()

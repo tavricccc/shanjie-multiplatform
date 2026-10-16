@@ -201,6 +201,7 @@ pub enum Op {
     Context(String),
     Options(u32),
     Mixed(bool),
+    English(bool),
 }
 #[derive(Serialize, Deserialize)]
 enum Request {

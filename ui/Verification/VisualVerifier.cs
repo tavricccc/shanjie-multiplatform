@@ -61,12 +61,13 @@ internal static class VisualVerifier
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
-        settings.SetMixedInputForVerification(true); await Task.Delay(60);
-        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle binding failed");
-        settings.Vm.Save(); settings.Vm.Load();
-        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input persistence failed");
-        settings.SetMixedInputForVerification(false); await Task.Delay(60);
-        if (settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle off failed");
+        foreach (var mode in new[] { 1, 2, 0 })
+        {
+            settings.SetMixedModeForVerification(mode); await Task.Delay(60);
+            if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");
+            settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} persistence failed");
+        }
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
         foreach (bool enabled in new[] { true, false }) {
             settings.SetSpaceInputsZhuyinForVerification(enabled); await Task.Delay(60);

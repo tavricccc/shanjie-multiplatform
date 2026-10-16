@@ -50,7 +50,7 @@ public partial class SettingsViewModel
             Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true);
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedInput = profile.Flag("input", "mixed_input", false);
+            MixedMode = profile.Flag("input", "upstream_english", false) ? 2 : profile.Flag("input", "mixed_input", false) ? 1 : 0;
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -119,7 +119,7 @@ public partial class SettingsViewModel
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
-            ("input","mixed_input",MixedInput),
+            ("input","mixed_input",MixedMode == 1), ("input","upstream_english",MixedMode == 2),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
@@ -139,7 +139,7 @@ public partial class SettingsViewModel
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {
-        if (Keyboard is < 0 or > 4 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 2 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
         if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
             throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");

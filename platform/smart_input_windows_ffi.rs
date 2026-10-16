@@ -37,6 +37,17 @@ pub unsafe extern "C" fn shanjie_windows_set_mixed_input(
     0
 }
 
+/// 0 = Windows/off policy, 1 = upstream inline English (needs shanjie_engine_load_english).
+#[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_set_upstream_english(engine: *mut ShanjieEngine, flags: u32) -> i32 {
+    if engine.is_null() { return 1; }
+    if flags > 1 { return 2; }
+    match unsafe { &mut (*engine).0 }.set_upstream_english(flags != 0) {
+        Ok(()) => 0,
+        Err(_) => SHANJIE_ERR_INTERNAL,
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_is_mixed_hint(engine: *const ShanjieEngine) -> u32 {
     if engine.is_null() { return 0; }
