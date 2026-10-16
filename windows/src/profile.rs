@@ -18,6 +18,7 @@ pub(crate) const RESTART_MESSAGE: &str = "Shanjie.Restart.v2";
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
+    pub fn class_table(&self) -> u32 { if self.number("engine","class_table",5)==4 {4} else {5} }
     pub fn parse(text: &str) -> Result<Self> {
         let mut out = Self::default();
         let mut section = String::new();
@@ -313,8 +314,9 @@ fn notify(name: &str) -> Result<()> {
     Ok(())
 }
 pub fn save(path: &Path, text: &str) -> Result<()> {
+    let _guard = crate::word_store::lock(path)?;
     write_profile(path, text)?;
-    notify(CHANGED_MESSAGE)
+    if path == self::path() { notify(CHANGED_MESSAGE) } else { Ok(()) }
 }
 pub fn restart() -> Result<()> {
     notify(RESTART_MESSAGE)
@@ -326,7 +328,7 @@ pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     crate::dictionary_store::publish(folder, &name, content.as_bytes())?;
     Ok(name)
 }
-fn dictionary_content(text: &str) -> Result<String> {
+pub(crate) fn dictionary_content(text: &str) -> Result<String> {
     let mut content = String::new();
     // WinUI TextBox returns CR; accept it alongside LF and Windows CRLF.
     for line in text
@@ -400,7 +402,7 @@ pub fn clear_learning() -> Result<()> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "demote"]),
+    ("engine", &["ranking", "demote", "class_table"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],
@@ -457,6 +459,8 @@ fn shared_preset(text: &str) -> Result<Document> {
             };
             let valid = match CHOICES.iter().find(|(s, k, _)| s == section && k == key) {
                 Some((_, _, allowed)) => allowed.contains(&value.as_str()),
+                None if section == "shortcuts" && key == "add_word_interval" => value.parse::<u32>().is_ok_and(|v| (200..=1000).contains(&v)),
+                None if section == "shortcuts" && (key == "shift_side" || key == "add_word_side") => value.parse::<u32>().is_ok_and(|v| v <= 2),
                 None if default == "0" || default == "1" => value == "0" || value == "1",
                 None => default.parse::<u32>().is_ok() && value.parse::<u8>().is_ok(),
             };
@@ -492,7 +496,7 @@ pub fn apply_preset(source: &Path) -> Result<()> {
     if path().exists() {
         let previous = load(&path())?;
         for (section, keys) in [
-            ("engine", &["ranking", "demote"][..]),
+            ("engine", &["ranking", "demote", "class_table"][..]),
             (
                 "input",
                 &[

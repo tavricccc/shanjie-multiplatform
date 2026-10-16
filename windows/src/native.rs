@@ -58,6 +58,7 @@ impl ControlChannel {
             SetTimer(Some(self.window), 42, 50, None);
         }
     }
+    pub fn add_word(&self) { unsafe { let _ = PostMessageW(Some(self.window),WM_APP+91,WPARAM(0),LPARAM(0)); } }
     pub fn stop_retry(&self) {
         unsafe {
             let _ = KillTimer(Some(self.window), 42);
@@ -96,6 +97,9 @@ unsafe extern "system" fn watcher_proc(
         let _ = KillTimer(Some(window), 42);
         ((*p).callback)((*p).context, 2);
         return LRESULT(0);
+    }
+    if !p.is_null() && message == WM_APP+91 {
+        ((*p).callback)((*p).context,4); return LRESULT(0);
     }
     DefWindowProcW(window, message, wp, lp)
 }

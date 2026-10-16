@@ -3,13 +3,13 @@
 #include <filesystem>
 #include <cassert>
 #include <algorithm>
-inline void captureNative(HWND window,const std::filesystem::path& path,bool preserveAlpha = true) {
+inline void captureNative(HWND window,const std::filesystem::path& path,bool preserveAlpha = true,bool children = false) {
     RECT bounds{}; GetClientRect(window,&bounds); int width = bounds.right,height = bounds.bottom;
     BITMAPV4HEADER bitmap{}; bitmap.bV4Size=sizeof(bitmap);bitmap.bV4Width=width;bitmap.bV4Height=-height;bitmap.bV4Planes=1;bitmap.bV4BitCount=32;bitmap.bV4V4Compression=BI_BITFIELDS;
     bitmap.bV4RedMask=0x00ff0000;bitmap.bV4GreenMask=0x0000ff00;bitmap.bV4BlueMask=0x000000ff;bitmap.bV4AlphaMask=0xff000000;bitmap.bV4CSType=LCS_sRGB;
     void* pixels = nullptr; auto dc = CreateCompatibleDC(nullptr);
     auto image = CreateDIBSection(dc,(BITMAPINFO*)&bitmap,DIB_RGB_COLORS,&pixels,nullptr,0); auto old = SelectObject(dc,image);
-    SendMessageW(window,WM_PRINTCLIENT,(WPARAM)dc,PRF_CLIENT); GdiFlush();
+    SendMessageW(window,children?WM_PRINT:WM_PRINTCLIENT,(WPARAM)dc,PRF_CLIENT|(children?(PRF_CHILDREN|PRF_ERASEBKGND):0)); GdiFlush();
     if (preserveAlpha) {
         assert(((DWORD*)pixels)[0] == 0);
         // Direct2D writes premultiplied BGRA. BMP/PNG store straight alpha.

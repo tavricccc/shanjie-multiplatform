@@ -91,12 +91,17 @@ impl Engine {
         dictionary: &str,
         prediction: bool,
     ) -> Option<Self> {
+        Self::open_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
+    }
+    pub fn open_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
+        if ![4,5].contains(&classes) { return None; }
         if std::env::var_os("SHANJIE_CORE_LOCAL").is_some() {
-            return Self::open_local(
-                data, layout, ranking, right, learning, big5, dictionary, prediction,
+            return Self::open_local_variant(
+                data, layout, ranking, right, learning, big5, dictionary, prediction, classes,
             );
         }
         let config = crate::broker::Config {
+            classes,
             layout,
             ranking,
             right,
@@ -120,6 +125,10 @@ impl Engine {
         dictionary: &str,
         prediction: bool,
     ) -> Option<Self> {
+        Self::open_local_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
+    }
+    pub fn open_local_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
+        let model = match classes { 5=>"models/model-v6/bigram.winmap",4=>"models/model-v6-classes-v4/bigram.winmap",_=>return None };
         let mut e = Self::default();
         let folder = crate::profile::folder();
         let personal = folder.join(dictionary);
@@ -142,7 +151,7 @@ impl Engine {
                 return None;
             }
             e.operation(|h, o| shanjie_engine_set_prediction(h, prediction as u32, o))?;
-            let lm = CString::new(data.join("models/model-v6/bigram.winmap").to_str()?).ok()?;
+            let lm = CString::new(data.join(model).to_str()?).ok()?;
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }
@@ -403,6 +412,8 @@ impl Engine {
             Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) }
                 == 0)
                 .then(Snapshot::default),
+            Op::Tolerance(on) => (unsafe { shanjie_windows_set_mixed_tolerance(self.handle, on as u32) }
+                == 0).then(Snapshot::default),
         }
     }
     pub fn replay(&mut self, ops: &[crate::broker::Op]) -> bool {

@@ -8,6 +8,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int CandidateLayout { get; set; }
     [ObservableProperty] public partial int Ranking { get; set; }
     public int Model => 5;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int ModelVariant { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
     [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
@@ -34,6 +35,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial bool MixedInput { get; set; }
+    [ObservableProperty] public partial bool MixedTolerance { get; set; }
+    [ObservableProperty] public partial bool AddWord { get; set; }
+    [ObservableProperty] public partial int AddWordSide { get; set; }
+    [ObservableProperty] public partial int AddWordShortcut { get; set; }
+    [ObservableProperty] public partial double AddWordInterval { get; set; } = 450;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
@@ -60,5 +66,5 @@ public partial class SettingsViewModel : ObservableObject
     public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
         + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
-    public string ModelHelp => "使用上游最新 model-v6，固定搭配 classes-v4 詞類表。";
+    public string ModelHelp => ModelVariant==1 ? "model-v6＋classes-v4，詞類權重 0.8。個人詞庫及學習資料沿用。" : "model-v6＋classes-v5，詞類權重 0.2。公開 dev302 評測首選 238/302，舊配置為 242/302；不保證新配置在所有情境較好。";
 }

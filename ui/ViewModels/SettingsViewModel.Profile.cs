@@ -4,6 +4,7 @@ public partial class SettingsViewModel
 {
     private ProfileDocument profile = new();
     private bool loading;
+    private string dictionaryBaseline = "";
     public SettingsViewModel()
     {
         foreach (var key in ShiftKeys.Concat(PlainKeys)) key.PropertyChanged += (_, _) => { if (!loading) HasChanges = true; };
@@ -34,6 +35,7 @@ public partial class SettingsViewModel
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
             CandidateLayout = profile.Read("candidates", "layout", "horizontal") == "vertical" ? 1 : 0;
             Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
+            ModelVariant=profile.Number("engine","class_table",5)==4?1:0;
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
@@ -51,6 +53,11 @@ public partial class SettingsViewModel
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
             MixedInput = profile.Flag("input", "mixed_input", false);
+            MixedTolerance = profile.Flag("input", "mixed_tolerance", false);
+            AddWord = profile.Flag("shortcuts", "add_word", true);
+            AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
+            AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
+            AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -61,6 +68,7 @@ public partial class SettingsViewModel
             {
                 var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, profile.Read("input", "dictionary", "dictionary.tsv"));
                 DictionaryText = File.Exists(dictionary) ? File.ReadAllText(dictionary) : "";
+                dictionaryBaseline = DictionaryText;
             }
         }
         finally { loading = false; }
@@ -116,10 +124,14 @@ public partial class SettingsViewModel
         profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 5);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
+            ("engine","class_table",ModelVariant==1?4:5),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
             ("input","mixed_input",MixedInput),
+            ("input","mixed_tolerance",MixedTolerance),
+            ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
+            ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
@@ -143,8 +155,15 @@ public partial class SettingsViewModel
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
         if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
             throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");
-        string dictionary = PersonalDictionary.Save(DictionaryText, Path.GetDirectoryName(ProfileStore.Path)!);
-        WriteDocument(); profile.Set("input", "dictionary", dictionary); ProfileStore.Save(profile.ToString()); HasChanges = false;
+        if (ModelVariant is < 0 or > 1 || AddWordSide is < 0 or > 2 || AddWordShortcut is < 0 or > 1 || !double.IsFinite(AddWordInterval) || AddWordInterval is < 200 or > 1000)
+            throw new InvalidDataException("請選擇有效的加詞快捷鍵與 200–1000 毫秒間隔。");
+        WriteDocument();
+        string dictionary = Interop.Native.Take(Interop.Native.sj_profile_save_dictionary(profile.ToString(), DictionaryText, dictionaryBaseline));
+        profile.Set("input", "dictionary", dictionary);
+        loading = true;
+        try { DictionaryText = dictionaryBaseline = File.ReadAllText(Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, dictionary)); }
+        finally { loading = false; }
+        HasChanges = false;
         Status = "已儲存並通知善解立即套用。切換鍵盤或詞庫時會先提交目前組字。";
     }
 }

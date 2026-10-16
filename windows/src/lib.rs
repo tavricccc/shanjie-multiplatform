@@ -2,6 +2,8 @@ mod bridge;
 pub mod broker;
 pub mod candidate;
 mod dictionary_store;
+mod word_store;
+mod word_popup;
 pub mod engine;
 pub mod input;
 pub mod installation;

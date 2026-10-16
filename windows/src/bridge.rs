@@ -141,6 +141,13 @@ pub unsafe extern "C" fn sj_dictionary_save(
     }
 }
 #[no_mangle]
+pub unsafe extern "C" fn sj_profile_save_dictionary(content: *const c_char, draft: *const c_char, base: *const c_char) -> *mut c_char {
+    match crate::word_store::save_settings(text(content), text(draft), text(base)) {
+        Ok(name) => CString::new(name).unwrap().into_raw(),
+        Err(error) => { failure(error); ptr::null_mut() }
+    }
+}
+#[no_mangle]
 pub unsafe extern "C" fn sj_document_open(content: *const c_char) -> *mut Document {
     match Document::parse(text(content)) {
         Ok(d) => Box::into_raw(Box::new(d)),

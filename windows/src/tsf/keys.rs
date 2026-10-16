@@ -36,7 +36,41 @@ fn system_shortcut(key: WPARAM) -> bool {
 fn plain_shortcut(vk: WPARAM, modifier: VIRTUAL_KEY, other: VIRTUAL_KEY) -> bool {
     vk.0 == 32 && held(modifier) && !held(other) && !held(VK_MENU)
 }
+fn physical_shift(vk: WPARAM, flags: LPARAM) -> u32 {
+    if vk.0 == 16 { unsafe { MapVirtualKeyW(((flags.0 >> 16) & 255) as u32, MAPVK_VSC_TO_VK_EX) } }
+    else { vk.0 as u32 }
+}
+fn other_held(physical: u32) -> bool {
+    (1..=254).any(|vk| vk != physical && vk != 16 && held(VIRTUAL_KEY(vk as u16)))
+}
 impl Data {
+    fn ctrl_event(self: &Rc<Self>, context: Option<&ITfContext>, key:WPARAM, flags:LPARAM, down:bool) -> Result<()> {
+        let p = self.state.borrow().prefs.clone();
+        if !p.flag("shortcuts","add_word",true) || p.number("shortcuts","add_word_shortcut",0)!=0 { return Ok(()); }
+        let physical = if key.0==17 { if flags.0 & (1<<24)!=0 { 0xa3 } else { 0xa2 } } else { key.0 };
+        let side = p.number("shortcuts","add_word_side",0);
+        let pure = (side==0 || physical==if side==1 { 0xa2 } else { 0xa3 })
+            && !(1..=254).any(|vk| ![17,0xa2,0xa3].contains(&vk) && held(VIRTUAL_KEY(vk as u16)));
+        let fired = self.ctrl_gesture.borrow_mut().observe(physical,down,flags.0 & (1<<30)!=0,
+            super::modifiers::epoch(),pure,p.number("shortcuts","add_word_interval",450).clamp(200,1000));
+        if fired { if let Some(context)=context { self.show_word(context)?; } }
+        Ok(())
+    }
+    fn add_word_shortcut(&self, vk:WPARAM) -> bool {
+        let s=self.state.borrow();
+        s.prefs.flag("shortcuts","add_word",true) && s.prefs.number("shortcuts","add_word_shortcut",0)==1
+            && vk.0==0x7b && held(VK_CONTROL) && held(VK_SHIFT) && !held(VK_MENU)
+    }
+    fn popup_accepts(&self, vk:WPARAM) -> bool {
+        self.word_popup.borrow().as_ref().is_some_and(|p|p.active())
+            && crate::word_popup::Popup::accepts(vk.0,held(VK_CONTROL),held(VK_MENU),held(VK_LWIN)||held(VK_RWIN))
+    }
+    fn observe_modifier(&self, key: WPARAM, down: bool) {
+        if !shift(key) && self.state.borrow().shift_tap {
+            self.state.borrow_mut().shift_used = true;
+        }
+        if !down && !shift(key) { self.state.borrow_mut().shift_used = true; }
+    }
     pub(super) fn wants(
         self: &Rc<Self>,
         context: &ITfContext,
@@ -54,6 +88,7 @@ impl Data {
             {
                 return Ok(false);
             }
+            if self.add_word_shortcut(vk) || self.popup_accepts(vk) { return Ok(true); }
             let s = self.state.borrow();
             let p = &s.prefs;
             let physical = if vk.0 == 16 {
@@ -154,10 +189,16 @@ impl Data {
         }
         let p = self.state.borrow().prefs.clone();
         if p.flag("shortcuts", "shift_toggle", true) && shift(vk) {
-            if flags.0 & (1 << 30) == 0 {
+            if self.state.borrow().shift_tap && self.state.borrow().shift_physical != physical_shift(vk,flags) {
+                self.state.borrow_mut().shift_used = true;
+            }
+            if flags.0 & (1 << 30) == 0 && !self.state.borrow().shift_tap {
+                let physical = physical_shift(vk, flags);
                 let mut s = self.state.borrow_mut();
                 s.shift_tap = true;
-                s.shift_used = false;
+                s.shift_used = other_held(physical);
+                s.shift_physical = physical;
+                s.shift_epoch = super::modifiers::epoch();
             }
             return Ok(true);
         }
@@ -614,18 +655,33 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         Ok(())
     }
     fn OnTestKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
-        if !shift(key) && self.data.state.borrow().shift_tap {
-            self.data.state.borrow_mut().shift_used = true;
+        self.data.observe_modifier(key, true);
+        self.data.ctrl_event(context.as_ref(),key,flags,true)?;
+        if !self.data.popup_accepts(key) && ![16,17,160,161,162,163].contains(&key.0) {
+            if let Some(popup)=self.data.word_popup.borrow_mut().as_mut() { popup.close(); }
         }
         if system_shortcut(key) {
             return Ok(false.into());
         }
         Ok(self.data.wants(context.ok()?, key, flags)?.into())
     }
-    fn OnTestKeyUp(&self, _: Ref<ITfContext>, key: WPARAM, _: LPARAM) -> Result<BOOL> {
+    fn OnTestKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.observe_modifier(key, false);
+        self.data.ctrl_event(context.as_ref(),key,flags,false)?;
         Ok((shift(key) && self.data.state.borrow().shift_tap).into())
     }
     fn OnKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.observe_modifier(key, true);
+        self.data.ctrl_event(context.as_ref(),key,flags,true)?;
+        if self.data.add_word_shortcut(key) {
+            if flags.0 & (1<<30)==0 { self.data.show_word(context.ok()?)?; }
+            return Ok(true.into());
+        }
+        if self.data.popup_accepts(key) {
+            let ch=translate(key,flags).and_then(|k|char::from_u32(k.ch));
+            if let Some(popup)=self.data.word_popup.borrow_mut().as_mut() { popup.key(key.0,ch,held(VK_CONTROL)); }
+            return Ok(true.into());
+        }
         if system_shortcut(key) {
             return Ok(false.into());
         }
@@ -637,12 +693,15 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             }
         }
     }
-    fn OnKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, _: LPARAM) -> Result<BOOL> {
+    fn OnKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.observe_modifier(key, false);
+        self.data.ctrl_event(context.as_ref(),key,flags,false)?;
         if shift(key) && self.data.state.borrow().shift_tap {
             let toggle = {
                 let mut s = self.data.state.borrow_mut();
                 s.shift_tap = false;
-                let toggle = !s.shift_used;
+                let toggle = !s.shift_used && s.shift_epoch == super::modifiers::epoch()
+                    && s.shift_physical == physical_shift(key, flags) && !other_held(s.shift_physical);
                 s.shift_used = false;
                 toggle
             };

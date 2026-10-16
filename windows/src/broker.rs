@@ -173,6 +173,8 @@ fn read<T: DeserializeOwned>(pipe: &mut File) -> io::Result<T> {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_classes")]
+    pub classes: u32,
     pub layout: u32,
     pub ranking: u32,
     pub right: bool,
@@ -181,6 +183,7 @@ pub struct Config {
     pub dictionary: String,
     pub prediction: bool,
 }
+fn default_classes() -> u32 { 5 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Op {
     Key {
@@ -201,6 +204,7 @@ pub enum Op {
     Context(String),
     Options(u32),
     Mixed(bool),
+    Tolerance(bool),
 }
 #[derive(Serialize, Deserialize)]
 enum Request {
@@ -219,6 +223,7 @@ enum Request {
     Status,
     Stop,
     Profile,
+    Word { word: String, reading: Option<String> },
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Reply {
@@ -234,6 +239,8 @@ pub struct Reply {
     /// Profile text for sandboxed hosts, which cannot read the user's folder.
     #[serde(default)]
     pub profile: Option<String>,
+    #[serde(default)]
+    pub word_result: Option<std::result::Result<String, String>>,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -247,6 +254,7 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         found: false,
         failure: if ok { None } else { Some(Failure::Failed) },
         profile: None,
+        word_result: None,
     }
 }
 fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {
@@ -386,6 +394,16 @@ pub(crate) fn remote_profile() -> Option<String> {
     pipe.send(&Request::Profile, deadline).ok()?;
     pipe.receive::<Reply>(deadline).ok()?.profile
 }
+pub(crate) fn word_request(data: &Path, word: &str, reading: Option<&str>) -> std::result::Result<String,String> {
+    let request = Request::Word { word: word.into(), reading: reading.map(str::to_owned) };
+    let run = || -> io::Result<Reply> {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let pipe = connect(data, true, deadline)?;
+        pipe.send(&request, deadline)?; pipe.receive(deadline)
+    };
+    run().map_err(|e| format!("常駐核心未回應，請稍後重試（{e}）。"))?
+        .word_result.ok_or_else(|| "常駐核心版本不支援加詞，請重新啟動輸入法。".to_string())?
+}
 fn start_core(executable: &Path) -> io::Result<()> {
     use windows::{
         core::{PCWSTR, PWSTR},
@@ -517,7 +535,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         .map_err(|e| io::Error::other(e.to_string()))?;
     let keyboard = p.number("input", "keyboard", 0);
     let layout = crate::installation::layout(keyboard, 0, crate::installation::available());
-    let warm = Engine::open_local(
+    let warm = Engine::open_local_variant(
         data,
         layout,
         (p.get("engine", "ranking", "chat") == "formal") as u32,
@@ -526,6 +544,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         false,
         p.get("input", "dictionary", "dictionary.tsv"),
         p.flag("engine", "prediction", false),
+        p.class_table(),
     )
     .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.

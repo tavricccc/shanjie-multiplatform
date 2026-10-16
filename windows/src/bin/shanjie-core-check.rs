@@ -12,6 +12,7 @@ fn main() {
         "Use an isolated test profile"
     );
     let config = Config {
+        classes: 5,
         layout: 0,
         ranking: 0,
         right: true,
@@ -46,6 +47,20 @@ fn main() {
         }
         assert_eq!(e.reset(false).unwrap().commit, "你");
         println!("peer passed");
+        return;
+    }
+    if std::env::args().nth(2).as_deref() == Some("--models") {
+        for classes in [5,4,5] {
+            let mut selected=broker::Client::open(&data,Config { classes,..config.clone() }).unwrap();
+            for ch in "su3".chars() {
+                selected.perform(Op::Key {kind:1,ch:ch as u32,modifiers:0,latin:None}).unwrap();
+            }
+            assert_eq!(selected.perform(Op::Reset(false)).unwrap().commit,"你");
+        }
+        let status=broker::control(&data,false).unwrap();
+        assert_eq!(status.lexicon_loads,1);
+        assert_eq!(status.model_loads,2);
+        println!("PASS model-v6/classes-v5 to classes-v4 and back through resident IPC; {}",serde_json::to_string(&status).unwrap());
         return;
     }
     eprintln!("check: first session");
@@ -86,6 +101,15 @@ fn main() {
     let status = broker::control(&data, false).unwrap();
     assert_eq!(status.lexicon_loads, 1);
     assert_eq!(status.model_loads, 1);
+    for classes in [4,5] {
+        let mut alternate=broker::Client::open(&data,Config { classes,..config.clone() }).expect("model variant opens");
+        for ch in "su3".chars() {
+            alternate.perform(Op::Key {kind:1,ch:ch as u32,modifiers:0,latin:None}).unwrap();
+        }
+        assert_eq!(alternate.perform(Op::Reset(false)).unwrap().commit,"你");
+    }
+    assert_eq!(broker::control(&data,false).unwrap().model_loads,2,"both selected model assets were loaded");
+    println!("PASS both model-v6 class variants through resident IPC");
     // Simultaneous first sessions after stopping the broker own one endpoint.
     drop(a);
     drop(b);

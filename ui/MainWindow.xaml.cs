@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
+    internal void SetModelForVerification(int value) => ModelSelector.SelectedIndex = value;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedInputForVerification(bool mixed) => MixedInputToggle.SetToggleForVerification(mixed);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);

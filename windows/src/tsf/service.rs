@@ -68,10 +68,13 @@ pub struct State {
     pub prefs: Document,
     pub data: PathBuf,
     binary: PathBuf,
-    profile_layout: u32,
+    pub(super) profile_layout: u32,
     pub full_width: bool,
     pub shift_tap: bool,
     pub shift_used: bool,
+    pub shift_physical: u32,
+    pub shift_epoch: u64,
+    observer: Option<super::modifiers::Observer>,
     pub raw_reading: String,
 }
 impl Default for State {
@@ -103,6 +106,9 @@ impl Default for State {
             full_width: false,
             shift_tap: false,
             shift_used: false,
+            shift_physical: 0,
+            shift_epoch: 0,
+            observer: None,
             raw_reading: String::new(),
         }
     }
@@ -139,6 +145,9 @@ pub struct Data {
     pub(super) application_written: Cell<bool>,
     pub(super) retiring: RefCell<Vec<(u64, ITfContext)>>,
     pub indicator: RefCell<Box<Indicator>>,
+    pub(super) word_popup: RefCell<Option<Box<crate::word_popup::Popup>>>,
+    pub(super) word_selection: RefCell<Option<super::add_word::Selection>>,
+    pub(super) ctrl_gesture: RefCell<super::add_word::Gesture>,
     watcher_context: RefCell<Option<Box<std::rc::Weak<Data>>>>,
     owner: Cell<*mut c_void>,
     _count: Count,
@@ -167,6 +176,9 @@ pub fn new() -> ITfTextInputProcessorEx {
         application_written: Cell::new(false),
         retiring: RefCell::new(Vec::new()),
         indicator: RefCell::new(Box::new(Indicator::default())),
+        word_popup: RefCell::new(None),
+        word_selection: RefCell::new(None),
+        ctrl_gesture: RefCell::new(Default::default()),
         watcher_context: RefCell::new(None),
         owner: Cell::new(std::ptr::null_mut()),
         _count: Count::new(),
@@ -244,7 +256,10 @@ impl Data {
         })
     }
     pub fn settings(&self) {
-        let path = self.state.borrow().binary.join("ui/Shanjie.UI.exe");
+        // Resolve the current registration: old hosts may still hold a retired DLL.
+        let binary = crate::installer::current_binaries().ok().flatten()
+            .unwrap_or_else(|| self.state.borrow().binary.clone());
+        let path = binary.join("ui/Shanjie.UI.exe");
         unsafe {
             ShellExecuteW(
                 None,
@@ -289,6 +304,7 @@ impl Data {
         Ok(())
     }
     pub fn cancel(self: &Rc<Self>) -> Result<()> {
+        self.close_word();
         self.generation.set(self.generation.get().wrapping_add(1));
         self.recovery.borrow_mut().clear();
         if let Some(watcher) = self.state.borrow().watcher.as_ref() {
@@ -379,6 +395,7 @@ impl Data {
         let cancelled = self.cancel();
         let mut s = self.state.borrow_mut();
         s.watcher = None;
+        s.observer = None;
         if let (Some(bar), Some(button)) = (&s.bar, &s.button) {
             unsafe {
                 let _ = bar.RemoveItem(button);
@@ -758,6 +775,7 @@ impl Data {
         let rebuild = [
             ("input", "keyboard"),
             ("engine", "ranking"),
+            ("engine", "class_table"),
             ("candidates", "anchor"),
             ("input", "learning"),
             ("candidates", "big5"),
@@ -917,7 +935,7 @@ pub fn pick_associated(s: &mut State, index: u32) -> Result<Snapshot> {
     s.association_caret = None;
     Ok(out)
 }
-unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
+pub(super) unsafe fn physical(owner: HWND, caret: &mut RECT) -> Result<()> {
     if !owner.is_invalid()
         && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner))
             != DPI_AWARENESS_PER_MONITOR_AWARE
@@ -964,6 +982,9 @@ fn configure_options(s: &mut State) -> Result<()> {
     {
         return Err(E_FAIL.into());
     }
+    if s.engine.perform(crate::broker::Op::Tolerance(p.flag("input", "mixed_tolerance", false))).is_none() {
+        return Err(E_FAIL.into());
+    }
     Ok(())
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
@@ -974,6 +995,7 @@ unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
                 let _ = data.restart();
             }
             2 => data.retry_pending(),
+            4 => data.open_word_popup(),
             _ => {
                 let _ = data.refresh();
             }
@@ -1028,6 +1050,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 s.data = binary.join("data");
                 s.profile_layout = layout;
                 s.full_width = preferences.flag("input", "full_width", false);
+                s.observer = super::modifiers::Observer::new().ok();
             }
             self.data
                 .set_mode(preferences.flag("input", "chinese", true))
@@ -1162,10 +1185,19 @@ impl ITfTextEditSink_Impl for Service_Impl {
         unsafe {
             if self.data.editing.get()
                 || self.data.state.borrow().context.as_ref() != context.as_ref()
-                || !record.ok()?.GetSelectionStatus()?.as_bool()
             {
                 return Ok(());
             }
+            let record=record.ok()?;
+            let selection_changed=record.GetSelectionStatus()?.as_bool();
+            let word_open=self.data.word_popup.borrow().as_ref().is_some_and(|p|p.active())
+                || self.data.word_selection.borrow().is_some();
+            let text_changed=word_open && record.GetTextAndPropertyUpdates(TF_GTP_INCL_TEXT,&[]).is_ok_and(|updated| {
+                let mut ranges=[None]; let mut count=0;
+                updated.Next(&mut ranges,&mut count).is_ok() && count!=0
+            });
+            if selection_changed || text_changed { self.data.close_word(); }
+            if !selection_changed { return Ok(()); }
             let context = context.ok()?;
             let selected = selection(context, cookie)?;
             let anchor = if selected.style.ase == TF_AE_START {

@@ -6,6 +6,6 @@
   "abi": "core/include/shanjie.h",
   "modelRelease": "model-v6",
   "modelReleases": ["model-v6"],
-  "classReleases": ["classes-v4"],
+  "classReleases": ["classes-v5", "classes-v4"],
   "modelSources": "MODEL-SOURCES.json"
 }

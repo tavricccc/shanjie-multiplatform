@@ -62,6 +62,7 @@ pub fn pipe_deadlines() {
 }
 fn config(learning: bool) -> Config {
     Config {
+        classes: 5,
         layout: 0,
         ranking: 0,
         right: true,

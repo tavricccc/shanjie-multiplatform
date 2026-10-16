@@ -32,6 +32,34 @@ mod windows_smart_tests {
         out
     }
     #[test]
+    fn optional_duplicate_key_tolerance_keeps_original_selectable() {
+        let lex=Arc::new(Lexicon::parse("ㄏㄨㄟˊ 回 -0.1\nㄐㄧㄚ 家 -0.1\nㄏㄨㄟˊ-ㄐㄧㄚ 回家 -0.01\n").unwrap());
+        for layout in [Layout::Standard,Layout::Eten] {
+            let word_keys:String="ㄏㄨㄟ".chars().map(|s|layout.key_of_symbol(s).unwrap()).collect();
+            let tone=layout.key_of_tone('ˊ').unwrap();
+            let home_keys:String="ㄐㄧㄚ".chars().map(|s|layout.key_of_symbol(s).unwrap()).collect();
+            let correct=format!("{word_keys}{tone}{home_keys} ");
+            let extra=format!("{}{word_keys}{tone}{home_keys} ",word_keys.chars().next().unwrap());
+            for enabled in [false,true] {
+                let mut e=Engine::with_lexicon(lex.clone(),layout); e.set_mixed_input(true); e.set_mixed_tolerance(enabled);
+                assert_eq!(type_keys(&mut e,&correct).preedit,"回家"); e.reset(ResetMode::Discard);
+                let out=type_keys(&mut e,&extra);
+                assert_eq!(out.preedit,if enabled {"回家".into()} else {format!("{}回家",word_keys.chars().next().unwrap())});
+                if enabled {
+                    let shown=e.key(Key::new(KeyKind::Down)).unwrap();
+                    let index=shown.candidates.iter().position(|s|s==&extra).unwrap();
+                    assert_eq!(e.pick(index).unwrap().unwrap().preedit,extra);
+                    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,extra);
+                }
+            }
+            let mut e=Engine::with_lexicon(lex.clone(),layout); e.set_mixed_input(true); e.set_mixed_tolerance(true);
+            for english in ["call", "hello", "ABC", "SSD123"] {
+                for ch in english.chars() { e.key_with_latin(Key::ch(ch.to_ascii_lowercase(),0),Some(ch)).unwrap(); }
+                assert_eq!(e.view(true,String::new()).preedit,english); e.reset(ResetMode::Discard);
+            }
+        }
+    }
+    #[test]
     fn mixed_boundaries_and_lifecycle() {
         let mut e = engine();
         assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
@@ -111,6 +139,25 @@ impl Engine {
     pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
     }
+    pub fn set_mixed_tolerance(&mut self, enabled: bool) { self.mixed_tolerance = enabled; }
+
+    // Conservative first stage: one adjacent repeated key, a complete syllable,
+    // an explicit tone, and one unambiguous dictionary reading. Never touch host text.
+    fn corrected_mixed_keys(&self, raw: &str, tone: usize) -> Option<String> {
+        if !self.mixed_tolerance || !(2..=4).contains(&raw.len())
+            || !raw.is_ascii() || raw.chars().any(|c| c.is_ascii_uppercase())
+            || english_word(raw) { return None; }
+        let mut choices = std::collections::BTreeSet::new();
+        for index in 1..raw.len() {
+            if raw.as_bytes()[index] != raw.as_bytes()[index-1] { continue; }
+            let keys = format!("{}{}", &raw[..index], &raw[index+1..]);
+            if let Some(mut reading) = self.mixed_reading_order(&keys, false) {
+                reading.push_str(TONE_MARKS[tone]);
+                if !self.lex.entries(&[reading]).is_empty() { choices.insert(keys); }
+            }
+        }
+        if choices.len() == 1 { choices.into_iter().next() } else { None }
+    }
     pub fn is_mixed_hint(&self) -> bool {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
     }
@@ -169,6 +216,16 @@ impl Engine {
         if let Some(tone) =
             tone.filter(|_| key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
         {
+            if let Some(corrected) = self.corrected_mixed_keys(&raw, tone) {
+                self.clear_pend(); self.clear_pred();
+                for ch in corrected.chars() { self.key_original(Key::ch(ch, 0))?; }
+                let out = self.key_original(key)?;
+                let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                    self.typed_literals.insert(index, format!("{raw}{ending}"));
+                }
+                return Ok(out);
+            }
             // A tone explicitly confirms a complete syllable before the suffix heuristic.
             if key.kind != KeyKind::Space {
                 if let Some(mut reading) = self.mixed_reading_order(&raw, false) {

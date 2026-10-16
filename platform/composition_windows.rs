@@ -28,6 +28,24 @@ mod windows_composition_tests {
         out
     }
     #[test]
+    fn windows_punctuation_contract_across_layouts_and_mixed_modes() {
+        for layout in [Layout::Standard,Layout::Eten] { for mixed in [false,true] {
+            for key in [Key::ch(',',MOD_SHIFT),Key::ch('\\',MOD_CONTROL),Key::ch('(',0)] {
+                let mut e=engine(mixed,true); e.layout=layout; e.set_windows_input_options((1<<20)-1);
+                let keys:String="ㄋㄧ".chars().map(|s|layout.key_of_symbol(s).unwrap()).collect();
+                type_keys(&mut e,&keys);
+                let out=e.key(key).unwrap();
+                assert!(out.handled && out.commit.is_empty() && e.windows_phonetic_pending(),"eten={} mixed={} key={} modifiers={} preedit={}",layout==Layout::Eten,mixed,key.ch,key.modifiers,out.preedit);
+                let before=e.key(Key::new(KeyKind::Backspace)).unwrap();
+                assert!(before.commit.is_empty() && e.windows_phonetic_pending());
+                let out=type_keys(&mut e,&layout.key_of_tone('ˇ').unwrap().to_string());
+                // Eten backslash is a phonetic symbol; after removing it, the original reading remains.
+                if !(layout==Layout::Eten && key.modifiers==0) { assert_eq!(out.preedit,"你"); }
+                e.reset(ResetMode::Discard);
+            }
+        } }
+    }
+    #[test]
     fn literal_digits_and_symbols_are_handled_without_committing() {
         for mixed in [false,true] {
             for keys in ["3", "4", "\\", "su3()", "su3\\"] {
@@ -164,6 +182,9 @@ impl Engine {
 
     fn windows_key(&mut self, key: Key) -> Result<Output, EngineError> {
         let plain = key.modifiers == 0;
+        if key.kind == KeyKind::Char && key.ch == '\\' && key.modifiers == MOD_CONTROL {
+            return self.insert_windows_literal("、");
+        }
         if plain && key.kind == KeyKind::Backspace && !self.pending_literal.is_empty() {
             self.pending_literal.pop();
             return self.handled();

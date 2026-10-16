@@ -89,7 +89,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                     } else if states.len() >= 256 {
                         None
                     } else {
-                        Engine::open_local(
+                        Engine::open_local_variant(
                             &data,
                             config.layout,
                             config.ranking,
@@ -98,6 +98,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                             config.big5,
                             &config.dictionary,
                             config.prediction,
+                            config.classes,
                         )
                         .and_then(|mut engine| {
                             if engine.replay(&replay) {
@@ -166,6 +167,13 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 let mut r = reply(None, None, true);
                 r.profile = std::fs::read_to_string(crate::profile::path()).ok();
                 r
+            }
+            Request::Word { word, reading } => {
+                let result = if let Some(reading) = reading {
+                    crate::word_store::add(&word, &reading).map(|_| String::new())
+                } else { crate::word_store::suggest(&data, &word) };
+                let mut r = reply(None, None, result.is_ok());
+                r.word_result = Some(result.map_err(|e| e.to_string())); r
             }
             Request::Stop => {
                 let _ = write(&mut pipe, &reply(None, None, true));

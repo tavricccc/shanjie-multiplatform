@@ -1,23 +1,41 @@
 #Requires -Version 7
-param([switch]$NativeOnly, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
+param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
     [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny'))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     if (!$NativeOnly) {
-    & "$PSScriptRoot/build.ps1" -Architecture $Architecture
+    if (!$UseExistingBuild) { & "$PSScriptRoot/build.ps1" -Architecture $Architecture }
     New-Item -ItemType Directory -Path upstream/shanjie/data/lm -Force | Out-Null
     Copy-Item build/model/bigram-v6.sjlm upstream/shanjie/data/lm/bigram.sjlm -Force
-    Copy-Item build/model/classes-v4.sjc upstream/shanjie/data/lm/classes.sjc -Force
+    Copy-Item build/model/classes-v5.sjc upstream/shanjie/data/lm/classes.sjc -Force
     # Upstream goldens assume the kn-v1 side file next to the model; used for verification only, not packaged.
     if (!(Test-Path build/model/kn-v1.sjkn) -or (Get-FileHash build/model/kn-v1.sjkn).Hash.ToLowerInvariant() -ne 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e') {
         & "$PSScriptRoot/download-asset.ps1" -Url 'https://github.com/Nanako0129/shanjie/releases/download/kn-v1/kn.sjkn' -Destination (Join-Path $root 'build/model/kn-v1.sjkn') -Size 1414052 -Sha256 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e'
     }
     Copy-Item build/model/kn-v1.sjkn upstream/shanjie/data/lm/kn.sjkn -Force
+    # Goldens are versioned independently of the upstream code pin. Use the
+    # upstream Python oracle for the selected class weight, never edit the submodule.
+    $evalCopy = Join-Path $root 'build/verification-eval-classes-v5'
+    New-Item -ItemType Directory -Path $evalCopy -Force | Out-Null
+    Copy-Item "$root/upstream/shanjie/eval/*" $evalCopy -Recurse -Force
+    Copy-Item "$root/tests/fixtures/classes-v5/*.tsv" "$evalCopy/golden" -Force
+    Copy-Item "$root/tests/fixtures/classes-v5/s2h-lm-context.txt" "$evalCopy/golden" -Force
+    $englishFixture = Join-Path $evalCopy 'golden/english-tiny.txt'
+    [IO.File]::WriteAllText($englishFixture,[IO.File]::ReadAllText($englishFixture).Replace("`r`n","`n"),[Text.UTF8Encoding]::new($false))
     foreach ($name in @('data','eval')) {
         $destination = Join-Path $root "build/$name"
-        if (!(Test-Path $destination)) { New-Item -ItemType Junction -Path $destination -Target (Join-Path $root "upstream/shanjie/$name") | Out-Null }
+        $source = if ($name -eq 'eval') { $evalCopy } else { Join-Path $root "upstream/shanjie/$name" }
+        if (Test-Path -LiteralPath $destination) {
+            $item = Get-Item -LiteralPath $destination
+            if (!$item.LinkType -or [IO.Path]::GetFullPath($item.Target) -ne [IO.Path]::GetFullPath($source)) {
+                if ([IO.Path]::GetFullPath($destination) -ne [IO.Path]::Combine($root,'build',$name)) { throw 'Unexpected fixture path.' }
+                if ($item.LinkType) { Remove-Item -LiteralPath $destination -Force }
+                else { Remove-Item -LiteralPath $destination -Recurse -Force }
+            }
+        }
+        if (!(Test-Path -LiteralPath $destination)) { New-Item -ItemType Junction -Path $destination -Target $source | Out-Null }
     }
     # Upstream's lib tests link model files with unix symlinks; copy them on Windows (generated tree only).
     $ffi = Get-Content build/core/src/ffi.rs -Raw
@@ -26,6 +44,7 @@ try {
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
     foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
+    & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $root 'build/core/tests')
     $learnTests = Get-Content build/core/tests/engine_learn.rs -Raw
     $learnTests = $learnTests.Replace('fn store_append_refusals_fall_back_to_a_full_rewrite()', "#[cfg(unix)]`nfn store_append_refusals_fall_back_to_a_full_rewrite()")
     $learnTests = $learnTests.Replace('fn max_rss()', "#[cfg(unix)]`nfn max_rss()")
@@ -76,23 +95,33 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     Set-Content "$profileRoot/Shanjie/profile.ini" $profileText -Encoding utf8NoBOM
     $previousLocalAppData = $env:LOCALAPPDATA
     $previousHeadless = $env:SHANJIE_HEADLESS
+    $previousTestProfile = $env:SHANJIE_TEST_PROFILE
     try {
         $env:LOCALAPPDATA = $profileRoot
+        $env:SHANJIE_TEST_PROFILE = '1'
         $env:SHANJIE_HEADLESS = if ($Visual) { $null } else { '1' }
+        $fixtureCore = Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru
         & $harness @arguments
-    } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
-    if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
+        $harnessExit = $LASTEXITCODE
+    } finally {
+        $stop = Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
+        $stop.WaitForExit(5000) | Out-Null
+        if ($fixtureCore) { $fixtureCore.WaitForExit(5000) | Out-Null }
+        $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless; $env:SHANJIE_TEST_PROFILE = $previousTestProfile
+    }
+    if ($harnessExit) { throw 'TSF smoke harness failed.' }
     if (!$Visual) {
         $cold = Join-Path $root "build/cold-tip/$Architecture"
         New-Item -ItemType Directory -Path $cold -Force | Out-Null
         Copy-Item "$root/dist/$Architecture/Shanjie.dll" "$cold/Shanjie.dll" -Force
         try {
             $env:LOCALAPPDATA = $profileRoot
+            $env:SHANJIE_TEST_PROFILE = '1'
             # Keep the native channel enabled: it must remain hidden and avoid
             # renderer initialization while no candidate is displayed.
             $env:SHANJIE_HEADLESS = $null
             & $harness "$cold/Shanjie.dll" --cold-start
             if ($LASTEXITCODE) { throw 'Model-free TSF activation/shortcut check failed.' }
-        } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless }
+        } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless; $env:SHANJIE_TEST_PROFILE = $previousTestProfile }
     }
 } finally { Pop-Location }

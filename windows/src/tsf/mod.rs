@@ -1,6 +1,8 @@
 mod candidates;
+mod add_word;
 mod keys;
 mod mode;
+mod modifiers;
 mod recovery;
 mod resident;
 mod service;

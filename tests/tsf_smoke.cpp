@@ -22,6 +22,7 @@ public:
     std::wstring text;
     HWND window = nullptr;
     bool layoutReady = false;
+    bool readOnly = false;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
     TS_SELECTION_ACP selection{0,0,{TS_AE_NONE,FALSE}};
@@ -31,7 +32,7 @@ public:
     HRESULT STDMETHODCALLTYPE AdviseSink(REFIID iid, IUnknown* sink, DWORD) override { if (iid != IID_ITextStoreACPSink) return E_NOINTERFACE; return sink->QueryInterface(IID_PPV_ARGS(&sink_)); }
     HRESULT STDMETHODCALLTYPE UnadviseSink(IUnknown*) override { sink_.Reset(); return S_OK; }
     HRESULT STDMETHODCALLTYPE RequestLock(DWORD flags, HRESULT* result) override { if (!sink_) return E_FAIL; *result = sink_->OnLockGranted(flags); return S_OK; }
-    HRESULT STDMETHODCALLTYPE GetStatus(TS_STATUS* out) override { *out = {0,0}; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetStatus(TS_STATUS* out) override { *out = {0,readOnly?DWORD(TS_SD_READONLY):DWORD(0)}; return S_OK; }
     HRESULT STDMETHODCALLTYPE QueryInsert(LONG start, LONG end, ULONG, LONG* a, LONG* b) override { *a = start; *b = end; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override { *fetched = count ? 1 : 0; if (count) *out = selection; return S_OK; }
     HRESULT STDMETHODCALLTYPE SetSelection(ULONG count, const TS_SELECTION_ACP* value) override { if (count != 1) return E_INVALIDARG; selection = *value; return S_OK; }

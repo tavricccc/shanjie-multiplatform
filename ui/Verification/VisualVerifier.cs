@@ -41,6 +41,14 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=horizontal")) throw new InvalidDataException("Latest model/horizontal migration failed");
+        foreach (int variant in new[] { 1, 0 }) {
+            settings.SetModelForVerification(variant); await Task.Delay(60);
+            if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");
+            settings.Vm.Save(); settings.Vm.Load();
+            if(settings.Vm.ModelVariant!=variant || settings.Vm.ModelHelp.Contains("classes-v4")!=(variant==1)) throw new InvalidDataException("Model variant persistence failed");
+            settings.Vm.Preset(true);
+            if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
+        }
         // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");

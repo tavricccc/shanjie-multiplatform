@@ -23,7 +23,8 @@ foreach ($entry in $manifest.models) {
     if ($LASTEXITCODE) { throw "Mapped model equivalence verification failed: $($entry.release)" }
 }
 # Remove retired model directories from build output as well as legacy root files.
-foreach ($retired in @(Get-ChildItem -LiteralPath "$root/dist/data/models" -Directory | Where-Object Name -NotIn @($manifest.models.release))) {
+$allowedFolders = @($manifest.models | ForEach-Object { Split-Path (Split-Path $_.mapped -Parent) -Leaf })
+foreach ($retired in @(Get-ChildItem -LiteralPath "$root/dist/data/models" -Directory | Where-Object Name -NotIn $allowedFolders)) {
     $resolved = [IO.Path]::GetFullPath($retired.FullName)
     if (!$resolved.StartsWith([IO.Path]::GetFullPath("$root/dist/data/models") + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected model path.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
