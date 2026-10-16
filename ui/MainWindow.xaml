@@ -85,6 +85,8 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="Esc" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="候選或已進入的預測列仍先關閉／退出，不會因這個選項立即刪除整句。"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="Enter" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <controls:SettingToggle x:Name="EnterToCursorToggle" Label="Enter 只提交游標前的字" Description="游標在組字中間時，Enter 只送出游標前（選字後含所選的字）的部分，後面的字繼續留在組字區可再選字。關閉時一律送出整句。" IsOn="{x:Bind Vm.EnterToCursor, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="空白鍵" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <controls:SettingToggle x:Name="SpaceInputsZhuyinToggle" Label="空白鍵輸入注音符號" Description="開啟沿用注音符號輸入。關閉時，無法轉換的按鍵照原樣輸出，例如 1＋空白得到數字 1 和空格；第一聲仍可轉換。字詞候選第一項提供注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.SpaceInputsZhuyin, Mode=TwoWay}"/>
                         <controls:SettingToggle x:Name="SpaceCommitsToggle" Label="空白鍵提交組字" Description="預設關閉：直接在組字中插入空格，仍可繼續編輯。注音第一聲與拼音轉換依原有規則處理。" IsOn="{x:Bind Vm.SpaceCommits, Mode=TwoWay}"/>

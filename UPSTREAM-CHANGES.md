@@ -180,3 +180,7 @@ pwsh -File scripts/package.ps1
 核心與上游回歸、Windows 的最新模型／配表拒絕、兩種操作 profile、純 Rust TSF、候選／模式提示及 WinUI 離屏驗證詳見 `VERIFICATION.md`。TSF harness 的鍵盤 sink 註冊仍使用測試代理；Unix 權限、macOS 效能與 ignored 量測沒有變成已通過項目。安裝器清理 fixture 通過，不等同系統註冊／重開機移除實測。
 
 目前沒有提交上游 PR。右側候選擴充與平台 backend 可在和作者討論 API 後另行整理；目前版本以本機可用為目標。
+
+## Enter 只提交游標前（Windows 覆蓋）
+
+`[candidates] enter_to_cursor`（輸入選項 bit 21，Windows 互動預設開、善解互動預設關）：游標位於已定字的組字中間時，Enter 只送出游標前（選字後含所選字）的部分，後面的音節留在組字區、游標回到其開頭可繼續選字；固定詞不會被切開。候選窗開啟、預測選取、注音未完成或混打英文暫存時仍走原本的整句送出。實作在 `platform/composition_windows.rs` 的 `commit_through_cursor`，欄位由 `prepare-smart-input.ps1` 注入。

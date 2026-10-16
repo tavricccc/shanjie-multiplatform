@@ -55,7 +55,7 @@ public partial class SettingsViewModel
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
             SpaceInputsZhuyin = profile.Flag("input", "space_inputs_zhuyin", true);
-            EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
+            EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); EnterToCursor = profile.Flag("candidates", "enter_to_cursor", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
             BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
             if (readDictionary)
             {
@@ -123,7 +123,7 @@ public partial class SettingsViewModel
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
-            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),
+            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),

@@ -217,6 +217,8 @@ impl Document {
             flags |= (self.flag("punctuation", &format!("plain_{n}"), false) as u32) << (14 + i);
         }
         flags |= (!self.flag("input", "space_inputs_zhuyin", true) as u32) << 20;
+        let windows = self.get("profile", "interaction", "windows") != "shanjie";
+        flags |= (self.flag("candidates", "enter_to_cursor", windows) as u32) << 21;
         flags
     }
 }

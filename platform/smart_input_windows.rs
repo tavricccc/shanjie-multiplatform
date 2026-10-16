@@ -285,6 +285,9 @@ impl Engine {
         // owns the key (punctuation ends a run, Backspace takes a letter); otherwise the Windows
         // policy runs first and upstream English only sees what it leaves.
         if self.english && self.upstream_english_busy() { return self.key_original(key); }
+        if key.kind == KeyKind::Enter && key.modifiers == 0 {
+            if let Some(out) = self.commit_through_cursor()? { return Ok(self.mixed_view(out)); }
+        }
         let out = self.windows_key(key)?;
         Ok(self.mixed_view(out))
     }
