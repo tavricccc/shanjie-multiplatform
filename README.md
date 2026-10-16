@@ -1,8 +1,8 @@
 # 善解 Windows
 
-原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 `f8ea0bb`（feat/model-v6-switch），提供 model-v6，設定中可選 classes-v5（預設）或 classes-v4 配套。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
+原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 main `b2f5da8`（v0.4.6），內建 model-v6＋classes-v5，其他已確認相容的模型配套可由設定下載及選用。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.9.0**：設定視窗單一執行個體、Shift 組合鍵追蹤修正、可選的混打相鄰重複鍵容錯、反白字詞後雙 Ctrl 加詞浮層、classes-v5／v4 配套選單，以及設定更新遇到核心延遲時的操作確認與重試。操作及支援範圍見 [0.9.0 版本說明](docs/releases/RELEASE-NOTES-0.9.0.md)，測試與實機驗收界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發測試版為 **0.10.0**：整合雙方 0.9.0，固定上游 main b2f5da8，加入線上模型配套清單、按需下載／續傳與驗證，安裝包只內建一組模型。保留混打容錯、雙 Ctrl 加詞、唯一設定窗、設定逾時恢復，並整合上游英文與 Enter 游標前提交。操作與限制見 [0.10.0 版本說明](docs/releases/RELEASE-NOTES-0.10.0.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
@@ -15,7 +15,7 @@ git submodule update --init
 pwsh -File scripts/package.ps1
 ```
 
-輸出 `dist/Shanjie-Windows.zip`：x64／x86 Rust DLL、x64 self-contained WinUI 設定、原生 Rust 安裝管理程式、model-v6 與兩種可選詞類表、授權全文及 SHA256SUMS。下載核對官方 SHA-256，再驗證映射陣列及語言分數等價；來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。僅提供清單內的兩種配置，載入失敗時不暗中改用另一配置。
+輸出 `dist/Shanjie-Windows.zip`：x64／x86 Rust DLL、x64 self-contained WinUI 設定、原生 Rust 安裝管理程式、一組內建 model-v6＋classes-v5、授權全文及 SHA256SUMS。建置核對官方 SHA-256，再驗證映射陣列及語言分數等價；內建來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)，線上相容配套見 [MODEL-CATALOG.json](MODEL-CATALOG.json)。使用者下載的完整配套保存在 `%LOCALAPPDATA%\Shanjie\Models`；遺失或無效時，設定會說明原因，新核心以內建配套備援並保留原選擇。
 
 只編譯用 `pwsh -File scripts/build.ps1`，預設 x64 與 x86 都建置（x86 供 64 位元 Windows 上的 32 位元程式載入）；只要單一架構加 `-Architecture x64` 或 `x86`。`-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定 UI 並更新其 Rust DLL。已有完整 `dist/` 時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 重新整理、校驗及打包。
 
@@ -48,6 +48,7 @@ pwsh -File scripts/package.ps1
 | 候選範圍 | 游標右側 | 游標左側 |
 | 移動候選 | ↑↓ 或 ←→；Tab 下一項 | ←→ 或 ↑↓；Tab 下一項 |
 | 選字 | 數字確認；Enter 確認並提交 | 數字／Enter 確認後繼續組字 |
+| Enter 提交範圍 | 新設定只提交游標前；固定詞保持完整 | 整句；可另開游標前提交 |
 | 單按 Shift | 切換中英 | 保留上游行為 |
 | Ctrl＋空白 | 預設關閉，可啟用 | 相同 |
 | Shift＋空白／Ctrl＋標點 | 全半形／全形標點 | 預設關閉 |
@@ -56,7 +57,7 @@ pwsh -File scripts/package.ps1
 
 Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。候選維持不透明實色底；「介面與選字框主題」同時影響 WinUI 與候選，可選跟隨 Windows、淺色或深色，高對比模式仍優先遵循系統色。
 
-個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`。schema 5 將舊模型遷移至 v5、舊排列遷移至 horizontal，移除格狀相關開關；其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例；不監控 INI，也不在每次按鍵查檔案。直接改 INI 後，按設定頁的「重新啟動輸入法」或重新啟用善解才讀取。
+個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`，目前 schema 7。舊設定缺少 Enter 游標前提交選項時保留整句提交；已有明確值及模型選擇者保留原值。其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例；不監控 INI，也不在每次按鍵查檔案。直接改 INI 後，按設定頁的「重新啟動輸入法」或重新啟用善解才讀取。
 
 「重新啟動輸入法」先保存未儲存草稿；沒有草稿時直接讀取磁碟設定，保留手動改檔的內容。它通知各 App 內已啟用的善解提交組字、清除備用核心並在背景重新載入，不終止 App。核心在 TSF 啟用時背景預載；失焦、提交與暫時停用後保留在 App 程序內，同設定重新啟用可重用。每個程序最多保留一個備用核心，各啟用實例的組字狀態獨立。全新 App 若在預載完成前立刻輸入，第一鍵仍須等待同一份載入工作；Win 快捷鍵與閒置失焦不等待。此按鈕不能換掉 App 已載入的舊版 DLL，安裝更新後仍須重新開啟 App。模型／詞類損壞明確拒絕載入。
 
@@ -71,4 +72,4 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 程式碼沿用 Apache-2.0；詞庫、模型與 icons 分別有資料授權。Rust 相依套件的鎖定版本與全文也保存在包內 `LICENSES/windows-rust/`，不能把整包稱為單一 Apache 授權。
 ## 可選智慧輸入
 
-設定 →「組字與提交」可開啟「中英混打自動判斷」，預設關閉，適用標準／倚天注音。未完成輸入先顯示原始按鍵，例如 `gj`，游標下方另顯示 `ㄕㄨ` 提示；聲調完成後轉中文，Enter 保留原文。已移除免聲調／簡拼模式與開關；舊設定會清除該項。操作範例見 `docs/MICROSOFT-IME-DIFFS.md`。
+設定 →「中英混打與切換」可選關閉、Windows 注音順序、上游英文詞表或兩者並用，全新設定預設關閉。Windows 注音順序模式適用標準／倚天；未完成輸入先顯示原始按鍵，例如 `gj`，游標下方另顯示 `ㄕㄨ` 提示，聲調完成後轉中文，Enter 保留原文。上游英文詞表模式限標準注音，Shift＋字母可開始英文組字段。相鄰重複鍵容錯另行開啟，只處理 Windows 負責的片段。已移除免聲調／簡拼模式與開關；舊設定會清除該項。操作範例見 [設定索引](docs/MICROSOFT-IME-DIFFS.md)。

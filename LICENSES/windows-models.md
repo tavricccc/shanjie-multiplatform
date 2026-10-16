@@ -1,14 +1,15 @@
 # Windows 安裝包的模型與詞類表
 
-核對版本：善解 feat/model-v6-switch，`f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（包含 v0.4.0）。本包提供 model-v6，配套 classes-v5（預設）與 classes-v4 可於設定選擇；本文件補充上游 `LICENSES/data.md`，不取代上游詞庫授權與署名。
+核對版本：善解 main，`b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6）。本包只內建 model-v6＋classes-v5；其他相容配套由設定的線上模型管理另行下載；本文件補充上游 `LICENSES/data.md`，不取代上游詞庫授權與署名。
 
 | 包內目錄 | 原始 Release 資產 | 資料授權 |
 | --- | --- | --- |
 | `data/models/model-v6/` | [model-v6/bigram.sjlm](https://github.com/Nanako0129/shanjie/releases/tag/model-v6)、[classes-v5/classes.sjc](https://github.com/Nanako0129/shanjie/releases/tag/classes-v5) | CC BY-SA 4.0 |
-| `data/models/model-v6-classes-v4/` | [model-v6/bigram.sjlm](https://github.com/Nanako0129/shanjie/releases/tag/model-v6)、[classes-v4/classes.sjc](https://github.com/Nanako0129/shanjie/releases/tag/classes-v4) | CC BY-SA 4.0 |
 
 依上游資料來源與授權聲明，模型來自中文維基百科語料、Mozilla Common Voice 繁中（臺灣）句子、Tatoeba 中文句子及 gpt-oss-120b 產生的臺灣口語合成句。署名：**Wikipedia contributors、Tatoeba contributors**。維基語料為 CC BY-SA 4.0；Common Voice 為 CC0；Tatoeba 為 CC BY 2.0 FR；合成句是模型輸出。模型及其同批計數產生的詞類表以 [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) 散布。
 
-Windows 的修改為檔案格式轉換：`bigram.winmap` 使用 SJWM0002，將相同模型數值及配對詞類陣列排成可唯讀映射的格式，增加來源雜湊與對齊資訊；沒有重新訓練或修改詞頻。同目錄的 `classes.sjc` 是各自未修改的官方 classes-v5／classes-v4 附件。轉換後的資料仍依 CC BY-SA 4.0 散布。所有來源網址、完整 SHA-256、配對與映射路徑記在包內 `MODEL-SOURCES.json`；轉換程式位於 `platform/map_model.rs`、`platform/mapped_lm.rs` 與 `scripts/prepare-models.ps1`。
+Windows 的修改為檔案格式轉換：`bigram.winmap` 使用 SJWM0002，將相同模型數值及配對詞類陣列排成可唯讀映射的格式，增加來源雜湊與對齊資訊；沒有重新訓練或修改詞頻。同目錄的 `classes.sjc` 是未修改的官方 classes-v5 附件。轉換後的資料仍依 CC BY-SA 4.0 散布。所有來源網址、完整 SHA-256、配對與映射路徑記在包內 `MODEL-SOURCES.json`；轉換程式位於 `platform/map_model.rs`、`platform/mapped_lm.rs` 與 `scripts/prepare-models.ps1`。
 
 程式碼的 Apache-2.0、詞庫的 MIT／CC BY-SA、圖示的 MIT 各自適用，不將整個 Windows 安裝包視為單一程式碼授權。
+
+外部下載的 model-v6＋classes-v4、model-v5＋classes-v3 為上游同樣以 CC BY-SA 4.0 發布的配套，來源與完整 SHA-256 見 MODEL-CATALOG.json 及各官方 Release。這些模型檔不在本安裝包內；使用者模型與個人詞庫分開保存。

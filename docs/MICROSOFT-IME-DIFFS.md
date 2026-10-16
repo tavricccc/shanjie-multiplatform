@@ -6,13 +6,15 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 
 同日後續依使用者要求，將目前已儲存的個別設定設為 Windows 預設；下表已同步更新 Caps Lock、學習、空白提交、拼音空白與反引號標點。這些是使用者選定的值，不把它們描述成微軟的出廠值。
 
-## 模型與資料配對（2026-10-09 更新）
+## 模型與資料配對（2026-10-17／0.10.0 更新）
 
 | 模型 | 配對詞類表 | 差異與選擇 |
 | --- | --- | --- |
-| [model-v5](https://github.com/Nanako0129/shanjie/releases/tag/model-v5) | [classes-v3](https://github.com/Nanako0129/shanjie/releases/tag/classes-v3) | 唯一模型；舊設定遷移，不提供選單 |
+| [model-v6](https://github.com/Nanako0129/shanjie/releases/tag/model-v6) | [classes-v5](https://github.com/Nanako0129/shanjie/releases/tag/classes-v5) | 唯一內建配套，預設及備援 |
+| model-v6 | [classes-v4](https://github.com/Nanako0129/shanjie/releases/tag/classes-v4) | 相容配套，可由設定下載 |
+| [model-v5](https://github.com/Nanako0129/shanjie/releases/tag/model-v5) | [classes-v3](https://github.com/Nanako0129/shanjie/releases/tag/classes-v3) | 相容舊配套，可由設定下載 |
 
-詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。檔頭綁定原始模型 SHA-256；映射保存來源雜湊、九個模型陣列、三個詞類陣列。缺表或配錯明確拒絕，沒有舊模型 fallback。
+詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。檔頭綁定原始模型 SHA-256；映射保存來源雜湊、九個模型陣列、三個詞類陣列。設定的一般頁提供模型選單、線上下載、開啟模型資料夾及重新掃描。只有完整且通過驗證的配套可選；選定的外部配套遺失或無效時，新核心以內建配套備援並保留原選擇。原始模型附件不能直接當作 Windows 配套使用。細節見 [0.10.0 版本說明](releases/RELEASE-NOTES-0.10.0.md)。
 
 上游核心的「V3 即時預測」與模型版本是不同概念；是否使用仍由獨立開關決定。
 
@@ -24,14 +26,14 @@ Windows 操作預設採微軟公開的常用鍵位；依使用者要求，**即�
 | --- | --- | --- |
 | 未完成注音＋空白 | 完成第一聲，不開候選 | 相同；不受開候選鍵／提交後空白選項影響 |
 | 完整組字＋↓ | 開轉換候選 | 同樣可開；`candidates.open` 可只選空白 |
-| 完整組字＋空白 | 提交組字，不再額外輸入空白 | 預設開候選；`open` 與 `input.space_after_commit` 可分別調整 |
+| 完整組字＋空白 | 插入可編輯空格，組字繼續 | 相同；可開 `space_commits` 或 `space_operates` 改為提交／候選操作 |
 | 未開候選＋↑ | 在目前字詞的候選中循環，保持游標，不開窗 | 預設不換字；`up_cycles` 可獨立開啟 |
 | 候選中 ↑／↓／←／→ | 橫向列前後選字 | 相同；不展開格狀 |
 | 候選中 Tab | 下一候選 | 相同；預測列仍保留 Tab 進入／Shift＋Tab 退出 |
 | 候選中空白 | 下一頁，末頁回第一頁 | `space_pages`、`wrap_pages` 分別控制換頁／循環 |
 | 候選中 1–9 | 選目前頁／列的候選，保留組字 | 相同；不以普通數字選被動預測或聯想 |
-| 候選中 Enter | 確認並提交整句、關窗 | 原有確認後繼續組字；`enter_commits` 可獨立調整 |
-| 一般 Enter | 提交目前完整組字，不自動開聯想 | 相同；未完成音節沿用核心規則 |
+| 候選中 Enter | 確認候選再提交；範圍依 `enter_to_cursor` | 原有確認後繼續組字；`enter_commits` 可獨立調整 |
+| 一般 Enter | 新設定提交游標前，固定多字詞不拆開 | 預設整句；`enter_to_cursor` 可另開。舊設定缺值保留整句 |
 | 候選中 Backspace | 只收回候選 | `backspace_deletes` 開啟時再刪游標前一個字／音節 |
 | 未完成注音 Backspace | 刪畫面最後的注音，韻母→介音→聲母 | 保留上游 v0.2.1 修正，沒有再加一套順序選單 |
 | Delete／←→／Home／End | 刪游標右側音節或移動組字游標 | 未開候選時共用核心；候選／預測依自身狀態處理 |
@@ -44,12 +46,12 @@ Support 明確列出 ↓、↑、Space、Tab、→、數字、Enter 及聯想的
 
 ## 逐項開關
 
-W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀偏好不會被覆寫。schema 5 的個別選項可另行調整；固定模型、橫向排列與移除格狀是本輪使用者指定。
+W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變更操作、候選與預測；標記「保留」的資料／外觀／模型偏好不會被覆寫。現行 schema 7；舊式標點總開關已遷移為逐鍵選項，候選可選橫向或直式。
 
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
 | `profile.interaction` | 選字與外觀：↑↓ 或 ←→ 政策 | windows／shanjie |
-| `engine.model` | 固定 model-v5＋classes-v3，舊值遷移 | 5／5 |
+| `engine.model_id` | 一般：內建或已驗證的使用者模型配套 | model-v6-classes-v5；保留 |
 | `engine.ranking` | 一般：聊天／正式權重 | chat／chat；保留 |
 | `engine.prediction` | 未完成讀音的即時預測 | 0／1 |
 | `engine.demote` | 避免特定敏感詞排名過高，詞仍可選 | 1／1；保留 |
@@ -57,9 +59,14 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `input.full_width` | 一般：預設全／半形 | 0／0；保留 |
 | `input.keyboard` | 跟隨 TSF profile／標準／倚天／漢語／臺灣拼音 | 0／0；保留 |
 | `input.caps_lock_english` | Caps Lock 暫時輸入英文；關閉時仍輸入注音 | 0／0 |
+| `input.mixed_input`／`input.upstream_english` | 中英混打與切換：Windows 注音順序／上游英文／並用 | 0／0；全新預設關閉 |
+| `input.english_inline` | 上游英文模式直接顯示已辨識英文 | 1／1；限標準注音 |
+| `input.mixed_tolerance` | Windows 混打片段的相鄰重複鍵容錯 | 0／0 |
 | `input.alphanumeric` | 無法轉換的序列輸出實際英數 | 1／0 |
 | `input.escape` | 未開轉換候選時 staged／clear／ignore | staged／staged |
 | `input.space_after_commit` | 提交完整組字後是否再交給 App 輸入空白 | 0／1 |
+| `input.space_commits` | 空白提交組字；關閉時插入可編輯空格 | 0／0 |
+| `input.space_inputs_zhuyin` | 無法轉換時保留注音／提供注音候選 | 1／1 |
 | `input.pinyin_space_converts` | 拼音按一次空白轉換；關閉為分隔／雙空白 | 0／0 |
 | `input.standalone_tones` | 沒有組字時，聲調鍵輸入聲調符號 | 0／1 |
 | `input.shift_punctuation` | 善解式 Shift＋符號直接中文標點 | 0／1 |
@@ -70,11 +77,13 @@ W／S 為全新 Windows／善解操作範本的值。UI 載入操作預設只變
 | `input.dictionary` | 設定頁編輯、原子保存的個人詞庫 | 保留內容／路徑 |
 | `candidates.open` | 完整組字後 down／space／both | down／both |
 | `candidates.anchor` | 游標右側／左側候選範圍 | right／left |
-| `candidates.layout` | 僅橫向膠囊，舊值遷移 | horizontal／horizontal |
-| `candidates.enter_commits` | 候選 Enter 是否同時提交整句 | 1／0 |
+| `candidates.layout` | 橫向／直式；不提供格狀 | horizontal／horizontal |
+| `candidates.enter_commits` | 候選 Enter 是否同時提交 | 1／0 |
+| `candidates.enter_to_cursor` | Enter 只提交游標前；固定詞不拆開 | 1／0；舊設定缺值為 0 |
 | `candidates.up_cycles` | 未開候選的 ↑ 循環換字 | 1／0 |
 | `candidates.backspace_deletes` | 收回候選後再刪前一音節 | 0／0 |
 | `candidates.space_pages` | 空白換候選／聯想下一頁 | 1／1 |
+| `candidates.space_operates` | 空白是否操作候選 | 0／0 |
 | `candidates.wrap_pages` | 末頁空白是否循環到首頁 | 1／1 |
 | `candidates.big5` | 篩選候選、即時預測與聯想，不重寫既有組字 | 0／0；保留 |
 | `shortcuts.shift_toggle` | 單按 Shift 中英切換 | 1／0 |
@@ -117,11 +126,11 @@ Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成�
 驗證結果見 [VERIFICATION.md](../VERIFICATION.md)。背景 TSF、原生窗與離屏 XAML 證據分別驗證 adapter、視窗及設定保存；新安裝的記事本、Chrome／Office、多螢幕、高對比與讀屏仍需實際工作階段驗收。
 ## 可選的智慧組字
 
-「組字與提交」保留 **中英混打自動判斷** 開關，預設關閉，適用標準／倚天注音，拼音鍵盤時停用。
+「中英混打與切換」提供關閉、Windows 注音順序、上游英文詞表及兩者並用。以下例子說明 Windows 注音順序模式，適用標準／倚天注音，拼音鍵盤時停用。上游英文模式限標準注音，Shift＋字母可開始英文組字段，Caps Lock 與 Shift＋Caps Lock 保留 Windows 實際大小寫。兩者並用時，各自處理所負責的片段；容錯不改寫上游英文組字段。
 
 - 從第一個按鍵顯示英數原文。例如標準鍵盤 `gj` 直接顯示在組字區，下方藍色小提示顯示 `ㄕㄨ`，沒有選字序號，也不能點選成字。
 - 注音仍需完整讀音與聲調；`su3` 轉成「你」。未完成時按 Enter 保留英數原文，也可按 ↓／Tab 改回注音顯示後繼續操作。
 - 本機常用英文辨識保留，`su3hello` 得到「你hello」，`callsu3` 得到「call你」。已辨識英文後空白保留空格；英文沒有自動補字。未知或短英文可按 Enter 保留原文。
 - 免聲調／簡拼功能已移除；`smart_zhuyin` 舊設定會自動清掉，不再強制開啟讀音預測。
 
-「選字與外觀」的 **介面與選字框主題** 同時控制設定窗與候選窗；跟隨 Windows 時讀取系統應用程式淺深色。深色候選為深灰底與淺色字，保持原有細邊線；高對比優先使用系統配色。
+「外觀」的 **介面與選字框主題** 同時控制設定窗與候選窗；跟隨 Windows 時讀取系統應用程式淺深色。深色候選為深灰底與淺色字，保持原有細邊線；高對比優先使用系統配色。
