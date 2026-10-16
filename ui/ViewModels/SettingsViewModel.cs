@@ -34,6 +34,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial int MixedMode { get; set; }
+    [ObservableProperty] public partial bool EnglishInline { get; set; }
+    public bool UsesEnglishList => MixedMode >= 2;
+    partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesEnglishList));
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;

@@ -37,12 +37,12 @@ pub unsafe extern "C" fn shanjie_windows_set_mixed_input(
     0
 }
 
-/// 0 = Windows/off policy, 1 = upstream inline English (needs shanjie_engine_load_english).
+/// bit 0 = upstream English on (needs shanjie_engine_load_english), bit 1 = show the typed letters.
 #[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_set_upstream_english(engine: *mut ShanjieEngine, flags: u32) -> i32 {
     if engine.is_null() { return 1; }
-    if flags > 1 { return 2; }
-    match unsafe { &mut (*engine).0 }.set_upstream_english(flags != 0) {
+    if flags > 3 { return 2; }
+    match unsafe { &mut (*engine).0 }.set_upstream_english(flags & 1 != 0, flags & 2 != 0) {
         Ok(()) => 0,
         Err(_) => SHANJIE_ERR_INTERNAL,
     }

@@ -15,11 +15,13 @@
 
 沒有重跑 TSF smoke、WinUI、安裝與實機驗收；沒有重新打包。
 
-## 2026-10-16 中英混打方式三選一
+## 2026-10-16 中英混打：兩套並用與設定頁重排
 
-已驗證：產生後核心 lib 72 項通過（新增 `upstream_english_replaces_the_windows_policy_and_back`，涵蓋切到上游、Windows 狀態清空、切回後混打照舊）；打開上游英文後，上游 `engine_english` 全部 85 項在 Windows 核心上通過（先前未旁路時 7 項失敗，即 Windows 組字政策與上游英文的衝突）。x64 release DLL 與 WinUI 建置成功；WinUI `--verify-ui` 在隔離的 `LOCALAPPDATA` 下 PASS，涵蓋三個模式的下拉綁定、保存與重新載入（沒有碰真實 profile.ini）。
+已驗證：產生後核心 lib 72 項通過（`upstream_english_runs_beside_the_windows_policy`：兩者並用、Shift 字母交給上游、英文段中標點由上游結束、閒置時 Windows 標點照舊、關閉上游後 Windows 混打照舊）；上游 `engine_english` 85 項中 84 項在 Windows 核心上通過。
 
-未驗證：TSF 實機按鍵（Shift 字母、Caps Lock 與上游英文串的互動）、x86 建置、安裝與打包。上游模式下 Windows 的字面標點等組字政策被旁路，標點行為以上游為準；仍未解的 engine 1 項、engine_predict 2 項為 Windows 組字政策的既有刻意差異。
+未解決（皆為 Windows 組字政策的刻意差異，非回歸）：`engine_english::punctuation_keeps_the_letters_that_are_shown` 1 項（兩個字母的未完成讀音後按標點，Windows 保留讀音、上游丟棄）；`engine` 1 項、`engine_predict` 2 項為 0.8.0 起既有。`tri_tiny` 1 項是 Windows 沒有 symlink 的測試假象。
+
+未驗證：TSF 實機按鍵（Shift 大小寫、Caps Lock 與上游英文的互動、兩者並用時的實際手感）、x86 TSF、安裝。
 
 ## 2026-10-15 Windows 0.8.0 同步上游 f8ea0bb（model-v6／classes-v4）
 

@@ -408,7 +408,7 @@ impl Engine {
             Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) }
                 == 0)
                 .then(Snapshot::default),
-            Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on as u32) }
+            Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
                 == 0)
                 .then(Snapshot::default),
         }

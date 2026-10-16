@@ -57,11 +57,11 @@ internal static class VisualVerifier
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);
         if (settings.Vm.Prediction) throw new InvalidDataException("Native toggle off did not update the shared draft");
-        settings.ShowSection(MainWindow.Pages.Composition); settings.SetCapsLockForVerification(false); await Task.Delay(60);
+        settings.ShowSection(MainWindow.Pages.English); settings.SetCapsLockForVerification(false); await Task.Delay(60);
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
-        foreach (var mode in new[] { 1, 2, 0 })
+        foreach (var mode in new[] { 1, 2, 3, 0 })
         {
             settings.SetMixedModeForVerification(mode); await Task.Delay(60);
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");

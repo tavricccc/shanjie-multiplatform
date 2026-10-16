@@ -9,7 +9,8 @@
         <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Left" OpenPaneLength="208" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="Navigate">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="一般" Icon="Home" Tag="general"/>
-                <NavigationViewItem Content="切換與快捷鍵" Icon="Keyboard" Tag="keys"/>
+                <NavigationViewItem Content="中英混打與切換" Icon="Globe" Tag="english"/>
+                <NavigationViewItem Content="快捷鍵與符號鍵" Icon="Keyboard" Tag="keys"/>
                 <NavigationViewItem Content="標點符號" Icon="Font" Tag="punctuation"/>
                 <NavigationViewItem Content="組字與提交" Icon="Edit" Tag="composition"/>
                 <NavigationViewItem Content="選字" Icon="Bullets" Tag="candidates"/>
@@ -36,12 +37,22 @@
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="只提供最新模型與固定配對詞類表。個人詞庫與選字學習會保留，模型在本機執行。"/>
                     </StackPanel>
-                    <StackPanel x:Name="Keys" Spacing="12" Visibility="Collapsed">
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="切換與快捷鍵" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英與全半形切換" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                    <StackPanel x:Name="English" Spacing="12" Visibility="Collapsed">
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英混打與切換" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英切換" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                         <controls:SettingToggle Label="單按 Shift 切換中英" IsOn="{x:Bind Vm.ShiftToggle, Mode=TwoWay}"/>
                         <ComboBox Header="切換用的 Shift 鍵" IsEnabled="{x:Bind Vm.ShiftToggle, Mode=OneWay}" SelectedIndex="{x:Bind Vm.ShiftSide, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="左右 Shift 都可"/><ComboBoxItem Content="僅左 Shift"/><ComboBoxItem Content="僅右 Shift"/></ComboBox>
                         <controls:SettingToggle Label="Ctrl＋空白切換中英" Description="額外快捷鍵，Windows 預設關閉，保留給 App 的補全等操作。" IsOn="{x:Bind Vm.CtrlSpaceToggle, Mode=TwoWay}"/>
+                        <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英混打" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <ComboBox x:Name="MixedModeSelector" Header="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="注音順序自動判斷（Windows 版）"/><ComboBoxItem Content="英文詞表判斷（上游）"/><ComboBoxItem Content="兩者並用"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="注音順序：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文。英文詞表：打出的字母是英文字就當英文，按空白開出原字／首字大寫／全大寫選單，英文留在組字區可接著打中文。兩者並用時，注音順序先判斷，排得成注音但在詞表內的字交給詞表。Shift＋字母隨時可以開始一段英文。適用標準／倚天注音。"/>
+                        <controls:SettingToggle x:Name="EnglishInlineToggle" Label="打字時直接顯示英文字母" Description="只對英文詞表判斷有效：打到至少三個字母且是英文字的開頭時，組字區改顯示英文，不顯示注音。關閉時按空白才跳出英文。" IsEnabled="{x:Bind Vm.UsesEnglishList, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishInline, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="Keys" Spacing="12" Visibility="Collapsed">
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="快捷鍵與符號鍵" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="全半形切換" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                         <controls:SettingToggle Label="Shift＋空白切換全半形" IsOn="{x:Bind Vm.WidthToggle, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="符號快捷鍵" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <controls:SettingToggle Label="Ctrl＋標點輸入全形標點" Description="例如 Ctrl＋逗號輸入 ，；需要 Shift 的符號，仍要一起按 Shift。" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/>
@@ -70,11 +81,6 @@
                     </StackPanel>
                     <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="中英混打與英數" Style="{ThemeResource SubtitleTextBlockStyle}"/>
-                        <ComboBox x:Name="MixedModeSelector" Header="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="Windows 版自動判斷"/><ComboBoxItem Content="上游行內英文"/></ComboBox>
-                        <TextBlock Style="{StaticResource HelpText}" Text="Windows 版：組字區先顯示英文按鍵，下方提示注音；輸入聲調後轉成中文，Enter 保留英文。上游行內英文：Shift＋字母開始英文，英文留在組字區可接著打中文，兩者擇一，不會同時作用。適用標準／倚天注音。"/>
-                        <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="Esc" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>

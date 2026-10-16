@@ -765,6 +765,7 @@ impl Data {
             ("input", "context"),
             ("input", "mixed_input"),
             ("input", "upstream_english"),
+            ("input", "english_inline"),
             ("input", "space_inputs_zhuyin"),
         ]
         .iter()
@@ -955,12 +956,12 @@ fn configure_options(s: &mut State) -> Result<()> {
         return Err(E_FAIL.into());
     }
     let zhuyin = p.number("input", "keyboard", 0) < 3;
-    // Upstream inline English replaces the Windows mixed policy; send it first so turning
-    // it off never leaves the other mode switched off by accident.
+    // The Windows mixed policy and upstream English (word list) are independent; both can be on.
     let upstream = zhuyin && p.flag("input", "upstream_english", false);
-    let mixed = zhuyin && !upstream && p.flag("input", "mixed_input", false);
+    let inline = p.flag("input", "english_inline", true);
+    let mixed = zhuyin && p.flag("input", "mixed_input", false);
     if s.engine
-        .perform(crate::broker::Op::English(upstream))
+        .perform(crate::broker::Op::English(upstream as u32 | (inline as u32) << 1))
         .is_none()
         || s.engine
             .perform(crate::broker::Op::Mixed(mixed))

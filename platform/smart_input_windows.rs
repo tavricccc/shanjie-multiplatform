@@ -62,7 +62,7 @@ mod windows_smart_tests {
     }
 
     #[test]
-    fn upstream_english_replaces_the_windows_policy_and_back() {
+    fn upstream_english_runs_beside_the_windows_policy() {
         let mut e = engine();
         let dir = std::env::temp_dir().join("shanjie-upstream-english-test");
         std::fs::create_dir_all(&dir).unwrap();
@@ -71,19 +71,26 @@ mod windows_smart_tests {
 hello
 ").unwrap();
         e.load_english(&list).unwrap();
-        e.set_upstream_english(true).unwrap();
-        assert!(!e.mixed_input && e.english);
-        // Upstream owns the keys: Shift+letter opens its English run and the Windows raw state stays empty.
+        e.set_upstream_english(true, true).unwrap();
+        assert!(e.mixed_input && e.english, "both stay on");
+        // Shift+letter starts upstream's English run; the Windows raw state stays out of it.
         let out = e.key(Key::ch('r', MOD_SHIFT)).unwrap();
         assert_eq!(out.english_run_utf16_len, 1);
-        assert!(e.mixed_raw.is_empty() && !e.is_mixed_pending());
+        assert!(e.mixed_raw.is_empty());
+        // While the run is open upstream owns punctuation: it ends the run into a token.
+        let out = e.key(Key::ch(',', 0)).unwrap();
+        assert_eq!(out.english_run_utf16_len, 0);
         e.reset(ResetMode::Discard);
-        // Switching back restores the Windows mixed policy with no upstream English left over.
-        e.set_upstream_english(false).unwrap();
-        e.set_mixed_input(true);
-        assert!(!e.english);
+        // Idle again, the Windows policy maps the symbol as before.
+        assert_eq!(e.key(Key::ch('[', 0)).unwrap().preedit, "「");
+        e.reset(ResetMode::Discard);
+        // The Windows order rule still turns non-Zhuyin keys into English.
         assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
-        assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "g");
+        e.reset(ResetMode::Discard);
+        // Switching upstream off leaves only the Windows policy.
+        e.set_upstream_english(false, true).unwrap();
+        assert!(!e.english && e.mixed_input);
+        assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
     }
 
     #[test]
@@ -136,19 +143,17 @@ impl Engine {
     pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
     }
-    /// Switch to upstream inline English (zhen-mixed/zhen-inline). It replaces the Windows mixed
-    /// policy, so any Windows raw state is dropped first. Needs `load_english` for the word list.
-    pub fn set_upstream_english(&mut self, on: bool) -> Result<(), EngineError> {
-        if on {
-            self.mixed_input = false;
-            self.mixed_raw.clear();
-            self.mixed_latin = false;
-            self.windows_raw.clear();
-            self.pending_literal.clear();
-        }
+    /// Upstream English (zhen-mixed/zhen-inline) runs beside the Windows mixed policy. `on` needs
+    /// `load_english` for the word list; `inline` shows the typed letters instead of Zhuyin.
+    pub fn set_upstream_english(&mut self, on: bool, inline: bool) -> Result<(), EngineError> {
         self.set_english(on)?;
-        self.set_english_inline(on)?;
+        self.set_english_inline(inline)?;
         Ok(())
+    }
+    fn upstream_english_busy(&self) -> bool {
+        !self.run.is_empty()
+            || self.cands.as_ref().is_some_and(|c| c.english)
+            || self.english_inline_shown()
     }
     pub fn is_mixed_hint(&self) -> bool {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
@@ -276,9 +281,10 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
-        // Upstream inline English (set_english) owns every key while it is on: the Windows
-        // mixed policy and literal handling stay out so the two designs never mix.
-        if self.english { return self.key_original(key); }
+        // While an upstream English run, English window or inline letters are on screen, upstream
+        // owns the key (punctuation ends a run, Backspace takes a letter); otherwise the Windows
+        // policy runs first and upstream English only sees what it leaves.
+        if self.english && self.upstream_english_busy() { return self.key_original(key); }
         let out = self.windows_key(key)?;
         Ok(self.mixed_view(out))
     }
@@ -351,7 +357,8 @@ impl Engine {
                 _ => return self.finish_latin(key),
             }
         }
-        if self.mixed_input
+        // With upstream English on, Shift+letter starts its English run instead.
+        if self.mixed_input && !self.english
             && key.kind == KeyKind::Char
             && key.modifiers == MOD_SHIFT
             && key.ch.is_ascii_alphabetic()
