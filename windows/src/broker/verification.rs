@@ -2,6 +2,16 @@
 use super::*;
 use crate::pipe_io::Pipe;
 use std::os::windows::fs::OpenOptionsExt;
+pub fn start_fixture(data:&Path) {
+    assert_eq!(std::env::var("SHANJIE_TEST_PROFILE").as_deref(),Ok("1"));
+    if control(data,false).is_ok() {return;}
+    start_core(&executable(data)).expect("start isolated fixture core");
+    let deadline=Instant::now()+Duration::from_secs(10);
+    while control(data,false).is_err() {
+        assert!(Instant::now()<deadline,"fixture core did not become ready");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
 pub fn pipe_deadlines() {
     for writing in [false, true] {
         let name = crate::wide(&format!(
@@ -128,11 +138,10 @@ pub fn busy_learning(data: &Path) {
 }
 pub fn ambiguous(data: &Path) {
     let mut client = Client::open(data, config(true)).unwrap();
-    client.perform(Op::Context("他".into())).unwrap();
+    client.perform(Op::Context("他們".into())).unwrap();
     client.perform(Op::Mixed(true)).unwrap();
-    for ch in "su3".chars() {
-        client.perform(key(ch)).unwrap();
-    }
+    let mut original=Snapshot::default();
+    for ch in "su3".chars() {original=client.perform(key(ch)).unwrap();}
     let candidates = client
         .perform(Op::Key {
             kind: 10,
@@ -144,7 +153,7 @@ pub fn ambiguous(data: &Path) {
     let index = candidates
         .candidates
         .iter()
-        .position(|word| word != "你")
+        .position(|word| word != &original.preedit && word.chars().all(|ch|('\u{3400}'..='\u{9fff}').contains(&ch)))
         .unwrap();
     client.perform(Op::Pick(index as u32)).unwrap();
     let enter = Op::Key {

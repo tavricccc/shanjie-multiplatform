@@ -17,10 +17,12 @@ $testRoot = Join-Path $root ('build/interaction-' + [guid]::NewGuid().ToString('
 New-Item -ItemType Directory $testRoot -Force | Out-Null
 $previous = $env:LOCALAPPDATA
 $previousCore = $env:SHANJIE_CORE_LOCAL
+$previousTest = $env:SHANJIE_TEST_PROFILE
 try {
     $env:LOCALAPPDATA = $testRoot
+    $env:SHANJIE_TEST_PROFILE = '1'
     # Fixture lexicons use local core; resident IPC has a separate integration test.
     $env:SHANJIE_CORE_LOCAL = '1'
     & "$root/build/windows-interaction.exe" "$root/dist/data"
     if ($LASTEXITCODE) { throw "Interaction checks failed: $LASTEXITCODE" }
-} finally { $env:LOCALAPPDATA = $previous; $env:SHANJIE_CORE_LOCAL = $previousCore }
+} finally { $env:LOCALAPPDATA = $previous; $env:SHANJIE_CORE_LOCAL = $previousCore; $env:SHANJIE_TEST_PROFILE = $previousTest }

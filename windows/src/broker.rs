@@ -405,34 +405,36 @@ pub(crate) fn word_request(data: &Path, word: &str, reading: Option<&str>) -> st
         .word_result.ok_or_else(|| "常駐核心版本不支援加詞，請重新啟動輸入法。".to_string())?
 }
 fn start_core(executable: &Path) -> io::Result<()> {
-    use windows::{
-        core::{PCWSTR, PWSTR},
-        Win32::System::Threading::*,
-    };
-    let application = crate::wide(&executable.to_string_lossy());
-    let mut command = crate::wide(&format!("\"{}\" --serve", executable.display()));
-    let startup = STARTUPINFOW {
-        cb: std::mem::size_of::<STARTUPINFOW>() as u32,
-        ..Default::default()
-    };
-    let mut process = PROCESS_INFORMATION::default();
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use windows::{core::{w,PCWSTR,PWSTR},Win32::{Foundation::*,Security::SECURITY_ATTRIBUTES,
+        Storage::FileSystem::*,System::Threading::*}};
     unsafe {
-        // Never inherit an application's handles, console or capture pipes.
-        CreateProcessW(
-            PCWSTR(application.as_ptr()),
-            Some(PWSTR(command.as_mut_ptr())),
-            None,
-            None,
-            false,
-            CREATE_NO_WINDOW,
-            None,
-            PCWSTR::null(),
-            &startup,
-            &mut process,
-        )
-        .map_err(|e| io::Error::other(e.to_string()))?;
-        CloseHandle(process.hThread.0);
-        CloseHandle(process.hProcess.0);
+        // A resident child must inherit only NUL, never another inheritable
+        // application handle (including a redirected capture pipe).
+        let security=SECURITY_ATTRIBUTES {nLength:std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,bInheritHandle:true.into(),..Default::default()};
+        let null=CreateFileW(w!("NUL"),GENERIC_READ.0|GENERIC_WRITE.0,FILE_SHARE_READ|FILE_SHARE_WRITE,Some(&security),OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,None)?;
+        let _null_owner=OwnedHandle::from_raw_handle(null.0);
+        let mut size=0;
+        let _=InitializeProcThreadAttributeList(None,1,None,&mut size);
+        if size==0 {return Err(io::Error::last_os_error());}
+        let mut storage=vec![0usize;size.div_ceil(std::mem::size_of::<usize>())];
+        let attributes=LPPROC_THREAD_ATTRIBUTE_LIST(storage.as_mut_ptr().cast());
+        InitializeProcThreadAttributeList(Some(attributes),1,None,&mut size)?;
+        struct Attributes(LPPROC_THREAD_ATTRIBUTE_LIST);
+        impl Drop for Attributes {fn drop(&mut self){unsafe{DeleteProcThreadAttributeList(self.0);}}}
+        let _attributes_owner=Attributes(attributes);
+        let handles=[null];
+        UpdateProcThreadAttribute(attributes,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,Some(handles.as_ptr().cast()),std::mem::size_of_val(&handles),None,None)?;
+        let startup=STARTUPINFOEXW {StartupInfo:STARTUPINFOW {
+            cb:std::mem::size_of::<STARTUPINFOEXW>() as u32,dwFlags:STARTF_USESTDHANDLES,
+            hStdInput:null,hStdOutput:null,hStdError:null,..Default::default()
+        },lpAttributeList:attributes};
+        let application=crate::wide(&executable.to_string_lossy());
+        let mut command=crate::wide(&format!("\"{}\" --serve",executable.display()));
+        let mut process=PROCESS_INFORMATION::default();
+        CreateProcessW(PCWSTR(application.as_ptr()),Some(PWSTR(command.as_mut_ptr())),None,None,true,
+            CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,None,PCWSTR::null(),&startup.StartupInfo,&mut process)?;
+        let _=CloseHandle(process.hThread);let _=CloseHandle(process.hProcess);
     }
     Ok(())
 }

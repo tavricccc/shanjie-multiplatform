@@ -1,9 +1,18 @@
 #Requires -Version 7
-param([string]$ResultRoot)
+param([string]$ResultRoot,[switch]$ExplicitCore)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 if (!$ResultRoot) { $ResultRoot = Join-Path $root ('build/update-checks-' + (Get-Date -Format yyyyMMdd-HHmmss)) }
 New-Item -ItemType Directory -Path $ResultRoot -Force | Out-Null
+$payload=Join-Path $ResultRoot 'payload'
+New-Item -ItemType Directory -Path $payload -Force | Out-Null
+foreach($architecture in 'x64','x86') {
+    New-Item -ItemType Directory "$payload/$architecture" -Force | Out-Null
+    Copy-Item "$root/dist/$architecture/Shanjie.dll" "$payload/$architecture" -Force
+}
+Copy-Item "$root/dist/data","$root/dist/tools" $payload -Recurse -Force
+# A portable fixture must expose both layouts independently of the real install.
+Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 $profile = Join-Path $ResultRoot 'profile'
 New-Item -ItemType Directory -Path "$profile/Shanjie" -Force | Out-Null
 $previousLocal = $env:LOCALAPPDATA
@@ -11,6 +20,7 @@ $previousHeadless = $env:SHANJIE_HEADLESS
 $previousTest = $env:SHANJIE_TEST_PROFILE
 $previousCore = $env:SHANJIE_CORE_LOCAL
 $previousEten = $env:SHANJIE_TEST_ETEN
+$previousExplicit = $env:SHANJIE_TEST_EXPLICIT_CORE
 $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 $cases = @()
 foreach ($setting in 0,1) { foreach ($caps in 0,1) { foreach ($shift in 0,1) {
@@ -40,6 +50,7 @@ function Invoke-Check([string]$Executable, [string[]]$Arguments, [switch]$AllowF
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
     if (!$process.WaitForExit(60000)) { $process.Kill(); throw "Check timed out: $Executable" }
+    if (!$stdout.Wait(5000) -or !$stderr.Wait(5000)) { $process.Dispose(); throw 'Owned check exited but its output pipe remained open.' }
     $text = $stdout.GetAwaiter().GetResult()
     $errorText = $stderr.GetAwaiter().GetResult()
     $code = $process.ExitCode
@@ -51,12 +62,13 @@ try {
     $env:LOCALAPPDATA = $profile
     $env:SHANJIE_HEADLESS = '1'
     $env:SHANJIE_TEST_PROFILE = '1'
+    $env:SHANJIE_TEST_EXPLICIT_CORE = if($ExplicitCore){'1'}else{$null}
     $env:SHANJIE_CORE_LOCAL = $null
     Copy-Item "$root/profiles/windows.ini" "$profile/Shanjie/profile.ini" -Force
     $content = Get-Content "$profile/Shanjie/profile.ini" -Raw
     $content = $content -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^keyboard=.*','keyboard=1'
     Set-Content "$profile/Shanjie/profile.ini" $content -Encoding utf8NoBOM
-    $brokerLog = Invoke-Check "$root/windows/target/x86_64-pc-windows-msvc/release/shanjie-core-check.exe" @("$root/dist/data")
+    $brokerLog = Invoke-Check "$root/windows/target/x86_64-pc-windows-msvc/release/shanjie-core-check.exe" @("$payload/data")
     Set-Content "$ResultRoot/resident.log" $brokerLog -Encoding utf8NoBOM
     foreach ($arch in 'x64','x86') {
         $output = Join-Path $ResultRoot $arch
@@ -78,10 +90,13 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
             $modified = $modified -replace '(?m)^keyboard=.*',("keyboard=" + $keyboard)
             Set-Content "$profile/Shanjie/profile.ini" $modified -Encoding utf8NoBOM
             if ($case[0] -eq 'first-keys-immediate') {
-                Invoke-Check "$root/dist/tools/shanjie-core.exe" @('--stop') | Out-Null
+                Invoke-Check "$payload/tools/shanjie-core.exe" @('--stop') | Out-Null
                 Start-Sleep -Milliseconds 100
+                # Explicit isolated worker also supports elevated test hosts;
+                # the product still refuses elevated automatic core startup.
+                if($ExplicitCore){$fixture=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru}
             }
-            $arguments = @("$root/dist/$arch/Shanjie.dll") + $case[1..($case.Count-1)]
+            $arguments = @("$payload/$arch/Shanjie.dll") + $case[1..($case.Count-1)]
             $log = Invoke-Check "$output/input-probe.exe" $arguments
             Set-Content "$output/keyboard$keyboard-$($case[0]).log" $log -Encoding utf8NoBOM
             $json = (($log -split "`r?`n") | Where-Object { $_ -like 'RESULT *' }) -replace '^RESULT ','' | ConvertFrom-Json
@@ -90,7 +105,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
           }
         }
     }
-    $status = (Invoke-Check "$root/dist/tools/shanjie-core.exe" @('--status') | ConvertFrom-Json)
+    $status = (Invoke-Check "$payload/tools/shanjie-core.exe" @('--status') | ConvertFrom-Json)
     $process = Get-Process -Id $status.pid
     $status | Add-Member -NotePropertyName working_set_bytes -NotePropertyValue $process.WorkingSet64
     $status | Add-Member -NotePropertyName private_bytes -NotePropertyValue $process.PrivateMemorySize64
@@ -98,10 +113,11 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
     $status | ConvertTo-Json | Set-Content "$ResultRoot/resident-status.json" -Encoding utf8NoBOM
     Write-Output "Passed $($results.Count) native cases. Evidence: $ResultRoot"
 } finally {
-    Invoke-Check "$root/dist/tools/shanjie-core.exe" @('--stop') -AllowFailure | Out-Null
+    Invoke-Check "$payload/tools/shanjie-core.exe" @('--stop') -AllowFailure | Out-Null
     $env:LOCALAPPDATA=$previousLocal
     $env:SHANJIE_HEADLESS=$previousHeadless
     $env:SHANJIE_TEST_PROFILE=$previousTest
     $env:SHANJIE_CORE_LOCAL=$previousCore
     $env:SHANJIE_TEST_ETEN=$previousEten
+    $env:SHANJIE_TEST_EXPLICIT_CORE=$previousExplicit
 }

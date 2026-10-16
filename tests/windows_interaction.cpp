@@ -40,14 +40,23 @@ int wmain(int argc,wchar_t** argv) {
     key.ch = '1'; key.modifiers = 2; assert(!shanjie::windowsPunctuation(key));
     shanjie::Engine first,second;
     assert(first.open(argv[1],0,0,true,true)); assert(second.open(argv[1],0,0,true,true));
-    first.context(L"我"); second.context(L"你");
-    auto learn = [](shanjie::Engine& engine,const char* reading) {
+    // Current upstream deliberately ignores single-character learns under a
+    // one-character context. Use two-character keys to test persisted learning.
+    first.context(L"我們"); second.context(L"他們");
+    auto alternateHan=[](const auto& word,const auto& original) {
+        return word!=original&&!word.empty()&&std::all_of(word.begin(),word.end(),[](wchar_t ch){return (ch>=0x3400&&ch<=0x9fff)||(ch>=0xf900&&ch<=0xfaff);});
+    };
+    auto learn = [&](shanjie::Engine& engine,const char* reading) {
         shanjie::Snapshot out; ShanjieKey k{}; k.kind = 1;
         for (auto ch : std::string(reading)) { k.ch = ch; assert(engine.key(k,out)); }
+        auto original=out.preedit;
         k.kind = 10; assert(engine.key(k,out)); assert(out.candidates.size() > 1);
-        auto selected = std::find_if(out.candidates.begin(),out.candidates.end(),[&out](const auto& word) { return word != out.preedit; });
+        // Bopomofo/raw-text candidates intentionally do not train the learner.
+        auto selected = std::find_if(out.candidates.begin(),out.candidates.end(),[&](const auto& word) { return alternateHan(word,original); });
         assert(selected != out.candidates.end());
+        auto expected=*selected;
         assert(engine.pick((unsigned)(selected - out.candidates.begin()),out)); k.kind = 3; assert(engine.key(k,out));
+        assert(out.commit==expected);
     };
     learn(first,"su3"); learn(second,"cl3");
     wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
@@ -57,8 +66,9 @@ int wmain(int argc,wchar_t** argv) {
     assert(text.find("ㄋㄧˇ") != std::string::npos); assert(text.find("ㄏㄠˇ") != std::string::npos);
     shanjie::Snapshot pending; key.kind = 1; key.modifiers = 0;
     for (auto ch : std::string("su3")) { key.ch = ch; assert(first.key(key,pending)); }
+    auto originalPending=pending.preedit;
     key.kind = 10; assert(first.key(key,pending));
-    auto different = std::find_if(pending.candidates.begin(),pending.candidates.end(),[&pending](const auto& word) { return word != pending.preedit; });
+    auto different = std::find_if(pending.candidates.begin(),pending.candidates.end(),[&](const auto& word) { return alternateHan(word,originalPending); });
     assert(different != pending.candidates.end()); assert(first.pick((unsigned)(different - pending.candidates.begin()),pending));
     std::ofstream(path.parent_path() / L"learning.epoch") << "cleared";
     auto archive=path.parent_path()/L".deleted_files"; std::filesystem::create_directory(archive);
@@ -128,7 +138,8 @@ int wmain(int argc,wchar_t** argv) {
             ShanjieKey k{}; k.kind = 1;
             for (auto ch : std::string(keys)) { k.ch = ch; assert(engine.key(k,out)); }
         };
-        type("gj"); assert(out.preedit == L"gj" && out.readingHint && out.selected == -1 && out.candidates == std::vector<std::wstring>{L"ㄕㄨ"});
+        // The second hint item transports original keys; neither item is selectable.
+        type("gj"); assert(out.preedit == L"gj" && out.readingHint && out.selected == -1 && out.candidates == (std::vector<std::wstring>{L"ㄕㄨ",L"gj"}));
         assert(!engine.pick(0,out));
         ShanjieKey enter{}; enter.kind = 3; assert(engine.key(enter,out)); assert(out.commit == L"gj");
         type("su"); assert(out.preedit == L"su" && out.readingHint); type("3"); assert(out.preedit == L"你" && !out.readingHint);

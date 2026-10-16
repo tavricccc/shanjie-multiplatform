@@ -5,12 +5,32 @@ use shanjie_windows::{
     engine::Engine,
 };
 use std::{path::PathBuf, time::Instant};
+fn start_fixture(data:&std::path::Path) {
+    if std::env::var("SHANJIE_TEST_EXPLICIT_CORE").as_deref()!=Ok("1") {return;}
+    broker::verification::start_fixture(data);
+}
+fn stop_fixture(data:&std::path::Path) {
+    use windows::Win32::{Foundation::{CloseHandle,WAIT_OBJECT_0},System::Threading::{OpenProcess,PROCESS_ACCESS_RIGHTS,WaitForSingleObject}};
+    let pid=broker::control(data,false).unwrap().pid;
+    let handle=unsafe{OpenProcess(PROCESS_ACCESS_RIGHTS(0x00100000),false,pid)}.unwrap();
+    broker::control(data,true).unwrap();
+    let result=unsafe{WaitForSingleObject(handle,5000)};
+    unsafe{CloseHandle(handle).unwrap();}
+    assert_eq!(result,WAIT_OBJECT_0,"fixture core must exit before restart");
+}
 fn main() {
     let data = PathBuf::from(std::env::args().nth(1).expect("data directory"));
     assert!(
         std::env::var_os("SHANJIE_TEST_PROFILE").is_some(),
         "Use an isolated test profile"
     );
+    let default_hook=std::panic::take_hook();
+    std::panic::set_hook(Box::new(move|info| {
+        if let Some(folder)=std::env::var_os("LOCALAPPDATA") {
+            let _=std::fs::write(PathBuf::from(folder).join("core-check-panic.txt"),info.to_string());
+        }
+        default_hook(info);
+    }));
     let config = Config {
         classes: 5,
         layout: 0,
@@ -63,6 +83,7 @@ fn main() {
         println!("PASS model-v6/classes-v5 to classes-v4 and back through resident IPC; {}",serde_json::to_string(&status).unwrap());
         return;
     }
+    start_fixture(&data);
     eprintln!("check: first session");
     let start = Instant::now();
     let mut a = open();
@@ -94,8 +115,8 @@ fn main() {
     // Reconnect and replay a partially typed syllable after a server exit.
     key(&mut a, 's');
     key(&mut a, 'u');
-    broker::control(&data, true).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    stop_fixture(&data);
+    start_fixture(&data);
     key(&mut a, '3');
     assert_eq!(a.reset(false).unwrap().commit, "你");
     let status = broker::control(&data, false).unwrap();
@@ -113,13 +134,13 @@ fn main() {
     // Simultaneous first sessions after stopping the broker own one endpoint.
     drop(a);
     drop(b);
-    broker::control(&data, true).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    stop_fixture(&data);
     let joins: Vec<_> = (0..4)
         .map(|_| {
             let data = data.clone();
             let config = config.clone();
             std::thread::spawn(move || {
+                start_fixture(&data);
                 let mut c = broker::Client::open(&data, config).unwrap();
                 for ch in "su3".chars() {
                     c.perform(Op::Key {
