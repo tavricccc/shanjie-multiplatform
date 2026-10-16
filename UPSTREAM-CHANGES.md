@@ -10,7 +10,7 @@ Windows 英文擴充將實際大小寫送入 shadow 與 run，查英文詞表時
 
 使用者模型不修改上游載入演算法；model_store 負責有界資訊、大小／SHA、模型與 class 配對、映射等價、完整資料夾發布及修改後失效。broker 傳模型識別，由正常權限核心解析使用者目錄；選擇與配套修訂納入 TSF 重建與預載識別。安裝包只有內建 v6／v5，公開模型的其他配套由相容表及 GitHub asset metadata 核對後下載。
 
-新 schema 7 保留舊 Enter 行為與模型選擇，操作預設排除 model_id／model_revision；舊 v4 模型在未提升權限的安裝入口先遷移。原有設定重試也包含 English 操作；核心 CreateProcess 同時使用 NUL handle allowlist 與自己的工作目錄。
+新 schema 7 保留舊 Enter 行為與模型選擇，操作預設排除 model_id／model_revision；安裝入口先驗證起始帳號，再遷移舊 v4 模型，涵蓋一般及直接提升權限的入口。原有設定重試也包含 English 操作；核心 CreateProcess 同時使用 NUL handle allowlist 與自己的工作目錄。
 
 測試適配移除已由新上游修正的 learn／LM 斷言補丁，使用新 pin 的公開 goldens；保留 Windows 標點不丟未完成讀音的明確差異。rerank 的一般檔案 fixture 用複製，真正 dangling symlink 子案例僅 Unix 執行；KN／tri 的 byte-for-byte golden 在測試副本正規化 CRLF，沒有跳過整組測試。
 

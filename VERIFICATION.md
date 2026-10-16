@@ -15,11 +15,12 @@
 - 真實 WinUI 模型管理通過：GitHub 清單／附件 digest、內建項目不重複下載、從 4096 bytes 續傳實際公開 classes-v4 附件、共用主模型下載快取、取消保留片段、錯誤 SHA 拒絕、離線清單快取、model-v5＋classes-v3 解析／轉換／等價校驗、修改 class 後失效並顯示原因。下載與選取保留未儲存詞庫草稿，不隱式寫 profile；操作預設保留模型。
 - 內建 → 使用者 v6／v4 → 使用者 v5／v3 → 內建的常駐 IPC 通過：詞庫載入 1 次、模型載入 3 次，每組均實際輸入／提交「你」。獨立遷移案例從舊資料的兩個模型檔建立通過掃描的 v4 配套；沒有執行真實安裝。
 - 核心呼叫程式退出後輸出管線關閉，核心仍存活；原啟動目錄可立即改名，證實不再受核心工作目錄鎖定。verify-update 的舊相對測試 profile 在新啟動目錄下失效，已改為絕對路徑，再取得完整 PASS。
+- 安裝入口先校驗起始帳號，再處理舊 v4 配套保存；直接以管理員身分執行不再略過保存。這項分支由程式路徑檢查及隔離遷移驗證，真實 UAC 安裝仍未執行。
 - WinUI 真實控制項／保存／遷移／分享／淺深色擷取及 reliability 通過；設定唯一實例在兩個 EXE 路徑、四次轉送下保留同一份未儲存草稿。模型及主要設定頁畫面已檢視，移除舊「只有兩種配套」說明。
 
 核心 English 回歸曾揭露 Shift 字母重啟既有英文段，已限制為空段才起始；真實資料另揭露英文詞表 CRLF 使上游 LF 嚴格讀取器拒絕整份資料，建置輸出現正規化 LF 並驗證字元／長度／重複項。最終完整 English 85 項及使用隨附詞表的兩架構 TSF 案例通過。
 
-本輪證據在 `build/release-0.10.0/`：`build-final.log`、`ui-qualified.log`、`core-all-qualified.log`、`unit-final-*.log`、`features-final/` 與 `features-final.log`、`update-qualified2/`、`recovery-final/`、`input-final/`、`refresh-final/`、`refresh-deadline-final/`、`features-090-final.log`、`interaction-final.log`、`tsf-*-final.log`、`ui-ui-final/`、`ui-reliability-final/`、`models-range-final/`、`models-release-final/resident-models.log`、`migration-final/`、`cwd-final/`、`instance-release-final/`。早先失敗／診斷紀錄保留，不能將其冒充最終 PASS。
+本輪證據在 `build/release-0.10.0/`：`build-final.log`、`build-installer-preserve.log`（安裝入口補強後兩架構重建）、`ui-qualified.log`、`core-all-qualified.log`、`unit-delivery-*.log`（最終兩架構各 33 項）、`features-final/` 與 `features-final.log`、`update-qualified2/`、`recovery-final/`、`input-final/`、`refresh-final/`、`refresh-deadline-final/`、`features-090-final.log`、`interaction-final.log`、`tsf-*-final.log`、`ui-ui-final/`、`ui-reliability-final/`、`models-range-final/`、`models-release-final/resident-models.log`、`migration-delivery-final/`（最終 manager 舊模型遷移與來源雜湊）、`cwd-final/`、`instance-release-final/`。早先失敗／診斷紀錄保留，不能將其冒充最終 PASS。
 
 沙箱不允許測試 IPC，相關程序於解除沙箱限制、相同隔離 profile 下驗證。實際 profile.ini 與 installed.json 的前後 SHA-256 一致；不宣稱使用中的學習資料整輪不變，也沒有讀取或打包私人詞庫。UI 可能讓已註冊舊 TIP 在隔離 profile 啟動核心，收尾依端點 PID／路徑／啟動時間核對後停止，日常核心保留。保護檔、測試核心清理、封裝逐檔 SHA／公開資料來源／私人檔排除的結果另存本機 `protected-comparison.json`、`test-core-cleanup.json` 及 `package-audit.json`。
 

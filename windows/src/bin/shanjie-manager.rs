@@ -75,7 +75,6 @@ fn announce(text: &str, dialog: bool) {
 }
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.iter().any(|a|a=="install") {shanjie_windows::model_store::migrate_before_install()?;}
     if let Some(at) = args.iter().position(|value| value == "--user-sid") {
         if args.get(at + 1).map(String::as_str)
             != Some(shanjie_windows::installation::user_sid()?.as_str())
@@ -83,6 +82,9 @@ fn run() -> Result<()> {
             return Err("請使用同一登入帳號提升權限，以便更新該帳號的輸入法清單。".into());
         }
     }
+    // Validate the initiating account before touching its model folder, including
+    // when install.cmd was launched directly with an elevated token.
+    if args.iter().any(|a|a=="install") {shanjie_windows::model_store::migrate_before_install()?;}
     let explicit = if let Some(at) = args.iter().position(|value| value == "--keyboard") {
         Some(match args.get(at + 1).map(String::as_str) {
             Some("standard") => 1,

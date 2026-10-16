@@ -269,9 +269,6 @@ pub fn migrate_legacy(data: &Path) -> Result<()> {
     Ok(())
 }
 pub fn migrate_before_install() -> Result<()> {
-    if crate::broker::elevated() {
-        return Ok(());
-    }
     let prefs = crate::profile::load(&crate::profile::path())?;
     if prefs.model_id() == "model-v6-classes-v4" {
         if let Some(previous) = crate::installer::current_binaries()? {
