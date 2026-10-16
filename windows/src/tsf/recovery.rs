@@ -41,6 +41,9 @@ impl Recovery {
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
+    pub(super) fn rebase(&mut self, from:u64, to:u64) {
+        for key in &mut self.keys {if key.generation==from {key.generation=to;}}
+    }
 }
 struct Checkpoint {
     pinyin: Pinyin,
@@ -144,12 +147,12 @@ impl Data {
             result
         }
     }
-    fn schedule_retry(&self) {
+    pub(super) fn schedule_retry(&self) {
         if let Some(watcher) = self.state.borrow().watcher.as_ref() {
             watcher.retry();
         }
     }
-    fn recovery_hint(self: &Rc<Self>, context: &ITfContext, expired: bool) {
+    pub(super) fn recovery_hint(self: &Rc<Self>, context: &ITfContext, expired: bool) {
         let failure = self.state.borrow().engine.failure();
         let message = if self
             .retiring
@@ -160,6 +163,8 @@ impl Data {
             "正在完成上一段組字，後續輸入已保留。"
         } else if failure == Some(Failure::Ambiguous) {
             "上次輸入結果尚未確認，組字已保留；Esc 取消後重試。"
+        } else if expired && self.profile_update.borrow().is_some() {
+            "設定及待處理按鍵已保留；按任一鍵重試，Esc 取消組字。"
         } else if expired {
             "組字與待處理按鍵已保留；按任一鍵重試，Esc 取消。"
         } else if failure == Some(Failure::Busy) {
@@ -175,7 +180,7 @@ impl Data {
             context,
             TF_ES_READ | TF_ES_ASYNCDONTCARE,
             move |cookie| unsafe {
-                if data.recovery.borrow().is_empty() {
+                if data.recovery.borrow().is_empty() && data.profile_update.borrow().is_none() {
                     return Ok(());
                 }
                 let (candidate, mut snapshot) = {
@@ -214,7 +219,8 @@ impl Data {
             return self.key_down(context, vk, flags);
         }
         self.watch(context)?;
-        if !self.recovery.borrow().is_empty() && vk.0 == VK_ESCAPE.0 as usize {
+        if (!self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) && vk.0 == VK_ESCAPE.0 as usize {
+            self.profile_update.borrow_mut().take();
             self.recovery.borrow_mut().clear();
             if let Some(watcher) = self.state.borrow().watcher.as_ref() {
                 watcher.stop_retry();
@@ -254,7 +260,8 @@ impl Data {
             keyboard,
             pick: None,
         };
-        if self.recovery.borrow().is_empty() {
+        self.wake_profile_update();
+        if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() {
             if let Ok(handled) = self.attempt_key(&key, None) {
                 return Ok(handled);
             }
@@ -286,7 +293,8 @@ impl Data {
             keyboard: [0; 256],
             pick: Some((index, self.state.borrow().snapshot.clone())),
         };
-        if self.recovery.borrow().is_empty() && self.attempt_key(&key, Some(cookie)).is_ok() {
+        self.wake_profile_update();
+        if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() && self.attempt_key(&key, Some(cookie)).is_ok() {
             return Ok(());
         }
         let mut recovery = self.recovery.borrow_mut();
@@ -303,6 +311,7 @@ impl Data {
         Ok(())
     }
     pub(super) fn retry_pending(self: &Rc<Self>) {
+        if self.retry_profile_update() { return; }
         // Bound each timer dispatch so a burst does not monopolize the UI thread.
         let started = Instant::now();
         for _ in 0..16 {
@@ -340,11 +349,7 @@ impl Data {
             let mut recovery = self.recovery.borrow_mut();
             recovery.keys.pop_front();
             // Following keys are a new composition in the same valid field.
-            for next in &mut recovery.keys {
-                if next.generation == key.generation {
-                    next.generation = generation;
-                }
-            }
+            recovery.rebase(key.generation,generation);
             drop(recovery);
             if started.elapsed() > Duration::from_millis(30) {
                 self.schedule_retry();

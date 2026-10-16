@@ -12,15 +12,16 @@ pub struct State {
     touched: Instant,
 }
 static FAULT_USED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-fn fault(sequence: u64) -> Option<String> {
+fn fault(sequence: u64, op: &Op) -> Option<String> {
     if std::env::var_os("SHANJIE_TEST_PROFILE").is_none() {
         return None;
     }
-    let expected = std::env::var("SHANJIE_TEST_FAULT_SEQUENCE")
-        .ok()?
-        .parse::<u64>()
-        .ok()?;
-    if sequence != expected || FAULT_USED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+    let matches = if std::env::var("SHANJIE_TEST_FAULT_OP").as_deref() == Ok("prediction") {
+        matches!(op, Op::Prediction(_))
+    } else {
+        sequence == std::env::var("SHANJIE_TEST_FAULT_SEQUENCE").ok()?.parse::<u64>().ok()?
+    };
+    if !matches || FAULT_USED.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return None;
     }
     std::env::var("SHANJIE_TEST_FAULT").ok()
@@ -57,8 +58,8 @@ impl State {
 pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
     let mut attached: Option<(String, Arc<Mutex<State>>)> = None;
     while let Ok(request) = read::<Request>(&mut pipe) {
-        let injection = if let Request::Apply { sequence, .. } = &request {
-            fault(*sequence)
+        let injection = if let Request::Apply { sequence, op } = &request {
+            fault(*sequence, op)
         } else {
             None
         };
@@ -151,7 +152,9 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
             }
             Request::Apply { sequence, op } => {
                 if let Some((_, state)) = attached.as_ref() {
-                    state.lock().unwrap().apply(sequence, op)
+                    let mut state=state.lock().unwrap();
+                    if injection.as_deref()==Some("hold-state") {std::thread::sleep(Duration::from_millis(6500));}
+                    state.apply(sequence, op)
                 } else {
                     reply(None, None, false)
                 }

@@ -139,7 +139,7 @@ pub struct Data {
     pub ending: Cell<bool>,
     pub editing: Cell<bool>,
     pub mode_revision: Cell<u64>,
-    profile_revision: Cell<u64>,
+    pub(super) profile_update: RefCell<Option<super::profile_refresh::Pending>>,
     pub(super) generation: Cell<u64>,
     pub(super) recovery: RefCell<super::recovery::Recovery>,
     pub(super) application_written: Cell<bool>,
@@ -170,7 +170,7 @@ pub fn new() -> ITfTextInputProcessorEx {
         ending: Cell::new(false),
         editing: Cell::new(false),
         mode_revision: Cell::new(0),
-        profile_revision: Cell::new(0),
+        profile_update: RefCell::new(None),
         generation: Cell::new(0),
         recovery: RefCell::new(Default::default()),
         application_written: Cell::new(false),
@@ -304,6 +304,7 @@ impl Data {
         Ok(())
     }
     pub fn cancel(self: &Rc<Self>) -> Result<()> {
+        let updating=self.profile_update.borrow_mut().take().is_some();
         self.close_word();
         self.generation.set(self.generation.get().wrapping_add(1));
         self.recovery.borrow_mut().clear();
@@ -342,7 +343,7 @@ impl Data {
                     .map(|o| o.commit)
                     .unwrap_or_else(|| s.snapshot.preedit.clone())
             };
-            if s.engine.recovery_pending() {
+            if updating || s.engine.recovery_pending() {
                 s.engine = Engine::default();
                 s.preload = None;
             }
@@ -764,13 +765,17 @@ impl Data {
         )
     }
     pub fn refresh(self: &Rc<Self>) -> Result<()> {
+        if self.profile_update.borrow().is_some() {
+            self.recovery.borrow_mut().refresh=true;
+            self.wake_profile_update();
+            self.schedule_retry();
+            return Ok(());
+        }
         if !self.recovery.borrow().is_empty() {
             self.recovery.borrow_mut().refresh = true;
             return Ok(());
         }
         let current = profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
-        let revision = self.profile_revision.get() + 1;
-        self.profile_revision.set(revision);
         let old = self.state.borrow().prefs.clone();
         let rebuild = [
             ("input", "keyboard"),
@@ -803,7 +808,6 @@ impl Data {
                 s.preload = None;
                 s.pinyin = Pinyin::default();
             }
-            configure_options(&mut s)?;
             if width_changed {
                 s.full_width = current.flag("input", "full_width", false);
             }
@@ -831,45 +835,16 @@ impl Data {
             }
         }
         self.prepare_engine()?;
-        if self.state.borrow().engine.is_open() && (prediction_changed || demote_changed) {
-            let configure =
-                move |s: &mut State| -> Result<Snapshot> {
-                    let mut out = Snapshot::default();
-                    if demote_changed {
-                        out = output(s.engine.perform(crate::broker::Op::Demote(
-                            current.flag("engine", "demote", true),
-                        )))?;
-                    }
-                    if prediction_changed {
-                        out = output(s.engine.perform(crate::broker::Op::Prediction(
-                            current.flag("engine", "prediction", false),
-                        )))?;
-                    }
-                    Ok(out)
-                };
-            let context = self.state.borrow().context.clone();
-            if let Some(context) = context {
-                let current_context = context.clone();
-                let data = self.clone();
-                self.request_current(
-                    &context,
-                    TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
-                    move |cookie| {
-                        let out = {
-                            let mut s = data.state.borrow_mut();
-                            if data.profile_revision.get() != revision || !s.engine.is_open() {
-                                return Ok(());
-                            }
-                            s.associated.clear();
-                            s.association_caret = None;
-                            configure(&mut s)?
-                        };
-                        data.apply(&current_context, cookie, out, false)
-                    },
-                )?;
-            } else {
-                configure(&mut self.state.borrow_mut())?;
+        if self.state.borrow().engine.is_open() {
+            let mut operations=std::collections::VecDeque::from(option_operations(&current));
+            if demote_changed {operations.push_back(crate::broker::Op::Demote(current.flag("engine","demote",true)));}
+            if prediction_changed {operations.push_back(crate::broker::Op::Prediction(current.flag("engine","prediction",false)));}
+            let context=self.state.borrow().context.clone();
+            if prediction_changed || demote_changed {
+                let mut s=self.state.borrow_mut();s.associated.clear();s.association_caret=None;
             }
+            *self.profile_update.borrow_mut()=Some(super::profile_refresh::Pending::new(context,self.generation.get(),operations));
+            self.retry_profile_update();
         }
         if mode_changed || width_changed {
             self.set_mode(if mode_changed {
@@ -879,7 +854,7 @@ impl Data {
             })?;
         }
         let context = self.state.borrow().context.clone();
-        if let Some(context) = context {
+        if let Some(context) = context.filter(|_|self.profile_update.borrow().is_none()) {
             self.layout(&context, TF_LC_CHANGE)?;
         }
         Ok(())
@@ -963,29 +938,16 @@ fn configure_options(s: &mut State) -> Result<()> {
     if !s.engine.is_open() {
         return Ok(());
     }
-    let p = &s.prefs;
-    let flags = p.input_options();
-    if s.engine
-        .perform(crate::broker::Op::Options(flags))
-        .is_none()
-    {
-        return Err(E_FAIL.into());
-    }
+    for op in option_operations(&s.prefs) {output(s.engine.perform(op))?;}
+    Ok(())
+}
+fn option_operations(p:&Document) -> [crate::broker::Op;3] {
     let flags = if p.number("input", "keyboard", 0) < 3 {
         p.flag("input", "mixed_input", false) as u32
     } else {
         0
     };
-    if s.engine
-        .perform(crate::broker::Op::Mixed(flags != 0))
-        .is_none()
-    {
-        return Err(E_FAIL.into());
-    }
-    if s.engine.perform(crate::broker::Op::Tolerance(p.flag("input", "mixed_tolerance", false))).is_none() {
-        return Err(E_FAIL.into());
-    }
-    Ok(())
+    [crate::broker::Op::Options(p.input_options()),crate::broker::Op::Mixed(flags!=0),crate::broker::Op::Tolerance(p.flag("input","mixed_tolerance",false))]
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
     let weak = &*(context as *const std::rc::Weak<Data>);

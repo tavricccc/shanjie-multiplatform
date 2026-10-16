@@ -3,6 +3,7 @@ mod add_word;
 mod keys;
 mod mode;
 mod modifiers;
+mod profile_refresh;
 mod recovery;
 mod resident;
 mod service;
