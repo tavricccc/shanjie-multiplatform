@@ -635,10 +635,10 @@ mod tests {
         assert!(!doc.0["input"].contains_key("shift_punctuation"));
         assert!(!doc.0["input"].contains_key("plain_punctuation"));
         assert!(SHIFT_KEYS.iter().all(|(c, _)| doc.shift_punctuation(*c)));
-        assert_eq!(doc.input_options(), 1 | 0x1fff << 1);
+        assert_eq!(doc.input_options(), 1 | 0x1fff << 1 | 1 << 21);
         // Each mark is now independent: 「 on, 、 (backslash) still off.
         doc.set("punctuation", "plain_lbracket", 1);
-        assert_eq!(doc.input_options() >> 14, 1);
+        assert_eq!(doc.input_options() >> 14 & 0x3f, 1);
         assert!(!doc.shift_punctuation('a'));
     }
     #[test]

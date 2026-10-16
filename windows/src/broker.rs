@@ -394,6 +394,15 @@ fn start_core(executable: &Path) -> io::Result<()> {
     };
     let application = crate::wide(&executable.to_string_lossy());
     let mut command = crate::wide(&format!("\"{}\" --serve", executable.display()));
+    // The long-lived core must not inherit the caller's directory (an installer run from a
+    // package folder would otherwise keep that folder locked for as long as the core lives).
+    let directory = crate::wide(
+        executable
+            .parent()
+            .unwrap_or(executable)
+            .to_string_lossy()
+            .trim_start_matches(r"\?\"),
+    );
     let startup = STARTUPINFOW {
         cb: std::mem::size_of::<STARTUPINFOW>() as u32,
         ..Default::default()
@@ -409,7 +418,7 @@ fn start_core(executable: &Path) -> io::Result<()> {
             false,
             CREATE_NO_WINDOW,
             None,
-            PCWSTR::null(),
+            PCWSTR(directory.as_ptr()),
             &startup,
             &mut process,
         )
