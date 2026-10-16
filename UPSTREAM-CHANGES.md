@@ -1,6 +1,16 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游固定於 `feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（2026-10-15；基於 main `76dc7ac`，作者表示 model-v6 即將發佈，尚未合入 main），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-16 同步上游 main b2f5da8（v0.4.6、classes-v5、trigram 核心、行內英文）
+
+上游 pin 由 `feat/model-v6-switch` 的 `f8ea0bb` 改回 main `b2f5da8`（model-v6 已合入 main）。範圍：v0.4.4–v0.4.6、`classes-v5`（只把詞類權重 μ 從 0.8 降到 0.2，檔案其餘與 classes-v4 相同；`MODEL-SOURCES.json` 同步，`prepare-models.ps1` 退役 classes-v4 快取）、trigram 核心、zhen-mixed／zhen-inline 英文功能。
+
+**核心 ABI 變動**：`ShanjieOutput` 尾端新增 `english_run_utf16_start`／`english_run_utf16_len`；新增 `set_english_inline`；`Fixed` 與 `Cands` 新增 `zh` 欄位；`insert_token` 多一個 `zh` 參數；`Lm` 新增 `tri`。prepare 契約與 platform 覆蓋只做上述對應調整，沒有手改 `build/core` 或上游追蹤檔。
+
+**trigram**：書面設定用前兩個詞打分並關閉 KN（`trigram.sjt3`，上游尚未出貨此檔）；聊天與預測列不變。Windows 沒有此表，映射模型 `tri: None`，行為與前版相同；未接入設定或下載。
+
+**上游行內英文**（`set_english`／`set_english_inline`，預設關）：與 Windows 自有的中英混打政策（`smart_input_windows`）是兩套獨立實作。目前兩者尚未接成可切換；上游英文測試在 Windows 組字政策下有 7 項失敗，屬已知衝突，待「中英混打方式」三選一開關處理。
 
 ## 2026-10-15 Windows 0.8.0：同步上游並換 model-v6／classes-v4
 

@@ -1,6 +1,19 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-15。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-16。上游 pin：main `b2f5da8f202b4b996071860cac3bc357430848df`，與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-16 同步上游 b2f5da8（v0.4.6、classes-v5、trigram）
+
+已驗證：
+- prepare 覆蓋契約通過；`prepare-models.ps1` 核對 model-v6＋classes-v5 官方大小與 SHA-256，映射等價核對通過。
+- 產生後的核心 lib 71 項通過；整合測試 engine_learn 54、engine_lm 16、engine_pack 3、engine_replay 3、engine_rerank 22、engine_vertical 20、engine_demote 6、kn_tiny 9、tinylm_tiny 16 通過。
+
+未解決（尚未區分到逐項原因，不宣稱通過）：
+- `engine` 1 項（`row2_punctuation_goes_into_the_composition`）與 `engine_predict` 2 項（`abbreviation_keys_with_two_units`、`another_key_leaves_and_is_handled_as_usual`）：0.8.0 已記錄的既有失敗。
+- `engine_english` 7 項失敗，皆是標點或 Shift 英文串被 Windows 組字政策攔截（輸出出現全形逗號、`Windows` 之類字面文字），與上游行內英文互相衝突。
+- `tri_tiny` 1 項（`load_reads_the_table_beside_the_model`）：測試把 unix symlink 換成複製後的假象，Windows 不適用。
+
+沒有重跑 TSF smoke、WinUI、安裝與實機驗收；沒有重新打包。
 
 ## 2026-10-15 Windows 0.8.0 同步上游 f8ea0bb（model-v6／classes-v4）
 
