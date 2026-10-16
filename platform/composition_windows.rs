@@ -155,7 +155,7 @@ impl Engine {
         self.mixed_latin = false;
         let mut commit = String::new();
         for ch in raw.chars().chain(text.chars()) {
-            let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()))?;
+            let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
             commit.push_str(&out.commit);
         }
         self.windows_raw.clear();
@@ -248,7 +248,7 @@ impl Engine {
         self.cursor = candidate.start;
         // One literal word replaces its original span. Expanding it into several
         // cells could reach MAX_SYLLABLES and silently discard an automatic commit.
-        self.insert_token(format!("{PUNCT_PREFIX}{}",candidate.text),Some(candidate.text))?;
+        self.insert_token(format!("{PUNCT_PREFIX}{}",candidate.text),Some(candidate.text),None)?;
         Ok(true)
     }
 }

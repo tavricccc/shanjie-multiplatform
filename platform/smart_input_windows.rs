@@ -147,7 +147,7 @@ impl Engine {
         let mut out = self.handled()?;
         let mut committed = String::new();
         for ch in text.chars() {
-            out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()))?;
+            out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
             committed.push_str(&out.commit);
         }
         out.commit = committed;

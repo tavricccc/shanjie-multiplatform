@@ -9,7 +9,7 @@ try {
     & "$PSScriptRoot/build.ps1" -Architecture $Architecture
     New-Item -ItemType Directory -Path upstream/shanjie/data/lm -Force | Out-Null
     Copy-Item build/model/bigram-v6.sjlm upstream/shanjie/data/lm/bigram.sjlm -Force
-    Copy-Item build/model/classes-v4.sjc upstream/shanjie/data/lm/classes.sjc -Force
+    Copy-Item build/model/classes-v5.sjc upstream/shanjie/data/lm/classes.sjc -Force
     # Upstream goldens assume the kn-v1 side file next to the model; used for verification only, not packaged.
     if (!(Test-Path build/model/kn-v1.sjkn) -or (Get-FileHash build/model/kn-v1.sjkn).Hash.ToLowerInvariant() -ne 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e') {
         & "$PSScriptRoot/download-asset.ps1" -Url 'https://github.com/Nanako0129/shanjie/releases/download/kn-v1/kn.sjkn' -Destination (Join-Path $root 'build/model/kn-v1.sjkn') -Size 1414052 -Sha256 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e'
