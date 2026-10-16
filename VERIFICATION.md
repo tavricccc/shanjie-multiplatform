@@ -1,6 +1,25 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-15。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-16。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
+
+## 2026-10-16 Windows 0.9.0 測試包（尚有未通過項目）
+
+本輪依使用者要求收尾，沒有安裝、註冊輸入法、變更語言清單或發布遠端 release。下列結果屬隔離回歸；真實前景 App 與系統安裝驗收仍待進行。
+
+- x64／x86 release 與 WinUI 編譯完成；模型選單提供 model-v6＋classes-v5（預設）與 classes-v4，保留詞庫／學習。常駐 IPC 的 v5 → v4 → v5 測試通過，詞庫載入 1 次、兩組模型載入 2 次。模型映射等價檢查通過。
+- 產生後核心 lib 70、engine 33、demote 6、learn 54、lm 16、replay 3、predict 66、pack 3、vertical 20、kn_tiny 9、tinylm_tiny 16，合計 **296 項通過**。保留原有 Unix 機制排除、效能／選用測試 ignored；不是把衝突測試整項跳過。Windows 標點契約與新權重 golden 的適配見 prepare-test-contracts.ps1 與 tests/fixtures/classes-v5/。公開預期由固定上游 Python 評測器產生，沒有更改子模組追蹤檔。
+- Windows crate 兩架構各 **30 通過、2 項既有原生系統測試 ignored**。包括雙 Ctrl 手勢、兩程序加詞、重複加詞、設定舊草稿合併／衝突及讀音驗證。
+- 新增的真實 TSF context 測試在 x64／x86 通過：7 種 Shift 序列（含 Enter 缺失回呼及原生訊息）、owned／NOACTIVATE 加詞浮層、讀音建議／重填、儲存、原文字與反白保留、Esc、選取變更、唯讀及密碼欄位拒絕。
+- 原有數字／標點／混打／空白／注音與原始候選 **70 個兩架構隔離 TSF 案例通過**。x64 原有 TSF smoke 與無模型啟動通過；x86 直接核心模式同樣通過。
+- WinUI --verify-ui 通過：模型選單實際控制項雙向綁定、兩配置保存／載入、操作預設保留個人模型選擇、既有遷移／標點／分享及淺深色擷取。模型選單與加詞浮層畫面已檢視。不同啟動目錄的設定實例測試通過（4 個轉送、兩個 EXE 路徑、一份未儲存草稿）。最小化恢復、舊版已開啟視窗及真正前景啟用仍待實機驗收。
+
+**未解決：** x86 常駐核心模式的原有 TSF smoke 在 check 286（啟用 prediction 後預期顯示候選）失敗。直接核心通過；一次帶同步檔案診斷的常駐測試通過，但移除診斷後重現，不能視為修復。補上訊息泵等待亦未解決；未保留此測試改動或暫時診斷碼。原因尚未定位，不宣稱是已證實的宿主／管道缺陷。測試包明確保留此限制；之後優先從刷新、候選 snapshot、edit session 與 IPC 狀態追查。未完成完整 verify-update、Windows interaction 最終回歸及前景 App 驗收。
+
+**模型取捨：** 固定 model-v6，無 KN 的 Windows 對應 Python 配置、公開 dev302：v4 首選 242/302、v5 238/302，前 64 名皆 300/302。使用者接受 v5 預設並要求可選 v4；不能把這組結果推廣到所有輸入或沿用上游含 KN／語意重排的改善幅度。KN 側檔只供整合測試，不打包。
+
+測試只用專案 build 內 profile、公開／合成字詞。沙箱會阻擋測試 IPC，相關通訊驗證在解除沙箱限制、相同隔離資料下執行。UI 測試曾使已註冊舊 TIP 在測試 profile 啟動核心；已逐一核對端點、PID、執行檔及啟動時間後清理，沒有停止日常核心。收尾核對 installed.json 雜湊相同；日常 profile.ini 的雜湊與起始不同（最後寫入 13:51:54，內容仍是 0.8.x 欄位，未帶入本版 class_table／mixed_tolerance），來源未確認，沒有自行覆寫或還原，不能宣稱整輪個人設定完全不變。原始雜湊見 protected-before/after.json；不宣稱正在使用中的學習檔整輪未變。
+
+證據位於 build/release-0.9.0/：verify-v5-final.log、windows-unit-{x64,x86}.log、tsf-{x64,x86}/result.log、input-regression/results.json、smoke-x64-final.log、smoke-x86-local.log、smoke-x86-final-pass.log（名稱含 pass 但實際失敗，以內容為準）、model-switch.log、ui-final.log、instance-final.log、cleanup-test-cores*.log。UI 擷取在 build/ui-review-final/。LNK4104、WUI2011、C4701 既有警告保留；NU1900 表示 NuGet 弱點資料查詢未完成。
 
 ## 2026-10-15 Windows 0.8.0 同步上游 f8ea0bb（model-v6／classes-v4）
 

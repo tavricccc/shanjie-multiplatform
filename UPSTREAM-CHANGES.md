@@ -2,6 +2,16 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 `feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（2026-10-15；基於 main `76dc7ac`，作者表示 model-v6 即將發佈，尚未合入 main），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-16 Windows 0.9.0：Windows 輸入政策與 classes-v5
+
+核心程式 pin 沿用 `f8ea0bb`，沒有合入持續變動的 main。模型仍是 model-v6，官方配套詞類表預設 classes-v5，設定選單可切回 classes-v4；兩組原始配對雜湊、檔案大小及授權見 MODEL-SOURCES.json。classes-v4／v5 只有檔頭 μ 的 8-byte 欄位不同（0.8 → 0.2）；Windows 映射讀寫及等價校驗會保留並核對此權重。broker 會話及共用快取按所選配置區分。Windows 未自動啟用 KN／tiny-LM，測試側檔不打包。
+
+測試預期值由固定上游 Python 評測器及核對雜湊的原始資料獨立產生，公開保存於 `tests/fixtures/classes-v5/`；不以 Windows Engine 自己的輸出更新 golden。適配層另外處理新權重造成的 no-op 選字學習，以及固定範例的預期文字變化，保留對應斷言。出貨對應無 KN 配置的公開 dev302 首選為 v4 242/302、v5 238/302，前 64 名皆 300/302；使用者接受此取捨，並要求保留模型選單。
+
+核心差異仍由 platform 與 prepare 腳本產生：混打容錯僅嘗試最多四鍵內的一次相鄰重複，完整讀音須有詞庫條目，保留原始按鍵候選；預設關閉。Ctrl+反斜線與 Shift／直接標點一致保留未完成讀音。`prepare-test-contracts.ps1` 對上游標點測試做具確切錨點的 Windows 預期適配，不跳過整個測試。
+
+Windows 前端新增執行緒範圍、只觀察及放行的修飾鍵 hook；不記文字、不在 hook 呼叫核心。加詞浮層讀取 TSF 選取範圍後釋放 edit lock，由既有控制通道顯示 owned／NOACTIVATE 視窗。加詞請求只接受漢字與讀音，經 broker 寫入現用個人詞庫，不接受任意檔案路徑；設定頁採三方合併避免併發新增遺失。上游追蹤檔保持乾淨。
+
 ## 2026-10-15 Windows 0.8.0：同步上游並換 model-v6／classes-v4
 
 上游 pin 由 `368eebc`（main）更新到 `feat/model-v6-switch` 的 `f8ea0bb`（約 1,040 個 commit，含 main 的 `76dc7ac`）。該分支尚未合入 main，待作者發佈後再改回 main 的對應 commit。內建模型換成 model-v6＋classes-v4（`MODEL-SOURCES.json`、安裝包驗證與 UI 文案同步）；model-v5／classes-v3 不再打包。

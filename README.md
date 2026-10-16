@@ -1,8 +1,8 @@
 # 善解 Windows
 
-原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。同步 2026-10-11 main（包含 v0.4.0），只提供 model-v5＋classes-v3。候選是實色橫向膠囊與 0.5 DIP 細邊線，支援淺色、深色及跟隨 Windows，不使用毛玻璃或陰影；設定保留獨立 WinUI 3 原生程式。
+原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 `f8ea0bb`（feat/model-v6-switch），提供 model-v6，設定中可選 classes-v5（預設）或 classes-v4 配套。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
-目前 Windows 開發版為 **0.8.1**：讀音列標示游標所在的字；0.8.0 起：上游同步到 `feat/model-v6-switch`（model-v6＋classes-v4，尚未合入 main），修正語言清單輸入法名稱後的亂碼，安裝時以按鈕選擇標準或倚天注音，並更換單色「解」與中／A 圖示，見 [docs/releases/RELEASE-NOTES-0.8.0.md](docs/releases/RELEASE-NOTES-0.8.0.md)。沿用 0.7.0 的混打數字／標點、亂序注音與空白鍵輸入注音符號開關、0.6.1 的設定共存與提權等待、0.6.0 的逐鍵標點／操作預設／直式候選，以及 0.5.x 的核心復原、安裝與詞典修正。背景驗證與實際系統驗收的界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發版為 **0.9.0**：設定視窗單一執行個體、Shift 組合鍵追蹤修正、可選的混打相鄰重複鍵容錯、反白字詞後雙 Ctrl 加詞浮層，以及 classes-v5 詞類權重更新。操作及支援範圍見 [0.9.0 版本說明](docs/releases/RELEASE-NOTES-0.9.0.md)，測試與實機驗收界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
@@ -15,7 +15,7 @@ git submodule update --init
 pwsh -File scripts/package.ps1
 ```
 
-輸出 `dist/Shanjie-Windows.zip`：x64／x86 Rust DLL、x64 self-contained WinUI 設定、原生 Rust 安裝管理程式、最新模型與詞類表、授權全文及 SHA256SUMS。下載核對官方 SHA-256，再驗證映射陣列及語言分數等價；來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。不保留舊模型或執行期 fallback。
+輸出 `dist/Shanjie-Windows.zip`：x64／x86 Rust DLL、x64 self-contained WinUI 設定、原生 Rust 安裝管理程式、model-v6 與兩種可選詞類表、授權全文及 SHA256SUMS。下載核對官方 SHA-256，再驗證映射陣列及語言分數等價；來源見 [MODEL-SOURCES.json](MODEL-SOURCES.json)。僅提供清單內的兩種配置，載入失敗時不暗中改用另一配置。
 
 只編譯用 `pwsh -File scripts/build.ps1`，預設 x64 與 x86 都建置（x86 供 64 位元 Windows 上的 32 位元程式載入）；只要單一架構加 `-Architecture x64` 或 `x86`。`-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定 UI 並更新其 Rust DLL。已有完整 `dist/` 時，`pwsh -File scripts/package.ps1 -UseExistingBuild` 重新整理、校驗及打包。
 
