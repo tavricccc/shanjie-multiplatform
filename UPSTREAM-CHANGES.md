@@ -1,6 +1,36 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游固定於 `feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（2026-10-15；基於 main `76dc7ac`，作者表示 model-v6 即將發佈，尚未合入 main），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-17 Windows 0.10.0：兩條 0.9.0 整合與使用者模型
+
+合併本機 e17295cb 與公開 12b5ebf4，固定 main b2f5da8。保留新上游的 zh／English run／trigram ABI 與 Windows policy 覆蓋；Mapped LM 的 tri 明確為 None，模型管理不接入 KN、tiny-LM 或 trigram 附件。
+
+Windows 英文擴充將實際大小寫送入 shadow 與 run，查英文詞表時轉成小寫，不改注音解析鍵；Shift＋字母僅在尚無 run 時開始新段，已有 run 則接續。倚天停用上游英文，Windows 混打仍保留。隨附英文資料在建置輸出驗證後正規化成 LF，保持上游嚴格讀取契約。
+
+使用者模型不修改上游載入演算法；model_store 負責有界資訊、大小／SHA、模型與 class 配對、映射等價、完整資料夾發布及修改後失效。broker 傳模型識別，由正常權限核心解析使用者目錄；選擇與配套修訂納入 TSF 重建與預載識別。安裝包只有內建 v6／v5，公開模型的其他配套由相容表及 GitHub asset metadata 核對後下載。
+
+新 schema 7 保留舊 Enter 行為與模型選擇，操作預設排除 model_id／model_revision；舊 v4 模型在未提升權限的安裝入口先遷移。原有設定重試也包含 English 操作；核心 CreateProcess 同時使用 NUL handle allowlist 與自己的工作目錄。
+
+測試適配移除已由新上游修正的 learn／LM 斷言補丁，使用新 pin 的公開 goldens；保留 Windows 標點不丟未完成讀音的明確差異。rerank 的一般檔案 fixture 用複製，真正 dangling symlink 子案例僅 Unix 執行；KN／tri 的 byte-for-byte golden 在測試副本正規化 CRLF，沒有跳過整組測試。
+
+## 2026-10-16 中英混打：Windows 注音順序與上游英文詞表可並用
+
+設定 `[input] mixed_input`（Windows 注音順序判斷）、`upstream_english`（上游英文詞表判斷、空白選單、英文留在組字區）、`english_inline`（預設 1，打字時顯示英文字母）互相獨立；設定頁「中英混打方式」為 關／注音順序／英文詞表／兩者並用 四選一，另有顯示英文字母開關。兩者並用時，Windows 政策先處理按鍵，上游英文只接手它放行的部分；`Shift＋字母` 在上游英文開啟時交給上游開英文段。
+
+核心接合（`platform/smart_input_windows.rs`）：`Engine::key` 在上游英文段進行中（`run` 非空、英文選單開啟、或行內字母顯示）時直接走上游 `key_original`，其餘仍走 Windows 組字政策（字面標點等）。`set_upstream_english(on, inline)` 只設定上游 `set_english`／`set_english_inline`，不影響 Windows 混打狀態。英文詞表使用打包的 `data/english-common.txt`，由 `engine.rs` 開核心時載入，缺檔只讓詞表判斷失效。新增 broker `Op::English(u32)`（bit0 開、bit1 顯示字母，列於 enum 尾端）、FFI `shanjie_windows_set_upstream_english`、bridge op 10；TSF 先送 English 再送 Mixed，並列入需重建核心的設定鍵。
+
+設定頁重排：新增「中英混打與切換」頁，集中單按 Shift 切換中英、Shift 側別、Ctrl＋空白、Caps Lock、混打方式與無法轉換序列輸出英數；「切換與快捷鍵」改為「快捷鍵與符號鍵」，只留全半形與符號快捷鍵。
+
+## 2026-10-16 同步上游 main b2f5da8（v0.4.6、classes-v5、trigram 核心、行內英文）
+
+上游 pin 由 `feat/model-v6-switch` 的 `f8ea0bb` 改回 main `b2f5da8`（model-v6 已合入 main）。範圍：v0.4.4–v0.4.6、`classes-v5`（只把詞類權重 μ 從 0.8 降到 0.2，檔案其餘與 classes-v4 相同；`MODEL-SOURCES.json` 同步，`prepare-models.ps1` 退役 classes-v4 快取）、trigram 核心、zhen-mixed／zhen-inline 英文功能。
+
+**核心 ABI 變動**：`ShanjieOutput` 尾端新增 `english_run_utf16_start`／`english_run_utf16_len`；新增 `set_english_inline`；`Fixed` 與 `Cands` 新增 `zh` 欄位；`insert_token` 多一個 `zh` 參數；`Lm` 新增 `tri`。prepare 契約與 platform 覆蓋只做上述對應調整，沒有手改 `build/core` 或上游追蹤檔。
+
+**trigram**：書面設定用前兩個詞打分並關閉 KN（`trigram.sjt3`，上游尚未出貨此檔）；聊天與預測列不變。Windows 沒有此表，映射模型 `tri: None`，行為與前版相同；未接入設定或下載。
+
+**上游行內英文**（`set_english`／`set_english_inline`，預設關）：與 Windows 自有的中英混打政策（`smart_input_windows`）是兩套獨立實作。目前兩者尚未接成可切換；上游英文測試在 Windows 組字政策下有 7 項失敗，屬已知衝突，待「中英混打方式」三選一開關處理。
 
 ## 2026-10-16 Windows 0.9.0：Windows 輸入政策與 classes-v5
 
@@ -176,3 +206,7 @@ pwsh -File scripts/package.ps1
 核心與上游回歸、Windows 的最新模型／配表拒絕、兩種操作 profile、純 Rust TSF、候選／模式提示及 WinUI 離屏驗證詳見 `VERIFICATION.md`。TSF harness 的鍵盤 sink 註冊仍使用測試代理；Unix 權限、macOS 效能與 ignored 量測沒有變成已通過項目。安裝器清理 fixture 通過，不等同系統註冊／重開機移除實測。
 
 目前沒有提交上游 PR。右側候選擴充與平台 backend 可在和作者討論 API 後另行整理；目前版本以本機可用為目標。
+
+## Enter 只提交游標前（Windows 覆蓋）
+
+`[candidates] enter_to_cursor`（輸入選項 bit 21，Windows 互動預設開、善解互動預設關）：游標位於已定字的組字中間時，Enter 只送出游標前（選字後含所選字）的部分，後面的音節留在組字區、游標回到其開頭可繼續選字；固定詞不會被切開。候選窗開啟、預測選取、注音未完成或混打英文暫存時仍走原本的整句送出。實作在 `platform/composition_windows.rs` 的 `commit_through_cursor`，欄位由 `prepare-smart-input.ps1` 注入。

@@ -30,6 +30,8 @@ pub(super) struct Config {
     dictionary: String,
     prediction: bool,
     classes: u32,
+    model: String,
+    model_revision: String,
 }
 impl Config {
     pub fn new(data: &Path, p: &Document, profile_layout: u32) -> Self {
@@ -46,10 +48,12 @@ impl Config {
             dictionary: p.get("input", "dictionary", "dictionary.tsv").to_owned(),
             prediction: p.flag("engine", "prediction", false),
             classes: p.class_table(),
+            model: p.model_id(),
+            model_revision: p.get("engine","model_revision","").into(),
         }
     }
     fn load(&self) -> Option<(Engine, Pinyin)> {
-        let engine = Engine::open_variant(
+        let engine = Engine::open_model(
             &self.data,
             self.layout,
             self.ranking,
@@ -59,6 +63,7 @@ impl Config {
             &self.dictionary,
             self.prediction,
             self.classes,
+            &self.model,
         )?;
         let pinyin = if self.keyboard >= 3 {
             Pinyin::load(&self.data, self.keyboard == 4).ok()?

@@ -94,13 +94,17 @@ impl Engine {
         Self::open_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
     }
     pub fn open_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
+        Self::open_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"")
+    }
+    pub fn open_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str)->Option<Self> {
         if ![4,5].contains(&classes) { return None; }
         if std::env::var_os("SHANJIE_CORE_LOCAL").is_some() {
-            return Self::open_local_variant(
-                data, layout, ranking, right, learning, big5, dictionary, prediction, classes,
+            return Self::open_local_model(
+                data, layout, ranking, right, learning, big5, dictionary, prediction, classes, model,
             );
         }
         let config = crate::broker::Config {
+            model: model.into(),
             classes,
             layout,
             ranking,
@@ -128,7 +132,12 @@ impl Engine {
         Self::open_local_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
     }
     pub fn open_local_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
-        let model = match classes { 5=>"models/model-v6/bigram.winmap",4=>"models/model-v6-classes-v4/bigram.winmap",_=>return None };
+        Self::open_local_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"")
+    }
+    pub fn open_local_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str)->Option<Self> {
+        let legacy=match classes {5=>"model-v6-classes-v5",4=>"model-v6-classes-v4",_=>return None};
+        let old=data.join("models/model-v6-classes-v4/bigram.winmap");
+        let model=if model.is_empty() && classes==4 && old.is_file(){old}else{crate::model_store::resolve(data,if model.is_empty(){legacy}else{model})};
         let mut e = Self::default();
         let folder = crate::profile::folder();
         let personal = folder.join(dictionary);
@@ -151,9 +160,14 @@ impl Engine {
                 return None;
             }
             e.operation(|h, o| shanjie_engine_set_prediction(h, prediction as u32, o))?;
-            let lm = CString::new(data.join(model).to_str()?).ok()?;
+            let lm = CString::new(model.to_str()?).ok()?;
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
+            }
+            // The word list only matters when upstream inline English is switched on; a missing
+            // list leaves that mode inert instead of failing the engine.
+            if let Some(list) = data.join("english-common.txt").to_str().and_then(|p| CString::new(p).ok()) {
+                shanjie_engine_load_english(e.handle, list.as_ptr());
             }
             e.operation(|h, o| shanjie_engine_set_profile(h, ranking, o))?;
             if shanjie_windows_set_candidate_anchor(e.handle, right as u32) != 0
@@ -414,6 +428,9 @@ impl Engine {
                 .then(Snapshot::default),
             Op::Tolerance(on) => (unsafe { shanjie_windows_set_mixed_tolerance(self.handle, on as u32) }
                 == 0).then(Snapshot::default),
+            Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
+                == 0)
+                .then(Snapshot::default),
         }
     }
     pub fn replay(&mut self, ops: &[crate::broker::Op]) -> bool {

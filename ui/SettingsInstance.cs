@@ -30,7 +30,7 @@ internal sealed class SettingsInstance : IDisposable
     }
     public static async Task<SettingsInstance?> Open()
     {
-        // 0.8.x has no forwarding protocol. Preserve its unsaved draft and bring
+        // Some independently released 0.9.x builds have no forwarding protocol. Preserve their draft and bring
         // that window back until the user closes it; do not create a second one.
         if (Environment.GetEnvironmentVariable("SHANJIE_TEST_PROFILE") != "1")
         {
@@ -46,7 +46,7 @@ internal sealed class SettingsInstance : IDisposable
                     string file = process.MainModule?.FileName ?? "";
                     if (!file.StartsWith(installed, StringComparison.OrdinalIgnoreCase)) continue;
                     var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(file);
-                    if (version.FileMajorPart != 0 || version.FileMinorPart >= 9) continue;
+                    if (version.FileMajorPart != 0 || version.FileMinorPart >= 10) continue;
                     nint handle = process.MainWindowHandle;
                     if (handle == 0) throw new IOException("舊版設定正在啟動或關閉，請稍後重試。未儲存的修改仍保留。 ");
                     AllowSetForegroundWindow((uint)process.Id); if (IsIconic(handle)) ShowWindow(handle, 9); SetForegroundWindow(handle); return null;

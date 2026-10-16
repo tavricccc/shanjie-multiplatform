@@ -1,6 +1,29 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-16。上游 pin：`feat/model-v6-switch` 的 `f8ea0bbed4e05ceda653cc73221660f3ee3f6873`（尚未合入 main），與子模組／UPSTREAM.json 一致。下方 0.6.0 以前的段落為歷史證據（當時 pin 為 main `368eebc`、model-v5）。下方 0.7.0 及更早的段落為歷史證據（0.5.3–0.7.0 的 pin 為 main `368eebc`、model-v5），其日期與結果不表示本輪已安裝或仍提供舊模型／排列。
+最新日期：2026-10-17。上游 pin 為 main `b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6），與子模組／UPSTREAM.json 一致。下列 0.9.0 及更早段落保留各自當時的來源、模型、失敗與驗證界線；以本節作為 0.10.0 的現況依據。
+
+## 2026-10-17 Windows 0.10.0 整合測試版
+
+整合本機 e17295cb 與朋友公開 12b5ebf4。沒有安裝、修改真實輸入法註冊／語言清單或推送遠端。兩架構及 WinUI release 建置完成；安裝包只內建 model-v6＋classes-v5。子模組追蹤檔保持乾淨，所有 Windows 差異由 platform 與 prepare 腳本產生。
+
+已通過：
+
+- 完整產生核心 **418 項**：lib 77、engine 33、demote 6、English 85、learn 54、LM 16、pack 3、predict 66、replay 3、rerank 22、vertical 20、KN 9、tiny-LM 16、trigram 8。Windows 不適用的 Unix symlink／子程序及資源量測保留既有 cfg／skip／ignored 界線；沒有因失敗刪除整組測試。KN／tiny-LM／trigram 小型 fixture 是核心驗證，並非安裝包新增附件。
+- Windows crate x64／x86 各 **33 項通過、2 項原生系統測試 ignored**。涵蓋 schema 7、舊 Enter 缺值維持整句、明確值與模型選擇保留、預設匯出排除個人選擇、無效模型識別拒絕及內建備援。
+- 新增 **28 個兩架構 TSF 案例**：三種混打模式的 Caps Lock 英文與中文、上游模式 Shift 英文段續接與 Shift＋Caps Lock、倚天防護，以及 Enter 前段／整句／候選後提交。候選測試明確選單字「你」，核對剩餘後段仍可取消；固定跨切點多字詞的整詞提交另依上游契約判讀。只操作自有 context／執行緒鍵盤狀態，不對使用者桌面送鍵。
+- 常駐／輸入回歸 **64 項**、恢復 **16 項**、字面／注音輸入 **70 項**、設定刷新／佇列／故障／期限 **42 項**皆通過。原有雙 Ctrl 加詞與 Shift 七種序列、x64／x86 TSF smoke、check 286、無模型啟用與系統快捷鍵通過。Windows interaction 三段 PASS，保留模型／詞類配對、修改後快取拒絕、學習與個人詞庫等斷言。
+- 真實 WinUI 模型管理通過：GitHub 清單／附件 digest、內建項目不重複下載、從 4096 bytes 續傳實際公開 classes-v4 附件、共用主模型下載快取、取消保留片段、錯誤 SHA 拒絕、離線清單快取、model-v5＋classes-v3 解析／轉換／等價校驗、修改 class 後失效並顯示原因。下載與選取保留未儲存詞庫草稿，不隱式寫 profile；操作預設保留模型。
+- 內建 → 使用者 v6／v4 → 使用者 v5／v3 → 內建的常駐 IPC 通過：詞庫載入 1 次、模型載入 3 次，每組均實際輸入／提交「你」。獨立遷移案例從舊資料的兩個模型檔建立通過掃描的 v4 配套；沒有執行真實安裝。
+- 核心呼叫程式退出後輸出管線關閉，核心仍存活；原啟動目錄可立即改名，證實不再受核心工作目錄鎖定。verify-update 的舊相對測試 profile 在新啟動目錄下失效，已改為絕對路徑，再取得完整 PASS。
+- WinUI 真實控制項／保存／遷移／分享／淺深色擷取及 reliability 通過；設定唯一實例在兩個 EXE 路徑、四次轉送下保留同一份未儲存草稿。模型及主要設定頁畫面已檢視，移除舊「只有兩種配套」說明。
+
+核心 English 回歸曾揭露 Shift 字母重啟既有英文段，已限制為空段才起始；真實資料另揭露英文詞表 CRLF 使上游 LF 嚴格讀取器拒絕整份資料，建置輸出現正規化 LF 並驗證字元／長度／重複項。最終完整 English 85 項及使用隨附詞表的兩架構 TSF 案例通過。
+
+本輪證據在 `build/release-0.10.0/`：`build-final.log`、`ui-qualified.log`、`core-all-qualified.log`、`unit-final-*.log`、`features-final/` 與 `features-final.log`、`update-qualified2/`、`recovery-final/`、`input-final/`、`refresh-final/`、`refresh-deadline-final/`、`features-090-final.log`、`interaction-final.log`、`tsf-*-final.log`、`ui-ui-final/`、`ui-reliability-final/`、`models-range-final/`、`models-release-final/resident-models.log`、`migration-final/`、`cwd-final/`、`instance-release-final/`。早先失敗／診斷紀錄保留，不能將其冒充最終 PASS。
+
+沙箱不允許測試 IPC，相關程序於解除沙箱限制、相同隔離 profile 下驗證。實際 profile.ini 與 installed.json 的前後 SHA-256 一致；不宣稱使用中的學習資料整輪不變，也沒有讀取或打包私人詞庫。UI 可能讓已註冊舊 TIP 在隔離 profile 啟動核心，收尾依端點 PID／路徑／啟動時間核對後停止，日常核心保留。保護檔、測試核心清理、封裝逐檔 SHA／公開資料來源／私人檔排除的結果另存本機 `protected-comparison.json`、`test-core-cleanup.json` 及 `package-audit.json`。
+
+**待實機：** 真正註冊宿主中的長時間輸入、Office／瀏覽器／Codex／AppContainer、雙 Ctrl 位置與 DPI／邊緣、登入預載、UAC、舊版雙鍵盤升級與回復仍須後續驗收。本包定位為測試版，不以隔離通過代替系統驗收。0.9.0 舊核心公開 dev302 的 v4=242/302、v5=238/302 是歷史取捨，0.10.0 沒有重跑該句集，不把它當成本版重新量得的準確度。
 
 ## 2026-10-16 Windows 0.9.0 續修與完整自動回歸
 
@@ -45,6 +68,28 @@
 測試只用專案 build 內 profile、公開／合成字詞。沙箱會阻擋測試 IPC，相關通訊驗證在解除沙箱限制、相同隔離資料下執行。UI 測試曾使已註冊舊 TIP 在測試 profile 啟動核心；已逐一核對端點、PID、執行檔及啟動時間後清理，沒有停止日常核心。收尾核對 installed.json 雜湊相同；日常 profile.ini 的差異，使用者後續確認是更新個人詞庫所致，屬預期變動，不列為異常，沒有自行還原。原始雜湊見 protected-before/after.json；不宣稱正在使用中的學習檔整輪未變。
 
 證據位於 build/release-0.9.0/：verify-v5-final.log、windows-unit-{x64,x86}.log、tsf-{x64,x86}/result.log、input-regression/results.json、smoke-x64-final.log、smoke-x86-local.log、smoke-x86-final-pass.log（名稱含 pass 但實際失敗，以內容為準）、model-switch.log、ui-final.log、instance-final.log、cleanup-test-cores*.log。UI 擷取在 build/ui-review-final/。LNK4104、WUI2011、C4701 既有警告保留；NU1900 表示 NuGet 弱點資料查詢未完成。
+
+
+## 2026-10-16 同步上游 b2f5da8（v0.4.6、classes-v5、trigram）
+
+已驗證：
+- prepare 覆蓋契約通過；`prepare-models.ps1` 核對 model-v6＋classes-v5 官方大小與 SHA-256，映射等價核對通過。
+- 產生後的核心 lib 71 項通過；整合測試 engine_learn 54、engine_lm 16、engine_pack 3、engine_replay 3、engine_rerank 22、engine_vertical 20、engine_demote 6、kn_tiny 9、tinylm_tiny 16 通過。
+
+未解決（尚未區分到逐項原因，不宣稱通過）：
+- `engine` 1 項（`row2_punctuation_goes_into_the_composition`）與 `engine_predict` 2 項（`abbreviation_keys_with_two_units`、`another_key_leaves_and_is_handled_as_usual`）：0.8.0 已記錄的既有失敗。
+- `engine_english` 7 項失敗，皆是標點或 Shift 英文串被 Windows 組字政策攔截（輸出出現全形逗號、`Windows` 之類字面文字），與上游行內英文互相衝突。
+- `tri_tiny` 1 項（`load_reads_the_table_beside_the_model`）：測試把 unix symlink 換成複製後的假象，Windows 不適用。
+
+沒有重跑 TSF smoke、WinUI、安裝與實機驗收；沒有重新打包。
+
+## 2026-10-16 中英混打：兩套並用與設定頁重排
+
+已驗證：產生後核心 lib 72 項通過（`upstream_english_runs_beside_the_windows_policy`：兩者並用、Shift 字母交給上游、英文段中標點由上游結束、閒置時 Windows 標點照舊、關閉上游後 Windows 混打照舊）；上游 `engine_english` 85 項中 84 項在 Windows 核心上通過。
+
+未解決（皆為 Windows 組字政策的刻意差異，非回歸）：`engine_english::punctuation_keeps_the_letters_that_are_shown` 1 項（兩個字母的未完成讀音後按標點，Windows 保留讀音、上游丟棄）；`engine` 1 項、`engine_predict` 2 項為 0.8.0 起既有。`tri_tiny` 1 項是 Windows 沒有 symlink 的測試假象。
+
+未驗證：TSF 實機按鍵（Shift 大小寫、Caps Lock 與上游英文的互動、兩者並用時的實際手感）、x86 TSF、安裝。
 
 ## 2026-10-15 Windows 0.8.0 同步上游 f8ea0bb（model-v6／classes-v4）
 
@@ -335,3 +380,5 @@ TSF harness 的文字儲存是記憶體中的 ITextStoreACP，TSF manager 和 co
 本次完成可建置、可打包、已做背景整合驗證的開發版。日常可用與正式發佈仍需上述實際系統驗收。
 
 新增原生設定窗與右側候選版已建置／打包。首次更新 UAC 回傳取消；2026-10-06 使用者要求重新觸發後，安裝退出碼為 0，兩架構 COM 註冊指向新版本目錄，全部安裝檔案 SHA-256 與設定窗執行檔均已核對。已開啟的程式仍可能載有舊 DLL，需重新開啟後驗收新行為。
+
+2026-10-16：新增「Enter 只提交游標前的字」。核心單元測試（5 字、游標在第 3 字，Enter 送出前 3 字、後 2 字續留；關閉時整句送出）、`profile.rs` 測試與 WinUI 離屏驗證（隔離 LOCALAPPDATA）通過；`row2_punctuation` 既有失敗不變。尚未在真實 TSF 應用程式中實測 Enter 流程（TSF 在 `enter_commits` 時送第二個 Enter 的行為需實機確認）。

@@ -3,6 +3,7 @@ param([string]$ResultRoot,[switch]$ExplicitCore)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 if (!$ResultRoot) { $ResultRoot = Join-Path $root ('build/update-checks-' + (Get-Date -Format yyyyMMdd-HHmmss)) }
+$ResultRoot = [IO.Path]::GetFullPath($ResultRoot)
 New-Item -ItemType Directory -Path $ResultRoot -Force | Out-Null
 $payload=Join-Path $ResultRoot 'payload'
 New-Item -ItemType Directory -Path $payload -Force | Out-Null
@@ -64,6 +65,8 @@ try {
     $env:SHANJIE_TEST_PROFILE = '1'
     $env:SHANJIE_TEST_EXPLICIT_CORE = if($ExplicitCore){'1'}else{$null}
     $env:SHANJIE_CORE_LOCAL = $null
+    . "$PSScriptRoot/test-models.ps1"
+    Initialize-TestModels $profile
     Copy-Item "$root/profiles/windows.ini" "$profile/Shanjie/profile.ini" -Force
     $content = Get-Content "$profile/Shanjie/profile.ini" -Raw
     $content = $content -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^keyboard=.*','keyboard=1'

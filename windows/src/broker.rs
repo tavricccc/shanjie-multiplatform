@@ -173,6 +173,8 @@ fn read<T: DeserializeOwned>(pipe: &mut File) -> io::Result<T> {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub model: String,
     #[serde(default = "default_classes")]
     pub classes: u32,
     pub layout: u32,
@@ -205,6 +207,7 @@ pub enum Op {
     Options(u32),
     Mixed(bool),
     Tolerance(bool),
+    English(u32),
 }
 #[derive(Serialize, Deserialize)]
 enum Request {
@@ -431,9 +434,10 @@ fn start_core(executable: &Path) -> io::Result<()> {
         },lpAttributeList:attributes};
         let application=crate::wide(&executable.to_string_lossy());
         let mut command=crate::wide(&format!("\"{}\" --serve",executable.display()));
+        let directory=crate::wide(&executable.parent().unwrap_or(executable).to_string_lossy());
         let mut process=PROCESS_INFORMATION::default();
         CreateProcessW(PCWSTR(application.as_ptr()),Some(PWSTR(command.as_mut_ptr())),None,None,true,
-            CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,None,PCWSTR::null(),&startup.StartupInfo,&mut process)?;
+            CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,None,PCWSTR(directory.as_ptr()),&startup.StartupInfo,&mut process)?;
         let _=CloseHandle(process.hThread);let _=CloseHandle(process.hProcess);
     }
     Ok(())
@@ -537,7 +541,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         .map_err(|e| io::Error::other(e.to_string()))?;
     let keyboard = p.number("input", "keyboard", 0);
     let layout = crate::installation::layout(keyboard, 0, crate::installation::available());
-    let warm = Engine::open_local_variant(
+    let warm = Engine::open_local_model(
         data,
         layout,
         (p.get("engine", "ranking", "chat") == "formal") as u32,
@@ -547,6 +551,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         p.get("input", "dictionary", "dictionary.tsv"),
         p.flag("engine", "prediction", false),
         p.class_table(),
+        &p.model_id(),
     )
     .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.

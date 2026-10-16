@@ -90,7 +90,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                     } else if states.len() >= 256 {
                         None
                     } else {
-                        Engine::open_local_variant(
+                        Engine::open_local_model(
                             &data,
                             config.layout,
                             config.ranking,
@@ -100,6 +100,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                             &config.dictionary,
                             config.prediction,
                             config.classes,
+                            &config.model,
                         )
                         .and_then(|mut engine| {
                             if engine.replay(&replay) {

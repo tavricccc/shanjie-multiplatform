@@ -109,8 +109,6 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "ui/Shanjie.UI.exe",
         "data/models/model-v6/bigram.winmap",
         "data/models/model-v6/classes.sjc",
-        "data/models/model-v6-classes-v4/bigram.winmap",
-        "data/models/model-v6-classes-v4/classes.sjc",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
     ] {
@@ -120,9 +118,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     }
     if listed
         .iter()
-        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v6") && !p.starts_with("data/models/model-v6-classes-v4"))
+        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v6/"))
     {
-        return Err("安裝包只允許 model-v6 搭配 classes-v5／classes-v4。".into());
+        return Err("安裝包只內建 model-v6＋classes-v5；其他配套由使用者另行取得。".into());
     }
     Ok(listed)
 }

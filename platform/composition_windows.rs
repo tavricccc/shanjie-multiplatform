@@ -145,6 +145,23 @@ mod windows_composition_tests {
         assert!(out.preedit.is_empty() && e.typed_literals.is_empty());
     }
     #[test]
+    fn enter_commits_only_through_the_cursor_when_enabled() {
+        let mut e = engine(false,true);
+        e.set_windows_input_options(1 << 21);
+        for _ in 0..5 { type_keys(&mut e,"su3"); }
+        e.key(Key::new(KeyKind::Left)).unwrap();
+        e.key(Key::new(KeyKind::Left)).unwrap();
+        let out = e.key(Key::new(KeyKind::Enter)).unwrap();
+        assert_eq!(out.commit,"你你你");
+        assert_eq!(out.preedit,"你你");
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"你你");
+        // Off: the whole line goes.
+        let mut e = engine(false,true);
+        for _ in 0..5 { type_keys(&mut e,"su3"); }
+        e.key(Key::new(KeyKind::Left)).unwrap();
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"你你你你你");
+    }
+    #[test]
     fn reading_candidate_near_composition_limit_keeps_surrounding_text() {
         let mut e = engine(false,false);
         for _ in 0..MAX_SYLLABLES-1 { type_keys(&mut e,"su3"); }
@@ -157,6 +174,39 @@ mod windows_composition_tests {
 }
 
 impl Engine {
+    /// Enter with the cursor inside a settled composition sends only the text before the cursor
+    /// (after a candidate pick the cursor sits at the end of the picked word); the rest stays
+    /// composing with the cursor at its start. `None` means the ordinary whole-line Enter applies.
+    fn commit_through_cursor(&mut self) -> Result<Option<Output>, EngineError> {
+        let total = self.syls.len();
+        if !self.enter_to_cursor || self.cands.is_some() || self.pred_sel.is_some() || !self.run.is_empty()
+            || self.windows_phonetic_pending() || !self.pending_literal.is_empty()
+            || self.mixed_latin || !self.mixed_raw.is_empty()
+            || self.cursor == 0 || self.cursor >= total { return Ok(None); }
+        let mut n = self.cursor;
+        // A fixed word is never split: the cut moves to its end.
+        if let Some(f) = self.fixed.iter().find(|f| f.start < n && n < f.end) { n = f.end; }
+        if n >= total { return Ok(None); }
+        let left = self.left.clone();
+        let rest_syls = self.syls.split_off(n);
+        let (head, tail): (Vec<_>, Vec<_>) = std::mem::take(&mut self.fixed).into_iter().partition(|f| f.end <= n);
+        self.fixed = head;
+        let rest_fixed: Vec<Fixed> = tail.into_iter().map(|mut f| { f.start -= n; f.end -= n; f.key = None; f }).collect();
+        let (keep, moved): (Vec<_>, Vec<_>) = std::mem::take(&mut self.typed_literals).into_iter().partition(|(i,_)| *i < n);
+        self.typed_literals = keep.into_iter().collect();
+        let rest_literals: HashMap<usize,String> = moved.into_iter().map(|(i,text)| (i - n, text)).collect();
+        self.cursor = n;
+        self.refresh()?;
+        let commit = self.take_commit();
+        self.left = left + &commit;
+        self.syls = rest_syls;
+        self.fixed = rest_fixed;
+        self.typed_literals = rest_literals;
+        self.cursor = 0;
+        self.refresh()?;
+        Ok(Some(self.view(true, commit)))
+    }
+
     pub fn windows_phonetic_pending(&self) -> bool {
         self.pend.iter().any(Option::is_some) || !self.pend_prev.is_empty()
     }
@@ -173,7 +223,7 @@ impl Engine {
         self.mixed_latin = false;
         let mut commit = String::new();
         for ch in raw.chars().chain(text.chars()) {
-            let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()))?;
+            let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
             commit.push_str(&out.commit);
         }
         self.windows_raw.clear();
@@ -269,7 +319,8 @@ impl Engine {
         self.cursor = candidate.start;
         // One literal word replaces its original span. Expanding it into several
         // cells could reach MAX_SYLLABLES and silently discard an automatic commit.
-        self.insert_token(format!("{PUNCT_PREFIX}{}",candidate.text),Some(candidate.text))?;
+        self.insert_token(format!("{PUNCT_PREFIX}{}",candidate.text),Some(candidate.text),None)?;
         Ok(true)
     }
+
 }

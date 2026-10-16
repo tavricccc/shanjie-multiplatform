@@ -155,7 +155,7 @@ impl Client {
         self.outstanding = None;
         self.pending = result.pending;
         match &op {
-            Op::Options(_) | Op::Mixed(_) | Op::Tolerance(_) | Op::Prediction(_) | Op::Demote(_) => {
+            Op::Options(_) | Op::Mixed(_) | Op::English(_) | Op::Tolerance(_) | Op::Prediction(_) | Op::Demote(_) => {
                 self.settings
                     .retain(|old| std::mem::discriminant(old) != std::mem::discriminant(&op));
                 self.settings.push(op);

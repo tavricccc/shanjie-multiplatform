@@ -41,11 +41,11 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=horizontal")) throw new InvalidDataException("Latest model/horizontal migration failed");
-        foreach (int variant in new[] { 1, 0 }) {
+        foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");
             settings.Vm.Save(); settings.Vm.Load();
-            if(settings.Vm.ModelVariant!=variant || settings.Vm.ModelHelp.Contains("classes-v4")!=(variant==1)) throw new InvalidDataException("Model variant persistence failed");
+            if(settings.Vm.ModelVariant!=variant || settings.Vm.ModelId!=settings.Vm.AvailableModels[variant].Id) throw new InvalidDataException("Model variant persistence failed");
             settings.Vm.Preset(true);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
@@ -65,16 +65,17 @@ internal static class VisualVerifier
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);
         if (settings.Vm.Prediction) throw new InvalidDataException("Native toggle off did not update the shared draft");
-        settings.ShowSection(MainWindow.Pages.Composition); settings.SetCapsLockForVerification(false); await Task.Delay(60);
+        settings.ShowSection(MainWindow.Pages.English); settings.SetCapsLockForVerification(false); await Task.Delay(60);
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
-        settings.SetMixedInputForVerification(true); await Task.Delay(60);
-        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle binding failed");
-        settings.Vm.Save(); settings.Vm.Load();
-        if (!settings.Vm.MixedInput) throw new InvalidDataException("Mixed input persistence failed");
-        settings.SetMixedInputForVerification(false); await Task.Delay(60);
-        if (settings.Vm.MixedInput) throw new InvalidDataException("Mixed input toggle off failed");
+        foreach (var mode in new[] { 1, 2, 3, 0 })
+        {
+            settings.SetMixedModeForVerification(mode); await Task.Delay(60);
+            if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");
+            settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} persistence failed");
+        }
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
         foreach (bool enabled in new[] { true, false }) {
             settings.SetSpaceInputsZhuyinForVerification(enabled); await Task.Delay(60);

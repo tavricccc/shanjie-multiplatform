@@ -33,7 +33,7 @@ foreach ($legacy in @('bigram.winmap','bigram-v2.winmap')) {
     $path = Join-Path $root "dist/data/$legacy"
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
 }
-foreach ($retired in @('bigram.sjlm','bigram-v2.sjlm','bigram-v3.sjlm','bigram-v4.sjlm','bigram-v5.sjlm','classes-v1.sjc','classes-v2.sjc','classes-v3.sjc')) {
+foreach ($retired in @('bigram.sjlm','bigram-v2.sjlm','bigram-v3.sjlm','bigram-v4.sjlm','bigram-v5.sjlm','classes-v1.sjc','classes-v2.sjc','classes-v3.sjc','classes-v4.sjc')) {
     $path = [IO.Path]::GetFullPath((Join-Path $root "build/model/$retired"))
     if (!$path.StartsWith([IO.Path]::GetFullPath("$root/build/model") + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected model cache path.' }
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }

@@ -32,6 +32,7 @@ fn main() {
         default_hook(info);
     }));
     let config = Config {
+        model: String::new(),
         classes: 5,
         layout: 0,
         ranking: 0,
@@ -68,6 +69,16 @@ fn main() {
         assert_eq!(e.reset(false).unwrap().commit, "你");
         println!("peer passed");
         return;
+    }
+    if std::env::args().nth(2).as_deref() == Some("--user-models") {
+        start_fixture(&data);
+        for id in ["model-v6-classes-v5","model-v6-classes-v4","model-v5-classes-v3","model-v6-classes-v5"] {
+            let mut selected=broker::Client::open(&data,Config{model:id.into(),..config.clone()}).unwrap();
+            for ch in "su3".chars(){selected.perform(Op::Key{kind:1,ch:ch as u32,modifiers:0,latin:None}).unwrap();}
+            assert_eq!(selected.perform(Op::Reset(false)).unwrap().commit,"你");
+        }
+        let status=broker::control(&data,false).unwrap();assert_eq!(status.lexicon_loads,1);assert_eq!(status.model_loads,3);
+        println!("PASS built-in and two user model ids through resident IPC; {}",serde_json::to_string(&status).unwrap());return;
     }
     if std::env::args().nth(2).as_deref() == Some("--models") {
         for classes in [5,4,5] {

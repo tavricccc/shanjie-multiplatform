@@ -34,13 +34,18 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool Demote { get; set; }
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
-    [ObservableProperty] public partial bool MixedInput { get; set; }
     [ObservableProperty] public partial bool MixedTolerance { get; set; }
     [ObservableProperty] public partial bool AddWord { get; set; }
     [ObservableProperty] public partial int AddWordSide { get; set; }
     [ObservableProperty] public partial int AddWordShortcut { get; set; }
     [ObservableProperty] public partial double AddWordInterval { get; set; } = 450;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin))] public partial int Keyboard { get; set; }
+    [ObservableProperty] public partial int MixedMode { get; set; }
+    [ObservableProperty] public partial bool EnglishInline { get; set; }
+    [ObservableProperty] public partial bool EnterToCursor { get; set; }
+    public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
+    public bool UsesEnglishList => SupportsUpstreamEnglish && MixedMode >= 2;
+    partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesEnglishList));
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesEnglishList))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
@@ -66,5 +71,7 @@ public partial class SettingsViewModel : ObservableObject
     public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
         + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
-    public string ModelHelp => ModelVariant==1 ? "model-v6＋classes-v4，詞類權重 0.8。個人詞庫及學習資料沿用。" : "model-v6＋classes-v5，詞類權重 0.2。公開 dev302 評測首選 238/302，舊配置為 242/302；不保證新配置在所有情境較好。";
+    public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
+        ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"
+        : "所選配套目前不存在或未通過驗證，輸入時使用內建模型。原選擇已保留，可重新下載；選取其他模型並儲存可更換。";
 }

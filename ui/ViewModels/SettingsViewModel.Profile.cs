@@ -35,7 +35,9 @@ public partial class SettingsViewModel
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
             CandidateLayout = profile.Read("candidates", "layout", "horizontal") == "vertical" ? 1 : 0;
             Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
-            ModelVariant=profile.Number("engine","class_table",5)==4?1:0;
+            ModelId=profile.Read("engine","model_id",profile.Number("engine","class_table",5)==4?"model-v6-classes-v4":ModelCatalog.Builtin);
+            ModelRevision=profile.Read("engine","model_revision","");
+            ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
@@ -52,17 +54,17 @@ public partial class SettingsViewModel
             Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true);
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedInput = profile.Flag("input", "mixed_input", false);
             MixedTolerance = profile.Flag("input", "mixed_tolerance", false);
             AddWord = profile.Flag("shortcuts", "add_word", true);
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
             AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
+            MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishInline = profile.Flag("input", "english_inline", true);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
             SpaceInputsZhuyin = profile.Flag("input", "space_inputs_zhuyin", true);
-            EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
+            EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); EnterToCursor = profile.Flag("candidates", "enter_to_cursor", false); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
             BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
             if (readDictionary)
             {
@@ -120,22 +122,22 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
-        profile.Set("profile", "schema", 6); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
+        profile.Set("profile", "schema", 7); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 5);
         foreach (var (section, key, value) in new (string, string, object)[] {
             ("engine","prediction",Prediction), ("engine","demote",Demote),
-            ("engine","class_table",ModelVariant==1?4:5),
+            ("engine","class_table",ModelId=="model-v6-classes-v4"?4:5), ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
-            ("input","mixed_input",MixedInput),
             ("input","mixed_tolerance",MixedTolerance),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
+            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_inline",EnglishInline),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
-            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits),
+            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
@@ -151,11 +153,11 @@ public partial class SettingsViewModel
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {
-        if (Keyboard is < 0 or > 4 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 3 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
         if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
             throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");
-        if (ModelVariant is < 0 or > 1 || AddWordSide is < 0 or > 2 || AddWordShortcut is < 0 or > 1 || !double.IsFinite(AddWordInterval) || AddWordInterval is < 200 or > 1000)
+        if (ModelVariant<0 || ModelVariant>=AvailableModels.Count || AddWordSide is < 0 or > 2 || AddWordShortcut is < 0 or > 1 || !double.IsFinite(AddWordInterval) || AddWordInterval is < 200 or > 1000)
             throw new InvalidDataException("請選擇有效的加詞快捷鍵與 200–1000 毫秒間隔。");
         WriteDocument();
         string dictionary = Interop.Native.Take(Interop.Native.sj_profile_save_dictionary(profile.ToString(), DictionaryText, dictionaryBaseline));

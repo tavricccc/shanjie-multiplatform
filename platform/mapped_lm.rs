@@ -69,6 +69,7 @@ impl Lm {
             classes: None,
             sha: bytes[32..64].iter().map(|b| format!("{b:02x}")).collect(),
             kn: None,
+            tri: None,
         };
         if classed == 1 {
             // Keep the released class table beside the map. Missing/wrong pairs fail,

@@ -12,12 +12,13 @@ use windows::{
 };
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const SCHEMA: u32 = 6;
+pub const SCHEMA: u32 = 7;
 pub(crate) const CHANGED_MESSAGE: &str = "Shanjie.ProfileChanged.v2";
 pub(crate) const RESTART_MESSAGE: &str = "Shanjie.Restart.v2";
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
+    pub fn model_id(&self)->String {self.get("engine","model_id",if self.class_table()==4 {"model-v6-classes-v4"}else{crate::model_store::BUILTIN}).to_owned()}
     pub fn class_table(&self) -> u32 { if self.number("engine","class_table",5)==4 {4} else {5} }
     pub fn parse(text: &str) -> Result<Self> {
         let mut out = Self::default();
@@ -151,6 +152,9 @@ impl Document {
                 self.remove("input", old);
             }
         }
+        // Missing values in older profiles preserve their pre-update behavior.
+        if schema<7 && self.get("candidates","enter_to_cursor","").is_empty(){self.set("candidates","enter_to_cursor",0);}
+        if self.get("engine","model_id","").is_empty(){let id=self.model_id();self.set("engine","model_id",id);}
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
         } else {
@@ -218,6 +222,8 @@ impl Document {
             flags |= (self.flag("punctuation", &format!("plain_{n}"), false) as u32) << (14 + i);
         }
         flags |= (!self.flag("input", "space_inputs_zhuyin", true) as u32) << 20;
+        let windows = self.get("profile", "interaction", "windows") != "shanjie";
+        flags |= (self.flag("candidates", "enter_to_cursor", windows) as u32) << 21;
         flags
     }
 }
@@ -402,7 +408,7 @@ pub fn clear_learning() -> Result<()> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "demote", "class_table"]),
+    ("engine", &["ranking", "demote", "class_table", "model_id", "model_revision"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],
@@ -496,7 +502,7 @@ pub fn apply_preset(source: &Path) -> Result<()> {
     if path().exists() {
         let previous = load(&path())?;
         for (section, keys) in [
-            ("engine", &["ranking", "demote", "class_table"][..]),
+            ("engine", &["ranking", "demote", "class_table", "model_id", "model_revision"][..]),
             (
                 "input",
                 &[
@@ -523,6 +529,16 @@ pub fn apply_preset(source: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn model_selection_and_enter_migration_preserve_explicit_choices() {
+        let mut old=super::Document::parse("[profile]\nschema=6\ninteraction=windows\n[engine]\nclass_table=4\n").unwrap();
+        old.migrate();assert!(!old.flag("candidates","enter_to_cursor",true));assert_eq!(old.model_id(),"model-v6-classes-v4");
+        old.set("candidates","enter_to_cursor",1);old.set("engine","model_id","model-v5-classes-v3");old.migrate();
+        assert!(old.flag("candidates","enter_to_cursor",false));
+        let preset=super::preset(&old.content(),true).unwrap();
+        assert_eq!(super::Document::parse(&preset).unwrap().model_id(),"model-v5-classes-v3");
+        assert!(!super::export_preset(&old.content(),"public").unwrap().contains("model_id="));
+    }
     use super::*;
     fn fixture(name: &str) -> PathBuf {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -561,10 +577,10 @@ mod tests {
     #[test]
     fn future_schema_is_not_downgraded_or_overwritten() {
         let path = fixture("future");
-        let future = "[profile]\nschema=7\n[future]\nchoice=keep\n";
+        let future = "[profile]\nschema=99\n[future]\nchoice=keep\n";
         fs::write(&path, future).unwrap();
         let doc = load(&path).unwrap();
-        assert_eq!(doc.number("profile", "schema", 0), 7);
+        assert_eq!(doc.number("profile", "schema", 0), 99);
         assert_eq!(doc.get("future", "choice", ""), "keep");
         assert!(write_profile(&path, future).is_err());
         assert!(write_profile(&path, "[profile]\nschema=6\n").is_err());
@@ -637,10 +653,10 @@ mod tests {
         assert!(!doc.0["input"].contains_key("shift_punctuation"));
         assert!(!doc.0["input"].contains_key("plain_punctuation"));
         assert!(SHIFT_KEYS.iter().all(|(c, _)| doc.shift_punctuation(*c)));
-        assert_eq!(doc.input_options(), 1 | 0x1fff << 1);
+        assert_eq!(doc.input_options(), 1 | 0x1fff << 1); // Existing profiles retain whole-line Enter.
         // Each mark is now independent: 「 on, 、 (backslash) still off.
         doc.set("punctuation", "plain_lbracket", 1);
-        assert_eq!(doc.input_options() >> 14, 1);
+        assert_eq!(doc.input_options() >> 14 & 0x3f, 1);
         assert!(!doc.shift_punctuation('a'));
     }
     #[test]

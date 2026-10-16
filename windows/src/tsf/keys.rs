@@ -422,7 +422,7 @@ impl Data {
             && key.modifiers & 16 != 0
             && key.modifiers & 14 == 0
             && [1, 2].contains(&key.kind);
-        let mixed_letter = p.flag("input", "mixed_input", false)
+        let mixed_letter = (p.flag("input", "mixed_input", false) || (p.flag("input","upstream_english",false) && crate::installation::layout(p.number("input","keyboard",0),self.state.borrow().profile_layout,crate::installation::available())==0))
             && p.number("input", "keyboard", 0) < 3
             && key.kind == 1
             && (key.ch as u8).is_ascii_alphabetic()

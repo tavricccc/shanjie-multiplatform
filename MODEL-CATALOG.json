@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "models": [
+    {
+      "id": "model-v6-classes-v5",
+      "name": "model-v6＋classes-v5（預設配套）",
+      "model_release": "model-v6",
+      "classes_release": "classes-v5",
+      "model_sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
+      "classes_sha256": "9e36fa1be4518adb34bcddc2c79761006b0b06c539aa64a4564ba00397cf0262",
+      "model_size": 83445569,
+      "classes_size": 5656826
+    },
+    {
+      "id": "model-v6-classes-v4",
+      "name": "model-v6＋classes-v4（舊配套）",
+      "model_release": "model-v6",
+      "classes_release": "classes-v4",
+      "model_sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
+      "classes_sha256": "efac3184170e9795cef35855fc6615cf5672882bc0e20c624b620597aeab7a56",
+      "model_size": 83445569,
+      "classes_size": 5656826
+    },
+    {
+      "id": "model-v5-classes-v3",
+      "name": "model-v5＋classes-v3（較早配套）",
+      "model_release": "model-v5",
+      "classes_release": "classes-v3",
+      "model_sha256": "f81a021e5dea08dc48dbca1db0d0f63517bb6f0f3e1b20fdac631542d13f45af",
+      "classes_sha256": "75a5efb3d050a9b0d21bca707ff6b1fd71945a8e059b869aa856618290e55827",
+      "model_size": 82535147,
+      "classes_size": 5575836
+    }
+  ]
+}

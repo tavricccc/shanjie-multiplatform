@@ -781,12 +781,16 @@ impl Data {
             ("input", "keyboard"),
             ("engine", "ranking"),
             ("engine", "class_table"),
+            ("engine", "model_id"),
+            ("engine", "model_revision"),
             ("candidates", "anchor"),
             ("input", "learning"),
             ("candidates", "big5"),
             ("input", "dictionary"),
             ("input", "context"),
             ("input", "mixed_input"),
+            ("input", "upstream_english"),
+            ("input", "english_inline"),
             ("input", "space_inputs_zhuyin"),
         ]
         .iter()
@@ -941,13 +945,15 @@ fn configure_options(s: &mut State) -> Result<()> {
     for op in option_operations(&s.prefs) {output(s.engine.perform(op))?;}
     Ok(())
 }
-fn option_operations(p:&Document) -> [crate::broker::Op;3] {
-    let flags = if p.number("input", "keyboard", 0) < 3 {
-        p.flag("input", "mixed_input", false) as u32
-    } else {
-        0
-    };
-    [crate::broker::Op::Options(p.input_options()),crate::broker::Op::Mixed(flags!=0),crate::broker::Op::Tolerance(p.flag("input","mixed_tolerance",false))]
+fn option_operations(p:&Document) -> [crate::broker::Op;4] {
+    let keyboard=p.number("input","keyboard",0);
+    let zhuyin=keyboard<3;
+    let upstream=zhuyin && keyboard!=2 && p.flag("input","upstream_english",false);
+    let inline=p.flag("input","english_inline",true);
+    [crate::broker::Op::Options(p.input_options()),
+     crate::broker::Op::English(upstream as u32 | (inline as u32)<<1),
+     crate::broker::Op::Mixed(zhuyin && p.flag("input","mixed_input",false)),
+     crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false))]
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
     let weak = &*(context as *const std::rc::Weak<Data>);

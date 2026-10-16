@@ -18,18 +18,21 @@ public sealed partial class MainWindow : Window
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
         RefreshPresets(); ShowLoadFeedback();
+        Root.Loaded+=InitializeModels;
+        Closed+=(_,_)=>{modelsClosed=true;modelScan?.Cancel();modelOperation?.Cancel();modelWatcher?.Dispose();};
     }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
     internal void SetModelForVerification(int value) => ModelSelector.SelectedIndex = value;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
-    internal void SetMixedInputForVerification(bool mixed) => MixedInputToggle.SetToggleForVerification(mixed);
+    internal void SetMixedModeForVerification(int mode) => MixedModeSelector.SelectedIndex = mode;
+    internal void SetEnglishInlineForVerification(bool value) => EnglishInlineToggle.SetToggleForVerification(value);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
     internal void SetSpaceInputsZhuyinForVerification(bool value) => SpaceInputsZhuyinToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
     internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceInputsZhuyinToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
-    internal static class Pages { public const int General = 0, Keys = 1, Punctuation = 2, Composition = 3, Candidates = 4, Appearance = 5, Dictionary = 6, About = 7, Count = 8; }
+    internal static class Pages { public const int General = 0, English = 1, Keys = 2, Punctuation = 3, Composition = 4, Candidates = 5, Appearance = 6, Dictionary = 7, About = 8, Count = 9; }
     internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAdvancedKeys() { ShowSection(Pages.Punctuation); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
@@ -45,7 +48,7 @@ public sealed partial class MainWindow : Window
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        foreach (var (name, panel) in new (string, StackPanel)[] { ("general", General), ("keys", Keys), ("punctuation", Punctuation), ("composition", Composition), ("candidates", Candidates), ("appearance", Appearance), ("dictionary", Dictionary), ("about", About) })
+        foreach (var (name, panel) in new (string, StackPanel)[] { ("general", General), ("english", English), ("keys", Keys), ("punctuation", Punctuation), ("composition", Composition), ("candidates", Candidates), ("appearance", Appearance), ("dictionary", Dictionary), ("about", About) })
             panel.Visibility = tag == name ? Visibility.Visible : Visibility.Collapsed;
         ContentScroll.ChangeView(null, 0, null, true);
     }

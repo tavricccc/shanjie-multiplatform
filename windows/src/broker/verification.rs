@@ -72,6 +72,7 @@ pub fn pipe_deadlines() {
 }
 fn config(learning: bool) -> Config {
     Config {
+        model: String::new(),
         classes: 5,
         layout: 0,
         ranking: 0,

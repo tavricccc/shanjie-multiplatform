@@ -1,4 +1,5 @@
 mod bridge;
+pub mod model_store;
 pub mod broker;
 pub mod candidate;
 mod dictionary_store;

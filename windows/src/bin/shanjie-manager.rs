@@ -75,6 +75,7 @@ fn announce(text: &str, dialog: bool) {
 }
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.iter().any(|a|a=="install") {shanjie_windows::model_store::migrate_before_install()?;}
     if let Some(at) = args.iter().position(|value| value == "--user-sid") {
         if args.get(at + 1).map(String::as_str)
             != Some(shanjie_windows::installation::user_sid()?.as_str())
@@ -123,6 +124,15 @@ fn run() -> Result<()> {
             let path=args.get(1).ok_or("請指定安裝包目錄。")?;
             let files=installer::verified_package(std::path::Path::new(path))?;
             println!("PASS: {} verified package files, latest model only",files.len());
+        }
+        Some("models") => println!("{}",serde_json::to_string(&shanjie_windows::model_store::scan())?),
+        Some("model-prepare") => {
+            let id=args.get(1).ok_or("請指定下載工作識別。")?;
+            println!("{}",serde_json::to_string(&shanjie_windows::model_store::prepare(id)?)?);
+        }
+        Some("model-migrate") => {
+            if std::env::var("SHANJIE_TEST_PROFILE").as_deref()!=Ok("1"){return Err("此命令僅供隔離驗證。".into());}
+            shanjie_windows::model_store::migrate_legacy(std::path::Path::new(args.get(1).ok_or("請指定來源。")?))?;
         }
         Some("apply-profile") => {
             let path=args.get(1).ok_or("請指定操作範本。")?;

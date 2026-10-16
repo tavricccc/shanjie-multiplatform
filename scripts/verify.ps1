@@ -1,6 +1,6 @@
 #Requires -Version 7
-param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
-    [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny'))
+param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [switch]$CoreOnly, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
+    [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny'))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -20,8 +20,8 @@ try {
     $evalCopy = Join-Path $root 'build/verification-eval-classes-v5'
     New-Item -ItemType Directory -Path $evalCopy -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/eval/*" $evalCopy -Recurse -Force
-    Copy-Item "$root/tests/fixtures/classes-v5/*.tsv" "$evalCopy/golden" -Force
-    Copy-Item "$root/tests/fixtures/classes-v5/s2h-lm-context.txt" "$evalCopy/golden" -Force
+
+
     $englishFixture = Join-Path $evalCopy 'golden/english-tiny.txt'
     [IO.File]::WriteAllText($englishFixture,[IO.File]::ReadAllText($englishFixture).Replace("`r`n","`n"),[Text.UTF8Encoding]::new($false))
     foreach ($name in @('data','eval')) {
@@ -43,7 +43,7 @@ try {
     cargo test --release --manifest-path build/core/Cargo.toml --lib -- --skip english_codes_through_the_c_abi --skip child_english
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
-    foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
+    foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
     & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $root 'build/core/tests')
     $learnTests = Get-Content build/core/tests/engine_learn.rs -Raw
     $learnTests = $learnTests.Replace('fn store_append_refusals_fall_back_to_a_full_rewrite()', "#[cfg(unix)]`nfn store_append_refusals_fall_back_to_a_full_rewrite()")
@@ -66,10 +66,20 @@ try {
     $knTests = $knTests.Replace($symlink,"    #[cfg(unix)] {`n$symlink`n    }")
     $knTests = $knTests.Replace('let want = String::from_utf8(bytes("decode.tsv")).unwrap();', 'let want = String::from_utf8(bytes("decode.tsv")).unwrap().replace("\r\n", "\n");')
     Set-Content build/core/tests/kn_tiny.rs $knTests -Encoding utf8NoBOM
+    $rerank=Get-Content build/core/tests/engine_rerank.rs -Raw
+    Set-Content build/core/tests/engine_rerank.rs $rerank.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
+    $tri = Get-Content build/core/tests/tri_tiny.rs -Raw
+    $triStart=$tri.IndexOf('    std::os::unix::fs::symlink(')
+    $triEnd=$tri.IndexOf('    let mut bad = table_bytes();',$triStart)
+    if($triStart -lt 0 -or $triEnd -lt 0){throw 'Trigram symlink fixture changed.'}
+    $tri=$tri.Substring(0,$triStart)+"    #[cfg(unix)] {`n"+$tri.Substring($triStart,$triEnd-$triStart)+"    }`n"+$tri.Substring($triEnd)
+    $tri=$tri.Replace('let want = String::from_utf8(bytes("tri-tiny", "decode.tsv")).unwrap();','let want = String::from_utf8(bytes("tri-tiny", "decode.tsv")).unwrap().replace("\r\n", "\n");')
+    Set-Content build/core/tests/tri_tiny.rs $tri -Encoding utf8NoBOM
     $testArguments = foreach ($test in $CoreTests) { '--test'; $test }
     cargo test --release --manifest-path build/core/Cargo.toml @testArguments -- --test-threads=4 --skip global_eps_table
     if ($LASTEXITCODE) { throw 'Engine behavior tests failed.' }
     }
+    if($CoreOnly){return}
     if (!(Test-Path dist/data/models/model-v6/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the verified model/class pairs.' }
     $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'

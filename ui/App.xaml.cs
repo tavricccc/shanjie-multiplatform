@@ -8,7 +8,17 @@ public partial class App : Application
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         var arguments = Environment.GetCommandLineArgs();
-        if (arguments.Length == 4 && arguments[1] == "--verify-instance")
+        if (arguments.Length == 4 && arguments[1] == "--verify-models")
+        {
+            string output=Path.GetFullPath(arguments[2]);Directory.CreateDirectory(output);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA",Path.Combine(output,"profile"));
+            Environment.SetEnvironmentVariable("SHANJIE_TEST_PROFILE","1");
+            int code=0;
+            try{window=new MainWindow();await Verification.ModelVerifier.Run((MainWindow)window,output,Path.GetFullPath(arguments[3]));File.WriteAllText(Path.Combine(output,"result.txt"),"PASS");}
+            catch(Exception error){code=1;File.WriteAllText(Path.Combine(output,"result.txt"),error.ToString());}
+            Environment.Exit(code);
+        }
+        else if (arguments.Length == 4 && arguments[1] == "--verify-instance")
         {
             string output=Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
             Environment.SetEnvironmentVariable("LOCALAPPDATA",Path.Combine(output,"profile"));

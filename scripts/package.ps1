@@ -30,7 +30,7 @@ try {
     Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
     Copy-Item "$root/docs" $output -Recurse -Force
-    Copy-Item "$root/MODEL-SOURCES.json" $output -Force
+    Copy-Item "$root/MODEL-SOURCES.json","$root/MODEL-CATALOG.json" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)
