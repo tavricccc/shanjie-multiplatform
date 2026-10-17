@@ -146,7 +146,7 @@ fn run() -> Result<()> {
         Some("install") => {
             let package=std::env::current_exe()?.parent().unwrap().parent().unwrap().to_owned();
             match installer::install(&package,&target,explicit,choose)? {
-                Some(pending)=>announce(&format!("已更新善解，並設定登入後啟動常駐核心。\n舊檔保留於原目錄旁的 .deleted_files。\n另有 {pending} 個使用中的項目暫留原位，關閉相關程式後可再處理。\n請重新開啟使用輸入法的程式，並登出再登入。"),dialog),
+                Some(pending)=>announce(&format!("已更新善解，並設定登入後啟動常駐核心。\n舊版本與舊安裝紀錄已清除，只保留最新一份。\n另有 {pending} 個使用中的項目，已排程於重新開機時清除。\n請重新開啟使用輸入法的程式，並登出再登入。"),dialog),
                 None=>announce("已取消安裝，現有安裝及資料已保留。",dialog),
             }
         }

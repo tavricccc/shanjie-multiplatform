@@ -486,7 +486,7 @@ pub fn install(
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
         if entry.file_name() != version.as_str() && entry.file_name() != ".deleted_files" {
-            pending += remove_tree(&entry.path())?;
+            pending += retire(&entry.path())?;
         }
     }
     for entry in fs::read_dir(target)? {
@@ -503,10 +503,84 @@ pub fn install(
         ]
         .contains(&entry.file_name().to_string_lossy().as_ref())
         {
-            pending += remove_tree(&entry.path())?;
+            pending += retire(&entry.path())?;
         }
     }
+    pending += purge_superseded(target, &backup);
     Ok(Some(pending))
+}
+/// Retire a superseded payload; a busy one is deleted by Windows at the next restart.
+fn retire(root: &Path) -> Result<usize> {
+    let busy = remove_tree(root)?;
+    if busy > 0 {
+        let _ = delete_at_reboot(root);
+    }
+    Ok(busy)
+}
+/// Children first, then the root: Windows only removes a directory once it is empty.
+fn reboot_delete_order(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    if root.is_dir() {
+        children(root, &mut paths)?;
+    }
+    paths.push(root.to_owned());
+    Ok(paths)
+}
+fn delete_at_reboot(root: &Path) -> Result<()> {
+    use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_DELAY_UNTIL_REBOOT};
+    for path in reboot_delete_order(root)? {
+        unsafe {
+            MoveFileExW(
+                PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
+                PCWSTR::null(),
+                MOVEFILE_DELAY_UNTIL_REBOOT,
+            )?;
+        }
+    }
+    Ok(())
+}
+/// After a fully validated update, permanently delete retired payloads and old recovery
+/// checkpoints so only the newest install remains. Best effort: busy items are left in
+/// place and counted so a later update retries them. Never follows reparse points.
+fn purge_superseded(target: &Path, current_backup: &Path) -> usize {
+    let mut busy = 0;
+    for archive in [
+        target.join("versions").join(".deleted_files"),
+        target.join(".deleted_files"),
+    ] {
+        busy += purge_children(&archive, None);
+    }
+    busy + purge_children(&target.join(".installer-recovery"), Some(current_backup))
+}
+fn purge_children(root: &Path, keep: Option<&Path>) -> usize {
+    if !root.exists() || safe_tree(root).is_err() {
+        return 0;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return 1;
+    };
+    let mut busy = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if keep == Some(path.as_path()) {
+            continue;
+        }
+        let Ok(kind) = entry.file_type() else {
+            busy += 1;
+            continue;
+        };
+        // remove_dir_all removes a junction itself without descending into its target.
+        let removed = if kind.is_dir() {
+            fs::remove_dir_all(&path)
+        } else {
+            fs::remove_file(&path)
+        };
+        if removed.is_err() {
+            let _ = delete_at_reboot(&path);
+            busy += 1;
+        }
+    }
+    busy
 }
 fn install_owner() -> Result<InstallOwner> {
     use windows::Win32::System::Threading::*;
@@ -845,5 +919,44 @@ mod tests {
         fs::write(root.join("old/data/models/model-v1/model"), b"old").unwrap();
         assert_eq!(remove_tree(&root).unwrap(), 0);
         assert!(!root.exists());
+    }
+    #[test]
+    fn update_purges_retired_versions_and_old_recovery_but_keeps_newest() {
+        let target = std::env::temp_dir().join(format!("shanjie-purge-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&target);
+        let versions = target.join("versions");
+        for old in ["versions/.deleted_files/a/tools", ".deleted_files/b"] {
+            fs::create_dir_all(target.join(old)).unwrap();
+            fs::write(target.join(old).join("f"), b"x").unwrap();
+        }
+        fs::create_dir_all(versions.join("current")).unwrap();
+        for id in ["1", "2", "3"] {
+            fs::create_dir_all(target.join(".installer-recovery").join(id)).unwrap();
+            fs::write(target.join(".installer-recovery").join(id).join("error.txt"), b"x").unwrap();
+        }
+        let keep = target.join(".installer-recovery/3");
+        assert_eq!(purge_superseded(&target, &keep), 0);
+        assert_eq!(fs::read_dir(versions.join(".deleted_files")).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(target.join(".deleted_files")).unwrap().count(), 0);
+        assert!(versions.join("current").is_dir());
+        let left: Vec<_> = fs::read_dir(target.join(".installer-recovery"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(left, vec![std::ffi::OsString::from("3")]);
+        fs::remove_dir_all(&target).unwrap();
+    }
+    #[test]
+    fn reboot_delete_lists_children_before_their_directory() {
+        let root = std::env::temp_dir().join(format!("shanjie-reboot-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        fs::write(root.join("a/b/f"), b"x").unwrap();
+        let order = reboot_delete_order(&root).unwrap();
+        let at = |p: PathBuf| order.iter().position(|x| *x == p).unwrap();
+        assert!(at(root.join("a/b/f")) < at(root.join("a/b")));
+        assert!(at(root.join("a/b")) < at(root.join("a")));
+        assert_eq!(order.last().unwrap(), &root);
+        fs::remove_dir_all(&root).unwrap();
     }
 }
