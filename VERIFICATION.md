@@ -22,7 +22,7 @@
 
 ## 2026-10-17 Windows 0.10.0 整合測試版
 
-整合本機 e17295cb 與朋友公開 12b5ebf4。沒有安裝、修改真實輸入法註冊／語言清單或推送遠端。兩架構及 WinUI release 建置完成；安裝包只內建 model-v6＋classes-v5。子模組追蹤檔保持乾淨，所有 Windows 差異由 platform 與 prepare 腳本產生。
+本版新增模型管理、混打容錯與雙 Ctrl 加詞，修復設定視窗、Shift 及核心設定恢復。沒有安裝、修改真實輸入法註冊／語言清單或推送遠端。兩架構及 WinUI release 建置完成；安裝包只內建 model-v6＋classes-v5。子模組追蹤檔保持乾淨，所有 Windows 差異由 platform 與 prepare 腳本產生。
 
 已通過：
 
@@ -42,9 +42,9 @@
 
 沙箱不允許測試 IPC，相關程序於解除沙箱限制、相同隔離 profile 下驗證。實際 profile.ini 與 installed.json 的前後 SHA-256 一致；不宣稱使用中的學習資料整輪不變，也沒有讀取或打包私人詞庫。UI 可能讓已註冊舊 TIP 在隔離 profile 啟動核心，收尾依端點 PID／路徑／啟動時間核對後停止，日常核心保留。保護檔、測試核心清理、封裝逐檔 SHA／公開資料來源／私人檔排除的結果另存本機 `protected-comparison.json`、`test-core-cleanup.json` 及 `package-audit.json`。
 
-**待實機：** 真正註冊宿主中的長時間輸入、Office／瀏覽器／Codex／AppContainer、雙 Ctrl 位置與 DPI／邊緣、登入預載、UAC、舊版雙鍵盤升級與回復仍須後續驗收。本包定位為測試版，不以隔離通過代替系統驗收。0.9.0 舊核心公開 dev302 的 v4=242/302、v5=238/302 是歷史取捨，0.10.0 沒有重跑該句集，不把它當成本版重新量得的準確度。
+**待實機：** 真正註冊宿主中的長時間輸入、Office／瀏覽器／Codex／AppContainer、雙 Ctrl 位置與 DPI／邊緣、登入預載、UAC、舊版雙鍵盤升級與回復仍須後續驗收。本包定位為測試版，不以隔離通過代替系統驗收。早期開發核心（f8ea0bb）公開 dev302 的 v4=242/302、v5=238/302 是歷史取捨，0.10.0 沒有重跑該句集，不把它當成本版重新量得的準確度。
 
-## 2026-10-16 Windows 0.9.0 續修與完整自動回歸
+## 2026-10-16 Windows 0.10.0 開發期：可靠性修正與自動回歸
 
 本輪沒有安裝、修改輸入法註冊／語言清單或推送遠端。上游程式 pin、主模型與兩種詞類表保持不變。
 
@@ -65,11 +65,11 @@
 - Windows interaction 三段 PASS：學習持久化／清除、個人詞庫、拼音、字面輸入、標點、混打、提示不可選取、模型與詞類配對、快取後資產遭修改時拒絕載入。學習 fixture 使用上游會記錄的兩字前文及改變原解碼的漢字，混打提示確認第二項原始按鍵資料；沒有刪除原有校驗。
 - WinUI --verify-reliability 通過，保留設定草稿、未安裝鍵盤反灰及詞庫／學習失敗處理；啟動前即設定隔離環境。UI 引起的舊 TIP 測試核心，依 profile 端點、PID、執行檔與啟動時間核對後清理。
 
-本輪證據：build/release-0.9.0-fix/ 下的 verify-full-x64.log、x86-original-{1,2,3}.log、refresh-baseline/、refresh-release.log（40 項）、refresh-deadline.log（2 項）、update-portable/results.json、core-recovery/results.json、input-release/results.json、unit-release-{x64,x86}.log、features-validated.log、interaction-complete.log、smoke-release-{x64,x86}.log 與 ui-reliability/result.txt。前輪模型選單、不同啟動路徑的唯一設定視窗及畫面擷取證據仍有效，相關 UI 原始碼本輪未改。
+以下保留原始開發證據目錄名，不代表另一次 0.9.0 發行。本輪證據：build/release-0.9.0-fix/ 下的 verify-full-x64.log、x86-original-{1,2,3}.log、refresh-baseline/、refresh-release.log（40 項）、refresh-deadline.log（2 項）、update-portable/results.json、core-recovery/results.json、input-release/results.json、unit-release-{x64,x86}.log、features-validated.log、interaction-complete.log、smoke-release-{x64,x86}.log 與 ui-reliability/result.txt。前輪模型選單、不同啟動路徑的唯一設定視窗及畫面擷取證據仍有效，相關 UI 原始碼本輪未改。
 
 **待實機：** 記事本、瀏覽器、Office、Codex 等已註冊前景 App，真正登入預載／UAC／升級／AppContainer 與螢幕縮放驗收仍未執行；歷史 x86 間歇觸發條件保留觀察。使用者已確認前輪 profile.ini 差異來自更新個人詞庫，可忽略，不列為異常。本輪保護檔與封裝稽核結果另存 protected-before/after.json 及 package-audit.json，私人詞庫／學習／本機 TODO 不納入包。
 
-## 2026-10-16 Windows 0.9.0 歷史測試包（當時尚有未通過項目）
+## 2026-10-16 Windows 0.10.0 開發期：初期測試（當時尚有未通過項目）
 
 本輪依使用者要求收尾，沒有安裝、註冊輸入法、變更語言清單或發布遠端 release。下列結果屬隔離回歸；真實前景 App 與系統安裝驗收仍待進行。
 
