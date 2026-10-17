@@ -20,16 +20,16 @@ fn rgb(value: u32) -> D2D1_COLOR_F {
         a: 1.0,
     }
 }
-struct Palette {
-    background: D2D1_COLOR_F,
-    border: D2D1_COLOR_F,
-    text: D2D1_COLOR_F,
+pub(crate) struct Palette {
+    pub(crate) background: D2D1_COLOR_F,
+    pub(crate) border: D2D1_COLOR_F,
+    pub(crate) text: D2D1_COLOR_F,
     label: D2D1_COLOR_F,
     accent: D2D1_COLOR_F,
     selected: D2D1_COLOR_F,
 }
 impl Palette {
-    fn new(theme: u32) -> Result<Self> {
+    pub(crate) fn new(theme: u32) -> Result<Self> {
         unsafe {
             let mut contrast = HIGHCONTRASTW {
                 cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,

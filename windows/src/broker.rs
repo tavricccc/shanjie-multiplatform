@@ -227,6 +227,7 @@ enum Request {
     Stop,
     Profile,
     Word { word: String, reading: Option<String> },
+    InspectWord { word: String, reading: Option<String> },
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Reply {
@@ -406,6 +407,15 @@ pub(crate) fn word_request(data: &Path, word: &str, reading: Option<&str>) -> st
     };
     run().map_err(|e| format!("常駐核心未回應，請稍後重試（{e}）。"))?
         .word_result.ok_or_else(|| "常駐核心版本不支援加詞，請重新啟動輸入法。".to_string())?
+}
+pub(crate) fn word_inspection(data:&Path,word:&str,reading:Option<&str>)->std::result::Result<crate::word_store::Inspection,String> {
+    let run=||->io::Result<Reply>{
+        let deadline=Instant::now()+Duration::from_secs(3);let pipe=connect(data,true,deadline)?;
+        pipe.send(&Request::InspectWord{word:word.into(),reading:reading.map(str::to_owned)},deadline)?;pipe.receive(deadline)
+    };
+    let text=run().map_err(|e|format!("無法完成詞條比對，請稍後重試（{e}）。"))?
+        .word_result.ok_or_else(||"常駐核心版本不支援詞條比對，請重新啟動輸入法。".to_string())??;
+    serde_json::from_str(&text).map_err(|_|"詞條比對結果格式有誤。".into())
 }
 fn start_core(executable: &Path) -> io::Result<()> {
     use std::os::windows::io::{FromRawHandle, OwnedHandle};

@@ -74,7 +74,7 @@ impl Data {
         let keyboard=s.prefs.number("input","keyboard",0);
         let layout=crate::installation::layout(keyboard,s.profile_layout,crate::installation::available());
         let layout=if layout==1 { shanjie_core::engine::Layout::Eten } else { shanjie_core::engine::Layout::Standard };
-        match unsafe { crate::word_popup::Popup::open(selected.owner,selected.rect,selected.word,s.data.clone(),layout) } {
+        match unsafe { crate::word_popup::Popup::open(selected.owner,selected.rect,selected.word,s.data.clone(),layout,s.prefs.number("appearance","theme",0)) } {
             Ok(popup)=>*self.word_popup.borrow_mut()=Some(popup), Err(e)=>super::trace(format_args!("word popup: {}",e.code()))
         }
     }

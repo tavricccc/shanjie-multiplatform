@@ -109,3 +109,14 @@ impl Engine {
         Ok(())
     }
 }
+
+/// Read-only word checks share the same immutable resources as input sessions.
+/// The base lexicon excludes personal additions and LM vocabulary expansion.
+pub fn windows_base_lexicon(data:&Path)->Result<Arc<Lexicon>,EngineError> {
+    Ok(Engine::new_with_personal(data,Layout::Standard,None)?.lex.clone())
+}
+pub fn windows_model_contains(data:&Path,path:&Path,word:&str)->Result<bool,EngineError> {
+    let mut engine=Engine::new_with_personal(data,Layout::Standard,None)?;
+    engine.load_lm(path)?;
+    Ok(engine.lm.as_ref().is_some_and(|state|state.lm.count(word)>0))
+}

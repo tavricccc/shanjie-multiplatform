@@ -179,6 +179,11 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 let mut r = reply(None, None, result.is_ok());
                 r.word_result = Some(result.map_err(|e| e.to_string())); r
             }
+            Request::InspectWord { word, reading } => {
+                let result=crate::word_store::inspect(&data,&word,reading.as_deref())
+                    .and_then(|info|Ok(serde_json::to_string(&info)?));
+                let mut r=reply(None,None,result.is_ok());r.word_result=Some(result.map_err(|e|e.to_string()));r
+            }
             Request::Stop => {
                 let _ = write(&mut pipe, &reply(None, None, true));
                 std::process::exit(0);

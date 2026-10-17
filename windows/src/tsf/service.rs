@@ -838,6 +838,7 @@ impl Data {
                     .set(current.get("candidates", "anchor", "right") == "right");
             }
         }
+        if let Some(popup)=self.word_popup.borrow_mut().as_mut(){let _=popup.set_theme(current.number("appearance","theme",0));}
         self.prepare_engine()?;
         if self.state.borrow().engine.is_open() {
             let mut operations=std::collections::VecDeque::from(option_operations(&current));

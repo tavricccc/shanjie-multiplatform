@@ -93,10 +93,42 @@ pub fn validate_word(word: &str) -> Result<()> {
 }
 pub fn suggest(data: &Path, word: &str) -> Result<String> {
     validate_word(word)?;
-    let lex = shanjie_core::engine::load_lexicon(data).map_err(|_| "無法讀取內建詞庫，請手動填寫讀音。")?;
+    let lex = shanjie_core::engine::windows_base_lexicon(data).map_err(|_| "無法讀取內建詞庫，請手動填寫讀音。")?;
     if let Some((reading, _)) = lex.word_info(word) { return Ok(reading.join("-")); }
     let readings: Option<Vec<_>> = word.chars().map(|ch| lex.word_info(&ch.to_string()).map(|(r,_)| r.join("-"))).collect();
     Ok(readings.unwrap_or_default().join("-"))
+}
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Inspection {
+    pub reading: String,
+    pub builtin_word: bool,
+    pub builtin_exact: bool,
+    pub personal_word: bool,
+    pub personal_exact: bool,
+    pub model_word: Option<bool>,
+    pub model_id: String,
+    pub model_fallback: bool,
+}
+fn matches(lex:&shanjie_core::Lexicon, rows:&Entries, word:&str, reading:&str)->(bool,bool,bool,bool) {
+    let key:Vec<_>=reading.split('-').map(str::to_owned).collect();
+    (lex.word_info(word).is_some(),lex.entries(&key).iter().any(|(w,_)|*w==word),
+        rows.keys().any(|(_,w)|w==word),rows.contains_key(&(reading.into(),word.into())))
+}
+/// Read-only inspection. LM vocabulary membership and lexicon pronunciation are distinct.
+pub(crate) fn inspect(data:&Path,word:&str,reading:Option<&str>)->Result<Inspection> {
+    validate_word(word)?;
+    if reading.is_some_and(|r|r.chars().count()>255){return Err("讀音過長。".into());}
+    let lex=shanjie_core::engine::windows_base_lexicon(data).map_err(|_|"無法讀取內建詞庫。")?;
+    let folder=profile::folder();let doc=profile::load(&profile::path())?;
+    let rows=entries(&current(&folder,&doc)?)?;
+    let suggested=suggest(data,word)?;
+    let reading=reading.unwrap_or(&suggested).to_owned();
+    let (builtin_word,builtin_exact,personal_word,personal_exact)=matches(&lex,&rows,word,&reading);
+    let selected=doc.model_id();let path=crate::model_store::resolve(data,&selected);
+    let model_fallback=selected!=crate::model_store::BUILTIN&&path==data.join("models/model-v6/bigram.winmap");
+    let model_id=if model_fallback{crate::model_store::BUILTIN.into()}else{selected};
+    let model_word=shanjie_core::engine::windows_model_contains(data,&path,word).ok();
+    Ok(Inspection{reading,builtin_word,builtin_exact,personal_word,personal_exact,model_word,model_id,model_fallback})
 }
 #[cfg(test)] mod tests {
     use super::*;
@@ -110,6 +142,14 @@ pub fn suggest(data: &Path, word: &str) -> Result<String> {
     }
     #[test] fn conflicting_score_edits_are_rejected() {
         assert!(merge(&entries("ㄋㄧˇ 你 -1").unwrap(),&entries("ㄋㄧˇ 你 -2").unwrap(),&entries("ㄋㄧˇ 你 -3").unwrap()).is_err());
+    }
+    #[test] fn inspection_distinguishes_words_from_exact_pronunciations() {
+        let lex=shanjie_core::Lexicon::parse("ㄊㄡˊ-ㄈㄚˇ 頭髮 -0.1\nㄈㄚˇ 法 -0.2\n").unwrap();
+        let rows=entries("ㄊㄡˊ-ㄈㄚˇ 頭髮\nㄗˋ-ㄉㄧㄥˋ 自訂").unwrap();
+        assert_eq!(matches(&lex,&rows,"頭髮","ㄊㄡˊ-ㄈㄚˇ"),(true,true,true,true));
+        assert_eq!(matches(&lex,&rows,"頭髮","ㄊㄡˊ-ㄈㄚˊ"),(true,false,true,false));
+        assert_eq!(matches(&lex,&rows,"自訂","ㄗˋ-ㄉㄧㄥˋ"),(false,false,true,true));
+        assert_eq!(matches(&lex,&rows,"新詞","ㄒㄧㄣ-ㄘˊ"),(false,false,false,false));
     }
     #[test] fn concurrent_additions_and_stale_settings_are_merged_atomically() {
         let folder=std::env::var_os("SHANJIE_TEST_ROOT").map(PathBuf::from).unwrap_or_else(std::env::temp_dir)
