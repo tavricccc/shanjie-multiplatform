@@ -486,7 +486,7 @@ pub fn install(
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
         if entry.file_name() != version.as_str() && entry.file_name() != ".deleted_files" {
-            pending += remove_tree(&entry.path())?;
+            pending += retire(&entry.path())?;
         }
     }
     for entry in fs::read_dir(target)? {
@@ -503,11 +503,41 @@ pub fn install(
         ]
         .contains(&entry.file_name().to_string_lossy().as_ref())
         {
-            pending += remove_tree(&entry.path())?;
+            pending += retire(&entry.path())?;
         }
     }
     pending += purge_superseded(target, &backup);
     Ok(Some(pending))
+}
+/// Retire a superseded payload; a busy one is deleted by Windows at the next restart.
+fn retire(root: &Path) -> Result<usize> {
+    let busy = remove_tree(root)?;
+    if busy > 0 {
+        let _ = delete_at_reboot(root);
+    }
+    Ok(busy)
+}
+/// Children first, then the root: Windows only removes a directory once it is empty.
+fn reboot_delete_order(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    if root.is_dir() {
+        children(root, &mut paths)?;
+    }
+    paths.push(root.to_owned());
+    Ok(paths)
+}
+fn delete_at_reboot(root: &Path) -> Result<()> {
+    use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_DELAY_UNTIL_REBOOT};
+    for path in reboot_delete_order(root)? {
+        unsafe {
+            MoveFileExW(
+                PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
+                PCWSTR::null(),
+                MOVEFILE_DELAY_UNTIL_REBOOT,
+            )?;
+        }
+    }
+    Ok(())
 }
 /// After a fully validated update, permanently delete retired payloads and old recovery
 /// checkpoints so only the newest install remains. Best effort: busy items are left in
@@ -546,6 +576,7 @@ fn purge_children(root: &Path, keep: Option<&Path>) -> usize {
             fs::remove_file(&path)
         };
         if removed.is_err() {
+            let _ = delete_at_reboot(&path);
             busy += 1;
         }
     }
@@ -914,5 +945,18 @@ mod tests {
             .collect();
         assert_eq!(left, vec![std::ffi::OsString::from("3")]);
         fs::remove_dir_all(&target).unwrap();
+    }
+    #[test]
+    fn reboot_delete_lists_children_before_their_directory() {
+        let root = std::env::temp_dir().join(format!("shanjie-reboot-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        fs::write(root.join("a/b/f"), b"x").unwrap();
+        let order = reboot_delete_order(&root).unwrap();
+        let at = |p: PathBuf| order.iter().position(|x| *x == p).unwrap();
+        assert!(at(root.join("a/b/f")) < at(root.join("a/b")));
+        assert!(at(root.join("a/b")) < at(root.join("a")));
+        assert_eq!(order.last().unwrap(), &root);
+        fs::remove_dir_all(&root).unwrap();
     }
 }
