@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 main `b2f5da8`（v0.4.6），內建 model-v6＋classes-v5，其他已確認相容的模型配套可由設定下載及選用。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
-目前 Windows 開發測試版為 **0.10.1**：修復「Windows 注音順序」及「兩者並用」混打時，`1` 後的聲調數字鍵遺失；雙 Ctrl 加詞浮層沿用介面主題，並在加入前比對內建詞庫、個人詞庫與目前模型。沿用 0.10.0 的線上模型管理、混打容錯及可靠性修正，上游 pin 與內建模型未變。操作與限制見 [0.10.1 版本說明](docs/releases/RELEASE-NOTES-0.10.1.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發測試版為 **0.10.2**：更新成功後自動清除舊版本與舊安裝紀錄，只保留最新一份，被占用的舊檔改在重新開機時刪除，輸入法本身與 0.10.1 相同。以下為 0.10.1 內容：修復「Windows 注音順序」及「兩者並用」混打時，`1` 後的聲調數字鍵遺失；雙 Ctrl 加詞浮層沿用介面主題，並在加入前比對內建詞庫、個人詞庫與目前模型。沿用 0.10.0 的線上模型管理、混打容錯及可靠性修正，上游 pin 與內建模型未變。操作與限制見 [0.10.2 版本說明](docs/releases/RELEASE-NOTES-0.10.2.md)、[0.10.1 版本說明](docs/releases/RELEASE-NOTES-0.10.1.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
