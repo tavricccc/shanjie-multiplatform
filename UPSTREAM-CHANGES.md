@@ -2,9 +2,9 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
-## 2026-10-17 Windows 0.10.0：兩條 0.9.0 整合與使用者模型
+## 2026-10-17 Windows 0.10.0：輸入可靠性修正與使用者模型
 
-合併本機 e17295cb 與公開 12b5ebf4，固定 main b2f5da8。保留新上游的 zh／English run／trigram ABI 與 Windows policy 覆蓋；Mapped LM 的 tri 明確為 None，模型管理不接入 KN、tiny-LM 或 trigram 附件。
+本版固定 main b2f5da8，新增使用者模型管理、混打容錯與雙 Ctrl 加詞，並修復設定視窗、Shift 及設定恢復。保留新上游的 zh／English run／trigram ABI 與 Windows policy 覆蓋；Mapped LM 的 tri 明確為 None，模型管理不接入 KN、tiny-LM 或 trigram 附件。
 
 Windows 英文擴充將實際大小寫送入 shadow 與 run，查英文詞表時轉成小寫，不改注音解析鍵；Shift＋字母僅在尚無 run 時開始新段，已有 run 則接續。倚天停用上游英文，Windows 混打仍保留。隨附英文資料在建置輸出驗證後正規化成 LF，保持上游嚴格讀取契約。
 
@@ -32,9 +32,9 @@ Windows 英文擴充將實際大小寫送入 shadow 與 run，查英文詞表時
 
 **上游行內英文**（`set_english`／`set_english_inline`，預設關）：與 Windows 自有的中英混打政策（`smart_input_windows`）是兩套獨立實作。目前兩者尚未接成可切換；上游英文測試在 Windows 組字政策下有 7 項失敗，屬已知衝突，待「中英混打方式」三選一開關處理。
 
-## 2026-10-16 Windows 0.9.0：Windows 輸入政策與 classes-v5
+## 2026-10-16 Windows 0.10.0 開發期：Windows 輸入政策與 classes-v5
 
-續修只涉及 Windows 設定通知／IPC／程序啟動與測試契約。`tsf/profile_refresh.rs` 逐一確認即時設定操作，逾時時從未確認操作續接，阻止後續按鍵越過它；edit session、取消與失焦依 context／generation 隔離。常駐程序以 STARTUPINFOEX 的 HANDLE_LIST 只允許繼承 NUL，保留原有不自動啟動管理員／AppContainer 核心的限制。沒有新增上游演算法覆蓋。
+本段保留本版開發期的來源與驗證背景，當時的 pin／打包配置不代表最終 0.10.0。此階段修正 Windows 設定通知／IPC／程序啟動與測試契約。`tsf/profile_refresh.rs` 逐一確認即時設定操作，逾時時從未確認操作續接，阻止後續按鍵越過它；edit session、取消與失焦依 context／generation 隔離。常駐程序以 STARTUPINFOEX 的 HANDLE_LIST 只允許繼承 NUL，保留原有不自動啟動管理員／AppContainer 核心的限制。沒有新增上游演算法覆蓋。
 
 Windows interaction 的學習 fixture 改用兩字前文（上游不記錄單字前文下的單字選擇），並選擇改變原解碼的漢字，保留兩份持久化紀錄校驗。混打提示契約校驗注音及第二項原始按鍵資料，且禁止選取提示。標準／倚天輸入回歸使用獨立可攜 installed.json，不依賴實機安裝了幾種鍵盤。
 
