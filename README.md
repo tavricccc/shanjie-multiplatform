@@ -2,7 +2,7 @@
 
 原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 main `b2f5da8`（v0.4.6），內建 model-v6＋classes-v5，其他已確認相容的模型配套可由設定下載及選用。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
-目前 Windows 開發測試版為 **0.10.0**：整合雙方 0.9.0，固定上游 main b2f5da8，加入線上模型配套清單、按需下載／續傳與驗證，安裝包只內建一組模型。保留混打容錯、雙 Ctrl 加詞、唯一設定窗、設定逾時恢復，並整合上游英文與 Enter 游標前提交。操作與限制見 [0.10.0 版本說明](docs/releases/RELEASE-NOTES-0.10.0.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
+目前 Windows 開發測試版為 **0.10.1**：修復「Windows 注音順序」及「兩者並用」混打時，`1` 後的聲調數字鍵遺失；雙 Ctrl 加詞浮層沿用介面主題，並在加入前比對內建詞庫、個人詞庫與目前模型。沿用 0.10.0 的線上模型管理、混打容錯及可靠性修正，上游 pin 與內建模型未變。操作與限制見 [0.10.1 版本說明](docs/releases/RELEASE-NOTES-0.10.1.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
 
 版本歷程見 [Changelog.md](Changelog.md)，各版詳細說明集中於 [docs/releases/](docs/releases/)。本機待辦不隨安裝包發佈。
 
@@ -55,7 +55,7 @@ pwsh -File scripts/package.ps1
 | 即時讀音預測 | 關閉 | 開啟，Tab 進入／Shift＋Tab 退出 |
 | 選字後聯想 | 關閉，可啟用 | 相同 |
 
-Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。候選維持不透明實色底；「介面與選字框主題」同時影響 WinUI 與候選，可選跟隨 Windows、淺色或深色，高對比模式仍優先遵循系統色。
+Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交後額外空白、拼音單空白轉換與反引號標點關閉。候選字級預設 16 DIP，可調 14–32；既有外觀偏好保留。窄工作區用候選列兩端箭頭瀏覽，不展開格狀。候選維持不透明實色底；「介面與選字框主題」同時影響 WinUI、候選與加詞浮層，可選跟隨 Windows、淺色或深色，高對比模式仍優先遵循系統色。
 
 個人設定在 `%LOCALAPPDATA%/Shanjie/profile.ini`，目前 schema 7。舊設定缺少 Enter 游標前提交選項時保留整句提交；已有明確值及模型選擇者保留原值。其他個別偏好、詞庫與學習保留。儲存立即通知正在使用的實例；不監控 INI，也不在每次按鍵查檔案。直接改 INI 後，按設定頁的「重新啟動輸入法」或重新啟用善解才讀取。
 

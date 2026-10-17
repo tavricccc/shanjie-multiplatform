@@ -2,6 +2,14 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-17 Windows 0.10.1：數字混打與加詞比對
+
+上游 pin、公開詞庫及 model-v6／classes-v5 不變。`smart_input_windows` 在純數字前綴無法配成完整讀音時保留聲調鍵，已成為字面數字串時優先延續數字；有效音節仍走原解析。覆蓋 Windows 注音順序／兩者並用與聲調符號開關兩值。
+
+`resident_windows` 提供唯讀的內建詞庫與模型詞彙查詢，重用現有不可變資源快取；內建判定排除個人詞庫與模型詞彙擴充。Windows broker 使用獨立 `InspectWord` 請求，以目前 profile 的模型解析／備援機制查詢完整 LM 詞條，與讀音詞庫判定分開。它不寫入個人資料；明確確認後才沿用既有原子加詞流程。修改讀音後重新比對並捨棄過期回覆，已有詞條仍允許加入個人讀音。
+
+浮層沿用候選的系統／淺／深／高對比配色及設定通知，保留 owned／NOACTIVATE 視窗與 TSF 選取範圍。所有核心差異由 platform 與 prepare 腳本產生，上游追蹤檔保持乾淨。
+
 ## 2026-10-17 Windows 0.10.0：兩條 0.9.0 整合與使用者模型
 
 合併本機 e17295cb 與公開 12b5ebf4，固定 main b2f5da8。保留新上游的 zh／English run／trigram ABI 與 Windows policy 覆蓋；Mapped LM 的 tri 明確為 None，模型管理不接入 KN、tiny-LM 或 trigram 附件。
