@@ -23,7 +23,7 @@ pwsh -File scripts/package.ps1
 
 完整解壓後雙擊 `install.cmd`，或右鍵「以系統管理員身分執行」。Rust manager 透過 UAC 提權，背景使用系統內建 Windows PowerShell 5.1 同步語言清單，使用者不須另外安裝 PowerShell 7。目標是 x64 Windows；先選標準注音或倚天，只註冊選定配置的 x64／x86 profile。已有選擇的升級沿用配置；沒有紀錄的舊版會先盤點並詢問，取消則保留現狀。ARM64 尚未支援。安裝後登出再登入，選已安裝的善解配置。更換配置可執行 `重新選擇鍵盤.cmd`；命令列支援 `--keyboard standard`／`--keyboard eten`。
 
-更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI、核心與模型），核對實際 COM DLL 路徑及雜湊，才將舊版本與殘留移到各自原目錄旁的 `.deleted_files`，並在更新成功後永久清除其中的舊內容與 `.installer-recovery` 內的舊紀錄，只保留最新一份；使用中而刪不掉的項目留到下次更新再清。變更前保存註冊、配置、完整語言清單、啟動檔案、Installed Apps 與 Run，任一步驟失敗會嘗試完整回復。回復未完成時保留相關版本與 `.installer-recovery` 紀錄，明確列出失敗項目。使用中而不能移動的項目先保留，不安排永久刪除或自動重新啟動；已開啟 App 需要重新開啟才使用新版。
+更新會先驗證所有安裝檔，放入新的 `versions/<DLL hash>-<unique stamp>/`（包含 UI、核心與模型），核對實際 COM DLL 路徑及雜湊，才將舊版本與殘留移到各自原目錄旁的 `.deleted_files`，並在更新成功後永久清除其中的舊內容與 `.installer-recovery` 內的舊紀錄，只保留最新一份；使用中而刪不掉的項目登記為重新開機時由 Windows 刪除。變更前保存註冊、配置、完整語言清單、啟動檔案、Installed Apps 與 Run，任一步驟失敗會嘗試完整回復。回復未完成時保留相關版本與 `.installer-recovery` 紀錄，明確列出失敗項目。使用中而不能移動的項目先保留，不安排永久刪除或自動重新啟動；已開啟 App 需要重新開啟才使用新版。
 
 安裝錯誤先存於 `%ProgramFiles%\Shanjie\.installer-recovery\<識別碼>\error.txt`，階段與回復結果見 `events.jsonl`，完整清單校驗見 `validation.json`；早期失敗另存於 `%LOCALAPPDATA%\Shanjie\installer-logs\<識別碼>\`。對話框會附紀錄位置。0.5.3 安裝時可根據已保留的 0.5.2 失敗 checkpoint 修復本程式機碼已確認的繼承旗標遺失；只在其餘權限內容完全相同時處理，詳見新版說明。
 
