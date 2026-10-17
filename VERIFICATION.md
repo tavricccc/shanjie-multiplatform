@@ -1,6 +1,16 @@
 # Windows 移植驗證紀錄
 
-最新日期：2026-10-17。上游 pin 為 main `b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.1 的現況依據。
+最新日期：2026-10-17。上游 pin 為 main `b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+
+## 2026-10-17 Windows 0.10.2：更新後清理舊版
+
+只改 `installer.rs` 與安裝完成對話框；輸入法 DLL、核心、上游 pin、模型與 profile 不變。
+
+已通過：清理（只留最新一份、`.deleted_files` 與舊 `.installer-recovery` 清空）及重開機刪除登記順序（子項在前、資料夾在後）的單元測試；`installer::` 測試 8 項通過、1 項原生系統測試 ignored；x64／x86 release 與 WinUI 建置、打包校驗 632 檔 PASS。
+
+實機觀察：使用者安裝上一個測試包後，`versions\.deleted_files` 由 22 個資料夾（約 6.5 GB）清為 0，`.installer-recovery` 由 24 份剩 1 份；兩個仍被載入的舊版資料夾暫留。
+
+**待實機：** 重開機刪除用 `MoveFileExW(MOVEFILE_DELAY_UNTIL_REBOOT)` 登記，單元測試不寫系統登錄，重開機後是否確實刪除尚未驗證，見 TODO。本輪沒有重跑 0.10.1 的輸入與浮層回歸，因為這些程式未變。
 
 ## 2026-10-17 Windows 0.10.1：數字與加詞浮層
 
