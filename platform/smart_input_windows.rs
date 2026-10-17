@@ -27,6 +27,21 @@ mod windows_smart_tests {
         e.layout=Layout::Eten;e.set_mixed_input(true);e.set_upstream_english(true,true).unwrap();
         assert!(!e.english&&e.mixed_input,"unsupported upstream English never disables Eten Windows mixed input");
     }
+    #[test]
+    fn numeric_prefix_keeps_unconvertible_tone_keys() {
+        let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
+        for english in [false,true] {
+            let mut e=Engine::with_lexicon(lex.clone(),Layout::Standard);
+            e.set_mixed_input(true);e.set_upstream_english(english,true).unwrap();
+            for digits in ["13","14","16","17","13467","1234567890"] {
+                assert_eq!(type_keys(&mut e,digits).preedit,digits,"english={english}");
+                assert_eq!(e.reset(ResetMode::Commit).commit,digits);
+            }
+            assert_eq!(type_keys(&mut e,"13su3").preedit,"13你");e.reset(ResetMode::Discard);
+            assert_eq!(type_keys(&mut e,"184").preedit,"爸","a complete valid syllable still converts");e.reset(ResetMode::Discard);
+            assert_eq!(type_keys(&mut e,"su3").preedit,"你");
+        }
+    }
     fn engine() -> Engine {
         let lex =
             Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄧˇ 以 -0.2\nㄋㄧˇ-ㄏㄠˇ 你好 -0.1\n")
@@ -267,6 +282,12 @@ impl Engine {
     fn finish_latin(&mut self, key: Key) -> Result<Output, EngineError> {
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
+        // Once a run is literal digits, later tone-number keys remain digits.
+        if !raw.is_empty() && raw.bytes().all(|c| c.is_ascii_digit())
+            && key.kind==KeyKind::Char && key.modifiers==0 && key.ch.is_ascii_digit() {
+            self.mixed_raw=raw;self.mixed_raw.push(key.ch);self.mixed_latin=true;
+            return self.handled();
+        }
         // Keep every literal prefix, including names absent from the English
         // list. Only the valid trailing syllable is allowed to become Chinese.
         let tone = if key.kind == KeyKind::Space {
@@ -505,6 +526,20 @@ impl Engine {
             self.mixed_raw.pop();
         } else {
             let previous = std::mem::take(&mut self.mixed_raw);
+            // An incomplete initial such as 1 (ㄅ) has no reading for any tone.
+            // Preserve the number key instead of restoring the raw prefix alone.
+            if !previous.is_empty() && previous.bytes().all(|c|c.is_ascii_digit())
+                && key.kind==KeyKind::Char && key.modifiers==0 {
+                if let Some(tone)=self.layout.tone_of(key.ch) {
+                    let complete=self.mixed_reading_order(&previous,false).is_some_and(|mut reading| {
+                        reading.push_str(TONE_MARKS[tone]);!self.lex.entries(&[reading]).is_empty()
+                    });
+                    if !complete {
+                        self.clear_pend();self.clear_pred();self.mixed_raw=previous;
+                        self.mixed_raw.push(key.ch);self.mixed_latin=true;return self.handled();
+                    }
+                }
+            }
             let out = self.key_original(key)?;
             if !previous.is_empty() && !self.pending().is_empty()
                 && (key.kind == KeyKind::Space || (key.kind == KeyKind::Char && self.layout.tone_of(key.ch).is_some())) {

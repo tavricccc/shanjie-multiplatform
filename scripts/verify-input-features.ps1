@@ -32,6 +32,12 @@ foreach($item in @(@('OX3','我'),@('XO3↓1','ㄨㄛˇ'),@('B ','b '))) {
 }
 $cases += [pscustomobject]@{keys='1 ';expected='1 ';mixed=1;symbols=0;keyboard=1;space=1;big5=0}
 $cases += [pscustomobject]@{keys='JI3↓1';expected='ㄨㄛˇ';mixed=0;symbols=0;keyboard=1;space=0;big5=1}
+foreach($upstream in 0,1){foreach($tones in 0,1){
+ foreach($digits in @('13','14','16','17','13467','1234567890')) {
+  $cases += [pscustomobject]@{keys=$digits;expected=$digits;mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
+ }
+ $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
+}}
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $results=@()
 try {
@@ -54,7 +60,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
    $env:SHANJIE_TEST_ETEN=if($case.keyboard -eq 2){'1'}else{$null}
    New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force | Out-Null
    $text=Get-Content "$root/profiles/windows.ini" -Raw
-   foreach($pair in @(@('keyboard',$case.keyboard),@('mixed_input',$case.mixed),@('space_inputs_zhuyin',$case.symbols),@('space_commits',$case.space),@('big5',$case.big5),@('learning',0))) {
+   foreach($pair in @(@('keyboard',$case.keyboard),@('mixed_input',$case.mixed),@('space_inputs_zhuyin',$case.symbols),@('space_commits',$case.space),@('big5',$case.big5),@('learning',0),@('upstream_english',[int]$case.upstream),@('standalone_tones',[int]$case.standalone))) {
     $text=$text -replace ('(?m)^'+$pair[0]+'=.*'),($pair[0]+'='+$pair[1])
    }
    Set-Content "$fixture/Shanjie/profile.ini" $text -Encoding utf8NoBOM
