@@ -9,6 +9,7 @@ if ([IO.Path]::GetDirectoryName($destinationPath) -ne $cache) { throw 'Unexpecte
 $parts = "$destinationPath.parts"
 New-Item -ItemType Directory -Path $parts -Force | Out-Null
 $chunkSize = 4MB
+$curl = if ($IsWindows) { 'curl.exe' } else { 'curl' }
 $count = [int][Math]::Ceiling($Size / $chunkSize)
 # Bounded ranges avoid restarting an 80 MB release download on a slow CDN.
 $results = 0..($count-1) | ForEach-Object -Parallel {
@@ -17,7 +18,7 @@ $results = 0..($count-1) | ForEach-Object -Parallel {
     $part = Join-Path $using:parts "$index.part"
     try {
         if (!(Test-Path -LiteralPath $part) -or (Get-Item -LiteralPath $part).Length -ne $end-$start+1) {
-            curl.exe --fail --location --silent --show-error --range "$start-$end" --connect-timeout 20 --max-time 180 --retry 2 --retry-all-errors --output $part "$using:Url"
+            & $using:curl --fail --location --silent --show-error --range "$start-$end" --connect-timeout 20 --max-time 180 --retry 2 --retry-all-errors --output $part "$using:Url"
             if ($LASTEXITCODE) { throw "Download failed: part $index" }
         }
         if ((Get-Item -LiteralPath $part).Length -ne $end-$start+1) { throw "Unexpected asset range length: part $index" }
