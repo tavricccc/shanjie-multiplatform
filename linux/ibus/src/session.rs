@@ -599,8 +599,9 @@ impl Shanjie {
         Ok(())
     }
 
-    /// service.rs `cancel`: what is shown stays in the document; the composition ends.
-    fn cancel(&mut self, out: &mut Effects) {
+    /// service.rs `cancel`: what is shown stays in the document; the composition ends. On focus out and
+    /// reset IBus commits the shown preedit itself (PREEDIT_COMMIT), so `commit` is false there.
+    fn cancel(&mut self, commit: bool, out: &mut Effects) {
         let final_text = if self.snapshot.preedit.is_empty() {
             String::new()
         } else if !self.pinyin.pending.is_empty() || [1, 2, 3].contains(&self.special.mode) {
@@ -612,7 +613,7 @@ impl Shanjie {
         } else {
             self.engine.as_mut().and_then(|e| e.reset(false)).map(|o| o.commit).unwrap_or_else(|| self.snapshot.preedit.clone())
         };
-        if !final_text.is_empty() {
+        if commit && !final_text.is_empty() {
             out.push(Effect::Commit(final_text));
         }
         self.shift_tap = false;
@@ -650,7 +651,7 @@ impl Shanjie {
         let mode_changed = current.get("input", "chinese", "") != old.get("input", "chinese", "");
         let width_changed = current.get("input", "full_width", "") != old.get("input", "full_width", "");
         if rebuild || mode_changed {
-            self.cancel(out);
+            self.cancel(true, out);
         }
         if rebuild {
             self.engine = None;
@@ -684,7 +685,7 @@ impl Shanjie {
 
     /// Restart from settings: drop the engine so the next key opens a fresh one.
     pub fn restart(&mut self, out: &mut Effects) {
-        self.cancel(out);
+        self.cancel(true, out);
         self.engine = None;
         self.pinyin = Pinyin::default();
     }
@@ -720,7 +721,7 @@ impl Session for Shanjie {
                 let toggle = !self.shift_used && self.shift_physical == keycode && self.held.is_empty();
                 self.shift_used = false;
                 if toggle && self.toggle(out).is_err() {
-                    self.cancel(out);
+                    self.cancel(true, out);
                 }
             }
             return false;
@@ -747,12 +748,12 @@ impl Session for Shanjie {
         }
     }
     fn focus_out(&mut self, out: &mut Effects) {
-        self.cancel(out);
+        self.cancel(false, out);
         self.held.clear();
         self.surrounding = None;
     }
     fn reset(&mut self, out: &mut Effects) {
-        self.cancel(out);
+        self.cancel(false, out);
     }
     fn enable(&mut self, out: &mut Effects) {
         self.register_properties(out);
@@ -761,7 +762,7 @@ impl Session for Shanjie {
         }
     }
     fn disable(&mut self, out: &mut Effects) {
-        self.cancel(out);
+        self.cancel(false, out);
     }
     fn capabilities(&mut self, caps: u32) {
         self.capabilities = caps;
@@ -798,7 +799,7 @@ impl Session for Shanjie {
         match name {
             MODE_PROPERTY => {
                 if self.toggle(out).is_err() {
-                    self.cancel(out);
+                    self.cancel(true, out);
                 }
             }
             SETUP_PROPERTY => {

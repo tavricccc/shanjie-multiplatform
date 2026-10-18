@@ -1,0 +1,35 @@
+{
+"keys": [
+[
+115,
+31,
+0
+],
+[
+117,
+22,
+0
+],
+[
+51,
+4,
+0
+],
+[
+60,
+51,
+1
+],
+[
+65293,
+28,
+0
+]
+],
+"expect_commits": [
+"你<"
+],
+"settle": 0.08,
+"final_wait": 0.4,
+"note": "windows.ini keeps Shift+symbol ASCII (punctuation.shift_* = 0)"
+}

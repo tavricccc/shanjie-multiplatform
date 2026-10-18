@@ -93,6 +93,11 @@ try:
     pump(float(script.get("final_wait", 0.3)))
     for item in log:
         print(json.dumps(item, ensure_ascii=False))
+    if "expect_commits" in script:
+        commits = [item["commit"] for item in log if "commit" in item]
+        if commits != script["expect_commits"]:
+            print("FAIL commits %r != expected %r" % (commits, script["expect_commits"]), file=sys.stderr)
+            sys.exit(1)
 finally:
     if engine is not None:
         engine.terminate()

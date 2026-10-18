@@ -16,8 +16,9 @@ use zbus::{
 // IBusCapabilite (ibustypes.h).
 pub const CAP_PREEDIT_TEXT: u32 = 1 << 0;
 pub const CAP_SURROUNDING_TEXT: u32 = 1 << 5;
-// IBusPreeditFocusMode: CLEAR drops the preedit when the client loses focus; the session commits itself.
-const PREEDIT_CLEAR: u32 = 0;
+// IBusPreeditFocusMode: with COMMIT the daemon or the client (ClientCommitPreedit) commits the shown
+// preedit on focus out and reset, exactly once; the session then only clears its state.
+const PREEDIT_COMMIT: u32 = 1;
 
 pub enum Effect {
     Commit(String),
@@ -94,9 +95,9 @@ async fn emit(e: &SignalEmitter<'_>, effects: Effects) {
             Effect::Commit(text) => EngineObject::commit_text(e, Text::new(&text).value()).await,
             Effect::Preedit(text, cursor, spans) => {
                 let visible = !text.is_empty();
-                EngineObject::update_preedit_text(e, Text::with_attributes(&text, spans).value(), cursor, visible, PREEDIT_CLEAR).await
+                EngineObject::update_preedit_text(e, Text::with_attributes(&text, spans).value(), cursor, visible, PREEDIT_COMMIT).await
             }
-            Effect::HidePreedit => EngineObject::update_preedit_text(e, Text::new("").value(), 0, false, PREEDIT_CLEAR).await,
+            Effect::HidePreedit => EngineObject::update_preedit_text(e, Text::new("").value(), 0, false, PREEDIT_COMMIT).await,
             Effect::Lookup(candidates, labels, cursor, vertical) => {
                 let orientation = if vertical { serial::ORIENTATION_VERTICAL } else { serial::ORIENTATION_HORIZONTAL };
                 let visible = !candidates.is_empty();
