@@ -1,7 +1,13 @@
-//! Read-only, aligned Windows model arrays. The mapping denies write/delete sharing
-//! for its entire lifetime; packaging never modifies an installed model in place.
-use std::{fs::{File, OpenOptions}, io::{self, Write}, marker::PhantomData, ops::Deref, os::windows::{fs::OpenOptionsExt, io::AsRawHandle}, path::Path, sync::Arc};
+//! Read-only, aligned model arrays. On Windows the mapping denies write/delete sharing
+//! for its entire lifetime; Unix has no such lock, so a mapped file must only ever be replaced
+//! by rename, never truncated or rewritten in place. Packaging never modifies an installed model.
+use std::{fs::{File, OpenOptions}, io::{self, Write}, marker::PhantomData, ops::Deref, path::Path, sync::Arc};
+#[cfg(windows)]
+use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 type Handle = *mut std::ffi::c_void;
+#[cfg(windows)]
 #[link(name = "kernel32")]
 extern "system" {
     fn CreateFileMappingW(file: Handle, attributes: Handle, protection: u32, high: u32, low: u32, name: *const u16) -> Handle;
@@ -9,12 +15,21 @@ extern "system" {
     fn UnmapViewOfFile(address: Handle) -> i32;
     fn CloseHandle(handle: Handle) -> i32;
 }
-pub(crate) struct Mapping { _file: File, handle: Handle, data: Handle, len: usize }
+#[cfg(unix)]
+extern "C" {
+    fn mmap(address: Handle, len: usize, protection: i32, flags: i32, fd: i32, offset: i64) -> Handle;
+    fn munmap(address: Handle, len: usize) -> i32;
+}
+pub(crate) struct Mapping { _file: File, #[cfg(windows)] handle: Handle, data: Handle, len: usize }
 // All views are read-only and the backing file cannot be opened for mutation.
 unsafe impl Send for Mapping {}
 unsafe impl Sync for Mapping {}
+#[cfg(windows)]
 impl Drop for Mapping { fn drop(&mut self) { unsafe { UnmapViewOfFile(self.data); CloseHandle(self.handle); } } }
+#[cfg(unix)]
+impl Drop for Mapping { fn drop(&mut self) { unsafe { munmap(self.data,self.len); } } }
 impl Mapping {
+    #[cfg(windows)]
     pub fn open(path: &Path) -> io::Result<Arc<Self>> {
         let file = OpenOptions::new().read(true).share_mode(1).open(path)?;
         let len = usize::try_from(file.metadata()?.len()).map_err(|_| io::ErrorKind::InvalidData)?;
@@ -26,6 +41,16 @@ impl Mapping {
             if data.is_null() { CloseHandle(handle); return Err(io::Error::last_os_error()); }
             Ok(Arc::new(Self { _file: file, handle, data, len }))
         }
+    }
+    #[cfg(unix)]
+    pub fn open(path: &Path) -> io::Result<Arc<Self>> {
+        // PROT_READ 1, MAP_PRIVATE 2; MAP_FAILED is (void*)-1.
+        let file = OpenOptions::new().read(true).open(path)?;
+        let len = usize::try_from(file.metadata()?.len()).map_err(|_| io::ErrorKind::InvalidData)?;
+        if len == 0 { return Err(io::ErrorKind::InvalidData.into()); }
+        let data = unsafe { mmap(std::ptr::null_mut(),len,1,2,file.as_raw_fd(),0) };
+        if data as isize == -1 { return Err(io::Error::last_os_error()); }
+        Ok(Arc::new(Self { _file: file, data, len }))
     }
     pub fn bytes(&self) -> &[u8] { unsafe { std::slice::from_raw_parts(self.data.cast(),self.len) } }
 }
