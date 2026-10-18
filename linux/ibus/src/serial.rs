@@ -11,7 +11,6 @@ fn owned<'a>(value: impl Into<Value<'a>>) -> OwnedValue {
 
 // IBusAttribute types and values (ibusattribute.h).
 pub const ATTR_UNDERLINE: u32 = 1;
-pub const ATTR_BACKGROUND: u32 = 3;
 pub const UNDERLINE_SINGLE: u32 = 1;
 
 #[derive(Type, Value, OwnedValue)]

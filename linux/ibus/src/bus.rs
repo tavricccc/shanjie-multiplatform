@@ -14,7 +14,6 @@ use zbus::{
 };
 
 // IBusCapabilite (ibustypes.h).
-pub const CAP_PREEDIT_TEXT: u32 = 1 << 0;
 pub const CAP_SURROUNDING_TEXT: u32 = 1 << 5;
 // IBusPreeditFocusMode: with COMMIT the daemon or the client (ClientCommitPreedit) commits the shown
 // preedit on focus out and reset, exactly once; the session then only clears its state.
@@ -33,8 +32,6 @@ pub enum Effect {
     Properties(Vec<Property>),
     UpdateProperty(Property),
     RequireSurrounding,
-    DeleteSurrounding(i32, u32),
-    Forward(u32, u32, u32),
 }
 
 pub type Effects = Vec<Effect>;
@@ -54,40 +51,25 @@ pub trait Session: Send + Sync + 'static {
     fn page(&mut self, down: bool, out: &mut Effects);
     fn cursor(&mut self, down: bool, out: &mut Effects);
     fn property(&mut self, name: &str, state: u32, out: &mut Effects);
-    /// Work finished off the D-Bus thread (see `Waker`); called on the engine object.
-    fn wake(&mut self, _out: &mut Effects) {}
+    /// The settings app saved (kind 0) or asked for a restart (kind 1).
+    fn notify(&mut self, kind: u32, out: &mut Effects);
 }
 
-/// Lets background work ask its engine object to call `Session::wake` and emit the result.
-#[derive(Clone)]
-pub struct Waker {
-    connection: Connection,
-    path: OwnedObjectPath,
-}
+pub type Maker = Arc<dyn Fn() -> Box<dyn Session> + Send + Sync>;
+pub type Engines = Arc<std::sync::Mutex<Vec<OwnedObjectPath>>>;
 
-impl Waker {
-    pub fn wake(&self) {
-        let connection = self.connection.clone();
-        let path = self.path.clone();
-        self.connection
-            .executor()
-            .spawn(
-                async move {
-                    let server = connection.object_server();
-                    let Ok(iface) = server.interface::<_, EngineObject>(&path).await else { return };
-                    let emitter = iface.signal_emitter().clone();
-                    let mut engine = iface.get_mut().await;
-                    let mut out = Effects::new();
-                    engine.session.wake(&mut out);
-                    emit(&emitter, out).await;
-                },
-                "shanjie wake",
-            )
-            .detach();
+/// Runs `f` on every live engine object and emits what each one records.
+pub async fn broadcast(connection: &Connection, engines: &Engines, f: impl Fn(&mut dyn Session, &mut Effects)) {
+    let paths = engines.lock().unwrap().clone();
+    let server = connection.object_server();
+    for path in paths {
+        let Ok(iface) = server.interface::<_, EngineObject>(&path).await else { continue };
+        let emitter = iface.signal_emitter().clone();
+        let mut out = Effects::new();
+        f(iface.get_mut().await.session.as_mut(), &mut out);
+        emit(&emitter, out).await;
     }
 }
-
-pub type Maker = Arc<dyn Fn(Waker) -> Box<dyn Session> + Send + Sync>;
 
 async fn emit(e: &SignalEmitter<'_>, effects: Effects) {
     for effect in effects {
@@ -109,8 +91,6 @@ async fn emit(e: &SignalEmitter<'_>, effects: Effects) {
             Effect::Properties(props) => EngineObject::register_properties(e, PropList::new(props).value()).await,
             Effect::UpdateProperty(prop) => EngineObject::update_property(e, prop.value()).await,
             Effect::RequireSurrounding => EngineObject::require_surrounding_text(e).await,
-            Effect::DeleteSurrounding(offset, chars) => EngineObject::delete_surrounding_text(e, offset, chars).await,
-            Effect::Forward(keyval, keycode, state) => EngineObject::forward_key_event(e, keyval, keycode, state).await,
         };
         if let Err(error) = result {
             eprintln!("ibus-engine-shanjie: signal failed: {error}");
@@ -260,6 +240,7 @@ fn text_of(value: &OwnedValue) -> String {
 /// org.freedesktop.IBus.Service on each engine path: the daemon destroys engines through it.
 struct ServiceObject {
     path: OwnedObjectPath,
+    engines: Engines,
 }
 
 #[interface(name = "org.freedesktop.IBus.Service")]
@@ -268,6 +249,7 @@ impl ServiceObject {
         let server = connection.object_server();
         let _ = server.remove::<EngineObject, _>(&self.path).await;
         let _ = server.remove::<ServiceObject, _>(&self.path).await;
+        self.engines.lock().unwrap().retain(|p| p != &self.path);
     }
 }
 
@@ -275,11 +257,12 @@ pub struct Factory {
     engine: String,
     maker: Maker,
     next: AtomicU32,
+    engines: Engines,
 }
 
 impl Factory {
-    pub fn new(engine: &str, maker: Maker) -> Self {
-        Self { engine: engine.into(), maker, next: AtomicU32::new(1) }
+    pub fn new(engine: &str, maker: Maker, engines: Engines) -> Self {
+        Self { engine: engine.into(), maker, next: AtomicU32::new(1), engines }
     }
 }
 
@@ -293,11 +276,11 @@ impl Factory {
         let path: OwnedObjectPath = ObjectPath::try_from(format!("/org/freedesktop/IBus/Engine/{id}"))
             .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?
             .into();
-        let waker = Waker { connection: connection.clone(), path: path.clone() };
-        let session = (self.maker)(waker);
+        let session = (self.maker)();
         let server = connection.object_server();
         server.at(&path, EngineObject { session }).await?;
-        server.at(&path, ServiceObject { path: path.clone() }).await?;
+        server.at(&path, ServiceObject { path: path.clone(), engines: self.engines.clone() }).await?;
+        self.engines.lock().unwrap().push(path.clone());
         Ok(path)
     }
 }

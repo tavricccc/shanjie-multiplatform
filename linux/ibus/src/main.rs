@@ -1,11 +1,12 @@
 mod bus;
 mod engine;
 mod keys;
+mod notify;
 mod profile;
 mod serial;
 mod session;
 
-use bus::{Factory, Maker, Session, Waker};
+use bus::{Engines, Factory, Maker, Session};
 use std::sync::Arc;
 use zbus::{connection, zvariant::OwnedValue};
 
@@ -38,6 +39,13 @@ fn warm(data: std::path::PathBuf, prefs: shanjie_shell::profile::Document) {
     });
 }
 
+fn settings() -> shanjie_shell::profile::Document {
+    profile::load(&profile::path()).unwrap_or_else(|error| {
+        eprintln!("ibus-engine-shanjie: profile.ini unreadable ({error}); using the Windows template");
+        shanjie_shell::profile::Document::parse(profile::TEMPLATE).expect("bundled template")
+    })
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("ibus-engine-shanjie: {error:?}");
@@ -49,15 +57,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let launched_by_daemon = std::env::args().any(|a| a == "--ibus");
     futures_lite::future::block_on(async {
         let data = profile::data();
-        let prefs = profile::load(&profile::path()).unwrap_or_else(|error| {
-            eprintln!("ibus-engine-shanjie: profile.ini unreadable ({error}); using the Windows template");
-            shanjie_shell::profile::Document::parse(profile::TEMPLATE).expect("bundled template")
-        });
-        warm(data.clone(), prefs.clone());
-        let maker: Maker = Arc::new(move |_waker: Waker| Box::new(session::Shanjie::new(data.clone(), prefs.clone())) as Box<dyn Session>);
+        warm(data.clone(), settings());
+        let maker: Maker = {
+            let data = data.clone();
+            // Every new context reads the settings, as each TSF activation does on Windows.
+            Arc::new(move || Box::new(session::Shanjie::new(data.clone(), settings())) as Box<dyn Session>)
+        };
+        let engines = Engines::default();
         let address = address()?;
         let connection = connection::Builder::address(address.as_str())?
-            .serve_at("/org/freedesktop/IBus/Factory", Factory::new(ENGINE, maker))?
+            .serve_at("/org/freedesktop/IBus/Factory", Factory::new(ENGINE, maker, engines.clone()))?
             .build()
             .await?;
         if !launched_by_daemon {
@@ -79,6 +88,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
         }
         connection.request_name(COMPONENT).await?;
+        if let Err(error) = notify::serve(connection.clone(), engines).await {
+            // Typing works without it; only saved settings then wait for the next context.
+            eprintln!("ibus-engine-shanjie: settings notifications unavailable: {error}");
+        }
         std::future::pending::<()>().await;
         Ok(())
     })

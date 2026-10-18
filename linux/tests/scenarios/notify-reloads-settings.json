@@ -1,0 +1,43 @@
+{
+"keys": [
+[
+115,
+31,
+0
+],
+[
+117,
+22,
+0
+],
+[
+51,
+4,
+0
+],
+[
+65293,
+28,
+0
+],
+[
+"profile",
+"[profile]\nschema=7\ninteraction=windows\n\n[engine]\nranking=chat\nmodel=5\nclass_table=5\nmodel_id=model-v6-classes-v5\nprediction=0\ndemote=1\n\n[input]\nmixed_input=0\nmixed_tolerance=0\nupstream_english=0\nenglish_inline=1\nchinese=0\nfull_width=0\nkeyboard=0\ncaps_lock_english=0\nescape=staged\nalphanumeric=1\nassociations=0\nlearning=1\ncontext=1\nspace_after_commit=0\nspace_commits=0\npinyin_space_converts=0\nspace_inputs_zhuyin=1\nstandalone_tones=0\n\n[punctuation]\nshift_comma=0\nshift_period=0\nshift_slash=0\nshift_1=0\nshift_semicolon=0\nshift_lbracket=0\nshift_rbracket=0\nshift_9=0\nshift_0=0\nshift_backquote=0\nshift_backslash=0\nshift_quote=0\nshift_equal=0\nplain_lbracket=0\nplain_rbracket=0\nplain_backslash=0\nplain_quote=0\nplain_equal=0\nplain_backquote=0\n\n[candidates]\nlayout=horizontal\nanchor=right\nopen=down\nspace_pages=1\nspace_operates=0\nbig5=0\nenter_commits=1\nenter_to_cursor=1\nup_cycles=1\nbackspace_deletes=0\nwrap_pages=1\n\n[shortcuts]\nshift_toggle=1\nshift_side=0\nctrl_space_toggle=0\nshift_space_toggle=1\nctrl_punctuation=1\nbackquote_symbols=0\ncode_input=1\nsymbol_keyboard=1\nctrl_backslash=0\nforget_candidate=0\nadd_word=1\nadd_word_side=0\nadd_word_interval=450\nadd_word_shortcut=0\n\n[appearance]\ntheme=0\nfont_size=16\nmode_indicator=1\n"
+],
+[
+"notify",
+0
+],
+[
+115,
+31,
+0
+]
+],
+"expect_commits": [
+"你"
+],
+"settle": 0.08,
+"final_wait": 0.4,
+"note": "after saving input.chinese=0 and notifying, the open context switches to English and passes 's' through"
+}

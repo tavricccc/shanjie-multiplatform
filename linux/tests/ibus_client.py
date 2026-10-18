@@ -4,7 +4,8 @@ and every commit / preedit / lookup table the engine sends printed as one JSON l
 Script: {"keys": [[keyval, keycode, state], ...]} — each key is sent as a press and then a release
 (state | IBUS_RELEASE_MASK) unless the entry has a fourth element "press" or "release";
 ["focus_out"] / ["focus_in"] / ["reset"] call those, and
-["surrounding", text, cursor] sets the surrounding text."""
+["surrounding", text, cursor] sets the surrounding text, ["profile", text] writes the user's profile.ini
+and ["notify", kind] sends the settings app's notification."""
 import json, os, subprocess, sys, time
 import gi
 gi.require_version("IBus", "1.0")
@@ -77,6 +78,21 @@ try:
             log.append({"step": entry[0]})
             getattr(ic, entry[0])()
             pump(0.2)
+            continue
+        if entry[0] == "profile":
+            folder = os.path.join(os.environ["XDG_DATA_HOME"], "shanjie")
+            os.makedirs(folder, exist_ok=True)
+            with open(os.path.join(folder, "profile.ini"), "w", encoding="utf-8") as f:
+                f.write(entry[1])
+            continue
+        if entry[0] == "notify":
+            from gi.repository import Gio
+            session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            session.call_sync("io.github.Nanako0129.Shanjie", "/io/github/Nanako0129/Shanjie",
+                              "io.github.Nanako0129.Shanjie.Engine", "Changed", GLib.Variant("(u)", (entry[1],)),
+                              None, Gio.DBusCallFlags.NONE, 5000, None)
+            log.append({"step": "notify", "kind": entry[1]})
+            pump(0.3)
             continue
         if entry[0] == "surrounding":
             ic.set_surrounding_text(IBus.Text.new_from_string(entry[1]), entry[2], entry[2])

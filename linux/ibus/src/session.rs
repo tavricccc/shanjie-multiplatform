@@ -645,7 +645,7 @@ impl Shanjie {
     }
 
     /// Replaces the settings; an engine built from different values is rebuilt on the next key.
-    pub fn reload(&mut self, current: Document, out: &mut Effects) {
+    fn reload(&mut self, current: Document, out: &mut Effects) {
         let old = std::mem::replace(&mut self.prefs, current.clone());
         let rebuild = REBUILD.iter().any(|(s, k)| current.get(s, k, "") != old.get(s, k, ""));
         let mode_changed = current.get("input", "chinese", "") != old.get("input", "chinese", "");
@@ -684,7 +684,7 @@ impl Shanjie {
     }
 
     /// Restart from settings: drop the engine so the next key opens a fresh one.
-    pub fn restart(&mut self, out: &mut Effects) {
+    fn restart(&mut self, out: &mut Effects) {
         self.cancel(true, out);
         self.engine = None;
         self.pinyin = Pinyin::default();
@@ -795,6 +795,15 @@ impl Session for Shanjie {
         }
     }
     fn cursor(&mut self, _down: bool, _out: &mut Effects) {}
+    fn notify(&mut self, kind: u32, out: &mut Effects) {
+        if kind == 1 {
+            self.restart(out);
+        }
+        match profile::load(&profile::path()) {
+            Ok(current) => self.reload(current, out),
+            Err(error) => eprintln!("ibus-engine-shanjie: profile.ini unreadable ({error}); settings kept"),
+        }
+    }
     fn property(&mut self, name: &str, _state: u32, out: &mut Effects) {
         match name {
             MODE_PROPERTY => {
