@@ -536,7 +536,16 @@ version = "0.10.2"
 dependencies = [
  "core",
  "futures-lite",
+ "shanjie-shell",
  "zbus",
+]
+
+[[package]]
+name = "shanjie-shell"
+version = "0.10.2"
+dependencies = [
+ "core",
+ "serde",
 ]
 
 [[package]]

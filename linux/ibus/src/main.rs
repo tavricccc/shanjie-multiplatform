@@ -1,7 +1,11 @@
 mod bus;
+mod engine;
+mod keys;
+mod profile;
 mod serial;
+mod session;
 
-use bus::{Effect, Effects, Factory, Maker, Session, Waker};
+use bus::{Factory, Maker, Session, Waker};
 use std::sync::Arc;
 use zbus::{connection, zvariant::OwnedValue};
 
@@ -23,45 +27,15 @@ fn address() -> Result<String, Box<dyn std::error::Error>> {
     Ok(address)
 }
 
-struct Echo {
-    text: String,
-}
-
-impl Session for Echo {
-    fn key(&mut self, keyval: u32, _keycode: u32, state: u32, out: &mut Effects) -> bool {
-        if state & (1 << 30) != 0 {
-            return false;
+/// Loads the shared lexicon and model once at startup, as the Windows resident core does at login,
+/// so the first key of every context finds them in the process-wide cache.
+fn warm(data: std::path::PathBuf, prefs: shanjie_shell::profile::Document) {
+    std::thread::spawn(move || {
+        let (config, _) = session::config(&data, &prefs);
+        if engine::Engine::open(&config).is_none() {
+            eprintln!("ibus-engine-shanjie: the core did not open with {}", data.display());
         }
-        match keyval {
-            0x20 if !self.text.is_empty() => {
-                out.push(Effect::Commit(std::mem::take(&mut self.text).to_uppercase()));
-                out.push(Effect::HidePreedit);
-                out.push(Effect::HideLookup);
-                true
-            }
-            0x61..=0x7a => {
-                self.text.push(char::from_u32(keyval).unwrap());
-                let len = self.text.chars().count() as u32;
-                out.push(Effect::Preedit(self.text.clone(), len, vec![(serial::ATTR_UNDERLINE, serial::UNDERLINE_SINGLE, 0, len)]));
-                out.push(Effect::Lookup(vec![self.text.to_uppercase(), self.text.clone()], vec!["1".into(), "2".into()], Some(0), false));
-                true
-            }
-            _ => false,
-        }
-    }
-    fn focus_in(&mut self, _out: &mut Effects) {}
-    fn focus_out(&mut self, _out: &mut Effects) {}
-    fn reset(&mut self, _out: &mut Effects) {
-        self.text.clear();
-    }
-    fn enable(&mut self, _out: &mut Effects) {}
-    fn disable(&mut self, _out: &mut Effects) {}
-    fn capabilities(&mut self, _caps: u32) {}
-    fn surrounding(&mut self, _text: &str, _cursor: u32, _anchor: u32, _out: &mut Effects) {}
-    fn candidate_clicked(&mut self, _index: u32, _out: &mut Effects) {}
-    fn page(&mut self, _down: bool, _out: &mut Effects) {}
-    fn cursor(&mut self, _down: bool, _out: &mut Effects) {}
-    fn property(&mut self, _name: &str, _state: u32, _out: &mut Effects) {}
+    });
 }
 
 fn main() {
@@ -74,7 +48,13 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let launched_by_daemon = std::env::args().any(|a| a == "--ibus");
     futures_lite::future::block_on(async {
-        let maker: Maker = Arc::new(|_waker: Waker| Box::new(Echo { text: String::new() }) as Box<dyn Session>);
+        let data = profile::data();
+        let prefs = profile::load(&profile::path()).unwrap_or_else(|error| {
+            eprintln!("ibus-engine-shanjie: profile.ini unreadable ({error}); using the Windows template");
+            shanjie_shell::profile::Document::parse(profile::TEMPLATE).expect("bundled template")
+        });
+        warm(data.clone(), prefs.clone());
+        let maker: Maker = Arc::new(move |_waker: Waker| Box::new(session::Shanjie::new(data.clone(), prefs.clone())) as Box<dyn Session>);
         let address = address()?;
         let connection = connection::Builder::address(address.as_str())?
             .serve_at("/org/freedesktop/IBus/Factory", Factory::new(ENGINE, maker))?

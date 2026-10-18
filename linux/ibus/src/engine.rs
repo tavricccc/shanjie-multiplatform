@@ -1,0 +1,297 @@
+//! The core, in process. The IBus engine process is itself resident (one per login, shared by every
+//! input context), so Linux needs only the local half of windows/src/engine.rs. Learning keeps the
+//! Windows rules: one lock per profile folder held around each operation, `learning.epoch` to see a
+//! clear from the settings app, and the learning file's stamp to see another writer.
+use shanjie_core::ffi::*;
+use shanjie_shell::protocol::{Failure, Op, Snapshot};
+use std::{
+    ffi::{CStr, CString},
+    fs::{File, OpenOptions},
+    os::fd::AsRawFd,
+    path::{Path, PathBuf},
+    ptr,
+    time::{Duration, Instant, UNIX_EPOCH},
+};
+
+extern "C" {
+    fn flock(fd: i32, operation: i32) -> i32;
+}
+const LOCK_EX: i32 = 2;
+const LOCK_NB: i32 = 4;
+const LOCK_UN: i32 = 8;
+/// Same bound as the Windows learning mutex wait.
+const LOCK_WAIT: Duration = Duration::from_millis(250);
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Config {
+    pub data: PathBuf,
+    pub folder: PathBuf,
+    pub layout: u32,
+    pub ranking: u32,
+    pub right: bool,
+    pub learning: bool,
+    pub big5: bool,
+    pub dictionary: String,
+    pub prediction: bool,
+    pub model: PathBuf,
+}
+
+pub struct Engine {
+    handle: *mut ShanjieEngine,
+    lock: Option<File>,
+    folder: PathBuf,
+    epoch: String,
+    learning_stamp: Option<(u128, u64)>,
+    learning_loaded: bool,
+    failure: Option<Failure>,
+}
+
+// The core owns its allocations and mappings and has no thread-affine state; an Engine moves
+// between threads but is never shared (every session keeps it behind its own lock).
+unsafe impl Send for Engine {}
+unsafe impl Sync for Engine {}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        unsafe { shanjie_engine_free(self.handle) };
+    }
+}
+
+/// Opens (creating it if needed) the per-folder lock file both the engine and the settings app take.
+pub fn lock_file(folder: &Path) -> std::io::Result<File> {
+    std::fs::create_dir_all(folder)?;
+    OpenOptions::new().read(true).write(true).create(true).truncate(false).open(folder.join("learning.lock"))
+}
+
+/// Waits up to `LOCK_WAIT` for the folder lock.
+pub fn acquire(file: &File) -> bool {
+    let start = Instant::now();
+    loop {
+        if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } == 0 {
+            return true;
+        }
+        if start.elapsed() >= LOCK_WAIT {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+pub fn release(file: &File) {
+    unsafe { flock(file.as_raw_fd(), LOCK_UN) };
+}
+
+impl Engine {
+    pub fn open(config: &Config) -> Option<Self> {
+        let mut e = Self {
+            handle: ptr::null_mut(),
+            lock: None,
+            folder: PathBuf::new(),
+            epoch: String::new(),
+            learning_stamp: None,
+            learning_loaded: false,
+            failure: None,
+        };
+        let personal = config.folder.join(&config.dictionary);
+        if config.dictionary != "dictionary.tsv" && !personal.exists() {
+            return None;
+        }
+        let dictionary = if personal.exists() && personal.metadata().ok()?.len() != 0 {
+            Some(CString::new(personal.to_str()?).ok()?)
+        } else {
+            None
+        };
+        unsafe {
+            if shanjie_windows_engine_new(
+                CString::new(config.data.to_str()?).ok()?.as_ptr(),
+                dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
+                config.layout,
+                &mut e.handle,
+            ) != 0
+            {
+                return None;
+            }
+            e.operation(|h, o| shanjie_engine_set_prediction(h, config.prediction as u32, o))?;
+            let lm = CString::new(config.model.to_str()?).ok()?;
+            if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
+                return None;
+            }
+            // The word list only matters when upstream inline English is switched on; a missing
+            // list leaves that mode inert instead of failing the engine.
+            if let Some(list) = config.data.join("english-common.txt").to_str().and_then(|p| CString::new(p).ok()) {
+                shanjie_engine_load_english(e.handle, list.as_ptr());
+            }
+            e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;
+            if shanjie_windows_set_candidate_anchor(e.handle, config.right as u32) != 0
+                || shanjie_windows_set_candidate_charset(e.handle, config.big5 as u32) != 0
+            {
+                return None;
+            }
+            if config.learning {
+                e.lock = Some(lock_file(&config.folder).ok()?);
+                e.folder = config.folder.clone();
+                if !e.begin() {
+                    return None;
+                }
+                let result = shanjie_engine_set_learning(e.handle, 1);
+                e.end();
+                if result != 0 {
+                    return None;
+                }
+            }
+        }
+        Some(e)
+    }
+
+    fn begin(&mut self) -> bool {
+        let Some(lock) = self.lock.as_ref() else { return true };
+        if !acquire(lock) {
+            self.failure = Some(Failure::Busy);
+            return false;
+        }
+        let epoch = std::fs::read_to_string(self.folder.join("learning.epoch")).unwrap_or_default().trim().to_owned();
+        unsafe {
+            if epoch != self.epoch {
+                shanjie_engine_set_learning(self.handle, 0);
+                shanjie_engine_set_learning(self.handle, 1);
+                self.epoch = epoch;
+                self.learning_loaded = false;
+            }
+            let stamp = self.store_stamp();
+            if self.learning_loaded && stamp == self.learning_stamp {
+                return true;
+            }
+            let folder = CString::new(self.folder.to_str().unwrap_or_default()).unwrap_or_default();
+            if shanjie_engine_learning_open(self.handle, folder.as_ptr()) == 0 {
+                self.learning_loaded = true;
+                self.learning_stamp = self.store_stamp();
+                true
+            } else {
+                release(lock);
+                false
+            }
+        }
+    }
+
+    fn store_stamp(&self) -> Option<(u128, u64)> {
+        let meta = std::fs::metadata(self.folder.join("learning.tsv")).ok()?;
+        let modified = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_nanos();
+        Some((modified, meta.len()))
+    }
+
+    fn end(&mut self) {
+        if let Some(lock) = self.lock.as_ref() {
+            // Capture our own writes while holding the same lock; a peer write or clear is
+            // detected before the next operation.
+            self.learning_stamp = self.store_stamp();
+            release(lock);
+        }
+    }
+
+    fn operation(&mut self, f: impl FnOnce(*mut ShanjieEngine, *mut *mut ShanjieOutput) -> i32) -> Option<Snapshot> {
+        if self.handle.is_null() || !self.begin() {
+            return None;
+        }
+        let out = self.invoke(f);
+        self.end();
+        out
+    }
+
+    fn invoke(&mut self, f: impl FnOnce(*mut ShanjieEngine, *mut *mut ShanjieOutput) -> i32) -> Option<Snapshot> {
+        if self.handle.is_null() {
+            return None;
+        }
+        let mut raw = ptr::null_mut();
+        if f(self.handle, &mut raw) != 0 {
+            return None;
+        }
+        unsafe {
+            let r = &*raw;
+            let string = |p| CStr::from_ptr(p).to_str().unwrap().to_owned();
+            let out = Snapshot {
+                handled: r.handled != 0,
+                commit: string(r.commit),
+                preedit: string(r.preedit),
+                cursor: r.cursor_utf16,
+                selected: usize::try_from(r.candidate_selected).ok(),
+                columns: r.candidate_columns,
+                first: r.candidate_first,
+                total: r.candidate_total,
+                prediction: shanjie_windows_is_prediction_row(self.handle) != 0 || shanjie_windows_is_mixed_hint(self.handle) != 0,
+                reading_hint: shanjie_windows_is_mixed_hint(self.handle) != 0,
+                phonetic_pending: shanjie_windows_phonetic_pending(self.handle) != 0,
+                candidates: (0..r.candidate_count).map(|i| string(*r.candidates.add(i as usize))).collect(),
+                associated: false,
+            };
+            shanjie_output_free(raw);
+            Some(out)
+        }
+    }
+
+    pub fn key(&mut self, k: ShanjieKey) -> Option<Snapshot> {
+        self.key_with_latin(k, None)
+    }
+
+    pub fn key_with_latin(&mut self, k: ShanjieKey, latin: Option<char>) -> Option<Snapshot> {
+        self.perform(Op::Key { kind: k.kind, ch: k.ch, modifiers: k.modifiers, latin })
+    }
+
+    pub fn mixed_pending(&self) -> bool {
+        unsafe { shanjie_windows_is_mixed_pending(self.handle) != 0 }
+    }
+
+    pub fn reset(&mut self, discard: bool) -> Option<Snapshot> {
+        // Upstream reset clears the composition without learning or persistence.
+        self.perform(Op::Reset(discard))
+    }
+
+    pub fn failure(&self) -> Option<Failure> {
+        self.failure
+    }
+
+    pub fn perform(&mut self, op: Op) -> Option<Snapshot> {
+        self.failure = None;
+        let string = |s: String| CString::new(s).ok();
+        let result = match op {
+            Op::Key { kind, ch, modifiers, latin } => self.operation(|h, o| unsafe {
+                shanjie_windows_key_with_latin(h, ShanjieKey { kind, ch, modifiers }, latin.map_or(0, |c| c as u32), o)
+            }),
+            Op::Reset(discard) => self.invoke(|h, o| unsafe { shanjie_engine_reset(h, discard as u32, o) }),
+            Op::Pick(index) => self.operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
+            Op::Associate(s) => {
+                let s = string(s)?;
+                self.operation(|h, o| unsafe { shanjie_windows_associate(h, s.as_ptr(), o) })
+            }
+            Op::Reading => self.operation(|h, o| unsafe { shanjie_windows_reading(h, 1, o) }),
+            Op::Prediction(on) => self.operation(|h, o| unsafe { shanjie_engine_set_prediction(h, on as u32, o) }),
+            Op::Demote(on) => self.operation(|h, o| unsafe { shanjie_engine_set_demote(h, on as u32, o) }),
+            Op::Punctuation(s) => {
+                let s = string(s)?;
+                self.operation(|h, o| unsafe { shanjie_windows_punctuation(h, s.as_ptr(), o) })
+            }
+            Op::Cycle => self.operation(|h, o| unsafe { shanjie_windows_cycle_candidate(h, o) }),
+            Op::Space => self.operation(|h, o| unsafe { shanjie_windows_insert_space(h, o) }),
+            Op::Context(s) => {
+                let s = string(s)?;
+                (unsafe { shanjie_engine_set_left_context(self.handle, s.as_ptr()) } == 0).then(Snapshot::default)
+            }
+            Op::Options(flags) => (unsafe { shanjie_windows_set_input_options(self.handle, flags) } == 0).then(Snapshot::default),
+            Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) } == 0).then(Snapshot::default),
+            Op::Tolerance(on) => (unsafe { shanjie_windows_set_mixed_tolerance(self.handle, on as u32) } == 0).then(Snapshot::default),
+            Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) } == 0).then(Snapshot::default),
+        };
+        if result.is_none() && self.failure.is_none() {
+            self.failure = Some(Failure::Failed);
+        }
+        result
+    }
+}
+
+impl shanjie_shell::input::Core for Engine {
+    fn key(&mut self, key: ShanjieKey) -> Option<Snapshot> {
+        Engine::key(self, key)
+    }
+    fn reset(&mut self, discard: bool) -> Option<Snapshot> {
+        Engine::reset(self, discard)
+    }
+}
