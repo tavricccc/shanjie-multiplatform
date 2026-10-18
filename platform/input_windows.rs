@@ -84,6 +84,31 @@ impl Engine {
         (!cands.list.is_empty()).then_some(cands)
     }
 }
+// glibc's CP950 is the same code page; without //TRANSLIT it never substitutes, matching
+// WC_NO_BEST_FIT_CHARS. The descriptor is kept per thread; without one nothing is filtered.
+#[cfg(unix)]
+fn fits_big5(word: &str) -> bool {
+    use std::{cell::Cell, ffi::{c_char, c_void}, ptr::null_mut};
+    extern "C" {
+        fn iconv_open(to: *const c_char, from: *const c_char) -> *mut c_void;
+        fn iconv(cd: *mut c_void, input: *mut *mut c_char, input_left: *mut usize, output: *mut *mut c_char, output_left: *mut usize) -> usize;
+    }
+    thread_local! { static CD: Cell<*mut c_void> = const { Cell::new(null_mut()) }; }
+    let cd = CD.with(|cd| {
+        if cd.get().is_null() { cd.set(unsafe { iconv_open(c"CP950".as_ptr(), c"UTF-8".as_ptr()) }); }
+        cd.get()
+    });
+    if cd as isize == -1 { return true; }
+    let mut input = word.as_bytes().to_vec();
+    let mut output = vec![0u8; input.len() * 2 + 8];
+    let (mut input_ptr, mut input_left) = (input.as_mut_ptr().cast::<c_char>(), input.len());
+    let (mut output_ptr, mut output_left) = (output.as_mut_ptr().cast::<c_char>(), output.len());
+    unsafe {
+        iconv(cd, null_mut(), null_mut(), null_mut(), null_mut());
+        iconv(cd, &mut input_ptr, &mut input_left, &mut output_ptr, &mut output_left) == 0 && input_left == 0
+    }
+}
+#[cfg(windows)]
 fn fits_big5(word: &str) -> bool {
     #[link(name="kernel32")]
     unsafe extern "system" { fn WideCharToMultiByte(page: u32, flags: u32, text: *const u16, length: i32, output: *mut u8, capacity: i32, default: *const u8, used: *mut i32) -> i32; }
