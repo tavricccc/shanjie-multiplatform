@@ -1,0 +1,16 @@
+[package]
+name = "shanjie-ibus"
+version = "0.10.2"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "ibus-engine-shanjie"
+path = "src/main.rs"
+
+[dependencies]
+shanjie-core = { package = "core", path = "../../build/core" }
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+futures-lite = "2"
+
+[workspace]
