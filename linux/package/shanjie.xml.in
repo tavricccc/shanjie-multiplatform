@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- IBus component of the Shanjie engine; install.sh fills in @PREFIX@ and @VERSION@. -->
+<component>
+	<name>org.freedesktop.IBus.Shanjie</name>
+	<description>善解注音輸入法</description>
+	<exec>@PREFIX@/libexec/ibus-engine-shanjie --ibus</exec>
+	<version>@VERSION@</version>
+	<author>Shanjie contributors</author>
+	<license>Apache-2.0</license>
+	<homepage>https://github.com/Nanako0129/shanjie</homepage>
+	<textdomain></textdomain>
+	<engines>
+		<engine>
+			<name>shanjie</name>
+			<language>zh_TW</language>
+			<license>Apache-2.0</license>
+			<author>Shanjie contributors</author>
+			<icon>@PREFIX@/share/shanjie/icons/shanjie.svg</icon>
+			<layout>us</layout>
+			<longname>善解注音</longname>
+			<description>善解注音輸入法</description>
+			<rank>0</rank>
+			<symbol>善</symbol>
+			<setup>@PREFIX@/bin/shanjie-settings</setup>
+			<icon_prop_key>InputMode</icon_prop_key>
+			<version>@VERSION@</version>
+		</engine>
+	</engines>
+</component>
