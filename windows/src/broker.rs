@@ -171,44 +171,7 @@ fn read<T: DeserializeOwned>(pipe: &mut File) -> io::Result<T> {
     pipe.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct Config {
-    #[serde(default)]
-    pub model: String,
-    #[serde(default = "default_classes")]
-    pub classes: u32,
-    pub layout: u32,
-    pub ranking: u32,
-    pub right: bool,
-    pub learning: bool,
-    pub big5: bool,
-    pub dictionary: String,
-    pub prediction: bool,
-}
-fn default_classes() -> u32 { 5 }
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub enum Op {
-    Key {
-        kind: u32,
-        ch: u32,
-        modifiers: u32,
-        latin: Option<char>,
-    },
-    Reset(bool),
-    Pick(u32),
-    Associate(String),
-    Reading,
-    Prediction(bool),
-    Demote(bool),
-    Punctuation(String),
-    Cycle,
-    Space,
-    Context(String),
-    Options(u32),
-    Mixed(bool),
-    Tolerance(bool),
-    English(u32),
-}
+pub use shanjie_shell::protocol::{Config, Op};
 #[derive(Serialize, Deserialize)]
 enum Request {
     Open {

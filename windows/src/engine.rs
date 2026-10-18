@@ -13,23 +13,7 @@ use windows::{
     },
 };
 
-#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct Snapshot {
-    pub handled: bool,
-    pub associated: bool,
-    pub prediction: bool,
-    pub reading_hint: bool,
-    #[serde(default)]
-    pub phonetic_pending: bool,
-    pub commit: String,
-    pub preedit: String,
-    pub cursor: u32,
-    pub columns: u32,
-    pub first: u32,
-    pub total: u32,
-    pub selected: Option<usize>,
-    pub candidates: Vec<String>,
-}
+pub use shanjie_shell::protocol::{Failure, Snapshot};
 pub struct Engine {
     pub handle: *mut ShanjieEngine,
     remote: Option<crate::broker::Client>,
@@ -41,14 +25,6 @@ pub struct Engine {
     failure: Option<Failure>,
     attempt: Vec<(crate::broker::Op, Snapshot)>,
     attempt_cursor: Option<usize>,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Failure {
-    Busy,
-    Disconnected,
-    Timeout,
-    Ambiguous,
-    Failed,
 }
 // The core owns its allocations/mappings and has no thread-affine UI or COM
 // objects. Move exclusive ownership only; never share an Engine concurrently.
@@ -446,5 +422,13 @@ impl Engine {
         }
         self.learning_loaded = false;
         ok
+    }
+}
+impl shanjie_shell::input::Core for Engine {
+    fn key(&mut self, key: ShanjieKey) -> Option<Snapshot> {
+        Engine::key(self, key)
+    }
+    fn reset(&mut self, discard: bool) -> Option<Snapshot> {
+        Engine::reset(self, discard)
     }
 }

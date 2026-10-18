@@ -1,0 +1,14 @@
+[package]
+name = "shanjie-shell"
+version = "0.10.2"
+edition = "2021"
+publish = false
+
+[lib]
+name = "shanjie_shell"
+
+[dependencies]
+shanjie-core = { package = "core", path = "../build/core" }
+serde = { version = "1", features = ["derive"] }
+
+[workspace]

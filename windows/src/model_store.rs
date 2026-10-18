@@ -9,7 +9,7 @@ use std::{
     time::SystemTime,
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const BUILTIN: &str = "model-v6-classes-v5";
+pub use shanjie_shell::profile::BUILTIN;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Spec {
     pub id: String,

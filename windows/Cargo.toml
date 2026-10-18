@@ -9,6 +9,7 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
 shanjie-core = { package = "core", path = "../build/core" }
+shanjie-shell = { path = "../shared" }
 sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

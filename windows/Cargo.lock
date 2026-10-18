@@ -249,6 +249,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shanjie-shell"
+version = "0.10.2"
+dependencies = [
+ "core",
+ "serde",
+]
+
+[[package]]
 name = "shanjie-windows"
 version = "0.10.2"
 dependencies = [
@@ -256,6 +264,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shanjie-shell",
  "tiny-skia",
  "windows",
  "windows-core",
