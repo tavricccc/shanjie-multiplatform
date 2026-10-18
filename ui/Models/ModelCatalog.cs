@@ -86,7 +86,7 @@ public static class ModelCatalog
         // Optional project-maintained compatibility metadata can add data versions without a binary update.
         try
         {
-            var remote=JsonSerializer.Deserialize<Compatibility>(await Fetch("https://raw.githubusercontent.com/tavricccc/shanjie-windows/codex/winui3/MODEL-CATALOG.json",token),Json);
+            var remote=JsonSerializer.Deserialize<Compatibility>(await Fetch("https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/main/MODEL-CATALOG.json",token),Json);
             if(remote is {Format:1,Models:not null}) foreach(var spec in remote.Models.Where(ValidSpec)) if(known.All(x=>x.Id!=spec.Id))known.Add(spec);
         }
         catch(Exception e) when(e is HttpRequestException or IOException or JsonException or OperationCanceledException){token.ThrowIfCancellationRequested();}

@@ -1,6 +1,6 @@
-# 善解 Windows
+# 善解（Windows／Linux）
 
-原生 Rust TSF 輸入法，基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 main `b2f5da8`（v0.4.6），內建 model-v6＋classes-v5，其他已確認相容的模型配套可由設定下載及選用。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
+Windows 為原生 Rust TSF 輸入法，Linux 為 Fedora GNOME 上的 IBus 輸入法（見[下方 Linux 段落](#linuxfedora-gnomeibus)），基於固定版本的 [善解 core](https://github.com/Nanako0129/shanjie)。上游核心 pin 為 main `b2f5da8`（v0.4.6），內建 model-v6＋classes-v5，其他已確認相容的模型配套可由設定下載及選用。候選支援橫向／直式、淺色／深色及跟隨 Windows；設定採獨立 WinUI 3 原生程式。
 
 目前 Windows 開發測試版為 **0.10.2**：更新成功後自動清除舊版本與舊安裝紀錄，只保留最新一份，被占用的舊檔改在重新開機時刪除，輸入法本身與 0.10.1 相同。以下為 0.10.1 內容：修復「Windows 注音順序」及「兩者並用」混打時，`1` 後的聲調數字鍵遺失；雙 Ctrl 加詞浮層沿用介面主題，並在加入前比對內建詞庫、個人詞庫與目前模型。沿用 0.10.0 的線上模型管理、混打容錯及可靠性修正，上游 pin 與內建模型未變。操作與限制見 [0.10.2 版本說明](docs/releases/RELEASE-NOTES-0.10.2.md)、[0.10.1 版本說明](docs/releases/RELEASE-NOTES-0.10.1.md)，驗證與實機界線見 [VERIFICATION.md](VERIFICATION.md)。
 
@@ -62,6 +62,21 @@ Windows 範本保留先前指定值：學習開啟；Caps Lock 英文、提交�
 「重新啟動輸入法」先保存未儲存草稿；沒有草稿時直接讀取磁碟設定，保留手動改檔的內容。它通知各 App 內已啟用的善解提交組字、清除備用核心並在背景重新載入，不終止 App。核心在 TSF 啟用時背景預載；失焦、提交與暫時停用後保留在 App 程序內，同設定重新啟用可重用。每個程序最多保留一個備用核心，各啟用實例的組字狀態獨立。全新 App 若在預載完成前立刻輸入，第一鍵仍須等待同一份載入工作；Win 快捷鍵與閒置失焦不等待。此按鈕不能換掉 App 已載入的舊版 DLL，安裝更新後仍須重新開啟 App。模型／詞類損壞明確拒絕載入。
 
 完整設定與鍵位見 [docs/MICROSOFT-IME-DIFFS.md](docs/MICROSOFT-IME-DIFFS.md)，範本在 `profiles/`。未安裝鍵盤在設定中反灰；舊偏好退回跟隨已安裝配置並提示。個人詞庫採內容雜湊命名，先核對或完整原子發布詞庫再替換 INI；損壞檔移到同目錄 `.deleted_files` 後修復。學習以使用者範圍 mutex／epoch 協調多程序。
+
+## Linux（Fedora GNOME／IBus）
+
+Linux 版為 **0.10.2** 首個測試版（tag `linux-v0.10.2`）：IBus 引擎、GTK 4＋libadwaita 設定程式與安裝腳本皆為 Rust／shell，沒有 C 程式碼，與 Windows 共用 `shared/`（輸入決策、設定檔、詞庫合併、模型驗證）及同一份 `build/core`。差異與安裝見 [Linux 0.10.2 版本說明](docs/releases/RELEASE-NOTES-linux-0.10.2.md)。
+
+從原始碼安裝需要 PowerShell 7（prepare 腳本）、Rust、curl、`gtk4-devel`、`libadwaita-devel`：
+
+```bash
+git submodule update --init
+linux/scripts/install.sh      # 建置後以 sudo 安裝並加入 GNOME 輸入來源
+linux/scripts/package.sh      # 產生 build/linux/dist/shanjie-linux-<版本>-<架構>.tar.gz
+linux/scripts/uninstall.sh    # 移除；--delete-user-data 把個人資料移到 .deleted_files
+```
+
+`linux/ibus/` 是 IBus D-Bus 引擎（zbus），`linux/settings/` 是設定程式，`linux/common/` 是兩者共用的路徑、flock 鎖、原子存檔、線上模型清單與下載。個人資料在 `~/.local/share/shanjie`。測試：`linux/tests/run-scenarios.sh` 在私有 ibus-daemon 上跑按鍵情境，各 crate 另有 `cargo test`。
 
 ## 維護與授權
 

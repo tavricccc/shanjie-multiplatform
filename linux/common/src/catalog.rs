@@ -18,7 +18,7 @@ use std::{
 const AGENT: &str = concat!("Shanjie-Linux/", env!("CARGO_PKG_VERSION"));
 const LIST_LIMIT: u64 = 8 * 1024 * 1024;
 const RELEASES: &str = "https://api.github.com/repos/Nanako0129/shanjie/releases";
-const REMOTE_CATALOG: &str = "https://raw.githubusercontent.com/tavricccc/shanjie-windows/codex/winui3/MODEL-CATALOG.json";
+const REMOTE_CATALOG: &str = "https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/main/MODEL-CATALOG.json";
 pub const BUILTIN_NAME: &str = "model-v6＋classes-v5（內建）";
 
 #[derive(Clone, Debug, PartialEq, Eq)]

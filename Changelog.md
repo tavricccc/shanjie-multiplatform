@@ -90,3 +90,11 @@
 2. 調整：舊版檔案被程式占用而刪不掉時，登記為重新開機時由 Windows 刪除。
 
 輸入法、核心、上游 pin 與內建模型未變；個人詞庫與學習資料沿用。細節見 [0.10.2 版本說明](docs/releases/RELEASE-NOTES-0.10.2.md)。
+
+Linux 0.10.2（首個 Linux 測試版）
+
+1. 新增：Fedora 44 GNOME 的 IBus 引擎，沿用 Windows 版的按鍵決策、設定檔與內建模型，候選使用 GNOME 原生候選框。
+2. 新增：GTK 4＋libadwaita 設定程式，包含 Windows 設定的九頁與全部項目、線上模型下載與個人詞庫。
+3. 新增：安裝／移除腳本與可直接安裝的發布壓縮包。
+
+細節見 [Linux 0.10.2 版本說明](docs/releases/RELEASE-NOTES-linux-0.10.2.md)。

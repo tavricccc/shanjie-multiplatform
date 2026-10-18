@@ -1,6 +1,25 @@
-# Windows 移植驗證紀錄
+# 移植驗證紀錄
 
 最新日期：2026-10-17。上游 pin 為 main `b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+
+## 2026-10-18 Linux 0.10.2：IBus 首版
+
+環境：Fedora 44、GNOME Wayland、ibus 1.5、gtk4 4.22、libadwaita 1.9。
+
+已通過：
+
+- `linux/tests/run-scenarios.sh`：私有 session bus 上的私有 ibus-daemon，以真實核心跑 8 個按鍵情境（↓ 開候選與數字選字、Enter 提交、失焦提交一次、設定通知重新載入、標點、Shift＋空白全形、單按 Shift 切換來回），開發版與安裝後的 `/usr/libexec` 版本皆通過（安裝前一輪）。
+- `cargo test`：`shared` 12 項、`linux/common` 9 項（原子存檔、詞庫發布損壞修復／並行／中斷重試、符號連結拒絕、三方合併、schema 備份、清除學習與鎖）、`linux/ibus` 4 項、`linux/settings` 5 項（草稿預設、存檔、無效值拒絕、模型保留、操作預設）。
+- 線上模型：實際抓取 GitHub release 清單，判定與 Windows 一致；model-v6-classes-v4 下載、SHA-256 核對、轉換並通過 `checked()`（暫存目錄）。
+- 使用者實機：安裝後在 GNOME App 中輸入與設定程式各項功能可用。
+- 共用 crate 的改動以 `cargo check --target x86_64-pc-windows-gnu --all-targets` 交叉檢查。
+
+未驗證／已知差異：
+
+- 中英混打時候選框上方沒有 Windows 的「整句＋注音提示」列，只以 IBus 輔助文字顯示注音。
+- 反白加詞、候選文字大小與游標旁提示在 GNOME 上未實作（設定照常保存）。
+- 最後一次重新安裝（加入設定程式）後沒有重跑情境測試；設定程式沒有自動化的畫面檢查。
+- 其他發行版、X11 工作階段與 KDE 未測。
 
 ## 2026-10-17 Windows 0.10.2：更新後清理舊版
 
