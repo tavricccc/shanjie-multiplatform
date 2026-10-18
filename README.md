@@ -88,3 +88,14 @@ linux/scripts/uninstall.sh    # 移除；--delete-user-data 把個人資料移�
 ## 可選智慧輸入
 
 設定 →「中英混打與切換」可選關閉、Windows 注音順序、上游英文詞表或兩者並用，全新設定預設關閉。Windows 注音順序模式適用標準／倚天；未完成輸入先顯示原始按鍵，例如 `gj`，游標下方另顯示 `ㄕㄨ` 提示，聲調完成後轉中文，Enter 保留原文。上游英文詞表模式限標準注音，Shift＋字母可開始英文組字段。相鄰重複鍵容錯另行開啟，只處理 Windows 負責的片段。已移除免聲調／簡拼模式與開關；舊設定會清除該項。操作範例見 [設定索引](docs/MICROSOFT-IME-DIFFS.md)。
+## 上游
+
+本專案是 [Nanako0129/shanjie](https://github.com/Nanako0129/shanjie)（善解注音）的 Windows／Linux 移植，輸入核心、詞庫與模型皆來自上游，並非獨立開發的輸入法。
+
+- 上游倉庫：https://github.com/Nanako0129/shanjie
+- 目前 pin：main `b2f5da8f202b4b996071860cac3bc357430848df`（基於 v0.4.6）
+- 內建模型：model-v6＋classes-v5
+- 以固定 commit 的子模組 `upstream/shanjie` 引入；本專案對核心的差異只放在 `platform/` 與 prepare 腳本，不直接修改上游檔案。
+
+升版紀錄與覆蓋契約見 [UPSTREAM.json](UPSTREAM.json)、[UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md)。
+
