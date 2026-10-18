@@ -10,5 +10,7 @@ name = "shanjie_shell"
 [dependencies]
 shanjie-core = { package = "core", path = "../build/core" }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 
 [workspace]

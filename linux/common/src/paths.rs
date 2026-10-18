@@ -35,17 +35,13 @@ pub fn load(path: &Path) -> Result<Document> {
     Ok(doc)
 }
 
-/// windows/src/model_store.rs `resolve`: the built-in model, or a downloaded one in Models/<id>.
+/// The downloaded model packages (Windows: %LOCALAPPDATA%\Shanjie\Models).
+pub fn models() -> PathBuf {
+    folder().join("Models")
+}
+
+/// model_store::resolve: the built-in model, or a validated package in Models/<id>. An unavailable
+/// package falls back to the built-in model and keeps the selected id in settings.
 pub fn model(data: &Path, id: &str) -> PathBuf {
-    let builtin = data.join("models/model-v6/bigram.winmap");
-    if id.is_empty() || id == shanjie_shell::profile::BUILTIN {
-        return builtin;
-    }
-    let valid = id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.') && !id.starts_with('.');
-    let folder = folder().join("Models").join(id);
-    if valid && folder.join("bigram.winmap").is_file() && folder.join("classes.sjc").is_file() {
-        return folder.join("bigram.winmap");
-    }
-    // Keep the selected id in settings; an unavailable package must not disable typing.
-    builtin
+    shanjie_shell::models::resolve(&models(), data, id)
 }

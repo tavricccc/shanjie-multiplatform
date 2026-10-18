@@ -254,6 +254,8 @@ version = "0.10.2"
 dependencies = [
  "core",
  "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
