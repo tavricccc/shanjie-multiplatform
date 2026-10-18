@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=善解設定
+Comment=善解注音輸入法的設定
+Exec=shanjie-settings
+Icon=@PREFIX@/share/shanjie/icons/shanjie.svg
+Categories=Settings;
+Keywords=shanjie;zhuyin;bopomofo;ibus;注音;輸入法;
+StartupNotify=true

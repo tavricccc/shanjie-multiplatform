@@ -623,6 +623,8 @@ dependencies = [
 name = "shanjie-linux"
 version = "0.10.2"
 dependencies = [
+ "serde",
+ "serde_json",
  "sha2",
  "shanjie-shell",
  "zbus",

@@ -1,0 +1,18 @@
+[package]
+name = "shanjie-settings"
+version = "0.10.2"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "shanjie-settings"
+path = "src/main.rs"
+
+[dependencies]
+shanjie-shell = { path = "../../shared" }
+shanjie-linux = { path = "../common" }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+async-channel = "2"
+
+[workspace]

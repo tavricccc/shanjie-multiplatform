@@ -2,7 +2,8 @@
 # Builds and installs the Linux engine.
 #   linux/scripts/install.sh            build as you, install with sudo, register for this user
 #   PREFIX=/usr/local linux/scripts/install.sh
-# System files: $PREFIX/libexec/ibus-engine-shanjie, $PREFIX/share/shanjie/, the IBus component
+# System files: $PREFIX/libexec/ibus-engine-shanjie, $PREFIX/bin/shanjie-settings, its desktop entry,
+# $PREFIX/share/shanjie/, the IBus component
 # (always /usr/share/ibus/component, where ibus-daemon reads components). The user's GNOME input
 # sources gain ('ibus', 'shanjie') at the end; the current source is not changed.
 set -euo pipefail
@@ -15,14 +16,18 @@ version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$root/linux/ibus/Cargo.toml" | h
 pwsh -NoProfile -File "$root/scripts/prepare-core.ps1"
 pwsh -NoProfile -File "$root/linux/scripts/prepare-data.ps1"
 cargo build --release --locked --manifest-path "$root/linux/ibus/Cargo.toml" --target-dir "$root/build/linux/target"
+cargo build --release --locked --manifest-path "$root/linux/settings/Cargo.toml" --target-dir "$root/build/linux/target"
 
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 sed -e "s|@PREFIX@|$PREFIX|g" -e "s|@VERSION@|$version|g" "$root/linux/package/shanjie.xml.in" > "$stage/shanjie.xml"
+sed -e "s|@PREFIX@|$PREFIX|g" "$root/linux/package/io.github.Nanako0129.Shanjie.Settings.desktop" > "$stage/settings.desktop"
 
 $SUDO bash -euo pipefail -s "$root" "$PREFIX" "$stage" <<'SYSTEM'
 root="$1"; prefix="$2"; stage="$3"
 install -Dm755 "$root/build/linux/target/release/ibus-engine-shanjie" "$prefix/libexec/ibus-engine-shanjie"
+install -Dm755 "$root/build/linux/target/release/shanjie-settings" "$prefix/bin/shanjie-settings"
+install -Dm644 "$stage/settings.desktop" "$prefix/share/applications/io.github.Nanako0129.Shanjie.Settings.desktop"
 # Replace the data folder whole, so a removed file never lingers from an older version.
 rm -rf "$prefix/share/shanjie/data.new"
 mkdir -p "$prefix/share/shanjie"

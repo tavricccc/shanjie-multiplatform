@@ -11,7 +11,7 @@ if command -v gsettings >/dev/null; then
   updated="$(python3 -I -c 'import ast,sys; s=ast.literal_eval(sys.argv[1].replace("@a(ss) ","")); s=[x for x in s if x!=("ibus","shanjie")]; print(repr(s) if s else "@a(ss) []")' "$current")"
   gsettings set org.gnome.desktop.input-sources sources "$updated"
 fi
-$SUDO rm -f "$PREFIX/libexec/ibus-engine-shanjie" "$PREFIX/bin/shanjie-settings" /usr/share/ibus/component/shanjie.xml
+$SUDO rm -f "$PREFIX/libexec/ibus-engine-shanjie" "$PREFIX/bin/shanjie-settings" "$PREFIX/share/applications/io.github.Nanako0129.Shanjie.Settings.desktop" /usr/share/ibus/component/shanjie.xml
 $SUDO rm -rf "$PREFIX/share/shanjie"
 ibus write-cache >/dev/null 2>&1 || true
 ibus restart >/dev/null 2>&1 || true
