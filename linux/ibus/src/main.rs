@@ -2,7 +2,7 @@ mod bus;
 mod engine;
 mod keys;
 mod notify;
-mod profile;
+use shanjie_linux::paths as profile;
 mod serial;
 mod session;
 

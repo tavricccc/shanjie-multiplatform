@@ -4,21 +4,15 @@
 //! clear from the settings app, and the learning file's stamp to see another writer.
 use shanjie_core::ffi::*;
 use shanjie_shell::protocol::{Failure, Op, Snapshot};
+use shanjie_linux::lock;
 use std::{
     ffi::{CStr, CString},
-    fs::{File, OpenOptions},
-    os::fd::AsRawFd,
-    path::{Path, PathBuf},
+    fs::File,
+    path::PathBuf,
     ptr,
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, UNIX_EPOCH},
 };
 
-extern "C" {
-    fn flock(fd: i32, operation: i32) -> i32;
-}
-const LOCK_EX: i32 = 2;
-const LOCK_NB: i32 = 4;
-const LOCK_UN: i32 = 8;
 /// Same bound as the Windows learning mutex wait.
 const LOCK_WAIT: Duration = Duration::from_millis(250);
 
@@ -55,30 +49,6 @@ impl Drop for Engine {
     fn drop(&mut self) {
         unsafe { shanjie_engine_free(self.handle) };
     }
-}
-
-/// Opens (creating it if needed) the per-folder lock file both the engine and the settings app take.
-pub fn lock_file(folder: &Path) -> std::io::Result<File> {
-    std::fs::create_dir_all(folder)?;
-    OpenOptions::new().read(true).write(true).create(true).truncate(false).open(folder.join("learning.lock"))
-}
-
-/// Waits up to `LOCK_WAIT` for the folder lock.
-pub fn acquire(file: &File) -> bool {
-    let start = Instant::now();
-    loop {
-        if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } == 0 {
-            return true;
-        }
-        if start.elapsed() >= LOCK_WAIT {
-            return false;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
-}
-
-pub fn release(file: &File) {
-    unsafe { flock(file.as_raw_fd(), LOCK_UN) };
 }
 
 impl Engine {
@@ -128,7 +98,7 @@ impl Engine {
                 return None;
             }
             if config.learning {
-                e.lock = Some(lock_file(&config.folder).ok()?);
+                e.lock = Some(lock::open(&config.folder, lock::LEARNING).ok()?);
                 e.folder = config.folder.clone();
                 if !e.begin() {
                     return None;
@@ -145,7 +115,7 @@ impl Engine {
 
     fn begin(&mut self) -> bool {
         let Some(lock) = self.lock.as_ref() else { return true };
-        if !acquire(lock) {
+        if !lock::acquire(lock, LOCK_WAIT) {
             self.failure = Some(Failure::Busy);
             return false;
         }
@@ -167,7 +137,7 @@ impl Engine {
                 self.learning_stamp = self.store_stamp();
                 true
             } else {
-                release(lock);
+                lock::release(lock);
                 false
             }
         }
@@ -184,7 +154,7 @@ impl Engine {
             // Capture our own writes while holding the same lock; a peer write or clear is
             // detected before the next operation.
             self.learning_stamp = self.store_stamp();
-            release(lock);
+            lock::release(lock);
         }
     }
 

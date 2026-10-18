@@ -3,8 +3,7 @@
 use crate::bus::{broadcast, Engines};
 use zbus::{connection, interface, Connection};
 
-pub const NAME: &str = "io.github.Nanako0129.Shanjie";
-pub const PATH: &str = "/io/github/Nanako0129/Shanjie";
+use shanjie_linux::notify::{NAME, PATH};
 
 struct Notifier {
     ibus: Connection,
