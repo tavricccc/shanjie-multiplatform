@@ -65,6 +65,26 @@ impl Engine {
         let commit = self.display.chars().take(before).collect::<String>() + &reading + &self.display.chars().skip(after).collect::<String>();
         self.clear_all(); self.view(true,commit)
     }
+    /// Windows policy on a window upstream just opened: the Big5 and reading-text filters, the typed-zhuyin and
+    /// original-letters items. Windows built from a prediction row, English or digit windows keep upstream's list
+    /// (their indexes carry meaning); only the lexicon items behind a row are filtered.
+    fn decorate_windows_candidates(&mut self) {
+        let Some(mut cands) = self.cands.take() else { return };
+        let plain = !cands.english && cands.dalt.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
+        let touching = self.cursor.saturating_sub(1);
+        let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
+        if !plain || digits {
+            let kept = cands.rows.len();
+            if self.candidate_big5 && !cands.english && cands.dalt.is_none() {
+                let tail = cands.list.split_off(kept.min(cands.list.len()));
+                cands.list.extend(tail.into_iter().filter(|(word,_)| fits_big5(word)));
+            }
+            self.cands = (!cands.list.is_empty()).then_some(cands);
+            return;
+        }
+        let list = std::mem::take(&mut cands.list);
+        self.cands = self.make_candidates(list);
+    }
     fn make_candidates(&self, mut list: Vec<(String,usize)>) -> Option<Cands> {
         let (_,length) = list.first()?.clone();
         if !self.space_inputs_zhuyin { list.retain(|(word,_)| !windows_reading_text(word)); }

@@ -31,7 +31,7 @@ Replace-SmartContract '        self.syls.splice(start..end, reading);' "        
 Replace-SmartContract '    fn choose(&mut self, idx: usize) -> Result<(), EngineError> {' "    fn choose(&mut self, idx: usize) -> Result<(), EngineError> {`n        if self.choose_windows_literal(idx)? { return Ok(()); }"
 Replace-SmartContract '    fn forget_highlighted(&mut self) -> Result<(), EngineError> {' "    fn forget_highlighted(&mut self) -> Result<(), EngineError> {`n        if self.cands.as_ref().is_some_and(|c| c.literals.contains_key(&c.sel)) { return Ok(()); }"
 Replace-SmartContract '    list: Vec<(String, usize)>,' "    list: Vec<(String, usize)>,`n    literals: HashMap<usize,WindowsLiteralCandidate>,"
-Replace-SmartContract 'Cands { list, sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None }' 'Cands { list, literals: HashMap::new(), sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None }'
+Replace-SmartContract 'Cands { list, sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None, rows: Vec::new(), dalt: None }' 'Cands { list, literals: HashMap::new(), sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None, rows: Vec::new(), dalt: None }'
 Set-Content $file $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-english.ps1" | Out-Null
 Copy-Item "$root/build/english-words.txt" "$CorePath/src/english-words.txt" -Force

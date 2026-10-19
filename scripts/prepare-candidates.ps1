@@ -12,10 +12,9 @@ function Replace-Contract([string]$old, [string]$replacement, [int]$count = 1) {
 }
 Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,`n    candidate_big5: bool,"
 Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,`n            candidate_big5: false,"
-Replace-Contract 'self.cands = Some(Cands::new(list, self.cand_vertical));' 'self.cands = self.make_candidates(list);' 2
-Replace-Contract '    fn open_candidates(&mut self) {' '    fn open_candidates_left(&mut self) {'
+Replace-Contract '    fn open_candidates(&mut self, rows: Vec<Pred>) {' '    fn open_candidates_left(&mut self, rows: Vec<Pred>) {'
 Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l);' 2
-Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh });`n        if self.candidate_from_right { self.cursor = end; }"
+Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
 Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
 Replace-Contract '        all.truncate(PREDICT_MAX);' "        if self.candidate_big5 { all.retain(|p| fits_big5(&p.word)); }`n        all.truncate(PREDICT_MAX);"
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)

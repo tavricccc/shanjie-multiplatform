@@ -16,9 +16,10 @@ impl Engine {
         }
     }
 
-    fn open_candidates(&mut self) {
+    fn open_candidates(&mut self, rows: Vec<Pred>) {
         if !self.candidate_from_right {
-            self.open_candidates_left();
+            self.open_candidates_left(rows);
+            self.decorate_windows_candidates();
             return;
         }
         if self.syls.is_empty() { return; }
@@ -46,7 +47,7 @@ impl Engine {
     }
 
     pub fn cycle_windows_candidate(&mut self) -> Result<Output,EngineError> {
-        let cursor = self.cursor; self.clear_pred(); self.open_candidates();
+        let cursor = self.cursor; self.clear_pred(); self.open_candidates(Vec::new());
         let Some(cands) = &self.cands else { self.cursor = cursor; return self.handled(); };
         let shown: Vec<char> = self.display.chars().collect();
         let current = cands.list.iter().position(|(word,length)| {

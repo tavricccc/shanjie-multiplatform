@@ -15,7 +15,7 @@ $source = Get-Content (Join-Path $upstream 'core/src/learn_store.rs') -Raw
 $constants = $source.Substring($source.IndexOf('pub const FILE:'), $source.IndexOf('// <fcntl.h>') - $source.IndexOf('pub const FILE:'))
 $shared = $source.Substring($source.IndexOf('/// Latest accepted day'), $source.IndexOf('impl LearnStore {') - $source.IndexOf('/// Latest accepted day'))
 $imports = @'
-use crate::learn::{context_key, is_full_context, is_single, Record, GLOBAL, NEXT_PREFIX, SENTINEL};
+use crate::learn::{context_key, is_full_context, is_han, is_single, Record, GLOBAL, NEWWORD, NEWWORD_MAX, NEWWORD_MIN, NEXT_PREFIX, SENTINEL};
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
@@ -34,6 +34,7 @@ $content = $content.Replace('pub fn local_day() -> i64 {', "#[cfg(not(windows))]
 $content += "`n#[cfg(windows)]`n" + (Get-Content (Join-Path $root 'platform/clock_windows.rs') -Raw)
 Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-lm.ps1" -CorePath $output
+& "$PSScriptRoot/prepare-trigram.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-candidates.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-keys.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-smart-input.ps1" -CorePath $output
