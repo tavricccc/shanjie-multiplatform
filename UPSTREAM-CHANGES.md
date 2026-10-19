@@ -26,7 +26,7 @@ Windows 英文擴充將實際大小寫送入 shadow 與 run，查英文詞表時
 
 設定 `[input] mixed_input`（Windows 注音順序判斷）、`upstream_english`（上游英文詞表判斷、空白選單、英文留在組字區）、`english_inline`（預設 1，打字時顯示英文字母）互相獨立；設定頁「中英混打方式」為 關／注音順序／英文詞表／兩者並用 四選一，另有顯示英文字母開關。兩者並用時，Windows 政策先處理按鍵，上游英文只接手它放行的部分；`Shift＋字母` 在上游英文開啟時交給上游開英文段。
 
-核心接合（`platform/smart_input_windows.rs`）：`Engine::key` 在上游英文段進行中（`run` 非空、英文選單開啟、或行內字母顯示）時直接走上游 `key_original`，其餘仍走 Windows 組字政策（字面標點等）。`set_upstream_english(on, inline)` 只設定上游 `set_english`／`set_english_inline`，不影響 Windows 混打狀態。英文詞表使用打包的 `data/english-common.txt`，由 `engine.rs` 開核心時載入，缺檔只讓詞表判斷失效。新增 broker `Op::English(u32)`（bit0 開、bit1 顯示字母，列於 enum 尾端）、FFI `shanjie_windows_set_upstream_english`、bridge op 10；TSF 先送 English 再送 Mixed，並列入需重建核心的設定鍵。
+核心接合（`platform/smart_input_windows.rs`）：`Engine::key` 在上游英文段進行中（`run` 非空、英文選單開啟、或行內字母顯示）時直接走上游 `key_original`，其餘仍走 Windows 組字政策（字面標點等）。`set_upstream_english(on, inline)` 只設定上游 `set_english`／`set_english_inline`，不影響 Windows 混打狀態。英文詞表使用打包的 `english-words.txt`（與上游相同的 82,730 詞，建置時由 `scripts/prepare-english.ps1` 產生並核對雜湊），由 `engine.rs` 開核心時載入，缺檔只讓詞表判斷失效。新增 broker `Op::English(u32)`（bit0 開、bit1 顯示字母，列於 enum 尾端）、FFI `shanjie_windows_set_upstream_english`、bridge op 10；TSF 先送 English 再送 Mixed，並列入需重建核心的設定鍵。
 
 設定頁重排：新增「中英混打與切換」頁，集中單按 Shift 切換中英、Shift 側別、Ctrl＋空白、Caps Lock、混打方式與無法轉換序列輸出英數；「切換與快捷鍵」改為「快捷鍵與符號鍵」，只留全半形與符號快捷鍵。
 
@@ -102,7 +102,7 @@ Windows 外層新增本機管道 broker 與 x64 核心程序；x86／x64 前端�
 
 `[input] mixed_input`、`smart_zhuyin` 預設均為 0，適用標準／倚天注音。簡拼開啟時，Windows 讓有效 prediction 為開啟，不改使用者保存的 prediction 偏好；切換任一新選項先保留組字再重建核心。舊 schema 5 由既有缺省值遷移補入兩個關閉值，不改個人資料。拼音保留設定值但不啟用這兩項政策。
 
-英文詞表來源固定於 Rime Easy English commit `54a4a07289412efc54134092c0d945f895a71ed3`，僅抽取常用、至少三個字母的英文項目，來源與 LGPL 授權見 `LICENSES/english-data.md`。沒有網路辨識；英文候選不是另一個雲端或大型模型。完整合法注音優先，小寫短詞、詞表外單字、無分界的英文／簡拼混合仍可能需要手動選詞或切換。英文後按 ↓／Tab 可要求回到注音；這不承諾華碩所有整句辨識行為。
+英文詞表與上游完全相同：SymSpell 固定 commit 的 `frequency_dictionary_en_82_765.txt`，用上游 `tools/build_english_words.py` 產生並核對 `data/english-words.txt.sha256`，不在 Git 內；授權見打包的 `LICENSES/data.md`、`SCOWL.txt`、`SymSpell-MIT.txt`。沒有網路辨識；英文候選不是另一個雲端或大型模型。完整合法注音優先，小寫短詞、詞表外單字、無分界的英文／簡拼混合仍可能需要手動選詞或切換。英文後按 ↓／Tab 可要求回到注音；這不承諾華碩所有整句辨識行為。
 
 ## 2026-10-11 同步 main 與 model-v5
 
