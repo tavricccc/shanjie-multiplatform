@@ -1,6 +1,18 @@
 # 上游差異與更新紀錄
 
-這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `b2f5da8f202b4b996071860cac3bc357430848df`（2026-10-16；含 v0.4.4–v0.4.6 與 trigram 核心第 A、B 片），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
+
+## 2026-10-19 對齊上游 a639e8a（v0.4.7）
+
+上游 pin 由 `b2f5da8` 前進 404 個 commit 到 main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7）。模型仍是 model-v6／classes-v5。
+
+- **個人詞庫**：修正個人詞庫載入時漏掉名稱層（`names.tsv`、`names-add.tsv`）；常駐快取鍵也納入 `names-add.tsv`。
+- **英文詞表**：改用上游 82,730 字的清單，建置時由 SymSpell 固定 commit 依上游產生器產生並核對上游記錄的雜湊，不入 git；移除原 Rime Easy English 子集。
+- **ACG 詞包**：兩條詞庫路徑都載入 `packs/acg-add.tsv`；設定檔 `engine.acg_pack`（預設開）、設定頁開關，屬個人設定。
+- **覆蓋層移植**：上游改為以列（`rows`）建立候選，`prepare-candidates` 改成重新命名上游函式再於 Windows 端裝飾；新增 `prepare-trigram.ps1` 與 `platform/mapped_windows.rs`，讓 trigram／oc 表的 mmap 型別在 Windows 可用。
+- **上游新功能一併帶入**：數字層、重選凍結、新詞學習、預測列。Windows 既有的字面數字／混打數字處理沿用現行路徑，與上游數字層並存的細節尚未逐項比對。
+- **未納入**：tinylm／語意修正；`trigram.sjt3` 不隨安裝包出貨，Windows 仍以 `tri: None` 執行書面設定的 trigram。
+- `build.ps1` 在子模組不在 pin 上時拒絕打包。
 
 ## 2026-10-17 Windows 0.10.1：數字混打與加詞比對
 
