@@ -28,6 +28,18 @@ mod windows_smart_tests {
         assert!(!e.english&&e.mixed_input,"unsupported upstream English never disables Eten Windows mixed input");
     }
     #[test]
+    fn symbols_kept_behind_a_reading_stay_before_an_english_run() {
+        let mut e=engine();e.set_mixed_input(false);
+        let folder=std::env::temp_dir().join(format!("shanjie-run-order-{}",std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();let path=folder.join("english.txt");
+        std::fs::write(&path,"hello\n").unwrap();e.load_english(&path).unwrap();e.set_upstream_english(true,true).unwrap();
+        e.key(Key::ch('s',0)).unwrap();
+        assert_eq!(e.key(Key::ch('\\',MOD_CONTROL)).unwrap().preedit,"ㄋ、","Windows keeps the unfinished reading");
+        assert_eq!(e.key(Key::ch('a',MOD_SHIFT)).unwrap().preedit,"、A");
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"、A");
+        std::fs::remove_dir_all(&folder).ok();
+    }
+    #[test]
     fn numeric_prefix_keeps_unconvertible_tone_keys() {
         let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
         for english in [false,true] {
@@ -385,7 +397,16 @@ impl Engine {
             return self.key_original(key);
         }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
-            let out=self.start_run(self.latin_character(key))?;
+            // Symbols the Windows policy kept behind an unfinished reading go in front of the run: upstream's
+            // run replaces that reading, and the symbols were typed before the letter.
+            let mut commit=String::new();
+            if !self.pending_literal.is_empty() {
+                let text=std::mem::take(&mut self.pending_literal);
+                self.clear_pend();
+                commit=self.insert_windows_literal(&text)?.commit;
+            }
+            let mut out=self.start_run(self.latin_character(key))?;
+            out.commit=commit+&out.commit;
             return Ok(self.mixed_view(out));
         }
         // While an upstream English run, English window or inline letters are on screen, upstream
