@@ -4,17 +4,9 @@
 
 Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後聯想與善解額外的標點／聲調操作預設關閉，Caps Lock、學習、空白提交、拼音空白與反引號標點也用專案自訂的值。這些是本專案的選擇，不是微軟的出廠值。候選排序、整句解碼與學習仍是善解的，沒有重製微軟的私有引擎。
 
-## 模型與詞類表
+## 模型
 
-| 模型 | 配對詞類表 | 差異與選擇 |
-| --- | --- | --- |
-| [model-v6](https://github.com/Nanako0129/shanjie/releases/tag/model-v6) | [classes-v5](https://github.com/Nanako0129/shanjie/releases/tag/classes-v5) | 唯一內建配套，預設及備援 |
-| model-v6 | [classes-v4](https://github.com/Nanako0129/shanjie/releases/tag/classes-v4) | 相容配套，可由設定下載 |
-| [model-v5](https://github.com/Nanako0129/shanjie/releases/tag/model-v5) | [classes-v3](https://github.com/Nanako0129/shanjie/releases/tag/classes-v3) | 相容舊配套，可由設定下載 |
-
-詞類表是模型的一部分，**不提供任意配表或單獨停用的開關**。檔頭綁定原始模型 SHA-256；映射保存來源雜湊、九個模型陣列、三個詞類陣列。設定的一般頁提供模型選單、線上下載、開啟模型資料夾及重新掃描。只有完整且通過驗證的配套可選；選定的外部配套遺失或無效時，新核心以內建配套備援並保留原選擇。原始模型附件不能直接當作 Windows 配套使用。細節見 [0.10.0 版本說明](releases/RELEASE-NOTES-0.10.0.md)。
-
-即時預測是獨立開關，和模型版本無關。
+使用上游 Release 內建的模型；設定的一般頁可下載上游發布的其他相容模型。模型與詞類表的搭配沿用上游的規定。即時預測是獨立開關，和模型無關。
 
 ## 按鍵與狀態
 
@@ -47,7 +39,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
 | `profile.interaction` | 選字與外觀：↑↓ 或 ←→ 政策 | windows／shanjie |
-| `engine.model_id` | 一般：內建或已驗證的使用者模型配套 | model-v6-classes-v5；保留 |
+| `engine.model_id` | 一般：內建或已下載的模型 | 內建；保留 |
 | `engine.ranking` | 一般：聊天／正式權重 | chat／chat；保留 |
 | `engine.prediction` | 未完成讀音的即時預測 | 0／1 |
 | `engine.demote` | 避免特定敏感詞排名過高，詞仍可選 | 1／1；保留 |
