@@ -1,6 +1,12 @@
 # 移植驗證紀錄
 
-最新日期：2026-10-17。上游 pin 為 main `b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+最新日期：2026-10-19。上游 pin 為 main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+
+## 2026-10-19 對齊上游 a639e8a（v0.4.7）
+
+**已驗證**：以 `verify.ps1 -UseExistingBuild -CoreOnly` 跑核心：上游 lib 測試 88 項（略過 2 項需子行程者）與 `engine`、`engine_learn`、`engine_replay`、`engine_lm`、`engine_demote`、`engine_predict`、`engine_pack`、`engine_vertical`、`kn_tiny`、`tinylm_tiny`、`engine_english`、`engine_rerank`、`tri_tiny` 全數通過；個人詞庫與 ACG 詞包的 Windows 單元測試通過；x64 Rust 與 WinUI 建置成功。測試用 `trigram.sjt3`（143,643,936 bytes，SHA-256 `fdd3b05d…` 與上游記錄一致）只放在驗證資料夾，不出貨。上游測試中僅 unix 可用的 symlink 案例在產生的測試樹內改為複製或略過。
+
+**未驗證**：真機 TSF 行為、新 pin 下的完整 `verify.ps1`（含原生與視覺測試）、x86 建置、Linux 端編譯、ACG 詞包的實際載入時間、Windows 數字處理與上游數字層並存的互動。
 
 ## 2026-10-18 Linux 0.10.2：IBus 首版
 
