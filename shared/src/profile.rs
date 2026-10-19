@@ -247,7 +247,7 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "demote", "class_table", "model_id", "model_revision"]),
+    ("engine", &["ranking", "demote", "acg_pack", "class_table", "model_id", "model_revision"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],

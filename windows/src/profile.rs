@@ -173,7 +173,7 @@ pub fn apply_preset(source: &Path) -> Result<()> {
     if path().exists() {
         let previous = load(&path())?;
         for (section, keys) in [
-            ("engine", &["ranking", "demote", "class_table", "model_id", "model_revision"][..]),
+            ("engine", &["ranking", "demote", "acg_pack", "class_table", "model_id", "model_revision"][..]),
             (
                 "input",
                 &[
