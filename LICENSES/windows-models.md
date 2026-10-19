@@ -1,6 +1,6 @@
 # Windows 安裝包的模型與詞類表
 
-核對版本：善解 main，`b2f5da8f202b4b996071860cac3bc357430848df`（v0.4.6）。本包只內建 model-v6＋classes-v5；其他相容配套由設定的線上模型管理另行下載；本文件補充上游 `LICENSES/data.md`，不取代上游詞庫授權與署名。
+核對版本：善解 main，`a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7）。本包只內建 model-v6＋classes-v5；其他相容配套由設定的線上模型管理另行下載；本文件補充上游 `LICENSES/data.md`，不取代上游詞庫授權與署名。
 
 | 包內目錄 | 原始 Release 資產 | 資料授權 |
 | --- | --- | --- |
