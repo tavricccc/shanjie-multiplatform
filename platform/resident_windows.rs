@@ -8,6 +8,8 @@ type LexCache = Vec<(
     Arc<Lexicon>,
     // Pack rows are part of the capped lexicon later built from this lexicon, so they travel with it.
     Option<String>,
+    // The optional digit count table read from the same data folder (upstream shares it across engines).
+    Option<Arc<DigitTable>>,
 )>;
 fn resource_stamp(
     data: &Path,
@@ -26,6 +28,11 @@ fn resource_stamp(
     .collect();
     if let Some(p) = personal {
         paths.push(p.to_owned());
+    }
+    // Optional like the pack: present files are part of the key, a missing one is not an error.
+    let digits = data.join("digits.tsv");
+    if digits.is_file() {
+        paths.push(digits);
     }
     // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
     if packs & PACK_ACG != 0 {
@@ -58,11 +65,12 @@ impl Engine {
             .get_or_init(Default::default)
             .lock()
             .map_err(|_| EngineError::LoadFailed)?;
-        if let Some(index) = cache.iter().position(|(key, _, _)| key == &stamp) {
+        if let Some(index) = cache.iter().position(|(key, _, _, _)| key == &stamp) {
             let entry = cache.remove(index);
             let mut engine = Engine::with_lexicon(entry.1.clone(), layout);
             engine.data_dir = Some(data.to_owned());
             engine.pack_text = entry.2.clone();
+            engine.digit_table = entry.3.clone();
             cache.push(entry);
             return Ok(engine);
         }
@@ -71,7 +79,7 @@ impl Engine {
         if cache.len() == 4 {
             cache.remove(0);
         }
-        cache.push((stamp, engine.lex.clone(), engine.pack_text.clone()));
+        cache.push((stamp, engine.lex.clone(), engine.pack_text.clone(), engine.digit_table.clone()));
         Ok(engine)
     }
     pub fn load_lm(&mut self, path: &Path) -> Result<(), EngineError> {

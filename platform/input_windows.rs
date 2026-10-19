@@ -44,7 +44,8 @@ impl Engine {
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
-        engine.pack_text = Some(pack_text).filter(|text| !text.is_empty()); Ok(engine)
+        engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
+        engine.digit_table = windows_digit_table(data); Ok(engine)
     }
     pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; self.clear_pred(); }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
@@ -111,6 +112,11 @@ impl Engine {
         }
         (!cands.list.is_empty()).then_some(cands)
     }
+}
+/// The optional digit count table, read as upstream `new_with_packs` reads it (digits.md A.3.2):
+/// missing or malformed leaves the digit layer off.
+fn windows_digit_table(data: &Path) -> Option<Arc<DigitTable>> {
+    std::fs::read_to_string(data.join("digits.tsv")).ok().and_then(|t| DigitTable::parse(&t)).map(Arc::new)
 }
 // glibc's CP950 is the same code page; without //TRANSLIT it never substitutes, matching
 // WC_NO_BEST_FIT_CHARS. The descriptor is kept per thread; without one nothing is filtered.
@@ -199,6 +205,30 @@ mod personal_lexicon_tests {
             assert!(off.pack_text.is_none());
         }
         assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 2).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+    #[test]
+    fn digit_table_loads_on_every_lexicon_path() {
+        let dir = std::env::temp_dir().join(format!("shanjie-digits-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -1.0\n").unwrap();
+        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
+        let personal = dir.join("dictionary.tsv");
+        std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
+        for source in [None, Some(personal.as_path())] {
+            assert!(Engine::new_with_personal(&dir, Layout::Standard, source, 0).unwrap().digit_table.is_none(), "no table: digits stay off");
+        }
+        let mut table = String::from("T\t1000\nN\t100\nS\t10\nD\t<s>\t5\t100\n");
+        for k in 1..=9 { table += &format!("L\t{k}\t10\n"); }
+        table += "L\t10+\t10\n";
+        for c in "0123456789./-".chars() { table += &format!("C\t{c}\t10\n"); }
+        std::fs::write(dir.join("digits.tsv"), table).unwrap();
+        for source in [None, Some(personal.as_path())] {
+            // The second engine of each pair comes from the resident cache.
+            for _ in 0..2 {
+                assert!(Engine::new_with_personal(&dir, Layout::Standard, source, 0).unwrap().digit_table.is_some(), "personal={}", source.is_some());
+            }
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 }
