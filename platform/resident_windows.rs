@@ -15,6 +15,7 @@ fn resource_stamp(
         "mcbpmf-data.txt",
         "overlay-add.tsv",
         "sandhi-add.tsv",
+        "names-add.tsv",
         "demote.tsv",
     ]
     .iter()
