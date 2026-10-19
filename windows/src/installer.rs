@@ -109,6 +109,11 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "ui/Shanjie.UI.exe",
         "data/models/model-v6/bigram.winmap",
         "data/models/model-v6/classes.sjc",
+        // Optional to the core (a missing file silently turns its feature off), so the package must
+        // carry them, as upstream's check-app requires digits.tsv.
+        "data/digits.tsv",
+        "data/english-words.txt",
+        "data/packs/acg-add.tsv",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
     ] {
