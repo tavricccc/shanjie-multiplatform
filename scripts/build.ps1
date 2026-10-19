@@ -12,6 +12,10 @@ $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
+    # The data copied below comes straight from the submodule working tree, so it must be the pinned commit
+    # even when the core is reused (a moved submodule would otherwise ship data the pinned core does not read).
+    $pin = (Get-Content "$root/UPSTREAM.json" -Raw | ConvertFrom-Json).commit
+    if ((git -C "$root/upstream/shanjie" rev-parse HEAD) -ne $pin) { throw 'upstream/shanjie is not at the commit in UPSTREAM.json.' }
     if (!$UseExistingCore) { & "$PSScriptRoot/prepare-core.ps1" }
     rustup target add $target
     if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
