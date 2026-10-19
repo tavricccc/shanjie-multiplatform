@@ -1,4 +1,4 @@
-善解 Windows v0.10.2 測試版
+善解 Windows v0.11.0 測試版
 
 1. 完整解壓 Shanjie-Windows.zip，雙擊 install.cmd。
    或右鍵「以系統管理員身分執行」。會要求 UAC。
