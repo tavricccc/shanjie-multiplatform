@@ -58,20 +58,31 @@ impl LearnStore {
         }
         Ok((records, Opened::Loaded { skipped }))
     }
-    pub fn save(&self, records: &[Record]) -> Result<(), StoreError> { self.rewrite(records) }
-    pub fn save_forgetting(&self, records: &[Record]) -> Result<(), StoreError> { self.rewrite(records) }
-    fn rewrite(&self, records: &[Record]) -> Result<(), StoreError> {
+    pub fn save(&self, records: &[Record]) -> Result<(), StoreError> { self.rewrite(records, false) }
+    /// As upstream: a forget renames even when the flush fails, since leaving the forgotten word on
+    /// disk is worse than a less durable file.
+    pub fn save_forgetting(&self, records: &[Record]) -> Result<(), StoreError> { self.rewrite(records, true) }
+    fn rewrite(&self, records: &[Record], rename_unsynced: bool) -> Result<(), StoreError> {
         let mut buffer = String::from(HEADER);
         buffer.push('\n');
         lines(records, &mut buffer);
         let temporary = self.dir.join(TMP);
         remove(&temporary)?;
-        let mut file = io(OpenOptions::new().write(true).create_new(true).open(&temporary))?;
-        io(file.write_all(buffer.as_bytes()))?;
-        io(file.sync_all())?;
-        drop(file);
-        // Rust uses MoveFileExW(REPLACE_EXISTING) on Windows: no delete-then-rename gap.
-        io(fs::rename(temporary, self.dir.join(FILE)))
+        let written = (|| {
+            let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+            file.write_all(buffer.as_bytes())?;
+            if file.sync_all().is_err() && !rename_unsynced {
+                return Err(std::io::Error::other("sync"));
+            }
+            drop(file);
+            // Rust uses MoveFileExW(REPLACE_EXISTING) on Windows: no delete-then-rename gap.
+            fs::rename(&temporary, self.dir.join(FILE))
+        })();
+        if written.is_err() {
+            let _ = fs::remove_file(&temporary);
+            return Err(StoreError::Io);
+        }
+        Ok(())
     }
     pub fn append(&self, records: &[Record]) -> Result<(), StoreError> {
         let mut buffer = String::new();
