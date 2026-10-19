@@ -1,6 +1,6 @@
 # 上游差異
 
-上游固定於 [Nanako0129/shanjie](https://github.com/Nanako0129/shanjie) main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），以 `UPSTREAM.json` 與子模組實際 commit 為準。內建模型 model-v6＋classes-v5。各版變更見 [Changelog](Changelog.md)。
+使用 [善解](https://github.com/Nanako0129/shanjie) v0.4.7 Release，實際 commit 以 `UPSTREAM.json` 為準。各版變更見 [Changelog](Changelog.md)。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、注音順序混打等都是核心行為變更，不是改設定就能做到。
 

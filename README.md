@@ -4,7 +4,7 @@
 
 - **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.10.2**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
 - **Linux**：Fedora GNOME 上的 IBus 輸入法，首個測試版 **0.10.2**。
-- **上游**：固定於 main `a639e8a`（v0.4.7），內建 model-v6＋classes-v5。
+- **上游**：使用善解 v0.4.7 Release 的核心、詞庫與模型。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。
 
@@ -59,7 +59,7 @@
 
 - **中英混打**：「中英混打與切換」頁可選關閉、Windows 注音順序、上游英文詞表或兩者並用，預設關閉。Windows 注音順序模式下，未完成的輸入先顯示原始按鍵（如 `gj`），下方提示 `ㄕㄨ`，聲調完成後轉中文，Enter 保留原文。上游英文詞表限標準注音，Shift＋字母開始英文段。
 - **加詞**：反白 1–32 個漢字後雙按 Ctrl，在詞旁確認讀音並加入個人詞庫；加入前會比對內建詞庫、個人詞庫與目前模型。
-- **模型**：設定可下載上游發布的相容配套，檢查大小、SHA-256 與配對後才列入選單；存於 `%LOCALAPPDATA%\Shanjie\Models`。選定的配套遺失或損壞時，改用內建配套並保留原選擇。
+- **模型**：可在設定中下載上游發布的其他相容模型。
 
 個人設定在 `%LOCALAPPDATA%\Shanjie\profile.ini`。直接改檔後，按設定頁的「重新啟動輸入法」或重新啟用善解才會讀取；這個按鈕不會終止 App，也換不掉 App 已載入的舊版 DLL。
 
@@ -89,7 +89,7 @@ pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建�
 pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 ```
 
-`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。建置時核對模型的官方 SHA-256 與映射等價；來源記在 [MODEL-SOURCES.json](MODEL-SOURCES.json)，線上相容配套在 [MODEL-CATALOG.json](MODEL-CATALOG.json)。
+`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
 
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
 - [上游差異](UPSTREAM-CHANGES.md)：核心覆蓋與升版流程。更新上游前先讀。
