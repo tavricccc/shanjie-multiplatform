@@ -1,6 +1,14 @@
 # 移植驗證紀錄
 
-最新日期：2026-10-19。上游 pin 為 main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+最新日期：2026-10-20。上游 pin 為 main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），與子模組／UPSTREAM.json 一致。下列開發期與歷史段落保留各自當時的來源、模型、失敗與驗證界線；以首節作為 0.10.2 的現況依據。
+
+## 2026-10-20 與上游 a639e8a 的差異檢查
+
+修正內容見 UPSTREAM-CHANGES.md 同日一節。
+
+**已驗證**：先以 `prepare-core.ps1` 重新產生核心，再跑 `verify.ps1 -UseExistingBuild -CoreOnly`，全數通過（exit 0）：lib 91 項（略過 2 項需子行程者），含新增的數字表載入、英文段前標點順序與映射模型旁 trigram 測試；`engine` 34、`engine_demote` 6、`engine_digits` 60、`engine_digits_off` 2、`engine_english` 85、`engine_learn` 56、`engine_lm` 16、`engine_newword` 38、`engine_pack` 3、`engine_predict` 81、`engine_repick` 30、`engine_replay` 4、`engine_rerank` 22、`engine_vertical` 21、`kn_tiny` 9、`oc_tiny` 6、`tinylm_tiny` 16、`tri_tiny` 12。`engine_digits_off` 排除 r01／r02／r36 三列，`oc_tiny` 只在刪暫存前釋放映射，理由見 UPSTREAM-CHANGES。`windows` crate 以 `cargo check --target x86_64-pc-windows-msvc` 通過（安裝包必要檔清單）。
+
+**未驗證**：真機 TSF 行為（數字層、英文段前標點）、完整 `verify.ps1`（原生 TSF、浮層與視覺測試）、x86 與 WinUI 建置、`verify-package` 對實際打包輸出的檢查。`dist/data` 是 pin 前舊輸出，尚未含 `digits.tsv`，需重新 `build.ps1` 後才會帶上；本輪未重建 dist。映射模型旁 `trigram.sjt3` 只以上游 tiny 測試檔驗證，未用完整 143 MB 表在 Windows 映射模型上試打。
 
 ## 2026-10-19 對齊上游 a639e8a（v0.4.7）
 
