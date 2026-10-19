@@ -97,9 +97,10 @@ impl Engine {
         // even after another session already holds a valid mapped model.
         let folder = path.parent().ok_or(EngineError::LoadFailed)?;
         let mut paths = vec![path.to_owned(), folder.join("classes.sjc")];
-        let side = folder.join("kn.sjkn");
-        if side.exists() {
-            paths.push(side);
+        for side in ["kn.sjkn", "trigram.sjt3"].map(|name| folder.join(name)) {
+            if side.exists() {
+                paths.push(side);
+            }
         }
         let stamp: Vec<_> = paths
             .into_iter()

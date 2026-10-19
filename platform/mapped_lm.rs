@@ -118,6 +118,18 @@ impl Lm {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err(LmError::KnSide),
         }
+        // Same rule as upstream `load_opts`: a `trigram.sjt3` beside the model is mapped and must match it;
+        // none is off (the package ships none, like upstream's app).
+        let tri = path.with_file_name("trigram.sjt3");
+        match std::fs::symlink_metadata(&tri) {
+            Ok(_) => {
+                // SAFETY: the Windows mapping denies writers and deleters while it is open.
+                let map = unsafe { Mapped::open(&tri) }.map_err(|()| LmError::TriTable)?;
+                model.add_tri_bytes(TriBytes::Map(map))?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(LmError::TriTable),
+        }
         Ok(model)
     }
 }
@@ -125,4 +137,29 @@ impl Lm {
 fn windows_digest(bytes: &[u8]) -> [u8;32] {
     let hex = crate::eval::sha256_hex(bytes);
     std::array::from_fn(|i| u8::from_str_radix(&hex[2*i..2*i+2],16).unwrap())
+}
+
+#[cfg(test)]
+mod windows_map_trigram {
+    use super::*;
+    #[test]
+    fn a_trigram_table_beside_the_map_is_used_like_upstream() {
+        let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval/golden");
+        let model = std::fs::read(golden.join("kn-tiny/bigram.sjlm")).unwrap();
+        let classes = std::fs::read(golden.join("kn-tiny/classes.sjc")).unwrap();
+        let dir = std::env::temp_dir().join(format!("shanjie-winmap-tri-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("classes.sjc"), &classes).unwrap();
+        let map = dir.join("bigram.winmap");
+        Lm::parse_with_classes(&model, &classes).unwrap().write_windows_map(&map, &model, Some(&classes)).unwrap();
+        assert!(Lm::load(&map).unwrap().tri.is_none(), "no table: off");
+        std::fs::copy(golden.join("tri-tiny/trigram.sjt3"), dir.join("trigram.sjt3")).unwrap();
+        {
+            let loaded = Lm::load(&map).unwrap();
+            assert!(loaded.tri.as_ref().is_some_and(Tri::is_mapped), "the table beside the map is mapped");
+        }
+        std::fs::write(dir.join("trigram.sjt3"), b"garbage").unwrap();
+        assert_eq!(Lm::load(&map).err(), Some(LmError::TriTable), "a bad table is refused, not ignored");
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
