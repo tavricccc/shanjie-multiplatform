@@ -2,7 +2,7 @@
 fn english_word(word: &str) -> bool {
     static WORDS: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
     WORDS
-        .get_or_init(|| include_str!("english-common.txt").lines().collect())
+        .get_or_init(|| include_str!("english-words.txt").lines().collect())
         .binary_search(&word)
         .is_ok()
 }

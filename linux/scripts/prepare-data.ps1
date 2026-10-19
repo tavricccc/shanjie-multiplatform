@@ -31,12 +31,9 @@ foreach ($entry in $manifest.models) {
 }
 Copy-Item "$root/upstream/shanjie/data/lexicon/*" $stage -Force
 Copy-Item "$root/data/pinyin-map.tsv" $stage -Force
-# Upstream's strict English reader accepts LF only, even when a local editor wrote CRLF.
-$english = [IO.File]::ReadAllText("$root/data/english-common.txt").Replace("`r`n","`n")
-$words = $english.TrimEnd("`n").Split("`n")
-if (@($words | Where-Object { $_ -cnotmatch '^[a-z]{3,32}$' }).Count -or @($words | Group-Object | Where-Object Count -gt 1).Count) { throw 'Bundled English list is invalid.' }
-[IO.File]::WriteAllText("$stage/english-common.txt",$english,[Text.UTF8Encoding]::new($false))
-Copy-Item "$root/LICENSES/english-data.md","$root/LICENSES/easy-en-LGPL-3.0.txt","$root/LICENSES/easy-en-GPL-3.0.txt" "$stage/LICENSES" -Force
+# Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
+& "$root/scripts/prepare-english.ps1" | Out-Null
+Copy-Item "$root/build/english-words.txt" "$stage/english-words.txt" -Force
 Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$stage/LICENSES" -Force
 Copy-Item "$root/data/README.md" "$stage/LICENSES/pinyin-data.md" -Force
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }

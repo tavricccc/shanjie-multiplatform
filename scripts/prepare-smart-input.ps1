@@ -33,5 +33,6 @@ Replace-SmartContract '    fn forget_highlighted(&mut self) -> Result<(), Engine
 Replace-SmartContract '    list: Vec<(String, usize)>,' "    list: Vec<(String, usize)>,`n    literals: HashMap<usize,WindowsLiteralCandidate>,"
 Replace-SmartContract 'Cands { list, sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None }' 'Cands { list, literals: HashMap::new(), sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, zh: None }'
 Set-Content $file $content -Encoding utf8NoBOM
-Copy-Item "$root/data/english-common.txt" "$CorePath/src/english-common.txt" -Force
+& "$PSScriptRoot/prepare-english.ps1" | Out-Null
+Copy-Item "$root/build/english-words.txt" "$CorePath/src/english-words.txt" -Force
 Add-Content "$CorePath/src/ffi.rs" ("`n" + (Get-Content "$root/platform/smart_input_windows_ffi.rs" -Raw))

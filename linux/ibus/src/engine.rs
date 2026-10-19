@@ -88,7 +88,7 @@ impl Engine {
             }
             // The word list only matters when upstream inline English is switched on; a missing
             // list leaves that mode inert instead of failing the engine.
-            if let Some(list) = config.data.join("english-common.txt").to_str().and_then(|p| CString::new(p).ok()) {
+            if let Some(list) = config.data.join("english-words.txt").to_str().and_then(|p| CString::new(p).ok()) {
                 shanjie_engine_load_english(e.handle, list.as_ptr());
             }
             e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;

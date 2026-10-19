@@ -52,13 +52,9 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
     Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
-    Copy-Item "$root/data/english-common.txt" "$root/dist/data" -Force
-    # Upstream's strict English reader accepts LF only, even when a local editor wrote CRLF.
-    $english=[IO.File]::ReadAllText("$root/data/english-common.txt").Replace("`r`n","`n")
-    $words=$english.TrimEnd("`n").Split("`n")
-    if(@($words|Where-Object{$_ -cnotmatch '^[a-z]{3,32}$'}).Count -or @($words|Group-Object|Where-Object Count -gt 1).Count){throw 'Bundled English list is invalid.'}
-    [IO.File]::WriteAllText("$root/dist/data/english-common.txt",$english,[Text.UTF8Encoding]::new($false))
-    Copy-Item "$root/LICENSES/english-data.md","$root/LICENSES/easy-en-LGPL-3.0.txt","$root/LICENSES/easy-en-GPL-3.0.txt" "$root/dist/LICENSES" -Force
+    # Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
+    & "$PSScriptRoot/prepare-english.ps1" | Out-Null
+    Copy-Item "$root/build/english-words.txt" "$root/dist/data" -Force
     Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
     Copy-Item "$root/LICENSES/mode-icons.md" "$root/dist/LICENSES" -Force
