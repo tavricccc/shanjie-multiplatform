@@ -1,11 +1,24 @@
 #Requires -Version 7
+# Builds the English word list exactly as upstream does: the pinned SymSpell input (hash-checked),
+# upstream's own generator, and the recorded output hash. Nothing here is committed; build/ is generated.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$pin = '54a4a07289412efc54134092c0d945f895a71ed3'
-$source = Join-Path $root 'build/easy_en.dict.yaml'
-Invoke-WebRequest "https://raw.githubusercontent.com/BlindingDark/rime-easy-en/$pin/easy_en.dict.yaml" -OutFile $source
-$words = foreach ($line in [IO.File]::ReadLines($source)) {
-    if ($line -cmatch '^([a-z]{3,32})\t\1\t(\d+)$' -and [int]$Matches[2] -ge 990000) { $Matches[1] }
+$upstream = Join-Path $root 'upstream/shanjie'
+$tool = Join-Path $upstream 'tools/build_english_words.py'
+$python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
+$url = (& $python $tool --print-url).Trim()
+$inputSha = (& $python $tool --print-input-sha256).Trim()
+$source = Join-Path $root 'build/english/frequency_dictionary_en_82_765.txt'
+$output = Join-Path $root 'build/english-words.txt'
+New-Item -ItemType Directory -Path (Split-Path $source) -Force | Out-Null
+if (!(Test-Path $source) -or (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant() -ne $inputSha) {
+    Invoke-WebRequest $url -OutFile "$source.part"
+    Move-Item "$source.part" $source -Force
+    if ((Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant() -ne $inputSha) { Remove-Item $source; throw "English word list input does not match SHA-256 $inputSha." }
 }
-[IO.File]::WriteAllLines((Join-Path $root 'data/english-common.txt'), @($words | Sort-Object -Unique), [Text.UTF8Encoding]::new($false))
-Get-FileHash $source,(Join-Path $root 'data/english-common.txt') -Algorithm SHA256
+& $python $tool --input $source --out $output | Out-Null
+if ($LASTEXITCODE) { throw 'tools/build_english_words.py failed.' }
+$recorded = ((Get-Content (Join-Path $upstream 'data/english-words.txt.sha256') -TotalCount 1) -split '\s+')[0]
+$actual = (Get-FileHash $output -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $recorded) { throw "Generated english-words.txt ($actual) does not match data/english-words.txt.sha256 ($recorded)." }
+Write-Output $output
