@@ -378,6 +378,12 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // An open digit run (upstream digits.md A.3.4) sees every key first, as in upstream's dispatch.
+        // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
+        // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
+        if self.drun.is_some() {
+            return self.key_original(key);
+        }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
             let out=self.start_run(self.latin_character(key))?;
             return Ok(self.mixed_view(out));
@@ -397,6 +403,12 @@ impl Engine {
             if let Some(out) = self.commit_through_cursor()? { return Ok(self.mixed_view(out)); }
         }
         let out = self.windows_key(key)?;
+        if self.drun.is_some() {
+            // The key upstream let through opened a digit run: the run owns these keys now.
+            self.mixed_raw.clear();
+            self.mixed_latin = false;
+            self.windows_raw.clear();
+        }
         Ok(self.mixed_view(out))
     }
 
