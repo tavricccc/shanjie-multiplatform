@@ -132,6 +132,7 @@
                         <controls:SettingToggle Label="選字後的聯想詞" Description="數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取。Windows 預設關閉。" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="使用游標前文改善選字" Description="只使用游標前的少量文字作為本機選字與學習的前文，不傳送到網路。" IsOn="{x:Bind Vm.UseContext, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="避免敏感詞排在第一名" Description="套用上游的特定詞降權表；詞仍可選取，並非刪除詞庫。" IsOn="{x:Bind Vm.Demote, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="動漫與遊戲詞包" Description="約四萬五千個作品名與角色名，來自中文維基百科（CC BY-SA 4.0）。關閉後選字結果與沒有詞包時相同；變更會重新載入核心。" IsOn="{x:Bind Vm.AcgPack, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
                         <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>

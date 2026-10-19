@@ -32,6 +32,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool Associations { get; set; }
     [ObservableProperty] public partial bool Prediction { get; set; }
     [ObservableProperty] public partial bool Demote { get; set; }
+    [ObservableProperty] public partial bool AcgPack { get; set; }
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial bool MixedTolerance { get; set; }

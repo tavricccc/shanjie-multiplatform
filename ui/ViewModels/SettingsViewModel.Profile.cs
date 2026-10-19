@@ -38,7 +38,7 @@ public partial class SettingsViewModel
             ModelId=profile.Read("engine","model_id",profile.Number("engine","class_table",5)==4?"model-v6-classes-v4":ModelCatalog.Builtin);
             ModelRevision=profile.Read("engine","model_revision","");
             ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
-            Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true);
+            Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true); AcgPack = profile.Flag("engine", "acg_pack", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
             CtrlPunctuation = profile.Flag("shortcuts", "ctrl_punctuation", Interaction == 0);
@@ -125,7 +125,7 @@ public partial class SettingsViewModel
         profile.Set("profile", "schema", 7); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal"); profile.Set("engine", "model", 5);
         foreach (var (section, key, value) in new (string, string, object)[] {
-            ("engine","prediction",Prediction), ("engine","demote",Demote),
+            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack),
             ("engine","class_table",ModelId=="model-v6-classes-v4"?4:5), ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
