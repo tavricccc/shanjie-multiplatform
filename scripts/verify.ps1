@@ -15,6 +15,12 @@ try {
         & "$PSScriptRoot/download-asset.ps1" -Url 'https://github.com/Nanako0129/shanjie/releases/download/kn-v1/kn.sjkn' -Destination (Join-Path $root 'build/model/kn-v1.sjkn') -Size 1414052 -Sha256 'cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e'
     }
     Copy-Item build/model/kn-v1.sjkn upstream/shanjie/data/lm/kn.sjkn -Force
+    # The formal profile's trigram table (upstream's sj-cx-1-7.7m asset): the upstream tests read it, the package does not ship it.
+    $trigramHash = ((Get-Content "$root/upstream/shanjie/data/trigram.sjt3.sha256" -Raw) -split '\s+')[0]
+    if (!(Test-Path build/model/trigram.sjt3) -or (Get-FileHash build/model/trigram.sjt3).Hash.ToLowerInvariant() -ne $trigramHash) {
+        & "$PSScriptRoot/download-asset.ps1" -Url 'https://github.com/Nanako0129/shanjie/releases/download/sj-cx-1-7.7m/trigram.sjt3' -Destination (Join-Path $root 'build/model/trigram.sjt3') -Size 143643936 -Sha256 $trigramHash
+    }
+    Copy-Item build/model/trigram.sjt3 upstream/shanjie/data/lm/trigram.sjt3 -Force
     # Goldens are versioned independently of the upstream code pin. Use the
     # upstream Python oracle for the selected class weight, never edit the submodule.
     $evalCopy = Join-Path $root 'build/verification-eval-classes-v5'
@@ -85,6 +91,10 @@ try {
     $triEnd=$tri.IndexOf('    let mut bad = table_bytes();',$triStart)
     if($triStart -lt 0 -or $triEnd -lt 0){throw 'Trigram symlink fixture changed.'}
     $tri=$tri.Substring(0,$triStart)+"    #[cfg(unix)] {`n"+$tri.Substring($triStart,$triEnd-$triStart)+"    }`n"+$tri.Substring($triEnd)
+    # Windows cannot delete a file that is still mapped: release the first loaded model before removing the table.
+    $mapped = "    std::fs::remove_file(tmp.join(`"trigram.sjt3`")).unwrap();`n    #[cfg(unix)] {"
+    if (!$tri.Contains($mapped)) { throw 'Trigram mapped-file fixture changed.' }
+    $tri=$tri.Replace($mapped,"    drop(on);`n$mapped")
     $tri=$tri.Replace('let want = String::from_utf8(bytes("tri-tiny", "decode.tsv")).unwrap();','let want = String::from_utf8(bytes("tri-tiny", "decode.tsv")).unwrap().replace("\r\n", "\n");')
     Set-Content build/core/tests/tri_tiny.rs $tri -Encoding utf8NoBOM
     $testArguments = foreach ($test in $CoreTests) { '--test'; $test }
