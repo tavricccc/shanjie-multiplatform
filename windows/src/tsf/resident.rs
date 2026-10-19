@@ -32,6 +32,7 @@ pub(super) struct Config {
     classes: u32,
     model: String,
     model_revision: String,
+    acg: bool,
 }
 impl Config {
     pub fn new(data: &Path, p: &Document, profile_layout: u32) -> Self {
@@ -50,6 +51,7 @@ impl Config {
             classes: p.class_table(),
             model: p.model_id(),
             model_revision: p.get("engine","model_revision","").into(),
+            acg: p.flag("engine", "acg_pack", true),
         }
     }
     fn load(&self) -> Option<(Engine, Pinyin)> {
@@ -64,6 +66,7 @@ impl Config {
             self.prediction,
             self.classes,
             &self.model,
+            self.acg,
         )?;
         let pinyin = if self.keyboard >= 3 {
             Pinyin::load(&self.data, self.keyboard == 4).ok()?

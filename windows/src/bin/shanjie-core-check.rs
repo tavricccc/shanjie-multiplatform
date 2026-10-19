@@ -41,6 +41,7 @@ fn main() {
         big5: false,
         dictionary: "dictionary.tsv".into(),
         prediction: false,
+        acg: true,
     };
     let open = || Engine::open(&data, 0, 0, true, false, false, "dictionary.tsv", false).unwrap();
     let key = |e: &mut Engine, ch: char| {

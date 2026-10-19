@@ -783,6 +783,7 @@ impl Data {
             ("engine", "class_table"),
             ("engine", "model_id"),
             ("engine", "model_revision"),
+            ("engine", "acg_pack"),
             ("candidates", "anchor"),
             ("input", "learning"),
             ("candidates", "big5"),

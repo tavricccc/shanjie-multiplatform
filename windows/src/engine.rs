@@ -70,13 +70,13 @@ impl Engine {
         Self::open_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
     }
     pub fn open_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
-        Self::open_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"")
+        Self::open_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"",true)
     }
-    pub fn open_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str)->Option<Self> {
+    pub fn open_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str,acg:bool)->Option<Self> {
         if ![4,5].contains(&classes) { return None; }
         if std::env::var_os("SHANJIE_CORE_LOCAL").is_some() {
             return Self::open_local_model(
-                data, layout, ranking, right, learning, big5, dictionary, prediction, classes, model,
+                data, layout, ranking, right, learning, big5, dictionary, prediction, classes, model, acg,
             );
         }
         let config = crate::broker::Config {
@@ -89,6 +89,7 @@ impl Engine {
             big5,
             dictionary: dictionary.into(),
             prediction,
+            acg,
         };
         let remote = crate::broker::Client::open(data, config)?;
         let mut engine = Self::default();
@@ -108,9 +109,9 @@ impl Engine {
         Self::open_local_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
     }
     pub fn open_local_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
-        Self::open_local_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"")
+        Self::open_local_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"",true)
     }
-    pub fn open_local_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str)->Option<Self> {
+    pub fn open_local_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str,acg:bool)->Option<Self> {
         let legacy=match classes {5=>"model-v6-classes-v5",4=>"model-v6-classes-v4",_=>return None};
         let old=data.join("models/model-v6-classes-v4/bigram.winmap");
         let model=if model.is_empty() && classes==4 && old.is_file(){old}else{crate::model_store::resolve(data,if model.is_empty(){legacy}else{model})};
@@ -130,7 +131,7 @@ impl Engine {
                 CString::new(data.to_str()?).ok()?.as_ptr(),
                 dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
                 layout,
-                shanjie_core::engine::PACK_ACG,
+                if acg { shanjie_core::engine::PACK_ACG } else { 0 },
                 &mut e.handle,
             ) != 0
             {

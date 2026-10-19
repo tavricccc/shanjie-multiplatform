@@ -38,8 +38,12 @@ pub struct Config {
     pub big5: bool,
     pub dictionary: String,
     pub prediction: bool,
+    // Word pack switch; absent from older senders, which always had no packs on the wire.
+    #[serde(default = "default_acg")]
+    pub acg: bool,
 }
 fn default_classes() -> u32 { 5 }
+fn default_acg() -> bool { true }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Op {
     Key {

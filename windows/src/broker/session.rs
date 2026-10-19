@@ -101,6 +101,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                             config.prediction,
                             config.classes,
                             &config.model,
+                            config.acg,
                         )
                         .and_then(|mut engine| {
                             if engine.replay(&replay) {

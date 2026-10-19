@@ -525,6 +525,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         p.flag("engine", "prediction", false),
         p.class_table(),
         &p.model_id(),
+        p.flag("engine", "acg_pack", true),
     )
     .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.

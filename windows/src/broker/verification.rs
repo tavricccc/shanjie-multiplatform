@@ -81,6 +81,7 @@ fn config(learning: bool) -> Config {
         big5: false,
         dictionary: "dictionary.tsv".into(),
         prediction: false,
+        acg: true,
     }
 }
 fn key(ch: char) -> Op {
