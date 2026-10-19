@@ -40,6 +40,16 @@ try {
     # Upstream's lib tests link model files with unix symlinks; copy them on Windows (generated tree only).
     $ffi = Get-Content build/core/src/ffi.rs -Raw
     Set-Content build/core/src/ffi.rs $ffi.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
+    # The dangling-symlink case of the trigram table test needs unix symlinks; it only runs where they exist.
+    $lm = Get-Content build/core/src/lm.rs -Raw
+    $dangling = @'
+        std::os::unix::fs::symlink(dir.join("nowhere"), &t).unwrap();
+        assert_eq!(Lm::load_opts(&m, false, true, true).err(), Some(LmError::TriTable), "dangling symlink");
+        std::fs::remove_file(&t).unwrap();
+'@
+    $dangling = $dangling.Replace("`r`n","`n")
+    if (!$lm.Contains($dangling)) { throw 'Upstream trigram symlink fixture changed.' }
+    Set-Content build/core/src/lm.rs $lm.Replace($dangling,"        #[cfg(unix)] {`n$dangling        }`n") -Encoding utf8NoBOM
     cargo test --release --manifest-path build/core/Cargo.toml --lib -- --skip english_codes_through_the_c_abi --skip child_english
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
@@ -66,6 +76,8 @@ try {
     $knTests = $knTests.Replace($symlink,"    #[cfg(unix)] {`n$symlink`n    }")
     $knTests = $knTests.Replace('let want = String::from_utf8(bytes("decode.tsv")).unwrap();', 'let want = String::from_utf8(bytes("decode.tsv")).unwrap().replace("\r\n", "\n");')
     Set-Content build/core/tests/kn_tiny.rs $knTests -Encoding utf8NoBOM
+    $predict = Get-Content build/core/tests/engine_predict.rs -Raw
+    Set-Content build/core/tests/engine_predict.rs $predict.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
     $rerank=Get-Content build/core/tests/engine_rerank.rs -Raw
     Set-Content build/core/tests/engine_rerank.rs $rerank.Replace('std::os::unix::fs::symlink(', 'std::fs::copy(') -Encoding utf8NoBOM
     $tri = Get-Content build/core/tests/tri_tiny.rs -Raw
