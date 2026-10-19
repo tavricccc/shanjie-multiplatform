@@ -2,6 +2,26 @@
 
 這份文件是後續更新善解上游的維護入口。上游固定於 main 的 `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7），以 `UPSTREAM.json` 與 Git 子模組實際 commit 為準。
 
+## 2026-10-20 與上游 a639e8a 的差異檢查
+
+pin 不變。逐項對照上游 v0.4.7 的核心功能、資料檔與學習儲存，修正覆蓋層讓上游功能實際生效：
+
+- **數字層原本只在第一次建立核心時有效**：上游 `new_with_packs` 讀 `digits.tsv`，但 Windows 的個人詞庫路徑與常駐快取命中路徑都沒有帶上數字表，所以有個人詞庫或第二個以後的核心，數字層都靜靜關閉。現在兩條路徑都讀 `digits.tsv`，常駐快取連同數字表一起共用，快取鍵也納入該檔。
+- **數字串進行中改由上游處理每個鍵**：和上游 `dispatch` 相同，數字串開著時（`drun`）按鍵直接交給上游，不再經過 Windows 標點保留、字面符號與注音順序判斷。原本 `1` 接 `Ctrl+\` 會顯示「ㄅ、」而非上游的「1、」。數字串由 Windows 放行的鍵開啟時，清掉 Windows 混打暫存。數字層只在上游英文開啟（英文詞表或兩者並用）且為標準注音時生效，與上游相同；「注音順序」單獨使用時行為不變。
+- **英文段開始時的標點順序**：Windows 標點保留政策會把未完成讀音後的符號暫存；上游英文段（Shift＋字母）開始時，這些符號先插入再開英文段，不再被排到英文後面（原本 `ㄋ` `Ctrl+\` `Shift+A` 送出「A、」）。
+- **trigram**：映射模型（`.winmap`）旁有 `trigram.sjt3` 時，依上游 `load_opts` 相同規則映射並核對；不存在就關閉，壞檔明確拒絕。安裝包仍不帶此檔，所以預設行為不變；常駐模型快取鍵納入該檔。
+- **學習儲存**：檔案格式、欄位驗證與新詞 B 的 `#` 紀錄都直接取自上游 `learn_store.rs`，與上游一致。Windows 後端補上兩個語意差異：忘記詞時即使 flush 失敗仍替換檔案（上游以隱私優先），寫入失敗時刪除暫存檔。
+- **安裝包必要檔**：`digits.tsv`、`english-words.txt`、`packs/acg-add.tsv` 缺少時核心只會靜靜關閉對應功能，所以 `verify-package` 改為要求這三個檔（上游 check-app 也要求 `digits.tsv`）。
+- **測試**：`verify.ps1` 新增上游 v0.4.7 的 `engine_digits`、`engine_digits_off`、`engine_newword`、`engine_repick`、`oc_tiny`。`engine_digits_off` 的 r01／r02／r36 三列在單獨 `1`（ㄅ）後打標點，屬於 Windows 保留未完成讀音的既有差異，由 `prepare-test-contracts.ps1` 排除這三列，其餘逐行比對上游基準。`oc_tiny` 的 NaN 案例在測試結束刪暫存資料夾時，兩個仍映射中的模型讓 Windows 拒絕刪檔（os error 32）；適配只在刪除前 `drop` 兩個模型，斷言不變。
+- **設定頁**：中英混打說明補上游的數字說明（英文詞表時數字列的鍵也會打出數字）。
+
+**仍與上游不同（未改）**：
+
+- 上游 App 預設開啟中英混打（含數字層）；Windows 範本 `upstream_english=0`，預設不啟用數字層。改預設會改變現有使用者的打字結果，留待使用者決定。
+- Windows 單獨聲調關閉（`standalone_tones=0`）時，閒置狀態按聲調鍵仍走 Windows 字面數字，不開上游數字串。
+- 上游殼層的「中英文之間自動加空格」（`cjkSpacing`）、各 App 個別聊天／書面設定、直排候選、語意修正（tinylm）Windows 沒有。
+- 預測列只在第一格標 Tab 符號（上游 header 新註解）：未核對 Windows 候選窗的畫法。
+
 ## 2026-10-19 對齊上游 a639e8a（v0.4.7）
 
 上游 pin 由 `b2f5da8` 前進 404 個 commit 到 main `a639e8ada773327a1ddf06b0f96b4c32db67d6c2`（v0.4.7）。模型仍是 model-v6／classes-v5。
@@ -10,8 +30,8 @@
 - **英文詞表**：改用上游 82,730 字的清單，建置時由 SymSpell 固定 commit 依上游產生器產生並核對上游記錄的雜湊，不入 git；移除原 Rime Easy English 子集。
 - **ACG 詞包**：兩條詞庫路徑都載入 `packs/acg-add.tsv`；設定檔 `engine.acg_pack`（預設開）、設定頁開關，屬個人設定。
 - **覆蓋層移植**：上游改為以列（`rows`）建立候選，`prepare-candidates` 改成重新命名上游函式再於 Windows 端裝飾；新增 `prepare-trigram.ps1` 與 `platform/mapped_windows.rs`，讓 trigram／oc 表的 mmap 型別在 Windows 可用。
-- **上游新功能一併帶入**：數字層、重選凍結、新詞學習、預測列。Windows 既有的字面數字／混打數字處理沿用現行路徑，與上游數字層並存的細節尚未逐項比對。
-- **未納入**：tinylm／語意修正；`trigram.sjt3` 不隨安裝包出貨，Windows 仍以 `tri: None` 執行書面設定的 trigram。
+- **上游新功能一併帶入**：數字層、重選凍結、新詞學習、預測列。數字層與 Windows 數字處理的並存見下方 2026-10-20 一節。
+- **未納入**：tinylm／語意修正；`trigram.sjt3` 不隨安裝包出貨（上游 App 也還沒出貨），見下方 2026-10-20 一節。
 - `build.ps1` 在子模組不在 pin 上時拒絕打包。
 
 ## 2026-10-17 Windows 0.10.1：數字混打與加詞比對
@@ -146,7 +166,7 @@ Windows 的 SJWM0002 映射格式保存來源模型／詞類表雜湊、原有�
 
 ## 哪些東西有改
 
-Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型設定遷移至 v5，沒有選單或執行期 fallback。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`。`prepare-models.ps1` 核對並轉換這一組，清除舊快取與 dist 模型目錄；`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄。
+Windows 安裝包只內建 model-v6＋classes-v5（設定可選 classes-v4，其他公開模型由使用者模型管理下載核對），舊模型設定由 profile 遷移。來源、配表、大小、SHA-256 和映射檔名記在 `MODEL-SOURCES.json`；不出貨 KN 側檔、`trigram.sjt3` 與 tinylm。`prepare-models.ps1` 核對並轉換這一組，清除舊快取與 dist 模型目錄；`download-asset.ps1` 以可續傳的並行範圍下載資產。模型資料 tag 與 App release 分開記錄。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次將上游 core 複製到 `build/core`，再套用以下程式變更。**子模組沒有被改，不代表建置出的核心完全等於上游。**
 
@@ -158,6 +178,9 @@ Windows 安裝包只提供 model-v5＋classes-v3，schema 5 將所有舊模型�
 | `core/src/lm.rs` | 9 個模型與 3 個詞類陣列改為可持有唯讀映射；`.winmap` 加入專用讀取路徑與來源配對驗證 | `scripts/prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` | 右側候選範圍、↑ 循環換字並保留游標；個人詞庫、Big5 篩選、聯想與預測列種類查詢；預測停用時不建索引 | `scripts/prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵處理 | Shift／直接中文標點逐鍵遮罩（0.6.0 起每個符號獨立，取代整列開關）與可關閉的單獨聲調；中文標點插入既有組字 | `scripts/prepare-keys.ps1`、`platform/key_options_windows.rs` |
+| `core/src/engine.rs` 組字政策 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、標點保留未完成讀音、注音順序混打與容錯、Enter 只送游標前；上游英文段、英文選單與數字串進行中直接交給上游 | `scripts/prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
+| `core/src/engine.rs` 資源 | 個人詞庫 constructor 與常駐快取共用不可變詞庫、詞包列與數字表；模型快取 | `scripts/prepare-resident.ps1`、`platform/resident_windows.rs` |
+| `core/src/trigram.rs` | Unix mmap 保留給 Unix；Windows 的 `Mapped` 改用模型陣列同一套唯讀映射 | `scripts/prepare-trigram.ps1`、`platform/mapped_windows.rs` |
 | `core/src/ffi.rs` | 追加 Windows 專用候選、輸入選項、標點及預測列查詢 ABI；不改上游既有函式簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
 | `core/Cargo.toml` | 讓產生的 core 可獨立建置，加入打包時使用的模型轉換工具 | `prepare-core.ps1`、`platform/map_model.rs` |
 
