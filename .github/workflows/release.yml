@@ -4,7 +4,7 @@ name: release
 # 安裝包需要模型與 Visual Studio 工具，CI 不建置；本機打包後用 gh release upload 附上 zip。
 on:
   push:
-    branches: [codex/winui3]
+    branches: [main]
     paths: [windows/Cargo.toml]
   workflow_dispatch:
 
