@@ -76,6 +76,7 @@ impl Engine {
                 CString::new(config.data.to_str()?).ok()?.as_ptr(),
                 dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
                 config.layout,
+                shanjie_core::engine::PACK_ACG,
                 &mut e.handle,
             ) != 0
             {

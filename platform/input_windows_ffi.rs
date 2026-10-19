@@ -32,7 +32,7 @@ pub unsafe extern "C" fn shanjie_windows_associate(engine: *mut ShanjieEngine, p
     })
 }
 #[no_mangle]
-pub unsafe extern "C" fn shanjie_windows_engine_new(data: *const c_char, personal: *const c_char, layout: u32, out: *mut *mut ShanjieEngine) -> i32 {
+pub unsafe extern "C" fn shanjie_windows_engine_new(data: *const c_char, personal: *const c_char, layout: u32, packs: u32, out: *mut *mut ShanjieEngine) -> i32 {
     guard(|| {
         if !unsafe { clear_out(out) } || data.is_null() { return SHANJIE_ERR_NULL; }
         let Ok(data) = unsafe { CStr::from_ptr(data) }.to_str() else { return SHANJIE_ERR_NULL; };
@@ -41,7 +41,7 @@ pub unsafe extern "C" fn shanjie_windows_engine_new(data: *const c_char, persona
             let Ok(text) = unsafe { CStr::from_ptr(personal) }.to_str() else { return SHANJIE_ERR_NULL; };
             Some(Path::new(text))
         };
-        match Engine::new_with_personal(Path::new(data),layout,personal) {
+        match Engine::new_with_personal(Path::new(data),layout,personal,packs) {
             Ok(engine) => { unsafe { *out = Box::into_raw(Box::new(ShanjieEngine(engine))); } SHANJIE_OK },
             Err(_) => SHANJIE_ERR_LOAD,
         }

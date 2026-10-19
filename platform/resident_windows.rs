@@ -6,10 +6,13 @@ static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::At
 type LexCache = Vec<(
     Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>,
     Arc<Lexicon>,
+    // Pack rows are part of the capped lexicon later built from this lexicon, so they travel with it.
+    Option<String>,
 )>;
 fn resource_stamp(
     data: &Path,
     personal: Option<&Path>,
+    packs: u32,
 ) -> Result<Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>, EngineError> {
     let mut paths: Vec<_> = [
         "mcbpmf-data.txt",
@@ -24,6 +27,13 @@ fn resource_stamp(
     if let Some(p) = personal {
         paths.push(p.to_owned());
     }
+    // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
+    if packs & PACK_ACG != 0 {
+        let acg = data.join("packs").join("acg-add.tsv");
+        if acg.is_file() {
+            paths.push(acg);
+        }
+    }
     paths
         .into_iter()
         .map(|p| {
@@ -37,26 +47,31 @@ impl Engine {
         data: &Path,
         layout: Layout,
         personal: Option<&Path>,
+        packs: u32,
     ) -> Result<Engine, EngineError> {
+        if packs & !PACK_ALL != 0 {
+            return Err(EngineError::LoadFailed);
+        }
         static CACHE: OnceLock<Mutex<LexCache>> = OnceLock::new();
-        let stamp = resource_stamp(data, personal)?;
+        let stamp = resource_stamp(data, personal, packs)?;
         let mut cache = CACHE
             .get_or_init(Default::default)
             .lock()
             .map_err(|_| EngineError::LoadFailed)?;
-        if let Some(index) = cache.iter().position(|(key, _)| key == &stamp) {
+        if let Some(index) = cache.iter().position(|(key, _, _)| key == &stamp) {
             let entry = cache.remove(index);
             let mut engine = Engine::with_lexicon(entry.1.clone(), layout);
             engine.data_dir = Some(data.to_owned());
+            engine.pack_text = entry.2.clone();
             cache.push(entry);
             return Ok(engine);
         }
-        let engine = Engine::new_with_personal_uncached(data, layout, personal)?;
+        let engine = Engine::new_with_personal_uncached(data, layout, personal, packs)?;
         WINDOWS_LEX_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if cache.len() == 4 {
             cache.remove(0);
         }
-        cache.push((stamp, engine.lex.clone()));
+        cache.push((stamp, engine.lex.clone(), engine.pack_text.clone()));
         Ok(engine)
     }
     pub fn load_lm(&mut self, path: &Path) -> Result<(), EngineError> {
@@ -114,10 +129,10 @@ impl Engine {
 /// Read-only word checks share the same immutable resources as input sessions.
 /// The base lexicon excludes personal additions and LM vocabulary expansion.
 pub fn windows_base_lexicon(data:&Path)->Result<Arc<Lexicon>,EngineError> {
-    Ok(Engine::new_with_personal(data,Layout::Standard,None)?.lex.clone())
+    Ok(Engine::new_with_personal(data,Layout::Standard,None,PACK_ALL)?.lex.clone())
 }
 pub fn windows_model_contains(data:&Path,path:&Path,word:&str)->Result<bool,EngineError> {
-    let mut engine=Engine::new_with_personal(data,Layout::Standard,None)?;
+    let mut engine=Engine::new_with_personal(data,Layout::Standard,None,PACK_ALL)?;
     engine.load_lm(path)?;
     Ok(engine.lm.as_ref().is_some_and(|state|state.lm.count(word)>0))
 }

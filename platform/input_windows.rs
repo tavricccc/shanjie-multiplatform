@@ -21,8 +21,10 @@ impl Engine {
         Output { handled: true, commit: String::new(), preedit: String::new(), cursor_utf16: 0,
             selected: (!candidates.is_empty()).then_some(0), columns: 0, first: 0, total: candidates.len() as u32, vertical: 0, candidates, english_run_utf16_start: 0, english_run_utf16_len: 0 }
     }
-    pub fn new_with_personal(data: &Path, layout: Layout, personal: Option<&Path>) -> Result<Engine,EngineError> {
-        let Some(personal) = personal else { return Engine::new(data,layout) };
+    pub fn new_with_personal(data: &Path, layout: Layout, personal: Option<&Path>, packs: u32) -> Result<Engine,EngineError> {
+        if packs & !PACK_ALL != 0 { return Err(EngineError::LoadFailed); }
+        let pack_dir = data.join("packs");
+        let Some(personal) = personal else { return Engine::new_with_packs(data,layout,(packs != 0).then_some((pack_dir.as_path(),packs))) };
         let original = std::fs::read_to_string(data.join("mcbpmf-data.txt")).map_err(|_| EngineError::LoadFailed)?;
         // Personal rows use the base reading/word/score format, so existing words may be reprioritized.
         let mut base = std::fs::read_to_string(personal).map_err(|_| EngineError::LoadFailed)?;
@@ -31,7 +33,9 @@ impl Engine {
         let sandhi = std::fs::read_to_string(data.join("sandhi-add.tsv")).map_err(|_| EngineError::LoadFailed)?;
         // Same fixed order as upstream load_lexicon: overlay, sandhi, then the always-on names layer.
         let names = std::fs::read_to_string(data.join(NAMES_FILE)).map_err(|_| EngineError::LoadFailed)?;
-        let overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
+        let mut overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
+        let pack_text = if packs != 0 { read_packs_detailed(&pack_dir,packs).map_err(|_| EngineError::LoadFailed)? } else { String::new() };
+        if !pack_text.is_empty() { overlay = join_overlays(overlay,&pack_text); }
         for line in overlay.lines() {
             let (reading,word,score) = crate::overlay_row(line).ok_or(EngineError::LoadFailed)?;
             base.push_str(&format!("\n{reading} {word} {score}"));
@@ -39,7 +43,8 @@ impl Engine {
         let lex = Arc::new(Lexicon::parse(&base).map_err(|_| EngineError::LoadFailed)?);
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
-        let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf()); Ok(engine)
+        let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
+        engine.pack_text = Some(pack_text).filter(|text| !text.is_empty()); Ok(engine)
     }
     pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; self.clear_pred(); }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
@@ -148,9 +153,32 @@ mod personal_lexicon_tests {
         let personal = dir.join("dictionary.tsv");
         std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
         let plain = Engine::new(&dir, Layout::Standard).unwrap();
-        let with_personal = Engine::new_with_personal(&dir, Layout::Standard, Some(&personal)).unwrap();
+        let with_personal = Engine::new_with_personal(&dir, Layout::Standard, Some(&personal), 0).unwrap();
         assert_eq!(plain.associated_words("臺灣藝").candidates, ["大"]);
         assert_eq!(with_personal.associated_words("臺灣藝").candidates, ["大"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+    #[test]
+    fn acg_pack_loads_with_and_without_a_personal_dictionary() {
+        let dir = std::env::temp_dir().join(format!("shanjie-pack-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("packs")).unwrap();
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -1.0\n").unwrap();
+        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
+        std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄧˇ-ㄎㄚ-ㄕㄚ\t米卡莎\t-4.6\tacg\n").unwrap();
+        let personal = dir.join("dictionary.tsv");
+        std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
+        for source in [None, Some(personal.as_path())] {
+            // The second iteration of each pair is served from the resident cache.
+            for _ in 0..2 {
+                let on = Engine::new_with_personal(&dir, Layout::Standard, source, PACK_ACG).unwrap();
+                assert_eq!(on.associated_words("米卡").candidates, ["莎"]);
+                assert!(on.pack_text.is_some());
+            }
+            let off = Engine::new_with_personal(&dir, Layout::Standard, source, 0).unwrap();
+            assert!(off.associated_words("米卡").candidates.is_empty());
+            assert!(off.pack_text.is_none());
+        }
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 2).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
 }
