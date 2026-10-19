@@ -31,6 +31,8 @@ foreach ($entry in $manifest.models) {
 }
 Copy-Item "$root/upstream/shanjie/data/lexicon/*" $stage -Force
 Copy-Item "$root/data/pinyin-map.tsv" $stage -Force
+New-Item -ItemType Directory -Path "$stage/packs" -Force | Out-Null
+Copy-Item "$root/upstream/shanjie/data/packs/acg-add.tsv","$root/upstream/shanjie/data/packs/acg-sources.tsv","$root/upstream/shanjie/data/packs/acg.json" "$stage/packs" -Force
 # Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
 & "$root/scripts/prepare-english.ps1" | Out-Null
 Copy-Item "$root/build/english-words.txt" "$stage/english-words.txt" -Force

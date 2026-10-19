@@ -52,6 +52,9 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
     Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
+    # The ACG word pack and its provenance files, the same three upstream ships.
+    New-Item -ItemType Directory -Path "$root/dist/data/packs" -Force | Out-Null
+    Copy-Item "$root/upstream/shanjie/data/packs/acg-add.tsv","$root/upstream/shanjie/data/packs/acg-sources.tsv","$root/upstream/shanjie/data/packs/acg.json" "$root/dist/data/packs" -Force
     # Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
     & "$PSScriptRoot/prepare-english.ps1" | Out-Null
     Copy-Item "$root/build/english-words.txt" "$root/dist/data" -Force
