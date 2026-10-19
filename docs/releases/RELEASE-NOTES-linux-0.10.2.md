@@ -24,4 +24,4 @@
 - 尚未提供反白加詞（連按兩次 Ctrl／Ctrl＋Shift＋F12）。
 - 中英混打時，候選框上方沒有 Windows 那一列「整句＋注音提示」，只顯示注音提示。
 
-驗證範圍見 [VERIFICATION.md](../../VERIFICATION.md)。
+驗證範圍見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。

@@ -20,4 +20,4 @@
 
 ## 建置與驗證界線
 
-見 [VERIFICATION.md](../../VERIFICATION.md)。已驗證：x64／x86 release 與 WinUI 建置、`package.ps1` 打包，以及上游整合測試、Windows interaction 與 TSF smoke（x64）。**未驗證：** 沒有重跑 `verify-update.ps1`、x86 TSF smoke 與 WinUI `--verify-ui`；沒有安裝到系統，因此亂碼修正、鍵盤選擇對話框與新圖示都還沒在實機確認。上游 pin 是未合入 main 的分支。
+見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。已驗證：x64／x86 release 與 WinUI 建置、`package.ps1` 打包，以及上游整合測試、Windows interaction 與 TSF smoke（x64）。**未驗證：** 沒有重跑 `verify-update.ps1`、x86 TSF smoke 與 WinUI `--verify-ui`；沒有安裝到系統，因此亂碼修正、鍵盤選擇對話框與新圖示都還沒在實機確認。上游 pin 是未合入 main 的分支。

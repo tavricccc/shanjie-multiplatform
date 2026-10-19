@@ -16,4 +16,4 @@
 
 ## 驗證界線
 
-本版使用隔離 profile、真實舊 DLL、測試專用隱藏視窗及無提權子程序驗證。沒有在目前系統安裝、更新註冊、控制使用者核心或修改私人設定。背景測試不能替代真實 UAC／系統升級與 Windows Terminal 驗收；結果與證據見 [VERIFICATION.md](../../VERIFICATION.md)。
+本版使用隔離 profile、真實舊 DLL、測試專用隱藏視窗及無提權子程序驗證。沒有在目前系統安裝、更新註冊、控制使用者核心或修改私人設定。背景測試不能替代真實 UAC／系統升級與 Windows Terminal 驗收；結果與證據見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。
