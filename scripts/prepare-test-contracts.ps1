@@ -37,3 +37,25 @@ foreach ($file in $contracts.Keys) {
     $content = "// Windows model/punctuation test adapter; see UPSTREAM-CHANGES.md and tests/fixtures/classes-v5.`n" + $content
     [IO.File]::WriteAllText($path,$content,[Text.UTF8Encoding]::new($false))
 }
+# Digits off (upstream #40/#50) compares every row of #1-#39 with the base commit. Rows r01, r02 and r36 type a
+# mark behind the unfinished ㄅ of a lone 1, which the Windows policy keeps; every other row is compared as is.
+$path = Join-Path $TestsPath 'engine_digits_off.rs'
+$content = [IO.File]::ReadAllText($path).Replace("`r`n","`n")
+$old = 'let (g, w): (Vec<&str>, Vec<&str>) = (got.lines().collect(), want.lines().collect());'
+$new = 'let windows = |l: &&str| !["r01\t", "r02\t", "r36\t"].iter().any(|r| l.starts_with(r)); let (g, w): (Vec<&str>, Vec<&str>) = (got.lines().filter(windows).collect(), want.lines().filter(windows).collect());'
+if ([regex]::Matches($content,[regex]::Escape($old)).Count -ne 1) { throw 'Windows test contract changed: engine_digits_off.rs' }
+$content = "// Windows punctuation test adapter; see UPSTREAM-CHANGES.md.`n" + $content.Replace($old,$new).Replace('std::os::unix::fs::symlink(', 'std::fs::copy(')
+[IO.File]::WriteAllText($path,$content,[Text.UTF8Encoding]::new($false))
+# oc_tiny maps each NaN model read-only; Windows refuses to delete a file while a mapping of it is alive, so the
+# two models are dropped before the temporary directory is removed. The assertions are unchanged.
+$path = Join-Path $TestsPath 'oc_tiny.rs'
+$content = [IO.File]::ReadAllText($path).Replace("`r`n","`n")
+$pairs = @(
+    @('    let m = nan("tone5", tone5);', "    drop(m);`n    let m = nan(`"tone5`", tone5);"),
+    @("vec![None; k.len()]);`n    }`n    std::fs::remove_dir_all(tmp).unwrap();", "vec![None; k.len()]);`n    }`n    drop(m);`n    std::fs::remove_dir_all(tmp).unwrap();")
+)
+foreach ($pair in $pairs) {
+    if ([regex]::Matches($content,[regex]::Escape($pair[0])).Count -ne 1) { throw "Windows test contract changed: oc_tiny.rs $($pair[0])" }
+    $content = $content.Replace($pair[0],$pair[1])
+}
+[IO.File]::WriteAllText($path,"// Windows mapping test adapter; see UPSTREAM-CHANGES.md.`n" + $content,[Text.UTF8Encoding]::new($false))

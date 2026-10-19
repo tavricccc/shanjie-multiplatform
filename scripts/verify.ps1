@@ -1,6 +1,6 @@
 #Requires -Version 7
 param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [switch]$CoreOnly, [ValidateSet('windows','shanjie')][string]$Interaction = 'windows', [ValidateSet('x64','x86')][string]$Architecture = 'x64',
-    [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny'))
+    [string[]]$CoreTests = @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny','engine_digits','engine_digits_off','engine_newword','engine_repick','oc_tiny'))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -59,7 +59,9 @@ try {
     cargo test --release --manifest-path build/core/Cargo.toml --lib -- --skip english_codes_through_the_c_abi --skip child_english
     if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
     New-Item -ItemType Directory -Path build/core/tests -Force | Out-Null
-    foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
+    foreach ($test in @('engine','engine_learn','engine_replay','engine_lm','engine_demote','engine_predict','engine_pack','engine_vertical','kn_tiny','tinylm_tiny','engine_english','engine_rerank','tri_tiny','engine_digits','engine_digits_off','engine_newword','engine_repick','oc_tiny')) { Copy-Item "upstream/shanjie/core/tests/$test.rs" build/core/tests -Force }
+    # The digits tests share a script module and the base commit's outputs.
+    Copy-Item upstream/shanjie/core/tests/common,upstream/shanjie/core/tests/fixtures build/core/tests -Recurse -Force
     & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $root 'build/core/tests')
     $learnTests = Get-Content build/core/tests/engine_learn.rs -Raw
     $learnTests = $learnTests.Replace('fn store_append_refusals_fall_back_to_a_full_rewrite()', "#[cfg(unix)]`nfn store_append_refusals_fall_back_to_a_full_rewrite()")
