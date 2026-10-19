@@ -149,7 +149,7 @@
           "upstream/shanjie/macos/Sources/ShanjieKit/CandidateCells.swift",
           "upstream/shanjie/macos/Sources/ShanjieKit/InputController.swift"
         ],
-        "contract": "docs/candidate-surface.md",
+        "contract": "docs/ARCHITECTURE.md",
         "decision": "使用者最新指定修復深色候選白底；淺／深色與設定共用主題偏好，保留實色、細邊線、橫向。混打依 ASUS 參考在正文呈現英文原文，下方提示注音。"
       },
       "selection": {
@@ -219,7 +219,7 @@
         "build/native-review/{x64,x86}/mixed-hint-{1,2}.bmp"
       ],
       "captureMethod": "本輪 x64／x86 各四張原生 WM_PRINTCLIENT BMP，1／2 為淺／深色；finish reviewer 逐張核對。",
-      "nativeVerification": "本輪非視覺檢查結果以 VERIFICATION.md 為準。先前純白版 x64／x86 建置與原生候選、WinUI 背景檢查及 x64 TSF 背景檢查 PASS；不將歷史結果當作本輪證據。",
+      "nativeVerification": "驗證指令見 docs/ARCHITECTURE.md。先前純白版 x64／x86 建置與原生候選、WinUI 背景檢查及 x64 TSF 背景檢查 PASS；不將歷史結果當作本輪證據。",
       "verificationLimit": "本輪背景原生繪製不代表前景 App、安裝、高對比、多螢幕、實際工作列、讀屏或實際切換 Windows 主題驗收。",
       "mixedReadingHint": {
         "component": "mixed-reading-hint",
