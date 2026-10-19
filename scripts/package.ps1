@@ -20,7 +20,7 @@ try {
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
     Copy-Item "$root/LICENSES/windows-models.md" "$output/LICENSES" -Force
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/VERIFICATION.md","$root/Changelog.md" $output -Force
+    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/ui" $output -Recurse -Force
