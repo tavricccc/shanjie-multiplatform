@@ -29,7 +29,10 @@ impl Engine {
         base.reserve_exact(original.len()+1); base.push('\n'); base.push_str(&original); drop(original);
         let overlay = std::fs::read_to_string(data.join("overlay-add.tsv")).map_err(|_| EngineError::LoadFailed)?;
         let sandhi = std::fs::read_to_string(data.join("sandhi-add.tsv")).map_err(|_| EngineError::LoadFailed)?;
-        for line in join_overlays(overlay,&sandhi).lines() {
+        // Same fixed order as upstream load_lexicon: overlay, sandhi, then the always-on names layer.
+        let names = std::fs::read_to_string(data.join(NAMES_FILE)).map_err(|_| EngineError::LoadFailed)?;
+        let overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
+        for line in overlay.lines() {
             let (reading,word,score) = crate::overlay_row(line).ok_or(EngineError::LoadFailed)?;
             base.push_str(&format!("\n{reading} {word} {score}"));
         }
@@ -128,5 +131,26 @@ mod windows_input_tests {
         assert!(engine.key(Key::new(KeyKind::Down)).unwrap().candidates.contains(&"𠮷".to_owned()));
         engine.set_candidate_charset(true);
         assert_eq!(engine.key(Key::new(KeyKind::Down)).unwrap().candidates,vec!["吉"]);
+    }
+}
+#[cfg(test)]
+mod personal_lexicon_tests {
+    use super::*;
+    #[test]
+    fn personal_lexicon_keeps_the_names_layer() {
+        let dir = std::env::temp_dir().join(format!("shanjie-names-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -1.0\n").unwrap();
+        std::fs::write(dir.join("overlay-add.tsv"), "").unwrap();
+        std::fs::write(dir.join("sandhi-add.tsv"), "").unwrap();
+        std::fs::write(dir.join("names-add.tsv"), "ㄊㄞˊ-ㄨㄢ-ㄧˋ-ㄉㄚˋ\t臺灣藝大\t-4.6\tnames\n").unwrap();
+        std::fs::write(dir.join("demote.tsv"), "").unwrap();
+        let personal = dir.join("dictionary.tsv");
+        std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
+        let plain = Engine::new(&dir, Layout::Standard).unwrap();
+        let with_personal = Engine::new_with_personal(&dir, Layout::Standard, Some(&personal)).unwrap();
+        assert_eq!(plain.associated_words("臺灣藝").candidates, ["大"]);
+        assert_eq!(with_personal.associated_words("臺灣藝").candidates, ["大"]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
