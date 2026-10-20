@@ -899,18 +899,23 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     // Native TSF cleanup also works when the registered DLL has already disappeared.
     unsafe {
         let initialized = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        let p: ITfInputProcessorProfiles =
-            CoCreateInstance(&CLSID_TF_InputProcessorProfiles, None, CLSCTX_INPROC_SERVER)?;
-        let id = windows::core::GUID::from_u128(0x8912696e8a314df3a7bc0261f3b6a147);
-        let _ = p.Unregister(&id);
-        let categories: ITfCategoryMgr =
-            CoCreateInstance(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER)?;
-        for category in crate::registration::CATEGORIES {
-            let _ = categories.UnregisterCategory(&id, &category, &id);
-        }
+        // The interfaces are released inside, before COM is uninitialized.
+        let unregistered = (|| -> Result<()> {
+            let p: ITfInputProcessorProfiles =
+                CoCreateInstance(&CLSID_TF_InputProcessorProfiles, None, CLSCTX_INPROC_SERVER)?;
+            let id = windows::core::GUID::from_u128(0x8912696e8a314df3a7bc0261f3b6a147);
+            let _ = p.Unregister(&id);
+            let categories: ITfCategoryMgr =
+                CoCreateInstance(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER)?;
+            for category in crate::registration::CATEGORIES {
+                let _ = categories.UnregisterCategory(&id, &category, &id);
+            }
+            Ok(())
+        })();
         if initialized.is_ok() {
             CoUninitialize();
         }
+        unregistered?;
     }
     delete_key(
         HKEY_CURRENT_USER,
