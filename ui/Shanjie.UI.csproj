@@ -6,6 +6,8 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Shanjie_UI</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Also the icon 「已安裝的應用程式」 shows for the uninstall entry. -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
