@@ -235,6 +235,26 @@ fn registry_dll(view: REG_SAM_FLAGS) -> Result<Option<PathBuf>> {
         )?)))
     }
 }
+fn language_folder() -> Result<PathBuf> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    Ok(std::env::temp_dir().join(format!("Shanjie-language-{}-{stamp:x}", std::process::id())))
+}
+/// Uninstalling may not take a language's last input method: Windows would drop the language.
+pub fn check_removable() -> Result<()> {
+    let folder = language_folder()?;
+    let state = language_list::read(&folder);
+    let _ = fs::remove_dir_all(&folder);
+    if let Some(tag) = language_list::sole_language(&state?) {
+        let name = if tag.eq_ignore_ascii_case("zh-Hant-TW") { "中文（台灣）" } else { tag };
+        return Err(format!(
+            "{name}目前只有善解一種輸入法，移除後 Windows 會把這個語言一併拿掉。\n請先到「設定 > 時間與語言 > 語言與地區」為{name}加入其他輸入法（例如微軟注音），再解除安裝。沒有修改任何設定。"
+        )
+        .into());
+    }
+    Ok(())
+}
 pub fn profiles(remove: bool) -> Result<()> {
     reject_live_test_mutation()?;
     let mask = if remove {
@@ -244,11 +264,7 @@ pub fn profiles(remove: bool) -> Result<()> {
             .and_then(|state| state.keyboards)
             .ok_or("請先透過安裝工具選擇鍵盤配置。")?
     };
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let folder =
-        std::env::temp_dir().join(format!("Shanjie-language-{}-{stamp:x}", std::process::id()));
+    let folder = language_folder()?;
     let before = language_list::read(&folder)?;
     profiles_selected(mask, remove)?;
     let desired = language_list::plan(&before, if remove { 0 } else { mask });
@@ -846,6 +862,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         return Err("請以系統管理員身分解除安裝善解。".into());
     }
     let _owner = install_owner()?;
+    check_removable()?;
     let Some(delete) = choose_data(policy) else {
         return Ok(None);
     };

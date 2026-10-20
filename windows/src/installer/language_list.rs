@@ -105,6 +105,15 @@ pub fn plan(before: &State, mask: u32) -> State {
     }
     desired
 }
+/// A language whose only input methods are Shanjie's: removing them makes Windows drop the
+/// language itself, and the change can no longer be checked or undone.
+pub fn sole_language(state: &State) -> Option<&str> {
+    state
+        .languages
+        .iter()
+        .find(|l| !l.tips.is_empty() && l.tips.iter().all(|t| bit(t) != 0))
+        .map(|l| l.tag.as_str())
+}
 pub fn read(folder: &Path) -> Result<State> {
     run(folder, "read", None, None, None)
 }
@@ -250,6 +259,15 @@ mod tests {
             vec![selected(1)[0].clone(), "0404:OTHER".into()]
         );
         assert_eq!(standard.default_tip, Some(selected(1)[0].clone()));
+    }
+    #[test]
+    fn only_a_language_left_without_other_input_blocks_removal() {
+        let mut state = fixture();
+        assert_eq!(sole_language(&state), None);
+        state.languages[1].tips.retain(|t| bit(t) != 0);
+        assert_eq!(sole_language(&state), Some("zh-Hant-TW"));
+        state.languages[1].tips.clear();
+        assert_eq!(sole_language(&state), None);
     }
     #[test]
     fn first_install_appends_only_needed_language_and_keeps_foreign_defaults() {

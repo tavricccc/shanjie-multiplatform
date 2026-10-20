@@ -129,6 +129,10 @@ fn run() -> Result<()> {
             after_update();
             return Ok(());
         }
+        if args.get(1).is_some_and(|action| action == "uninstall") {
+            // Before UAC, so nothing is asked for a removal that cannot go ahead.
+            installer::check_removable()?;
+        }
         let mut forwarded = Vec::new();
         let mut rest = args[1..].iter();
         while let Some(value) = rest.next() {
