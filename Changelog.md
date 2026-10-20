@@ -2,6 +2,12 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.12.1（Windows／Linux 測試版）
+
+1. 新增：單檔安裝程式 `Shanjie-Windows-Setup.exe`，下載後直接雙擊，不必先解壓縮；zip 照常提供。
+2. 優化：不再使用 `.deleted_files`。解除安裝與更新直接刪除程式檔案，使用中的檔案只留下那幾個，重新登入或重新開機後刪除；選擇移除的個人資料直接刪除，並清掉舊版留下的 `.deleted_files` 副本。Linux 的 `--delete-user-data` 同樣直接刪除。
+3. 優化：安裝包的命令列腳本移到 `scripts\`；更換鍵盤改為重新執行安裝程式。
+
 ## 0.12.0（Windows／Linux 測試版）
 
 1. 優化：Windows 常駐核心改由工作排程器的登入工作啟動，不再等 Explorer 延後處理的 `Run` 啟動項目，登入後更早可以輸入；升級時移除舊的 `Run` 值，解除安裝時一併移除排程。
