@@ -331,21 +331,18 @@ unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
     .ok()?;
     let result = (|| -> Result<()> {
         for (name, value) in [
-            ("DisplayName", "善解 Windows".to_owned()),
+            ("DisplayName", "善解輸入法".to_owned()),
             ("DisplayVersion", env!("CARGO_PKG_VERSION").to_owned()),
             ("InstallLocation", target.to_string_lossy().into_owned()),
             (
                 "DisplayIcon",
-                binaries
-                    .join("ui/Assets/AppIcon.ico")
-                    .to_string_lossy()
-                    .into_owned(),
+                format!("{},0", binaries.join("ui").join("Shanjie.UI.exe").display()),
             ),
             (
                 "UninstallString",
                 format!(
                     "\"{}\" --uninstall",
-                    binaries.join("ui/Shanjie.UI.exe").display()
+                    binaries.join("ui").join("Shanjie.UI.exe").display()
                 ),
             ),
         ] {
