@@ -31,11 +31,14 @@ try {
 call "$vcvars" $Architecture >nul
 if errorlevel 1 exit /b 1
 rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/resources.rc"
+if errorlevel 1 exit /b 1
+rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
 "@
     Set-Content "$objects/resources.cmd" $command -Encoding utf8NoBOM
     & cmd.exe /d /c "$objects/resources.cmd"
     if ($LASTEXITCODE) { throw 'Mode resource build failed.' }
     $env:SHANJIE_ICON_RESOURCE = Join-Path $objects 'mode_icons.res'
+    $env:SHANJIE_SETUP_RESOURCE = Join-Path $objects 'setup.res'
     cargo build --release --manifest-path windows/Cargo.toml --target $target
     if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }
     Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$output/Shanjie.dll" -Force
@@ -52,6 +55,9 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
         Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
         Preserve-Output "$root/dist/tools/shanjie-core.exe"
         Copy-Item "$root/windows/target/$target/release/shanjie-core.exe" "$root/dist/tools" -Force
+        # Package-root launcher for the WinUI setup window.
+        New-Item -ItemType Directory "$root/dist/setup" -Force | Out-Null
+        Copy-Item "$root/windows/target/$target/release/shanjie-setup.exe" "$root/dist/setup/安裝善解.exe" -Force
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
@@ -65,4 +71,4 @@ rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/re
     Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
     Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
     Copy-Item "$root/LICENSES/mode-icons.md" "$root/dist/LICENSES" -Force
-} finally { Remove-Item Env:SHANJIE_ICON_RESOURCE -ErrorAction SilentlyContinue; Pop-Location }
+} finally { Remove-Item Env:SHANJIE_ICON_RESOURCE,Env:SHANJIE_SETUP_RESOURCE -ErrorAction SilentlyContinue; Pop-Location }
