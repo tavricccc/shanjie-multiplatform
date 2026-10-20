@@ -2,7 +2,7 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
-## 未發布
+## 0.12.0（Windows／Linux 測試版）
 
 1. 優化：Windows 常駐核心改由工作排程器的登入工作啟動，不再等 Explorer 延後處理的 `Run` 啟動項目，登入後更早可以輸入；升級時移除舊的 `Run` 值，解除安裝時一併移除排程。
 2. 新增：GitHub Actions 建置 Windows zip 與 Linux tar.gz，並附到對應版本的 Release。
