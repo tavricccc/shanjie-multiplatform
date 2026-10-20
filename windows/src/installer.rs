@@ -298,8 +298,8 @@ unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
             (
                 "UninstallString",
                 format!(
-                    "\"{}\" --elevate uninstall",
-                    binaries.join("tools/shanjie-manager.exe").display()
+                    "\"{}\" --uninstall",
+                    binaries.join("ui/Shanjie.UI.exe").display()
                 ),
             ),
         ] {
