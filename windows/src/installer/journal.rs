@@ -2,6 +2,7 @@
 use super::*;
 use std::io::Write;
 pub fn event(folder: &Path, phase: &str, status: &str, message: &str) -> Result<()> {
+    progress::step(phase, status, message);
     fs::create_dir_all(folder)?;
     safe_tree(folder)?;
     let value = serde_json::json!({"time_unix_ms":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis(),"version":env!("CARGO_PKG_VERSION"),"phase":phase,"status":status,"message":message});
