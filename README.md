@@ -10,9 +10,11 @@
 
 ## Windows 安裝
 
-1. 完整解壓 `Shanjie-Windows.zip`，雙擊 `install.cmd`（會要求 UAC）。
-2. 第一次安裝選擇標準注音或倚天注音；之後升級沿用。要換鍵盤執行 `重新選擇鍵盤.cmd`，或用命令列 `--keyboard standard`／`--keyboard eten`。
+1. 完整解壓 `Shanjie-Windows.zip`，雙擊 `安裝善解.exe`。安裝畫面會顯示這次是全新安裝還是升級。
+2. 選擇標準注音或倚天注音（升級時預選目前的配置），按「安裝」後 Windows 會要求 UAC，畫面逐步顯示進度；失敗時會顯示回復結果與紀錄位置。之後要換鍵盤可再執行安裝，或執行 `重新選擇鍵盤.cmd`。
 3. 登出再登入，在輸入法清單選「善解注音」。
+
+命令列安裝仍可用 `install.cmd`，或 `tools/shanjie-manager.exe --elevate install --keyboard standard`／`--keyboard eten`。
 
 安裝程式使用系統內建的 Windows PowerShell 5.1，不需要另裝 PowerShell 7。登入時由工作排程器的 `ShanjieCore` 登入工作在背景啟動常駐核心，預載詞庫與模型，所有 App 共用同一個核心；切換到善解時若核心還沒啟動，輸入法也會在背景喚醒它。
 
@@ -20,13 +22,12 @@
 
 ### 解除安裝
 
-從「已安裝的應用程式」移除，或執行 `uninstall.cmd`。開始前會問：
+從「已安裝的應用程式」移除，或在設定的「關於與相容性」頁按「解除安裝善解…」。解除安裝畫面會先把自己複製到暫存資料夾再執行，讓安裝目錄可以完整移除；畫面中可以選：
 
-- **是**：移除程式、註冊與全部個人資料。
-- **否**：移除程式與設定，保留詞庫與學習，供重新安裝使用。
-- **取消**：不解除安裝。
+- **保留個人詞庫與選字學習**（預設）：移除程式與設定，詞庫與學習供重新安裝使用。
+- **一併移除個人詞庫、學習與設定**。
 
-檔案會移到 `.deleted_files`，不直接永久刪除。命令列可用 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data` 或 `--delete-user-data`。
+檔案會移到 `.deleted_files`，不直接永久刪除。`uninstall.cmd` 仍可用，會以對話框詢問同樣的選擇。命令列可用 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data` 或 `--delete-user-data`。
 
 ### 疑難排解
 
