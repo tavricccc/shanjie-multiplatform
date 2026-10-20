@@ -147,6 +147,9 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" x:Name="Differences" TextWrapping="Wrap"/>
                         <HyperlinkButton Content="微軟注音官方操作說明" NavigateUri="https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime" HorizontalAlignment="Left"/>
                         <HyperlinkButton Content="上游 model-v6 與詞類表說明" NavigateUri="https://github.com/Nanako0129/shanjie/releases/tag/model-v6" HorizontalAlignment="Left"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="解除安裝" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="移除輸入法、設定程式與登入啟動排程，可選擇保留個人詞庫與選字學習。也可以從 Windows 的「已安裝的應用程式」移除。"/>
+                        <Button Content="解除安裝善解…" Click="Uninstall" HorizontalAlignment="Left"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

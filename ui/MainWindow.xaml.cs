@@ -112,6 +112,12 @@ public sealed partial class MainWindow : Window
     }
     private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); RefreshPresets(); ShowLoadFeedback(); }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
+    private void Uninstall(object sender, RoutedEventArgs args)
+    {
+        // The uninstall window copies itself out of this version folder; settings must not stay open in it.
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, "--uninstall") { UseShellExecute = false }); Close(); }
+        catch (Exception error) { StatusBar.Severity = InfoBarSeverity.Error; Vm.Status = "解除安裝未能開始：" + error.Message; StatusBar.IsOpen = true; }
+    }
     private async void ClearLearning(object sender, RoutedEventArgs args)
     {
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "清除選字學習？", Content = "會清除本帳號已儲存的選字偏好，個人詞庫與設定會保留。", PrimaryButtonText = "清除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
