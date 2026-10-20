@@ -318,7 +318,7 @@ impl Draft {
         let safe: String = name.chars().map(|c| if c == '/' || c == '\0' { '_' } else { c }).collect::<String>().trim().to_owned();
         let safe = if safe.is_empty() || safe.starts_with('.') { format!("preset{safe}") } else { safe };
         let file = self.preset_folder().join(format!("{safe}.ini"));
-        // Replacing an earlier copy keeps it aside.
+        // A newer import of the same preset replaces the earlier copy.
         store::discard(&file)?;
         std::fs::write(file, clean)?;
         self.load_draft(&merged)?;

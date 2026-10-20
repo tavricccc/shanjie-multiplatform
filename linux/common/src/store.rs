@@ -1,6 +1,6 @@
 //! Writing the user folder with the Windows guarantees (windows/src/profile.rs, word_store.rs,
 //! dictionary_store.rs). flock replaces the named mutexes and rename(2) replaces MoveFileEx; a file
-//! that is replaced or cleared moves to `.deleted_files` instead of being deleted.
+//! that is replaced or cleared is deleted.
 use crate::{lock, notify, paths};
 use sha2::{Digest, Sha256};
 use shanjie_shell::{
@@ -21,19 +21,13 @@ fn stamp() -> Result<u128> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos())
 }
 
-/// installer::remove_tree: keep what is replaced in `<parent>/.deleted_files/<stamp>-<name>`.
+/// installer::remove_tree: deletes for good. A link is removed itself, never followed.
 pub fn discard(path: &Path) -> Result<()> {
-    if fs::symlink_metadata(path).is_err() {
-        return Ok(());
+    match fs::symlink_metadata(path) {
+        Err(_) => Ok(()),
+        Ok(metadata) if metadata.is_dir() => Ok(fs::remove_dir_all(path)?),
+        Ok(_) => Ok(fs::remove_file(path)?),
     }
-    let archive = path.parent().ok_or("不可清理根目錄。")?.join(".deleted_files");
-    if fs::symlink_metadata(&archive).is_ok_and(|m| m.file_type().is_symlink()) {
-        return Err("保留區不可為連結。".into());
-    }
-    fs::create_dir_all(&archive)?;
-    let name = path.file_name().ok_or("缺少檔名。")?.to_string_lossy();
-    fs::rename(path, archive.join(format!("{:x}-{name}", stamp()?)))?;
-    Ok(())
 }
 
 fn profile_lock(path: &Path) -> Result<lock::Guard> {
@@ -131,7 +125,7 @@ fn publish_with(folder: &Path, name: &str, bytes: &[u8], mut checkpoint: impl Fn
     drop(file);
     checkpoint(Stage::Written)?;
     checkpoint(Stage::BeforePublish)?;
-    // Keep a damaged previous file recoverable before replacing it.
+    // The name is the content hash, so a differing file under it is only a damaged copy.
     discard(&target)?;
     fs::rename(&temporary.0, &target)?;
     checkpoint(Stage::Published)?;
@@ -212,15 +206,14 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_content_is_repaired_and_preserved() {
+    fn corrupt_content_is_replaced_without_archives() {
         let folder = folder();
         let bytes = b"complete dictionary\n";
         publish(&folder, "dictionary-test.tsv", bytes).unwrap();
         fs::write(folder.join("dictionary-test.tsv"), b"partial").unwrap();
         publish(&folder, "dictionary-test.tsv", bytes).unwrap();
         assert_eq!(fs::read(folder.join("dictionary-test.tsv")).unwrap(), bytes);
-        let saved = fs::read_dir(folder.join(".deleted_files")).unwrap().next().unwrap().unwrap().path();
-        assert_eq!(fs::read(saved).unwrap(), b"partial");
+        assert!(!folder.join(".deleted_files").exists());
         let modified = fs::metadata(folder.join("dictionary-test.tsv")).unwrap().modified().unwrap();
         publish(&folder, "dictionary-test.tsv", bytes).unwrap();
         assert_eq!(fs::metadata(folder.join("dictionary-test.tsv")).unwrap().modified().unwrap(), modified);
@@ -318,15 +311,13 @@ mod tests {
     }
 
     #[test]
-    fn clearing_learning_keeps_the_files_aside_and_bumps_the_epoch() {
+    fn clearing_learning_deletes_the_files_and_bumps_the_epoch() {
         let folder = folder();
         fs::create_dir_all(&folder).unwrap();
         fs::write(folder.join("learning.tsv"), b"rows").unwrap();
         clear_learning(&folder).unwrap();
         assert!(!folder.join("learning.tsv").exists());
-        let kept: Vec<_> = fs::read_dir(folder.join(".deleted_files")).unwrap().map(|e| e.unwrap().path()).collect();
-        assert_eq!(kept.len(), 1);
-        assert_eq!(fs::read(&kept[0]).unwrap(), b"rows");
+        assert!(!folder.join(".deleted_files").exists());
         let epoch = fs::read_to_string(folder.join("learning.epoch")).unwrap();
         // Held by an engine operation, the clear waits and then reports busy instead of racing it.
         let held = lock::hold(&folder, lock::LEARNING, Duration::ZERO).unwrap().unwrap();

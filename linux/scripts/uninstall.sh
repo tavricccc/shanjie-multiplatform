@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Removes what install.sh installed. The user's folder (~/.local/share/shanjie: settings, personal
-# dictionary, learning) is kept unless --delete-user-data is given, and then it is moved aside to
-# ~/.local/share/shanjie.deleted_files/<time> rather than erased.
+# dictionary, learning) is kept unless --delete-user-data is given, and then it is deleted, together
+# with the shanjie.deleted_files backups that versions before 0.12.1 kept.
 set -euo pipefail
 PREFIX="${PREFIX:-/usr}"
 SUDO="${SUDO:-sudo}"
@@ -17,9 +17,6 @@ ibus write-cache >/dev/null 2>&1 || true
 ibus restart >/dev/null 2>&1 || true
 if [ "${1:-}" = "--delete-user-data" ]; then
   data="${XDG_DATA_HOME:-$HOME/.local/share}"
-  if [ -d "$data/shanjie" ]; then
-    mkdir -p "$data/shanjie.deleted_files"
-    mv "$data/shanjie" "$data/shanjie.deleted_files/$(date +%Y%m%d-%H%M%S)"
-  fi
+  rm -rf -- "$data/shanjie" "$data/shanjie.deleted_files"
 fi
 echo "removed Shanjie from $PREFIX"
