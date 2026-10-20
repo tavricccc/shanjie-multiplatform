@@ -16,6 +16,7 @@ use windows::{
 };
 mod journal;
 mod language_list;
+mod logon_task;
 mod permissions;
 mod transaction;
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
@@ -245,48 +246,27 @@ fn profiles_selected(mask: u32, remove: bool) -> Result<()> {
 }
 const APP_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Shanjie";
 const RUN_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
-unsafe fn core_login(executable: Option<&Path>) -> Result<()> {
+/// Versions before the logon task started the core from this Run value; removing it keeps one launcher.
+unsafe fn remove_run_entry() -> Result<()> {
     let mut key = HKEY::default();
-    RegCreateKeyExW(
+    let status = RegOpenKeyExW(
         HKEY_LOCAL_MACHINE,
         PCWSTR(wide(RUN_KEY).as_ptr()),
         Some(0),
-        None,
-        REG_OPTION_NON_VOLATILE,
         KEY_SET_VALUE | KEY_WOW64_64KEY,
-        None,
         &mut key,
-        None,
-    )
-    .ok()?;
-    let result = if let Some(exe) = executable {
-        let command = format!("\"{}\" --serve", exe.display());
-        if command.len() > 260 {
-            let _ = RegCloseKey(key);
-            return Err("常駐核心啟動路徑過長。".into());
-        }
-        let value = wide(&command);
-        RegSetValueExW(
-            key,
-            w!("ShanjieCore"),
-            Some(0),
-            REG_SZ,
-            Some(std::slice::from_raw_parts(
-                value.as_ptr().cast(),
-                value.len() * 2,
-            )),
-        )
-        .ok()
-    } else {
-        let status = RegDeleteValueW(key, w!("ShanjieCore"));
-        if status == ERROR_FILE_NOT_FOUND {
-            Ok(())
-        } else {
-            status.ok()
-        }
-    };
+    );
+    if status == ERROR_FILE_NOT_FOUND {
+        return Ok(());
+    }
+    status.ok()?;
+    let status = RegDeleteValueW(key, w!("ShanjieCore"));
     let _ = RegCloseKey(key);
-    result.map_err(Into::into)
+    if status == ERROR_FILE_NOT_FOUND {
+        Ok(())
+    } else {
+        status.ok().map_err(Into::into)
+    }
 }
 unsafe fn app_entry(target: &Path, binaries: &Path) -> Result<()> {
     let mut key = HKEY::default();
@@ -817,8 +797,9 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         return Ok(None);
     };
     unsafe {
-        core_login(None)?;
+        remove_run_entry()?;
     }
+    logon_task::remove()?;
     if let Ok(entries) = fs::read_dir(target.join("versions")) {
         for entry in entries.flatten() {
             if entry.file_name() == ".deleted_files" {

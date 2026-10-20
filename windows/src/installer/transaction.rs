@@ -84,6 +84,9 @@ pub struct Checkpoint {
     registry: Vec<Saved>,
     files: Vec<FileState>,
     languages: language_list::State,
+    /// Task Scheduler XML of the logon task, absent in checkpoints written before it existed.
+    #[serde(default)]
+    task: Option<String>,
 }
 pub struct Native<'a> {
     pub target: &'a Path,
@@ -222,6 +225,7 @@ impl Effects for Native<'_> {
             registry,
             files: save_files(self.target)?,
             languages: language_list::read(self.backup)?,
+            task: logon_task::read()?,
         };
         fs::create_dir_all(self.backup)?;
         atomic_file(
@@ -292,9 +296,12 @@ impl Effects for Native<'_> {
             Phase::AppEntry => unsafe {
                 app_entry(self.target, self.binaries)?;
             },
-            Phase::Login => unsafe {
-                core_login(Some(&self.binaries.join("tools/shanjie-core.exe")))?;
-            },
+            Phase::Login => {
+                logon_task::register(&logon_task::definition(
+                    &self.binaries.join("tools/shanjie-core.exe"),
+                ))?;
+                unsafe { remove_run_entry()? };
+            }
             Phase::Validate => {
                 let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
                 let languages = language_list::read(self.backup)?;
@@ -361,21 +368,15 @@ impl Effects for Native<'_> {
                     RUN_KEY,
                     "ShanjieCore",
                 ))?;
-                let expected = crate::wide(&format!(
-                    "\"{}\" --serve",
-                    self.binaries.join("tools/shanjie-core.exe").display()
-                ))
-                .into_iter()
-                .flat_map(u16::to_le_bytes)
-                .collect::<Vec<_>>();
                 if run
                     .tree
                     .as_ref()
-                    .and_then(|tree| tree.values.get("ShanjieCore"))
-                    .map(|v| &v.bytes)
-                    != Some(&expected)
+                    .is_some_and(|tree| tree.values.contains_key("ShanjieCore"))
+                    || !logon_task::read()?.is_some_and(|xml| {
+                        logon_task::matches(&xml, &self.binaries.join("tools/shanjie-core.exe"))
+                    })
                 {
-                    return Err("登入啟動路徑校驗失敗。".into());
+                    return Err("登入啟動排程校驗失敗。".into());
                 }
                 atomic_file(&self.backup.join("completed.txt"), b"committed")?;
             }
@@ -414,6 +415,9 @@ impl Effects for Native<'_> {
             if let Err(error) = registry_snapshot::restore(saved) {
                 failures.push(format!("{}：{error}", saved.location.path));
             }
+        }
+        if let Err(error) = logon_task::restore(checkpoint.task.as_deref()) {
+            failures.push(format!("登入啟動排程：{error}"));
         }
         for file in &checkpoint.files {
             if let Err(error) = restore_file(file) {
