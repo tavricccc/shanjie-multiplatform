@@ -41,7 +41,7 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 ## 安裝與版本目錄
 
-DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版；使用中刪不掉的檔案排入重新開機刪除。變更前保存註冊、語言清單與啟動項目，失敗時嘗試完整回復。安裝紀錄格式見 [README](../README.md#疑難排解)。
+DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版；使用中刪不掉的檔案排入重新開機刪除。變更前保存註冊、語言清單、啟動檔案與登入啟動排程，失敗時嘗試完整回復。常駐核心由工作排程器根目錄的隱藏工作 `ShanjieCore` 在任一使用者登入時啟動；安裝時移除舊版的 `Run` 啟動值，解除安裝時一併移除排程。安裝紀錄格式見 [README](../README.md#疑難排解)。
 
 ## 驗證
 
