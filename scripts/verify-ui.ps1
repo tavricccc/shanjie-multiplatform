@@ -23,3 +23,9 @@ $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList 
 $process.WaitForExit()
 if ((Get-Content "$output/result.txt" -Raw) -ne 'PASS') { throw 'WinUI loading, profile persistence or visual capture failed.' }
 Write-Host "WinUI profile/capture checks passed: $output"
+# Setup and uninstall pages, rendered offscreen with sample progress; nothing is installed.
+$setupOutput = Join-Path $root 'build/ui-review-setup'
+$process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-setup',('"' + $setupOutput + '"') -WindowStyle Hidden -PassThru
+$process.WaitForExit()
+if ((Get-Content "$setupOutput/result.txt" -Raw) -ne 'PASS') { throw 'WinUI setup pages failed.' }
+Write-Host "WinUI setup page checks passed: $setupOutput"
