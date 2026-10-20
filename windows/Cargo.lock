@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "shanjie-shell"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "core",
  "serde",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "shanjie-windows"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "core",
  "serde",
