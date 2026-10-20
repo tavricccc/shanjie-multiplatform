@@ -1,5 +1,5 @@
 use shanjie_windows::{
-    installer::{self, UserData},
+    installer::{self, progress, UserData},
     profile::{self, Result},
     wide,
 };
@@ -62,7 +62,12 @@ fn after_update() {
 }
 fn announce(text: &str, dialog: bool) {
     println!("{text}");
-    if dialog {
+    if progress::connected() {
+        progress::finish(
+            if text.starts_with("已取消") { "cancelled" } else { "succeeded" },
+            text,
+        );
+    } else if dialog {
         unsafe {
             MessageBoxW(
                 None,
@@ -95,6 +100,20 @@ fn run() -> Result<()> {
         None
     };
     let choose = args.iter().any(|value| value == "--choose-keyboard");
+    // The WinUI setup window reads results from its pipe instead of message boxes.
+    let pipe = match args.iter().position(|value| value == "--progress") {
+        Some(at) => {
+            let name = args.get(at + 1).ok_or("--progress 請指定管道名稱。")?;
+            if !progress::valid(name) {
+                return Err("安裝進度管道名稱不合法。".into());
+            }
+            Some(name.clone())
+        }
+        None => None,
+    };
+    let report = pipe
+        .as_ref()
+        .map_or(" --dialog".to_owned(), |name| format!(" --progress {name}"));
     if args.first().is_some_and(|s| s == "--elevate") {
         if args.get(1).is_some_and(|action| action == "install") {
             let Some(mask) =
@@ -104,13 +123,25 @@ fn run() -> Result<()> {
                 return Ok(());
             };
             elevate(&format!(
-                "install --keyboard {} --dialog",
+                "install --keyboard {}{report}",
                 if mask == 1 { "standard" } else { "eten" }
             ))?;
             after_update();
             return Ok(());
         }
-        return elevate(&(args[1..].join(" ") + " --dialog"));
+        let mut forwarded = Vec::new();
+        let mut rest = args[1..].iter();
+        while let Some(value) = rest.next() {
+            if value == "--progress" {
+                rest.next();
+            } else {
+                forwarded.push(value.as_str());
+            }
+        }
+        return elevate(&(forwarded.join(" ") + &report));
+    }
+    if let Some(name) = &pipe {
+        progress::connect(name)?;
     }
     let dialog = args.iter().any(|s| s == "--dialog");
     let target = installer::install_root();
@@ -176,6 +207,7 @@ fn main() {
             Err(log) => format!("{error}\n另有紀錄保存失敗：{log}"),
         };
         eprintln!("{message}");
+        progress::finish("failed", &message);
         if std::env::args().any(|s| s == "--dialog") {
             unsafe {
                 MessageBoxW(
