@@ -40,7 +40,10 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="setup:SetupStep">
                                 <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,3" Opacity="{x:Bind Opacity, Mode=OneWay}">
-                                    <FontIcon Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="14"/>
+                                    <Grid Width="16" Height="16">
+                                        <FontIcon Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="14" Visibility="{x:Bind ShowsGlyph, Mode=OneWay}"/>
+                                        <ProgressRing IsActive="{x:Bind IsRunning, Mode=OneWay}" Width="16" Height="16" MinWidth="0" MinHeight="0"/>
+                                    </Grid>
                                     <TextBlock Text="{x:Bind Label, Mode=OneTime}"/>
                                 </StackPanel>
                             </DataTemplate>

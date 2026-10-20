@@ -53,10 +53,12 @@ internal sealed partial class SetupStep(string stage, string label) : Observable
     internal StepState State
     {
         get => state;
-        set { if (SetProperty(ref state, value)) { OnPropertyChanged(nameof(Glyph)); OnPropertyChanged(nameof(Opacity)); } }
+        set { if (SetProperty(ref state, value)) { OnPropertyChanged(nameof(Glyph)); OnPropertyChanged(nameof(Opacity)); OnPropertyChanged(nameof(IsRunning)); OnPropertyChanged(nameof(ShowsGlyph)); } }
     }
-    // Segoe Fluent Icons: circle, sync, check, error.
-    public string Glyph => state switch { StepState.Running => "", StepState.Succeeded => "", StepState.Failed => "", _ => "" };
+    // Segoe Fluent Icons: circle, check, error; a running step shows a ProgressRing instead.
+    public string Glyph => state switch { StepState.Succeeded => "", StepState.Failed => "", _ => "" };
+    public bool IsRunning => state == StepState.Running;
+    public bool ShowsGlyph => !IsRunning;
     public double Opacity => state == StepState.Pending ? 0.5 : 1;
 }
 
