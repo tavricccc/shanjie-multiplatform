@@ -58,6 +58,8 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
         # Package-root launcher for the WinUI setup window.
         New-Item -ItemType Directory "$root/dist/setup" -Force | Out-Null
         Copy-Item "$root/windows/target/$target/release/shanjie-setup.exe" "$root/dist/setup/安裝善解.exe" -Force
+        # Build-time only: appends the package to the setup stub for the single-file installer.
+        Copy-Item "$root/windows/target/$target/release/shanjie-pack.exe" "$root/dist/setup" -Force
     }
     New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
     Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force

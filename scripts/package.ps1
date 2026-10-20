@@ -44,4 +44,9 @@ try {
     if ($LASTEXITCODE) { throw 'Native package verification failed.' }
     Preserve-Output "$root/dist/Shanjie-Windows.zip"
     Compress-Archive -Path "$output/*" -DestinationPath "$root/dist/Shanjie-Windows.zip"
+    # Single-file installer: the setup stub carrying this same verified package.
+    $setup = Join-Path $root 'dist/Shanjie-Windows-Setup.exe'
+    Preserve-Output $setup
+    & "$root/dist/setup/shanjie-pack.exe" "$root/dist/setup/安裝善解.exe" $output $setup
+    if ($LASTEXITCODE) { throw 'Single-file installer packing failed.' }
 } finally { Pop-Location }
