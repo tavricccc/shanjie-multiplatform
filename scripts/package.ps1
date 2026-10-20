@@ -26,6 +26,7 @@ try {
     Copy-Item "$root/dist/ui" $output -Recurse -Force
     New-Item -ItemType Directory -Path "$output/tools" -Force | Out-Null
     Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
+    Copy-Item "$root/dist/setup/安裝善解.exe" $output -Force
     Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
     Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
