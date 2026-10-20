@@ -18,6 +18,7 @@ mod journal;
 mod language_list;
 mod logon_task;
 mod permissions;
+pub mod progress;
 mod transaction;
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
 pub fn install_root() -> PathBuf {
