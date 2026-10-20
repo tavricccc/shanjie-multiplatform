@@ -396,6 +396,34 @@ pub fn choose_keyboard(target: &Path, explicit: Option<u32>, choose: bool) -> Re
         _ => None,
     })
 }
+/// What the setup window shows before installing. Reads only, so it runs unelevated.
+pub fn status(target: &Path) -> Result<serde_json::Value> {
+    let locations = transaction::locations();
+    let app = crate::registry_snapshot::capture(locations[7].clone())?;
+    let installed = app
+        .tree
+        .as_ref()
+        .and_then(|tree| tree.values.get("DisplayVersion"))
+        .map(|value| {
+            let units: Vec<u16> = value
+                .bytes
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect();
+            String::from_utf16_lossy(&units).trim_end_matches('\0').to_owned()
+        });
+    let user = crate::registry_snapshot::capture(locations[6].clone())?;
+    Ok(serde_json::json!({
+        "package_version": env!("CARGO_PKG_VERSION"),
+        "installed_version": installed,
+        "target": target,
+        // A damaged record is reported by the install itself; here it only hides the choice.
+        "keyboards": crate::installation::load(target).ok().flatten().and_then(|state| state.keyboards),
+        "registered64": crate::installation::registered(KEY_WOW64_64KEY)?,
+        "registered32": crate::installation::registered(KEY_WOW64_32KEY)?,
+        "listed": crate::installation::listed(&user),
+    }))
+}
 pub fn install(
     package: &Path,
     target: &Path,

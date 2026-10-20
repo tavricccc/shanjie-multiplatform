@@ -158,6 +158,7 @@ fn run() -> Result<()> {
             let files=installer::verified_package(std::path::Path::new(path))?;
             println!("PASS: {} verified package files, latest model only",files.len());
         }
+        Some("install-status") => println!("{}", installer::status(&target)?),
         Some("models") => println!("{}",serde_json::to_string(&shanjie_windows::model_store::scan())?),
         Some("model-prepare") => {
             let id=args.get(1).ok_or("請指定下載工作識別。")?;
@@ -190,7 +191,7 @@ fn run() -> Result<()> {
                 None=>announce("已取消解除安裝，沒有修改任何資料。",dialog),
             }
         }
-        _=>return Err("用法：shanjie-manager [--elevate] install [--keyboard standard|eten|--choose-keyboard]；uninstall [--keep-user-data|--delete-user-data]；另支援 verify-package、apply-profile、profiles、refresh-runtime。".into()),
+        _=>return Err("用法：shanjie-manager [--elevate] install [--keyboard standard|eten|--choose-keyboard]；uninstall [--keep-user-data|--delete-user-data]；可加 --progress 管道；另支援 install-status、verify-package、apply-profile、profiles、refresh-runtime。".into()),
     }
     Ok(())
 }
