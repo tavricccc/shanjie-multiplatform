@@ -75,6 +75,15 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString() + "\n" + string.Join("\n", error.Data.Keys.Cast<object>().Select(key => key + ": " + error.Data[key]))); }
             Exit();
         }
+        else if (arguments.Length == 3 && arguments[1] == "--verify-setup")
+        {
+            string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
+            int code = 0;
+            try { await Verification.SetupVerifier.Run(output); File.WriteAllText(Path.Combine(output, "result.txt"), "PASS"); }
+            catch (Exception error) { code = 1; File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString()); }
+            // Several hidden test windows are still open; Application.Exit does not end the process here.
+            Environment.Exit(code);
+        }
         else if (arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall")
         {
             bool uninstall = arguments[1] == "--uninstall";
