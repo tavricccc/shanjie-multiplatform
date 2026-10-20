@@ -11,7 +11,7 @@ pub const PATH: &str = "\\ShanjieCore";
 /// BUILTIN\Users: the task runs once in every interactive session, as the signed-in user.
 const USERS: &str = "S-1-5-32-545";
 
-fn escape(text: &str) -> String {
+pub(super) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -66,7 +66,7 @@ pub fn matches(xml: &str, core: &Path) -> bool {
         && element(xml, "ExecutionTimeLimit").as_deref() == Some("PT0S")
 }
 
-struct Com(bool);
+pub(super) struct Com(bool);
 impl Drop for Com {
     fn drop(&mut self) {
         if self.0 {
@@ -74,7 +74,7 @@ impl Drop for Com {
         }
     }
 }
-unsafe fn root() -> Result<(Com, ITaskFolder)> {
+pub(super) unsafe fn root() -> Result<(Com, ITaskFolder)> {
     let com = Com(CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok());
     let service: ITaskService = CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER)?;
     let empty = VARIANT::default();
@@ -82,7 +82,7 @@ unsafe fn root() -> Result<(Com, ITaskFolder)> {
     let folder = service.GetFolder(&BSTR::from("\\"))?;
     Ok((com, folder))
 }
-fn missing(error: &windows::core::Error) -> bool {
+pub(super) fn missing(error: &windows::core::Error) -> bool {
     // ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND as HRESULTs.
     matches!(error.code().0 as u32, 0x80070002 | 0x80070003)
 }

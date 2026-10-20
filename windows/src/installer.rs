@@ -14,6 +14,7 @@ use windows::{
         UI::{Controls::*, TextServices::*, WindowsAndMessaging::*},
     },
 };
+mod cleanup_task;
 mod journal;
 mod language_list;
 mod logon_task;
@@ -42,31 +43,72 @@ fn children(root: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     }
     Ok(())
 }
-/// Preserve retired payloads beside their old location. Never follow reparse points.
+/// Deletes a file or folder for good. What is still in use, such as a DLL loaded by an open
+/// program, stays and is queued for Windows to delete at the next restart (that needs an
+/// administrator; elsewhere it simply stays). Returns how many files stayed. Never follows
+/// reparse points.
 pub fn remove_tree(root: &Path) -> Result<usize> {
     if !root.exists() {
         return Ok(0);
     }
-    safe_tree(root)?;
-    let archive = root
-        .parent()
-        .ok_or("不可清理根目錄。")?
-        .join(".deleted_files");
-    safe_tree(&archive)?;
-    fs::create_dir_all(&archive)?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let destination = archive.join(format!(
-        "{stamp:x}-{}",
-        root.file_name().ok_or("缺少檔名。")?.to_string_lossy()
-    ));
-    match fs::rename(root, &destination) {
-        Ok(()) => Ok(0),
-        // Keep a busy payload in place; no reboot-time permanent deletion.
-        Err(e) if [Some(5), Some(32), Some(33)].contains(&e.raw_os_error()) => Ok(1),
-        Err(e) => Err(e.into()),
+    let mut paths = Vec::new();
+    if fs::symlink_metadata(root)?.is_dir() {
+        children(root, &mut paths)?;
     }
+    paths.push(root.to_owned());
+    let mut busy = 0;
+    for path in paths {
+        let directory = path.is_dir();
+        let remove = |path: &Path| {
+            if directory {
+                fs::remove_dir(path)
+            } else {
+                fs::remove_file(path)
+            }
+        };
+        if remove(&path).is_ok() {
+            continue;
+        }
+        if let Ok(metadata) = fs::metadata(&path) {
+            let mut permissions = metadata.permissions();
+            if permissions.readonly() {
+                #[allow(clippy::permissions_set_readonly_false)]
+                permissions.set_readonly(false);
+                if fs::set_permissions(&path, permissions).is_ok() && remove(&path).is_ok() {
+                    continue;
+                }
+            }
+        }
+        if path.exists() {
+            busy += usize::from(!directory);
+            let _ = delete_once_at_reboot(&path);
+        }
+    }
+    Ok(busy)
+}
+/// Versions before 0.12.1 moved removed items into a `.deleted_files` folder beside them,
+/// uninstalls the whole program; only those `<hex stamp>-<name>` entries are removed.
+fn purge_parked(target: &Path) -> usize {
+    let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
+        return 0;
+    };
+    let archive = parent.join(".deleted_files");
+    let suffix = format!("-{}", name.to_string_lossy());
+    let Ok(entries) = fs::read_dir(&archive) else {
+        return 0;
+    };
+    let mut busy = 0;
+    for entry in entries.flatten() {
+        let entry_name = entry.file_name().to_string_lossy().into_owned();
+        if entry_name.strip_suffix(&suffix).is_some_and(|stamp| {
+            !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_hexdigit())
+        }) {
+            busy += remove_tree(&entry.path()).unwrap_or(1);
+        }
+    }
+    // Only an archive left empty goes; anything else in it is not ours.
+    let _ = fs::remove_dir(&archive);
+    busy
 }
 fn files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
@@ -508,11 +550,38 @@ pub fn install(
     }
     // Only a fully validated transaction may retire an old version.
     progress::step("Cleanup", "started", "");
-    let mut pending = 0;
+    let left = retire_superseded(target, &version, &backup)?;
+    // A reinstall over an earlier uninstall replaces its cleanup with this one.
+    cleanup_task::schedule(&left.paths, &[])?;
+    let pending = left.files;
+    progress::step("Cleanup", "succeeded", "");
+    Ok(Some(pending))
+}
+/// What a cleanup could not delete yet: files open programs still hold, and the top-level
+/// paths that contain them.
+#[derive(Default)]
+struct Leftover {
+    files: usize,
+    paths: Vec<PathBuf>,
+}
+impl Leftover {
+    fn remove(&mut self, path: &Path) -> Result<()> {
+        let busy = remove_tree(path)?;
+        if busy > 0 || path.exists() {
+            self.files += busy;
+            self.paths.push(path.to_owned());
+        }
+        Ok(())
+    }
+}
+/// After a fully validated update only the newest install remains: other versions, files
+/// earlier versions left in the install folder, and older recovery checkpoints all go.
+fn retire_superseded(target: &Path, version: &str, current_backup: &Path) -> Result<Leftover> {
+    let mut left = Leftover::default();
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
-        if entry.file_name() != version.as_str() && entry.file_name() != ".deleted_files" {
-            pending += retire(&entry.path())?;
+        if entry.file_name() != version {
+            left.remove(&entry.path())?;
         }
     }
     for entry in fs::read_dir(target)? {
@@ -524,90 +593,35 @@ pub fn install(
             "manager-path.txt",
             "settings.cmd",
             "uninstall.cmd",
-            ".deleted_files",
             ".installer-recovery",
         ]
         .contains(&entry.file_name().to_string_lossy().as_ref())
         {
-            pending += retire(&entry.path())?;
+            left.remove(&entry.path())?;
         }
     }
-    pending += purge_superseded(target, &backup);
-    progress::step("Cleanup", "succeeded", "");
-    Ok(Some(pending))
-}
-/// Retire a superseded payload; a busy one is deleted by Windows at the next restart.
-fn retire(root: &Path) -> Result<usize> {
-    let busy = remove_tree(root)?;
-    if busy > 0 {
-        let _ = delete_at_reboot(root);
+    let recovery = target.join(".installer-recovery");
+    if recovery.exists() {
+        for entry in fs::read_dir(&recovery)? {
+            let path = entry?.path();
+            if path != current_backup {
+                left.remove(&path)?;
+            }
+        }
     }
-    Ok(busy)
+    left.files += purge_parked(target);
+    Ok(left)
 }
-/// Children first, then the root: Windows only removes a directory once it is empty.
-fn reboot_delete_order(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
-    if root.is_dir() {
-        children(root, &mut paths)?;
-    }
-    paths.push(root.to_owned());
-    Ok(paths)
-}
-fn delete_at_reboot(root: &Path) -> Result<()> {
+fn delete_once_at_reboot(path: &Path) -> Result<()> {
     use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_DELAY_UNTIL_REBOOT};
-    for path in reboot_delete_order(root)? {
-        unsafe {
-            MoveFileExW(
-                PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
-                PCWSTR::null(),
-                MOVEFILE_DELAY_UNTIL_REBOOT,
-            )?;
-        }
+    unsafe {
+        MoveFileExW(
+            PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
+            PCWSTR::null(),
+            MOVEFILE_DELAY_UNTIL_REBOOT,
+        )?;
     }
     Ok(())
-}
-/// After a fully validated update, permanently delete retired payloads and old recovery
-/// checkpoints so only the newest install remains. Best effort: busy items are left in
-/// place and counted so a later update retries them. Never follows reparse points.
-fn purge_superseded(target: &Path, current_backup: &Path) -> usize {
-    let mut busy = 0;
-    for archive in [
-        target.join("versions").join(".deleted_files"),
-        target.join(".deleted_files"),
-    ] {
-        busy += purge_children(&archive, None);
-    }
-    busy + purge_children(&target.join(".installer-recovery"), Some(current_backup))
-}
-fn purge_children(root: &Path, keep: Option<&Path>) -> usize {
-    if !root.exists() || safe_tree(root).is_err() {
-        return 0;
-    }
-    let Ok(entries) = fs::read_dir(root) else {
-        return 1;
-    };
-    let mut busy = 0;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if keep == Some(path.as_path()) {
-            continue;
-        }
-        let Ok(kind) = entry.file_type() else {
-            busy += 1;
-            continue;
-        };
-        // remove_dir_all removes a junction itself without descending into its target.
-        let removed = if kind.is_dir() {
-            fs::remove_dir_all(&path)
-        } else {
-            fs::remove_file(&path)
-        };
-        if removed.is_err() {
-            let _ = delete_at_reboot(&path);
-            busy += 1;
-        }
-    }
-    busy
 }
 fn install_owner() -> Result<InstallOwner> {
     use windows::Win32::System::Threading::*;
@@ -640,7 +654,7 @@ fn choose_data(policy: UserData) -> Option<bool> {
         UserData::Keep => Some(false),
         UserData::Delete => Some(true),
         UserData::Ask => unsafe {
-            match MessageBoxW(None,w!("要一併移除個人詞庫、選字學習與設定嗎？\n\n是：移除程式與全部個人資料，檔案保留至 .deleted_files。\n否：移除程式與設定，保留詞庫和學習供重新安裝使用。\n取消：不進行解除安裝。"),w!("解除安裝善解"),MB_YESNOCANCEL|MB_ICONQUESTION|MB_DEFBUTTON3){IDYES=>Some(true),IDNO=>Some(false),_=>None}
+            match MessageBoxW(None,w!("要一併移除個人詞庫、選字學習與設定嗎？\n\n是：移除程式與全部個人資料。\n否：移除程式與設定，保留詞庫和學習供重新安裝使用。\n取消：不進行解除安裝。"),w!("解除安裝善解"),MB_YESNOCANCEL|MB_ICONQUESTION|MB_DEFBUTTON3){IDYES=>Some(true),IDNO=>Some(false),_=>None}
         },
     }
 }
@@ -908,14 +922,36 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     )?;
     progress::step("Unregister", "succeeded", "");
     progress::step("Remove", "started", "");
-    let mut pending = remove_tree(target)?;
+    let mut left = Leftover::default();
+    let versions = target.join("versions");
+    safe_tree(&versions)?;
+    if versions.exists() {
+        for entry in fs::read_dir(&versions)? {
+            left.remove(&entry?.path())?;
+        }
+    }
+    if target.exists() {
+        for entry in fs::read_dir(target)? {
+            let path = entry?.path();
+            if path != versions {
+                left.remove(&path)?;
+            }
+        }
+    }
+    let _ = fs::remove_dir(&versions);
+    let _ = fs::remove_dir(target);
+    // What open programs still hold goes at the next sign-in or restart, with the folders.
+    cleanup_task::schedule(&left.paths, &[versions, target.to_owned()])?;
+    let mut pending = left.files + purge_parked(target);
     progress::step("Remove", "succeeded", "");
     progress::step("Data", "started", "");
     let personal = crate::profile::folder();
     safe_tree(&personal)?;
     if delete {
-        pending += remove_tree(&personal)?;
+        pending += remove_tree(&personal)? + purge_parked(&personal);
     } else if personal.exists() {
+        // Backups that versions before 0.12.1 kept of retired files.
+        pending += remove_tree(&personal.join(".deleted_files"))? + purge_parked(&personal);
         for file in files(&personal)? {
             let name = file.file_name().unwrap().to_string_lossy();
             if name.starts_with("profile.ini") || name.starts_with("profile.") {
@@ -957,42 +993,89 @@ mod tests {
         assert!(!root.exists());
     }
     #[test]
-    fn update_purges_retired_versions_and_old_recovery_but_keeps_newest() {
-        let target = std::env::temp_dir().join(format!("shanjie-purge-{}", std::process::id()));
+    fn removal_deletes_the_tree_and_counts_files_in_use() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = std::env::temp_dir().join(format!("shanjie-purge-tree-{}", std::process::id()));
+        fs::create_dir_all(root.join("versions/1/tools")).unwrap();
+        fs::write(root.join("versions/1/tools/a.exe"), b"a").unwrap();
+        fs::write(root.join("installed.json"), b"{}").unwrap();
+        let locked = root.join("versions/1/Shanjie.dll");
+        fs::write(&locked, b"dll").unwrap();
+        let readonly = root.join("versions/1/readonly.txt");
+        fs::write(&readonly, b"r").unwrap();
+        let mut permissions = fs::metadata(&readonly).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&readonly, permissions).unwrap();
+        // No FILE_SHARE_DELETE: deleting fails like a DLL loaded by an open program.
+        let hold = fs::OpenOptions::new().read(true).share_mode(1).open(&locked).unwrap();
+        assert_eq!(remove_tree(&root).unwrap(), 1);
+        assert!(locked.exists() && !readonly.exists());
+        assert!(!root.join("versions/1/tools").exists() && !root.join("installed.json").exists());
+        drop(hold);
+        assert_eq!(remove_tree(&root).unwrap(), 0);
+        assert!(!root.exists());
+    }
+    #[test]
+    fn a_version_in_use_leaves_only_the_files_in_use_and_is_reported() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let version = std::env::temp_dir()
+            .join(format!("shanjie-retire-{}", std::process::id()))
+            .join("versions/old");
+        fs::create_dir_all(version.join("ui")).unwrap();
+        fs::write(version.join("ui/Shanjie.UI.exe"), b"ui").unwrap();
+        fs::write(version.join("Shanjie.dll"), b"dll").unwrap();
+        let hold =
+            fs::OpenOptions::new().read(true).share_mode(1).open(version.join("Shanjie.dll")).unwrap();
+        let mut left = Leftover::default();
+        left.remove(&version).unwrap();
+        assert_eq!((left.files, left.paths), (1, vec![version.clone()]));
+        assert!(version.join("Shanjie.dll").exists() && !version.join("ui").exists());
+        drop(hold);
+        fs::remove_dir_all(version.parent().unwrap().parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn parked_uninstalls_are_removed_but_other_archived_items_stay() {
+        let parent = std::env::temp_dir().join(format!("shanjie-parked-{}", std::process::id()));
+        let archive = parent.join(".deleted_files");
+        for name in ["18f2a3b4c5-Shanjie/versions", "18f2a3b4c6-Shanjie", "18f2a3b4c7-Other", "note-Shanjie"] {
+            fs::create_dir_all(archive.join(name)).unwrap();
+        }
+        assert_eq!(purge_parked(&parent.join("Shanjie")), 0);
+        let mut left: Vec<_> =
+            fs::read_dir(&archive).unwrap().map(|e| e.unwrap().file_name()).collect();
+        left.sort();
+        assert_eq!(left, ["18f2a3b4c7-Other", "note-Shanjie"]);
+        for name in left {
+            fs::remove_dir(archive.join(name)).unwrap();
+        }
+        assert_eq!(purge_parked(&parent.join("Shanjie")), 0);
+        assert!(!archive.exists());
+        fs::remove_dir(&parent).unwrap();
+    }
+    #[test]
+    fn update_keeps_only_the_newest_install() {
+        let target = std::env::temp_dir().join(format!("shanjie-retire-all-{}", std::process::id()));
         let _ = fs::remove_dir_all(&target);
-        let versions = target.join("versions");
-        for old in ["versions/.deleted_files/a/tools", ".deleted_files/b"] {
+        for old in ["versions/old/tools", "versions/.deleted_files/a", ".deleted_files/b", "ui"] {
             fs::create_dir_all(target.join(old)).unwrap();
             fs::write(target.join(old).join("f"), b"x").unwrap();
         }
-        fs::create_dir_all(versions.join("current")).unwrap();
+        fs::create_dir_all(target.join("versions/current")).unwrap();
+        fs::write(target.join("installed.json"), b"{}").unwrap();
         for id in ["1", "2", "3"] {
             fs::create_dir_all(target.join(".installer-recovery").join(id)).unwrap();
-            fs::write(target.join(".installer-recovery").join(id).join("error.txt"), b"x").unwrap();
         }
         let keep = target.join(".installer-recovery/3");
-        assert_eq!(purge_superseded(&target, &keep), 0);
-        assert_eq!(fs::read_dir(versions.join(".deleted_files")).unwrap().count(), 0);
-        assert_eq!(fs::read_dir(target.join(".deleted_files")).unwrap().count(), 0);
-        assert!(versions.join("current").is_dir());
-        let left: Vec<_> = fs::read_dir(target.join(".installer-recovery"))
-            .unwrap()
-            .map(|e| e.unwrap().file_name())
-            .collect();
-        assert_eq!(left, vec![std::ffi::OsString::from("3")]);
+        let left = retire_superseded(&target, "current", &keep).unwrap();
+        assert_eq!((left.files, left.paths.len()), (0, 0));
+        let names = |p: PathBuf| {
+            let mut v: Vec<_> = fs::read_dir(p).unwrap().map(|e| e.unwrap().file_name()).collect();
+            v.sort();
+            v
+        };
+        assert_eq!(names(target.join("versions")), ["current"]);
+        assert_eq!(names(target.join(".installer-recovery")), ["3"]);
+        assert_eq!(names(target.clone()), [".installer-recovery", "installed.json", "versions"]);
         fs::remove_dir_all(&target).unwrap();
-    }
-    #[test]
-    fn reboot_delete_lists_children_before_their_directory() {
-        let root = std::env::temp_dir().join(format!("shanjie-reboot-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("a/b")).unwrap();
-        fs::write(root.join("a/b/f"), b"x").unwrap();
-        let order = reboot_delete_order(&root).unwrap();
-        let at = |p: PathBuf| order.iter().position(|x| *x == p).unwrap();
-        assert!(at(root.join("a/b/f")) < at(root.join("a/b")));
-        assert!(at(root.join("a/b")) < at(root.join("a")));
-        assert_eq!(order.last().unwrap(), &root);
-        fs::remove_dir_all(&root).unwrap();
     }
 }
