@@ -16,7 +16,7 @@
 
 同一份安裝包也以 `Shanjie-Windows.zip` 提供：完整解壓後雙擊 `安裝善解.exe`。命令列安裝用 zip 裡的 `scripts\install.cmd`，或 `tools/shanjie-manager.exe --elevate install --keyboard standard`／`--keyboard eten`。
 
-安裝程式使用系統內建的 Windows PowerShell 5.1，不需要另裝 PowerShell 7。登入時由工作排程器的 `ShanjieCore` 登入工作在背景啟動常駐核心，預載詞庫與模型，所有 App 共用同一個核心；切換到善解時若核心還沒啟動，輸入法也會在背景喚醒它。
+安裝時只把善解加到輸入法清單的最後面（沒有中文（台灣）時一併加入），不改動其他語言與輸入法。登入時由工作排程器的 `ShanjieCore` 登入工作在背景啟動常駐核心，預載詞庫與模型，所有 App 共用同一個核心；切換到善解時若核心還沒啟動，輸入法也會在背景喚醒它。
 
 更新時先校驗並註冊新版，成功後才清除舊版；被 App 占用而刪不掉的舊檔只留下那幾個檔案，重新登入或重新開機後刪除。已開啟的 App 要重新開啟才會用到新版。任何一步失敗都會嘗試完整回復。
 
