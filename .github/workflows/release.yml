@@ -38,7 +38,7 @@ jobs:
           notes="docs/releases/RELEASE-NOTES-${version}.md"
           if [ ! -f "$notes" ]; then echo "缺少 $notes"; exit 1; fi
           gh release create "$tag" --target "$GITHUB_SHA" \
-            --title "善解 Windows ${version}" --notes-file "$notes"
+            --title "善解輸入法 ${version}" --notes-file "$notes"
 
   windows:
     needs: release
