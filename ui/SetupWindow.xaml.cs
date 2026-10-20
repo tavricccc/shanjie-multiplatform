@@ -91,7 +91,14 @@ public sealed partial class SetupWindow : Window
         switch (page)
         {
             case Page.Welcome: Show(Page.Keyboard); break;
-            case Page.Keyboard: await Execute(() => SetupRunner.Install(KeyboardChoice.SelectedIndex == 1 ? 2u : 1u, Apply)); break;
+            case Page.Keyboard:
+                uint keyboard = KeyboardChoice.SelectedIndex == 1 ? 2u : 1u;
+                await Execute(async () =>
+                {
+                    await BundleExtraction.WaitReady(ShowExtraction);
+                    return await SetupRunner.Install(keyboard, Apply);
+                });
+                break;
             case Page.Uninstall: await Execute(() => SetupRunner.Uninstall(DataChoice.SelectedIndex == 1, Apply)); break;
             case Page.Done when !uninstalling && result?.Outcome == SetupOutcome.Succeeded: OpenSettings(); break;
             default: Close(); break;
@@ -108,6 +115,14 @@ public sealed partial class SetupWindow : Window
         catch (Exception error) { outcome = new(SetupOutcome.Failed, error.Message); }
         finally { running = false; }
         Finish(outcome);
+    }
+
+    /// <summary>The single-file installer is still writing the models and data.</summary>
+    private void ShowExtraction(double percent)
+    {
+        ProgressText.Text = "正在解開安裝檔案…";
+        Progress.IsIndeterminate = false;
+        Progress.Value = percent;
     }
 
     internal void Apply(SetupEvent item)
