@@ -140,7 +140,7 @@
                         <TextBlock Style="{StaticResource HelpText}" Text="每行填「注音 字詞」，例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後先提交組字再載入。"/>
                     </StackPanel>
                     <StackPanel x:Name="About" Spacing="12" Visibility="Collapsed">
-                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="善解 Windows" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="善解輸入法" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="WinUI 3 設定 · 原生 Windows 候選 · 本機注音引擎" TextWrapping="Wrap"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="輸入內容、詞庫、學習及設定都留在電腦上。操作預設調整按鍵與候選；鍵盤配置決定標準／倚天或拼音。" TextWrapping="Wrap"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="與微軟注音的差異" Style="{ThemeResource SubtitleTextBlockStyle}"/>

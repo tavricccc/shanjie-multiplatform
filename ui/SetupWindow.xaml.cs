@@ -53,14 +53,14 @@ public sealed partial class SetupWindow : Window
     internal void ShowStatus(SetupStatus value)
     {
         status = value; StatusError.IsOpen = false;
-        WelcomeTitle.Text = $"安裝善解 Windows {value.PackageVersion}";
+        WelcomeTitle.Text = $"安裝善解輸入法 {value.PackageVersion}";
         WelcomeText.Text = !value.Installed ? "這台電腦還沒有安裝善解，將進行全新安裝。"
             : value.InstalledVersion == value.PackageVersion ? $"已安裝相同版本 {value.InstalledVersion}，將重新安裝並修復註冊。"
             : $"已安裝 {value.InstalledVersion}，將更新到 {value.PackageVersion}。個人詞庫、選字學習與設定都會保留。";
         WelcomeTarget.Text = value.Target.Length == 0 ? "" : $"安裝位置：{value.Target}";
         KeyboardSummary.Text = value.KeyboardSummary;
         KeyboardChoice.SelectedIndex = value.SuggestedKeyboard == 2 ? 1 : 0;
-        if (value.InstalledVersion is { } installed) UninstallTitle.Text = $"解除安裝善解 Windows {installed}";
+        if (value.InstalledVersion is { } installed) UninstallTitle.Text = $"解除安裝善解輸入法 {installed}";
         PrimaryButton.IsEnabled = true;
     }
 
