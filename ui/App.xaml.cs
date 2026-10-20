@@ -75,6 +75,16 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString() + "\n" + string.Join("\n", error.Data.Keys.Cast<object>().Select(key => key + ": " + error.Data[key]))); }
             Exit();
         }
+        else if (arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall")
+        {
+            bool uninstall = arguments[1] == "--uninstall";
+            try {
+                // Uninstalling moves this version folder, so continue from a temporary copy.
+                if (uninstall && !Setup.UninstallCopy.Running) { Setup.UninstallCopy.Relaunch(); Exit(); return; }
+                var setup = new SetupWindow(uninstall); window = setup; setup.Activate(); await setup.LoadStatus();
+            }
+            catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
+        }
         else {
             try {
                 instance = await SettingsInstance.Open();
