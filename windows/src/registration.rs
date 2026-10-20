@@ -72,7 +72,7 @@ pub unsafe fn register(module: HMODULE, remove: bool) -> Result<()> {
         };
         let previous = crate::installation::registered(view)
             .map_err(|_| windows::core::Error::from_hresult(E_FAIL))?;
-        value(&path, PCWSTR::null(), "善解 Windows")?;
+        value(&path, PCWSTR::null(), "善解輸入法")?;
         value(&(path.clone() + "\\InprocServer32"), PCWSTR::null(), &file)?;
         value(
             &(path + "\\InprocServer32"),

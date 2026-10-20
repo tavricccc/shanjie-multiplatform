@@ -72,7 +72,7 @@ fn announce(text: &str, dialog: bool) {
             MessageBoxW(
                 None,
                 PCWSTR(wide(text).as_ptr()),
-                w!("善解 Windows"),
+                w!("善解輸入法"),
                 MB_OK | MB_ICONINFORMATION,
             );
         }
