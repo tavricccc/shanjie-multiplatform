@@ -874,7 +874,11 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         &format!("SOFTWARE\\Microsoft\\CTF\\TIP\\{SERVICE}"),
         REG_SAM_FLAGS(0),
     )?;
+    progress::step("Unregister", "succeeded", "");
+    progress::step("Remove", "started", "");
     let mut pending = remove_tree(target)?;
+    progress::step("Remove", "succeeded", "");
+    progress::step("Data", "started", "");
     let personal = crate::profile::folder();
     safe_tree(&personal)?;
     if delete {
@@ -887,6 +891,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
             }
         }
     }
+    progress::step("Data", "succeeded", "");
     Ok(Some(pending))
 }
 fn reject_live_test_mutation() -> Result<()> {
