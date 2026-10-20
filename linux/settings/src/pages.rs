@@ -401,7 +401,7 @@ fn link(ui: &Shared, title: &str, uri: &'static str) -> adw::ActionRow {
 }
 
 fn about(ui: &Shared) -> Vec<adw::PreferencesGroup> {
-    let about = group("善解 Linux", "GTK 4 設定 · GNOME 原生 IBus 候選 · 本機注音引擎");
+    let about = group("善解輸入法", "GTK 4 設定 · GNOME 原生 IBus 候選 · 本機注音引擎");
     about.add(&ui::note("輸入內容、詞庫、學習及設定都留在電腦上。操作預設調整按鍵與候選；鍵盤配置決定標準／倚天或拼音。"));
 
     let microsoft = group("與微軟注音的差異", "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。");
