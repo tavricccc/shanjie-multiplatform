@@ -407,7 +407,9 @@ pub fn install(
         return Err("請以系統管理員身分安裝善解。".into());
     }
     let _owner = install_owner()?;
+    progress::step("Verify", "started", "");
     let entries = verified_package(package)?;
+    progress::step("Verify", "succeeded", "");
     let Some(keyboards) = choose_keyboard(target, explicit, choose)? else {
         return Ok(None);
     };
