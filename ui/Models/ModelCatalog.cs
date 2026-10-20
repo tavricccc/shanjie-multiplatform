@@ -32,7 +32,7 @@ public static class ModelCatalog
     private static HttpClient CreateClient()
     {
         var client=new HttpClient {Timeout=Timeout.InfiniteTimeSpan};
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shanjie-Windows/0.12.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shanjie-Windows/0.12.1");
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }
