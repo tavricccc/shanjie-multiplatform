@@ -43,6 +43,8 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版；使用中刪不掉的檔案排入重新開機刪除。變更前保存註冊、語言清單、啟動檔案與登入啟動排程，失敗時嘗試完整回復。常駐核心由工作排程器根目錄的隱藏工作 `ShanjieCore` 在任一使用者登入時啟動；安裝時移除舊版的 `Run` 啟動值，解除安裝時一併移除排程。安裝紀錄格式見 [README](../README.md#疑難排解)。
 
+安裝與解除安裝畫面是設定程式的 `--setup`／`--uninstall` 模式（安裝包根目錄的 `安裝善解.exe` 只負責開啟 `ui\Shanjie.UI.exe --setup`）。畫面不提權，只是 `shanjie-manager` 的外殼：它以一般權限呼叫 `--elevate install`／`uninstall`，由 manager 自己要求 UAC，安裝後也由 manager 的未提權那一半啟動使用者的核心。提權後的 manager 經 `--progress \.\pipe\ShanjieSetup-<隨機>` 把每個階段寫成一行 JSON，最後一行是結果；管道由畫面建立、只開一個實例，manager 以 SECURITY_IDENTIFICATION 連線，不讓管道端冒用提權身分。`install-status` 唯讀回報已安裝版本與鍵盤配置。「已安裝的應用程式」的解除安裝指向 `Shanjie.UI.exe --uninstall`，它先把 `ui` 與 manager 複製到 `%TEMP%\ShanjieUninstall-<隨機>` 再從那裡執行，結束後刪掉這份暫存。
+
 ## 驗證
 
 ```powershell
@@ -50,7 +52,7 @@ pwsh -File scripts/verify.ps1                                 # 核心、上游�
 pwsh -File scripts/verify.ps1 -NativeOnly -Interaction shanjie
 pwsh -File scripts/verify-interaction.ps1
 pwsh -File scripts/verify-mode.ps1
-pwsh -File scripts/verify-ui.ps1                              # WinUI 離屏 render
+pwsh -File scripts/verify-ui.ps1                              # WinUI 設定與安裝畫面離屏 render
 cargo test --manifest-path windows/Cargo.toml --lib
 pwsh -File scripts/package.ps1                                # 打包並校驗
 ```
