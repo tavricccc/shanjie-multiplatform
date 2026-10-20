@@ -20,7 +20,7 @@ public partial class SettingsViewModel
         try {
             int previousKeyboard = Keyboard;
             StandardInstalled = (mask & 1) != 0; EtenInstalled = (mask & 2) != 0;
-            InstalledKeyboardHelp = mask switch { 1 => "本機只安裝標準注音。要改用倚天，請執行安裝包的「重新選擇鍵盤.cmd」。", 2 => "本機只安裝倚天注音。要改用標準注音，請執行安裝包的「重新選擇鍵盤.cmd」。", 0 => "鍵盤註冊狀態不一致，請重新執行安裝以修復。", _ => "本機提供標準注音與倚天注音。" };
+            InstalledKeyboardHelp = mask switch { 1 => "本機只安裝標準注音。要改用倚天，請重新執行善解安裝程式並選擇倚天注音。", 2 => "本機只安裝倚天注音。要改用標準注音，請重新執行善解安裝程式並選擇標準注音。", 0 => "鍵盤註冊狀態不一致，請重新執行安裝以修復。", _ => "本機提供標準注音與倚天注音。" };
             if (previousKeyboard == 1 && !StandardInstalled || previousKeyboard == 2 && !EtenInstalled) { Keyboard = 0; HasChanges = true; Status = "先前的鍵盤配置尚未安裝，已改為跟隨已安裝配置；按儲存後更新偏好。"; }
         }
         finally { loading = false; }

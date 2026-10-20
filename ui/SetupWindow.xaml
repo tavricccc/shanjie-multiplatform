@@ -22,14 +22,14 @@
                         <RadioButton><StackPanel><TextBlock Text="標準注音"/><TextBlock Style="{StaticResource HelpText}" Text="大千式排列，一般注音鍵盤"/></StackPanel></RadioButton>
                         <RadioButton><StackPanel><TextBlock Text="倚天注音"/><TextBlock Style="{StaticResource HelpText}" Text="倚天式排列"/></StackPanel></RadioButton>
                     </RadioButtons>
-                    <TextBlock Style="{StaticResource HelpText}" Text="只安裝選定的配置。個人詞庫、選字學習與輸入偏好都會保留，之後可以用「重新選擇鍵盤」更換。"/>
+                    <TextBlock Style="{StaticResource HelpText}" Text="只安裝選定的配置。個人詞庫、選字學習與輸入偏好都會保留，之後重新執行安裝程式即可更換。"/>
                 </StackPanel>
                 <StackPanel x:Name="UninstallPage" Spacing="12" Visibility="Collapsed">
                     <TextBlock x:Name="UninstallTitle" Text="解除安裝善解 Windows" Style="{ThemeResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
-                    <TextBlock TextWrapping="Wrap" Text="會移除輸入法、設定程式與登入時啟動核心的排程。Windows 會要求系統管理員權限。"/>
+                    <TextBlock TextWrapping="Wrap" Text="會移除輸入法註冊、登入時啟動核心的排程，並刪除全部程式檔案；仍被開啟中程式使用的檔案會在重新登入或重新開機後自動刪除。Windows 會要求系統管理員權限。"/>
                     <RadioButtons x:Name="DataChoice" Header="個人資料" SelectedIndex="0">
                         <RadioButton><StackPanel><TextBlock Text="保留個人詞庫與選字學習"/><TextBlock Style="{StaticResource HelpText}" Text="只移除設定，重新安裝後詞庫和學習可以繼續使用。"/></StackPanel></RadioButton>
-                        <RadioButton><StackPanel><TextBlock Text="一併移除個人詞庫、學習與設定"/><TextBlock Style="{StaticResource HelpText}" Text="檔案會移到 .deleted_files，不會直接刪除。"/></StackPanel></RadioButton>
+                        <RadioButton><StackPanel><TextBlock Text="一併移除個人詞庫、學習與設定"/><TextBlock Style="{StaticResource HelpText}" Text="個人詞庫、選字學習與設定會直接刪除，無法復原。"/></StackPanel></RadioButton>
                     </RadioButtons>
                 </StackPanel>
                 <StackPanel x:Name="ProgressPage" Spacing="12" Visibility="Collapsed">
