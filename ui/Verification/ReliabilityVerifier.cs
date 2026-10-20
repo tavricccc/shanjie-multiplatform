@@ -46,8 +46,7 @@ internal static class ReliabilityVerifier
         if (settings.FeedbackForVerification != InfoBarSeverity.Error || !settings.Vm.Status.Contains("清除操作未完成"))
             throw new InvalidDataException("Partial clear failure was not reported");
         CheckDraft(); if (File.Exists(learning)) throw new InvalidDataException("Partial clear fixture did not reach the expected stage");
-        var archive = Path.Combine(folder, ".deleted_files"); Directory.CreateDirectory(archive);
-        Directory.Move(Path.Combine(folder, "learning.tsv.tmp"), Path.Combine(archive, "blocked-temporary-" + Guid.NewGuid().ToString("N")));
+        Directory.Delete(Path.Combine(folder, "learning.tsv.tmp"));
         await settings.ClearLearningConfirmed(); CheckDraft();
         if (settings.FeedbackForVerification != InfoBarSeverity.Success || !File.Exists(Path.Combine(folder, "learning.epoch")))
             throw new InvalidDataException("Clear retry did not complete or update the epoch");
