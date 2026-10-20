@@ -806,6 +806,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     let Some(delete) = choose_data(policy) else {
         return Ok(None);
     };
+    progress::step("Stop", "started", "");
     unsafe {
         remove_run_entry()?;
     }
@@ -824,6 +825,8 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
             }
         }
     }
+    progress::step("Stop", "succeeded", "");
+    progress::step("Unregister", "started", "");
     safe_tree(target)?;
     profiles(true)?;
     unsafe {
