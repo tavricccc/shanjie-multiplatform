@@ -1,4 +1,4 @@
-善解 Windows v0.12.1 測試版
+善解輸入法 Windows 版 v0.12.1 測試版
 
 1. 雙擊 Shanjie-Windows-Setup.exe；用 zip 時先完整解壓，再雙擊「安裝善解.exe」。
    選擇標準注音或倚天（升級時預選目前配置），按「安裝」後會要求 UAC。
