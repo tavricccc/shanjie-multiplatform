@@ -11,8 +11,7 @@
 個人設定、詞庫、學習與下載的模型位於 ~/.local/share/shanjie。
 
 移除：./uninstall.sh
-個人資料預設保留；./uninstall.sh --delete-user-data 會把它移到
-~/.local/share/shanjie.deleted_files/<時間>，不會直接刪除。
+個人資料預設保留；./uninstall.sh --delete-user-data 會一併刪除，無法復原。
 
 GNOME 上的差異：候選框由 GNOME 繪製（外觀、字型大小、主題跟隨系統）；
 中／英狀態顯示在頂端列，沒有游標旁提示；尚未提供反白加詞。
