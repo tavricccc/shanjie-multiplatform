@@ -434,11 +434,15 @@ pub fn install(
     );
     let binaries = target.join("versions").join(&version);
     fs::create_dir_all(&binaries)?;
+    progress::step("Copy", "started", "");
     let staging = (|| -> Result<()> {
-        for relative in &entries {
+        for (done, relative) in entries.iter().enumerate() {
             let destination = binaries.join(relative);
             fs::create_dir_all(destination.parent().unwrap())?;
             fs::copy(package.join(relative), destination)?;
+            if done % 25 == 0 {
+                progress::count("Copy", done, entries.len());
+            }
         }
         fs::copy(
             package.join("SHA256SUMS.txt"),
@@ -450,6 +454,7 @@ pub fn install(
         let _ = remove_tree(&binaries);
         return Err(error);
     }
+    progress::step("Copy", "succeeded", "");
     let backup = target
         .join(".installer-recovery")
         .join(format!("{stamp:x}"));
