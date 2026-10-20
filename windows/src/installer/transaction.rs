@@ -83,7 +83,8 @@ struct FileState {
 pub struct Checkpoint {
     registry: Vec<Saved>,
     files: Vec<FileState>,
-    languages: language_list::State,
+    /// Shanjie's keyboards in the user's input list (the list itself is in `registry`).
+    languages: u32,
     /// Task Scheduler XML of the logon task, absent in checkpoints written before it existed.
     #[serde(default)]
     task: Option<String>,
@@ -224,7 +225,7 @@ impl Effects for Native<'_> {
         let checkpoint = Checkpoint {
             registry,
             files: save_files(self.target)?,
-            languages: language_list::read(self.backup)?,
+            languages: language_list::mask(&language_list::read()?),
             task: logon_task::read()?,
         };
         fs::create_dir_all(self.backup)?;
@@ -257,21 +258,7 @@ impl Effects for Native<'_> {
                     self.keyboards,
                 )?;
             }
-            Phase::Profiles => {
-                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
-                let listed = language_list::mask(&previous.languages);
-                let removed = listed & !self.keyboards;
-                if removed != 0 {
-                    profiles_selected(removed, true)?;
-                }
-                profiles_selected(self.keyboards, false)?;
-                let desired = language_list::plan(&previous.languages, self.keyboards);
-                atomic_file(
-                    &self.backup.join("expected-language-list.json"),
-                    &serde_json::to_vec_pretty(&desired)?,
-                )?;
-                language_list::apply(self.backup, &previous.languages, &desired)?;
-            }
+            Phase::Profiles => set_listed(self.keyboards)?,
             Phase::LaunchPaths => {
                 atomic_file(
                     &self.target.join("ui-path.txt"),
@@ -303,15 +290,13 @@ impl Effects for Native<'_> {
                 unsafe { remove_run_entry()? };
             }
             Phase::Validate => {
-                let previous = self.previous.as_ref().ok_or("安裝前狀態尚未記錄。")?;
-                let languages = language_list::read(self.backup)?;
-                let expected = language_list::plan(&previous.languages, self.keyboards);
+                let listed = language_list::mask(&language_list::read()?);
                 let registered64 = crate::installation::registered(KEY_WOW64_64KEY)?;
                 let registered32 = crate::installation::registered(KEY_WOW64_32KEY)?;
                 atomic_file(
                     &self.backup.join("validation.json"),
                     &serde_json::to_vec_pretty(
-                        &serde_json::json!({"expected_keyboards":self.keyboards,"registered64":registered64,"registered32":registered32,"expected_languages":expected,"actual_languages":languages,"dll64":registry_dll(KEY_WOW64_64KEY)?,"dll32":registry_dll(KEY_WOW64_32KEY)?}),
+                        &serde_json::json!({"expected_keyboards":self.keyboards,"registered64":registered64,"registered32":registered32,"listed_keyboards":listed,"dll64":registry_dll(KEY_WOW64_64KEY)?,"dll32":registry_dll(KEY_WOW64_32KEY)?}),
                     )?,
                 )?;
                 for (arch, view) in [("x64", KEY_WOW64_64KEY), ("x86", KEY_WOW64_32KEY)] {
@@ -323,8 +308,8 @@ impl Effects for Native<'_> {
                         return Err(format!("{arch} 安裝註冊校驗失敗。").into());
                     }
                 }
-                if languages != expected {
-                    return Err(format!("Windows 語言清單校驗失敗：預期善解配置 {}，實際 {}；完整清單見 validation.json。",self.keyboards,language_list::mask(&languages)).into());
+                if listed != self.keyboards {
+                    return Err(format!("Windows 輸入法清單校驗失敗：預期善解配置 {}，實際 {listed}。",self.keyboards).into());
                 }
                 let state = crate::installation::load(self.target)?.ok_or("安裝配置尚未保存。")?;
                 if state.version != self.version || state.keyboards != Some(self.keyboards) {
@@ -386,32 +371,23 @@ impl Effects for Native<'_> {
     fn restore(&mut self, checkpoint: &Checkpoint) -> Result<()> {
         let mut failures = Vec::new();
         journal::event(self.backup, "Rollback", "started", "")?;
+        // Take out what this install added while its TIPs are still registered: a language added
+        // only for Shanjie goes with them.
+        let added = language_list::mask(&language_list::read().unwrap_or_default()) & !checkpoint.languages;
+        if let Err(error) = profiles_selected(added, true) {
+            failures.push(format!("移除新加入的輸入法：{error}"));
+        }
         // Restore available machine profiles before notifying the language service.
         for saved in &checkpoint.registry[..6] {
             if let Err(error) = registry_snapshot::restore(saved) {
                 failures.push(format!("{}：{error}", saved.location.path));
             }
         }
-        let old_listed = language_list::mask(&checkpoint.languages);
-        if old_listed != 0 {
-            if let Err(error) = profiles_selected(old_listed, false) {
-                failures.push(format!("原清單通知：{error}"));
-            }
+        if let Err(error) = profiles_selected(checkpoint.languages, false) {
+            failures.push(format!("原清單通知：{error}"));
         }
-        let attempted = language_list::plan(&checkpoint.languages, self.keyboards);
-        let language_restored =
-            match language_list::restore(self.backup, &checkpoint.languages, &attempted) {
-                Ok(_) => true,
-                Err(error) => {
-                    failures.push(format!("原語言清單：{error}"));
-                    false
-                }
-            };
-        // Preserve exact registry metadata after the documented service notification.
-        for (index, saved) in checkpoint.registry.iter().enumerate().skip(6) {
-            if !language_restored && (index == 6 || index >= 9) {
-                continue;
-            }
+        // Preserve exact registry metadata, the input list included, after the notification.
+        for saved in &checkpoint.registry[6..] {
             if let Err(error) = registry_snapshot::restore(saved) {
                 failures.push(format!("{}：{error}", saved.location.path));
             }
@@ -424,12 +400,10 @@ impl Effects for Native<'_> {
                 failures.push(error.to_string());
             }
         }
-        if language_restored {
-            match language_list::read(self.backup) {
-                Ok(actual) if actual == checkpoint.languages => {}
-                Ok(_) => failures.push("回復後 Windows 語言清單仍與安裝前不同。".into()),
-                Err(error) => failures.push(format!("回復後語言清單校驗：{error}")),
-            }
+        match language_list::read() {
+            Ok(actual) if language_list::mask(&actual) == checkpoint.languages => {}
+            Ok(_) => failures.push("回復後 Windows 輸入法清單仍與安裝前不同。".into()),
+            Err(error) => failures.push(format!("回復後輸入法清單校驗：{error}")),
         }
         // Do not archive either version unless every rollback check succeeds.
         if failures.is_empty() {

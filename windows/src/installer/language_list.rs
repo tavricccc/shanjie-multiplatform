@@ -1,33 +1,14 @@
-//! Windows 10/11 user-language settings: preserve all properties except our TIPs.
+//! The user's input languages as Windows keeps them under `Control Panel\International\User
+//! Profile`. Shanjie adds and removes only its own TIPs through InstallLayoutOrTip, which appends
+//! them (and the language when missing); it never rewrites the rest of the list.
 use super::*;
-use serde::{Deserialize, Serialize};
-use std::{
-    process::Stdio,
-    sync::atomic::{AtomicU64, Ordering},
-    time::{Duration, Instant},
-};
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+use crate::registry_snapshot::{self, Tree};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Language {
     pub tag: String,
     pub tips: Vec<String>,
-    pub spelling: bool,
-    pub handwriting: bool,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct State {
-    pub languages: Vec<Language>,
-    pub default_tip: Option<String>,
-}
-#[derive(Serialize)]
-struct Request<'a> {
-    action: &'a str,
-    output: String,
-    before: Option<&'a State>,
-    desired: Option<&'a State>,
-    alternate: Option<&'a State>,
-}
-static NEXT: AtomicU64 = AtomicU64::new(0);
 pub fn bit(tip: &str) -> u32 {
     let tip = tip.to_uppercase();
     for (bit, id) in [
@@ -40,266 +21,99 @@ pub fn bit(tip: &str) -> u32 {
     }
     0
 }
-pub fn mask(state: &State) -> u32 {
-    state
-        .languages
+pub fn mask(languages: &[Language]) -> u32 {
+    languages
         .iter()
         .flat_map(|l| &l.tips)
         .fold(0, |m, t| m | bit(t))
 }
-fn selected(mask: u32) -> Vec<String> {
-    [
-        (1, crate::installation::STANDARD),
-        (2, crate::installation::ETEN),
-    ]
-    .into_iter()
-    .filter(|(b, _)| mask & b != 0)
-    .map(|(_, id)| format!("0404:{SERVICE}{id}"))
-    .collect()
-}
-pub fn plan(before: &State, mask: u32) -> State {
-    let mut desired = before.clone();
-    let mut inserted = false;
-    let selected = selected(mask);
-    for language in &mut desired.languages {
-        let mut tips = Vec::new();
-        for tip in &language.tips {
-            if bit(tip) == 0 {
-                tips.push(tip.clone());
-            } else if !inserted && !selected.is_empty() {
-                tips.extend(selected.clone());
-                inserted = true;
-            }
-        }
-        language.tips = tips;
-    }
-    if !inserted && !selected.is_empty() {
-        if let Some(language) = desired
-            .languages
-            .iter_mut()
-            .find(|l| l.tag.eq_ignore_ascii_case("zh-Hant-TW"))
-        {
-            language.tips.extend(selected.clone());
-        } else {
-            desired.languages.push(Language {
-                tag: "zh-Hant-TW".into(),
-                tips: selected.clone(),
-                spelling: true,
-                handwriting: false,
-            });
-        }
-    }
-    if before
-        .default_tip
-        .as_ref()
-        .is_some_and(|tip| bit(tip) != 0 && bit(tip) & mask == 0)
-    {
-        desired.default_tip = selected.first().cloned().or_else(|| {
-            desired
-                .languages
-                .iter()
-                .flat_map(|l| &l.tips)
-                .next()
-                .cloned()
-        });
-    }
-    desired
-}
 /// A language whose only input methods are Shanjie's: removing them makes Windows drop the
-/// language itself, and the change can no longer be checked or undone.
-pub fn sole_language(state: &State) -> Option<&str> {
-    state
-        .languages
+/// language itself.
+pub fn sole_language(languages: &[Language]) -> Option<&str> {
+    languages
         .iter()
         .find(|l| !l.tips.is_empty() && l.tips.iter().all(|t| bit(t) != 0))
         .map(|l| l.tag.as_str())
 }
-pub fn read(folder: &Path) -> Result<State> {
-    run(folder, "read", None, None, None)
+pub fn read() -> Result<Vec<Language>> {
+    let saved = registry_snapshot::capture(transaction::locations()[6].clone())?;
+    Ok(saved.tree.as_ref().map_or_else(Vec::new, parse))
 }
-pub fn apply(folder: &Path, before: &State, desired: &State) -> Result<State> {
-    run(folder, "apply", Some(before), Some(desired), None)
-}
-pub fn restore(folder: &Path, before: &State, attempted: &State) -> Result<State> {
-    run(
-        folder,
-        "restore",
-        Some(before),
-        Some(before),
-        Some(attempted),
-    )
-}
-fn run(
-    folder: &Path,
-    action: &str,
-    before: Option<&State>,
-    desired: Option<&State>,
-    alternate: Option<&State>,
-) -> Result<State> {
-    fs::create_dir_all(folder)?;
-    safe_tree(folder)?;
-    let count = NEXT.fetch_add(1, Ordering::Relaxed);
-    let output = folder.join(format!("language-{action}-{count}.json"));
-    let request_file = folder.join(format!("language-request-{count}.json"));
-    let request = Request {
-        action,
-        output: output.to_string_lossy().into(),
-        before,
-        desired,
-        alternate,
-    };
-    transaction::atomic_file(&request_file, &serde_json::to_vec_pretty(&request)?)?;
-    let system = if cfg!(target_pointer_width = "32") {
-        "Sysnative"
-    } else {
-        "System32"
-    };
-    let executable = PathBuf::from(std::env::var_os("WINDIR").ok_or("Windows 目錄無法辨識。")?)
-        .join(system)
-        .join("WindowsPowerShell/v1.0/powershell.exe");
-    // Windows passes Unicode environment values intact. The command evaluates
-    // only this compile-time script; request fields are JSON data, never code.
-    let mut child = Command::new(executable)
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "& ([scriptblock]::Create($env:SHANJIE_LANGUAGE_SCRIPT))",
-        ])
-        .env("SHANJIE_LANGUAGE_REQUEST", &request_file)
-        .env(
-            "SHANJIE_TEST_PROFILE",
-            if cfg!(test) {
-                "1".into()
-            } else {
-                std::env::var("SHANJIE_TEST_PROFILE").unwrap_or_default()
-            },
-        )
-        .env(
-            "SHANJIE_LANGUAGE_SCRIPT",
-            include_str!("../../../scripts/user-language-list.ps1"),
-        )
-        .creation_flags(0x08000000)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let start = Instant::now();
-    while child.try_wait()?.is_none() {
-        if start.elapsed() > Duration::from_secs(30) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("Windows 語言設定介面等待逾時；請查看安裝紀錄。".into());
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let result = child.wait_with_output()?;
-    if !result.status.success() {
-        return Err(format!(
-            "Windows 語言清單操作失敗：{}",
-            String::from_utf8_lossy(&result.stderr).trim()
-        )
-        .into());
-    }
-    let state: State = serde_json::from_slice(&fs::read(output)?)?;
-    if let Some(desired) = desired {
-        if &state != desired {
-            return Err(format!(
-                "Windows 語言清單未符合預期；預期善解配置 {}，實際 {}。",
-                mask(desired),
-                mask(&state)
-            )
-            .into());
-        }
-    }
-    Ok(state)
+/// `Languages` (REG_MULTI_SZ) orders the tags; each tag's subkey names its input methods as
+/// values such as `0404:{CLSID}{profile}` or `0409:00000409`.
+fn parse(tree: &Tree) -> Vec<Language> {
+    let order = tree.values.iter().find(|(name, _)| name.eq_ignore_ascii_case("Languages"));
+    let tags: Vec<String> = order.map_or_else(Vec::new, |(_, value)| {
+        let units: Vec<u16> = value
+            .bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        units
+            .split(|&unit| unit == 0)
+            .filter(|tag| !tag.is_empty())
+            .map(String::from_utf16_lossy)
+            .collect()
+    });
+    tags.into_iter()
+        .map(|tag| {
+            let tips = tree
+                .children
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(&tag))
+                .map_or_else(Vec::new, |(_, key)| {
+                    key.values.keys().filter(|name| name.contains(':')).cloned().collect()
+                });
+            Language { tag, tips }
+        })
+        .collect()
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fixture() -> State {
-        State {
-            languages: vec![
-                Language {
-                    tag: "en-US".into(),
-                    tips: vec!["0409:00000409".into()],
-                    spelling: false,
-                    handwriting: false,
-                },
-                Language {
-                    tag: "zh-Hant-TW".into(),
-                    tips: vec![
-                        selected(1)[0].clone(),
-                        "0404:OTHER".into(),
-                        selected(2)[0].clone(),
-                    ],
-                    spelling: true,
-                    handwriting: true,
-                },
-            ],
-            default_tip: Some(selected(2)[0].clone()),
+    use crate::registry_snapshot::Value;
+    fn tip(bit: u32) -> String {
+        let id = if bit == 1 { crate::installation::STANDARD } else { crate::installation::ETEN };
+        format!("0404:{SERVICE}{id}")
+    }
+    fn key(names: &[&str]) -> Tree {
+        Tree {
+            values: names
+                .iter()
+                .map(|n| (n.to_string(), Value { kind: 4, bytes: vec![1, 0, 0, 0] }))
+                .collect(),
+            children: Default::default(),
+            security: Vec::new(),
         }
     }
     #[test]
-    fn dual_keyboard_migration_preserves_language_properties_and_other_order() {
-        let before = fixture();
-        for mask in [1, 2, 3, 0] {
-            let after = plan(&before, mask);
-            assert_eq!(super::mask(&after), mask);
-            assert_eq!(after.languages[0], before.languages[0]);
-            assert_eq!(after.languages[1].spelling, true);
-            assert_eq!(after.languages[1].handwriting, true);
-            assert!(after.languages[1].tips.contains(&"0404:OTHER".into()));
-            assert_eq!(plan(&after, mask), after);
-        }
-        let standard = plan(&before, 1);
-        assert_eq!(
-            standard.languages[1].tips,
-            vec![selected(1)[0].clone(), "0404:OTHER".into()]
-        );
-        assert_eq!(standard.default_tip, Some(selected(1)[0].clone()));
+    fn the_registry_list_is_read_in_order_with_only_input_methods() {
+        let mut root = key(&[]);
+        let tags: Vec<u8> = "en-US\0zh-Hant-TW\0\0"
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
+        root.values.insert("Languages".into(), Value { kind: 7, bytes: tags });
+        let standard = tip(1);
+        root.children.insert("zh-Hant-TW".into(), key(&["CachedLanguageName", &standard]));
+        root.children.insert("en-US".into(), key(&["CachedLanguageName", "0409:00000409"]));
+        root.children.insert("fr-FR".into(), key(&["040C:0000040C"]));
+        let languages = parse(&root);
+        assert_eq!(languages.iter().map(|l| l.tag.as_str()).collect::<Vec<_>>(), ["en-US", "zh-Hant-TW"]);
+        assert_eq!(languages[1].tips, [standard]);
+        assert_eq!(mask(&languages), 1);
     }
     #[test]
     fn only_a_language_left_without_other_input_blocks_removal() {
-        let mut state = fixture();
-        assert_eq!(sole_language(&state), None);
-        state.languages[1].tips.retain(|t| bit(t) != 0);
-        assert_eq!(sole_language(&state), Some("zh-Hant-TW"));
-        state.languages[1].tips.clear();
-        assert_eq!(sole_language(&state), None);
-    }
-    #[test]
-    fn first_install_appends_only_needed_language_and_keeps_foreign_defaults() {
-        let mut before = fixture();
-        before.languages.pop();
-        before.default_tip = Some("0409:00000409".into());
-        let after = plan(&before, 2);
-        assert_eq!(after.languages[0], before.languages[0]);
-        assert_eq!(after.languages[1].tag, "zh-Hant-TW");
-        assert_eq!(after.default_tip, before.default_tip);
-        assert_eq!(super::mask(&after), 2);
-    }
-    #[test]
-    #[ignore = "Creates real International objects but never calls Set-WinUserLanguageList"]
-    fn windows_language_object_round_trip() {
-        let folder = PathBuf::from(
-            std::env::var_os("SHANJIE_TEST_ROOT").expect("Use an isolated workspace root"),
-        )
-        .join("language-objects");
-        let before = fixture();
-        for mask in [1, 2, 3, 0] {
-            let desired = plan(&before, mask);
-            assert_eq!(
-                run(&folder, "preview", Some(&before), Some(&desired), None).unwrap(),
-                desired
-            );
-        }
-        let observed = read(&folder).unwrap();
-        assert!(!observed.languages.is_empty());
-        let error = apply(&folder, &before, &plan(&before, 1)).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Isolated verification cannot change"));
+        let mut languages = vec![
+            Language { tag: "en-US".into(), tips: vec!["0409:00000409".into()] },
+            Language { tag: "zh-Hant-TW".into(), tips: vec![tip(1), "0404:OTHER".into(), tip(2)] },
+        ];
+        assert_eq!(mask(&languages), 3);
+        assert_eq!(sole_language(&languages), None);
+        languages[1].tips.retain(|t| bit(t) != 0);
+        assert_eq!(sole_language(&languages), Some("zh-Hant-TW"));
+        languages[1].tips.clear();
+        assert_eq!(sole_language(&languages), None);
     }
 }
