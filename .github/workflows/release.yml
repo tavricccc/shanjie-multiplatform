@@ -66,9 +66,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $hash = (Get-FileHash dist/Shanjie-Windows.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content dist/Shanjie-Windows.zip.sha256 "$hash  Shanjie-Windows.zip" -Encoding utf8NoBOM
-          gh release upload "${{ needs.release.outputs.tag }}" dist/Shanjie-Windows.zip dist/Shanjie-Windows.zip.sha256 --clobber
+          $assets = foreach ($name in 'Shanjie-Windows-Setup.exe','Shanjie-Windows.zip') {
+            $hash = (Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+            Set-Content "dist/$name.sha256" "$hash  $name" -Encoding utf8NoBOM
+            "dist/$name"; "dist/$name.sha256"
+          }
+          gh release upload "${{ needs.release.outputs.tag }}" @assets --clobber
           if ($LASTEXITCODE) { throw 'Release upload failed.' }
 
   linux:
