@@ -6,6 +6,7 @@
 
 1. 優化：Windows 常駐核心改由工作排程器的登入工作啟動，不再等 Explorer 延後處理的 `Run` 啟動項目，登入後更早可以輸入；升級時移除舊的 `Run` 值，解除安裝時一併移除排程。
 2. 新增：GitHub Actions 建置 Windows zip 與 Linux tar.gz，並附到對應版本的 Release。
+3. 新增：Windows 的 WinUI 3 安裝與解除安裝畫面。安裝包根目錄的「安裝善解.exe」可選鍵盤配置並逐步顯示安裝進度與回復結果；「已安裝的應用程式」和設定的「關於與相容性」頁可開啟解除安裝畫面，選擇保留或移除個人資料。`install.cmd`／`uninstall.cmd` 仍可使用。
 
 ## 0.11.0（Windows／Linux 測試版）
 
