@@ -282,7 +282,7 @@ impl Effects for Native<'_> {
                     format!("versions\\{}\\tools\\shanjie-manager.exe", self.version).as_bytes(),
                 )?;
                 for name in ["settings.cmd", "uninstall.cmd"] {
-                    atomic_file(&self.target.join(name), &fs::read(self.package.join(name))?)?;
+                    atomic_file(&self.target.join(name), &fs::read(self.package.join("scripts").join(name))?)?;
                 }
                 let installed = crate::installation::Installed {
                     version: self.version.into(),

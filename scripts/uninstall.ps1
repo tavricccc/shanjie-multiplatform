@@ -6,5 +6,5 @@ if ($KeepUserData -and $DeleteUserData) { throw '請只選一種個人資料處�
 $arguments = @('uninstall')
 if ($KeepUserData) { $arguments += '--keep-user-data' }
 if ($DeleteUserData) { $arguments += '--delete-user-data' }
-& (Join-Path $PSScriptRoot 'tools/shanjie-manager.exe') @arguments
+& (Join-Path $PSScriptRoot '../tools/shanjie-manager.exe') @arguments
 if ($LASTEXITCODE) { throw '善解解除安裝未完成。' }

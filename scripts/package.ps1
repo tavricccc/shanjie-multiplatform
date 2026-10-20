@@ -20,15 +20,17 @@ try {
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
     Copy-Item "$root/LICENSES/windows-models.md" "$output/LICENSES" -Force
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1","$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
-    Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" $output -Force
+    Copy-Item "$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
+    # Command-line alternatives to the setup window stay out of the package root.
+    New-Item -ItemType Directory -Path "$output/scripts" -Force | Out-Null
+    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1" "$output/scripts" -Force
+    Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" "$output/scripts" -Force
+    Copy-Item "$PSScriptRoot/settings.cmd","$PSScriptRoot/重新選擇鍵盤.cmd" "$output/scripts" -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
     Copy-Item "$root/dist/ui" $output -Recurse -Force
     New-Item -ItemType Directory -Path "$output/tools" -Force | Out-Null
     Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
     Copy-Item "$root/dist/setup/安裝善解.exe" $output -Force
-    Copy-Item "$PSScriptRoot/settings.cmd" $output -Force
-    Copy-Item "$PSScriptRoot/重新選擇鍵盤.cmd" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
     Copy-Item "$root/docs" $output -Recurse -Force
     Copy-Item "$root/MODEL-SOURCES.json","$root/MODEL-CATALOG.json" $output -Force

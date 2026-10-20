@@ -119,6 +119,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
         "安裝善解.exe",
+        // Copied beside the installed versions as launchers.
+        "scripts/settings.cmd",
+        "scripts/uninstall.cmd",
     ] {
         if !listed.contains(&PathBuf::from(required)) {
             return Err(format!("安裝包缺少 {required}").into());

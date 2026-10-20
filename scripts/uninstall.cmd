@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "SHANJIE_MANAGER=tools\shanjie-manager.exe"
+set "SHANJIE_MANAGER=..\tools\shanjie-manager.exe"
 if exist "%~dp0manager-path.txt" set /p SHANJIE_MANAGER=<"%~dp0manager-path.txt"
 rem Parse the whole block before removal deletes this launcher.
 (
