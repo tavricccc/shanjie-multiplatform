@@ -475,6 +475,7 @@ pub fn install(
         return Err(error);
     }
     // Only a fully validated transaction may retire an old version.
+    progress::step("Cleanup", "started", "");
     let mut pending = 0;
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
@@ -500,6 +501,7 @@ pub fn install(
         }
     }
     pending += purge_superseded(target, &backup);
+    progress::step("Cleanup", "succeeded", "");
     Ok(Some(pending))
 }
 /// Retire a superseded payload; a busy one is deleted by Windows at the next restart.
