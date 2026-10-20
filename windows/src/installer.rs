@@ -118,6 +118,7 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "data/packs/acg-add.tsv",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
+        "安裝善解.exe",
     ] {
         if !listed.contains(&PathBuf::from(required)) {
             return Err(format!("安裝包缺少 {required}").into());
