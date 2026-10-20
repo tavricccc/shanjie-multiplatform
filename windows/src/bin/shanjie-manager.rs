@@ -178,7 +178,7 @@ fn run() -> Result<()> {
         Some("install") => {
             let package=std::env::current_exe()?.parent().unwrap().parent().unwrap().to_owned();
             match installer::install(&package,&target,explicit,choose)? {
-                Some(pending)=>announce(&format!("已更新善解，並設定登入後啟動常駐核心。\n舊版本與舊安裝紀錄已清除，只保留最新一份。\n另有 {pending} 個使用中的項目，已排程於重新開機時清除。\n請重新開啟使用輸入法的程式，並登出再登入。"),dialog),
+                Some(pending)=>announce(&format!("已更新善解，並設定登入後啟動常駐核心。\n舊版本與舊安裝紀錄已清除，只保留最新一份。\n另有 {pending} 個仍被開啟中程式使用的檔案，會在重新登入或重新開機後刪除。\n請重新開啟使用輸入法的程式，並登出再登入。"),dialog),
                 None=>announce("已取消安裝，現有安裝及資料已保留。",dialog),
             }
         }
@@ -187,7 +187,8 @@ fn run() -> Result<()> {
             if delete&&keep{return Err("請只選一種個人資料處理方式。".into());}
             let policy=if delete{UserData::Delete}else if keep{UserData::Keep}else{UserData::Ask};
             match installer::uninstall(&target,policy)? {
-                Some(pending)=>announce(&format!("已移除善解與登入自動啟動設定。\n檔案保留於原目錄旁的 .deleted_files。\n另有 {pending} 個使用中的項目暫留原位，關閉相關程式後可再處理。"),dialog),
+                Some(0)=>announce("已移除善解、輸入法註冊與登入自動啟動設定，程式檔案已全部刪除。",dialog),
+                Some(pending)=>announce(&format!("已移除善解、輸入法註冊與登入自動啟動設定。\n另有 {pending} 個仍被開啟中程式使用的檔案，會在重新登入或重新開機後自動刪除。"),dialog),
                 None=>announce("已取消解除安裝，沒有修改任何資料。",dialog),
             }
         }
