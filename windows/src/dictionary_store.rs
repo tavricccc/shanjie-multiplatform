@@ -94,7 +94,7 @@ fn publish_with(
     checkpoint(Stage::Written)?;
     checkpoint(Stage::BeforePublish)?;
     if target.try_exists()? {
-        // Keep a damaged previous file recoverable before replacing it.
+        // The name is the content hash, so a differing file under it is only a damaged copy.
         if crate::installer::remove_tree(&target)? != 0 {
             return Err("舊詞庫使用中，未完成修復；請稍後重試。".into());
         }
@@ -124,20 +124,14 @@ mod tests {
         ))
     }
     #[test]
-    fn corrupt_content_is_repaired_and_preserved() {
+    fn corrupt_content_is_replaced_without_archives() {
         let folder = folder();
         let bytes = b"complete dictionary\n";
         publish(&folder, "dictionary-test.tsv", bytes).unwrap();
         fs::write(folder.join("dictionary-test.tsv"), b"partial").unwrap();
         publish(&folder, "dictionary-test.tsv", bytes).unwrap();
         assert_eq!(fs::read(folder.join("dictionary-test.tsv")).unwrap(), bytes);
-        let saved = fs::read_dir(folder.join(".deleted_files"))
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
-        assert_eq!(fs::read(saved).unwrap(), b"partial");
+        assert!(!folder.join(".deleted_files").exists());
         let stamp = fs::metadata(folder.join("dictionary-test.tsv"))
             .unwrap()
             .modified()
