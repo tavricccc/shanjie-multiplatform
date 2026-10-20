@@ -89,6 +89,8 @@ pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建�
 pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 ```
 
+推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows zip 與 Linux tar.gz（Fedora 44 容器）附上；手動執行 workflow 會重建並覆蓋目前版本的安裝包。
+
 `build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
 
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
