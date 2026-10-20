@@ -14,6 +14,7 @@ mod pipe_io;
 pub mod process_wait;
 pub mod profile;
 pub mod registration;
+pub mod setup_bundle;
 mod registry_snapshot;
 mod tsf;
 
