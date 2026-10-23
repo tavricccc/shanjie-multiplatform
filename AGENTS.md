@@ -8,3 +8,8 @@
 - 新功能與上游差異分批 commit。文件只寫目前狀態；各版變更寫在 `Changelog.md` 與 `docs/releases/`，尚未實機驗收的項目寫在 `TODO.md`。
 - 上游 PR 留待使用者與作者討論後另行整理。
 - 使用 PowerShell 7，遵循使用者的繁體中文、模組化、必要測試與介面 skill 要求。
+
+## GitHub 專案
+
+- 正式 repo：https://github.com/tavricccc/shanjie-multiplatform （GitHub repository ID：1418506561）。此名稱已由使用者確認，協作與發佈以此 repo 為準。
+- 主要分支為 main；本機 origin 與後續推送／Release 操作使用上述正式名稱。

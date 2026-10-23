@@ -1,6 +1,6 @@
 # 善解 Windows 0.10.0 測試版
 
-日期：2026-10-17。本版新增線上模型管理、雙 Ctrl 快捷加詞與混打重複鍵容錯，修復唯一設定視窗、Shift 組合鍵與設定更新恢復等問題。上游核心固定於 main `b2f5da8`（v0.4.6），本次不自動安裝或發布遠端；實際驗證結果與尚待驗收的宿主見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。
+日期：2026-10-17。本版新增線上模型管理、雙 Ctrl 快捷加詞與混打重複鍵容錯，修復唯一設定視窗、Shift 組合鍵與設定更新恢復等問題。上游核心固定於 main `b2f5da8`（v0.4.6），本次不自動安裝或發布遠端；實際驗證結果與尚待驗收的宿主見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-multiplatform/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。
 
 ## 線上模型管理
 
@@ -62,4 +62,4 @@
 
 ## 驗證與限制
 
-完整核心 418 項、Windows crate 兩架構各 33 項，以及輸入、恢復、模型管理與 WinUI 隔離回歸的詳細結果見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。舊 x86 check 286 的確切間歇觸發條件仍待觀察，不能以目前回歸通過宣稱已確認歷史根因。前景 App 長時間輸入、雙 Ctrl 浮層位置／DPI、真實 UAC／升級與登入預載尚待驗收，不以隔離通過代替實機結果。
+完整核心 418 項、Windows crate 兩架構各 33 項，以及輸入、恢復、模型管理與 WinUI 隔離回歸的詳細結果見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-multiplatform/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。舊 x86 check 286 的確切間歇觸發條件仍待觀察，不能以目前回歸通過宣稱已確認歷史根因。前景 App 長時間輸入、雙 Ctrl 浮層位置／DPI、真實 UAC／升級與登入預載尚待驗收，不以隔離通過代替實機結果。

@@ -26,6 +26,6 @@
 
 ## 建置與驗證界線
 
-本版提供 x64／x86 DLL 與 x64 設定介面。詳細結果及證據路徑見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。測試使用隔離設定、公開詞庫與模型；沒有安裝到系統、改寫實際個人設定或學習資料。
+本版提供 x64／x86 DLL 與 x64 設定介面。詳細結果及證據路徑見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-multiplatform/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。測試使用隔離設定、公開詞庫與模型；沒有安裝到系統、改寫實際個人設定或學習資料。
 
 數字／標點的隔離 TSF 驗證不依賴宿主回補按鍵，涵蓋組字、選字與提交；Thorium／AyuGram 的實際前景文字欄位仍需安裝後確認。真實 UAC、已註冊 App 共存更新、Windows Terminal／AppContainer 等既有實機驗收保留在 本機 `TODO.md`。

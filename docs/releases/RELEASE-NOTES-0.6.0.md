@@ -32,4 +32,4 @@ TSF 註冊新增 `GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT` 與 `GUID_TFCAT_TIPCAP_COM
 
 ## 驗證
 
-見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md) 2026-10-14 段落。本輪沒有安裝到目前系統，也沒有在前景 App 實機輸入。
+見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-multiplatform/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md) 2026-10-14 段落。本輪沒有安裝到目前系統，也沒有在前景 App 實機輸入。

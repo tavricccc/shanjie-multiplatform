@@ -28,4 +28,4 @@
 
 ## 驗證界線
 
-兩架構 release 建置、隔離交易故障測試、真正 Windows 登錄測試機碼的部分寫入／重建／繼承回復，以及 International 物件轉換均已驗證；隔離模式明確拒絕修改目前語言清單。細節見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-windows/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。本輪未執行實際 install.cmd、未修改目前安裝、47 個真實項目的權限或個人輸入設定。0.5.1 雙鍵盤至單一配置的實際升級仍列於 本機 `TODO.md` 驗收。
+兩架構 release 建置、隔離交易故障測試、真正 Windows 登錄測試機碼的部分寫入／重建／繼承回復，以及 International 物件轉換均已驗證；隔離模式明確拒絕修改目前語言清單。細節見 [VERIFICATION.md](https://github.com/tavricccc/shanjie-multiplatform/blob/68796049b3f19a67217c15c559ea8be2819ad3e2/VERIFICATION.md)。本輪未執行實際 install.cmd、未修改目前安裝、47 個真實項目的權限或個人輸入設定。0.5.1 雙鍵盤至單一配置的實際升級仍列於 本機 `TODO.md` 驗收。
