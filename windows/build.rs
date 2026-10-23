@@ -1,4 +1,9 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=SHANJIE_DIAGNOSTICS_BUILD");
+    if std::env::var_os("CARGO_FEATURE_INPUT_DIAGNOSTICS").is_some() {
+        println!("cargo:rustc-link-arg-bin=shanjie-diagnostics=/MANIFEST:EMBED");
+        println!("cargo:rustc-link-arg-bin=shanjie-diagnostics=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'");
+    }
     // TaskDialogIndirect only exists in comctl32 v6, which needs a manifest dependency.
     println!("cargo:rustc-link-arg-bin=shanjie-manager=/MANIFEST:EMBED");
     println!(

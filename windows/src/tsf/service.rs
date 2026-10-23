@@ -145,8 +145,14 @@ pub struct Data {
     pub(super) application_written: Cell<bool>,
     pub(super) retiring: RefCell<Vec<(u64, ITfContext)>>,
     pub indicator: RefCell<Box<Indicator>>,
+    pub(super) word_popup_revision: Cell<u64>,
     pub(super) word_popup: RefCell<Option<Box<crate::word_popup::Popup>>>,
+    pub(super) word_revision: Cell<u64>,
+    pub(super) word_request: RefCell<Option<super::add_word::Request>>,
+    pub(super) word_lookup: RefCell<Option<crate::selection_text::Lookup>>,
+    pub(super) word_notice: RefCell<Option<crate::selection_notice::Notice>>,
     pub(super) word_selection: RefCell<Option<super::add_word::Selection>>,
+    pub(super) focus_handoff: RefCell<Option<super::focus_handoff::Pending>>,
     pub(super) ctrl_gesture: RefCell<super::add_word::Gesture>,
     watcher_context: RefCell<Option<Box<std::rc::Weak<Data>>>>,
     owner: Cell<*mut c_void>,
@@ -176,8 +182,14 @@ pub fn new() -> ITfTextInputProcessorEx {
         application_written: Cell::new(false),
         retiring: RefCell::new(Vec::new()),
         indicator: RefCell::new(Box::new(Indicator::default())),
+        word_popup_revision: Cell::new(0),
         word_popup: RefCell::new(None),
+        word_revision: Cell::new(0),
+        word_request: RefCell::new(None),
+        word_lookup: RefCell::new(None),
+        word_notice: RefCell::new(None),
         word_selection: RefCell::new(None),
+        focus_handoff: RefCell::new(None),
         ctrl_gesture: RefCell::new(Default::default()),
         watcher_context: RefCell::new(None),
         owner: Cell::new(std::ptr::null_mut()),
@@ -272,6 +284,7 @@ impl Data {
         }
     }
     pub fn set_mode(&self, chinese: bool) -> Result<()> {
+        self.diagnostic("mode.set.request",None,None,Some(chinese as i32));
         let (thread, client, width, button) = {
             let s = self.state.borrow();
             (
@@ -301,9 +314,12 @@ impl Data {
         if let Some(button) = button {
             mode::refresh(&button);
         }
+        self.diagnostic("mode.set.completed",None,None,Some(chinese as i32));
         Ok(())
     }
     pub fn cancel(self: &Rc<Self>) -> Result<()> {
+        self.diagnostic("cancel.enter",None,None,None);
+        self.clear_handoff();
         let updating=self.profile_update.borrow_mut().take().is_some();
         self.close_word();
         self.generation.set(self.generation.get().wrapping_add(1));
@@ -351,31 +367,50 @@ impl Data {
         };
         if let (Some(context), Some(composition)) = (context, composition) {
             let retirement = self.generation.get();
+            let final_length = final_text.encode_utf16().count();
+            self.diagnostic_retirement("retirement.queued",retirement,&context,&composition,final_length,None);
             self.retiring
                 .borrow_mut()
                 .push((retirement, context.clone()));
             let data = self.clone();
-            self.request(
+            let captured_context = context.clone();
+            let captured_composition = composition.clone();
+            let requested = self.request(
                 &context,
                 TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
                 move |cookie| unsafe {
+                    data.diagnostic_retirement("retirement.edit.begin",retirement,&captured_context,&composition,final_length,None);
                     if !data
                         .retiring
                         .borrow()
                         .iter()
                         .any(|(id, _)| *id == retirement)
                     {
+                        data.diagnostic_retirement("retirement.skipped",retirement,&captured_context,&composition,final_length,None);
                         return Ok(());
                     }
-                    let range = composition.GetRange()?;
-                    range.SetText(cookie, 0, &final_text.encode_utf16().collect::<Vec<_>>())?;
-                    composition.EndComposition(cookie)?;
+                    let range = composition.GetRange();
+                    data.diagnostic_retirement("retirement.range",retirement,&captured_context,&composition,final_length,
+                        Some(match &range {Ok(_)=>0,Err(e)=>e.code().0}));
+                    let range = range?;
+                    data.diagnostic_range("retirement.write.begin",&range,cookie,final_length);
+                    let written = range.SetText(cookie, 0, &final_text.encode_utf16().collect::<Vec<_>>());
+                    data.diagnostic_retirement("retirement.write.end",retirement,&captured_context,&composition,final_length,
+                        Some(match &written {Ok(_)=>0,Err(e)=>e.code().0}));
+                    written?;
+                    let ended = composition.EndComposition(cookie);
+                    data.diagnostic_retirement("retirement.end",retirement,&captured_context,&composition,final_length,
+                        Some(match &ended {Ok(_)=>0,Err(e)=>e.code().0}));
+                    ended?;
                     data.retiring
                         .borrow_mut()
                         .retain(|(id, _)| *id != retirement);
                     Ok(())
                 },
-            )?;
+            );
+            self.diagnostic_retirement("retirement.request.return",retirement,&context,&captured_composition,final_length,
+                Some(match &requested {Ok(_)=>0,Err(e)=>e.code().0}));
+            requested?;
         }
         let mut s = self.state.borrow_mut();
         s.context = None;
@@ -393,42 +428,28 @@ impl Data {
         Ok(())
     }
     pub fn deactivate(self: &Rc<Self>) -> Result<()> {
-        let cancelled = self.cancel();
-        let mut s = self.state.borrow_mut();
-        s.watcher = None;
-        s.observer = None;
-        if let (Some(bar), Some(button)) = (&s.bar, &s.button) {
-            unsafe {
-                let _ = bar.RemoveItem(button);
-            }
-        }
-        s.button = None;
-        s.bar = None;
-        if let Some(thread) = s.thread.as_ref() {
-            unsafe {
-                if let Ok(keys) = thread.cast::<ITfKeystrokeMgr>() {
-                    let _ = keys.UnadviseKeyEventSink(s.client);
-                }
-                if let Ok(source) = thread.cast::<ITfSource>() {
-                    for cookie in [s.thread_sink, s.focus_sink] {
-                        if cookie != TF_INVALID_COOKIE {
-                            let _ = source.UnadviseSink(cookie);
-                        }
-                    }
-                }
-            }
-        }
-        s.thread_sink = TF_INVALID_COOKIE;
-        s.focus_sink = TF_INVALID_COOKIE;
-        if let Some(c) = s.candidates.take() {
-            c.data.release();
-        }
-        s.thread = None;
-        s.client = 0;
-        s.park_engine();
+        self.diagnostic("deactivate",None,None,None);
+        let cancelled=self.cancel();
+        // Unadvising TSF and destroying the last native window can synchronously
+        // call OnPopContext. Detach ownership before any external cleanup.
+        let (thread,client,sinks,bar,button,candidates,watcher,observer)={
+            let mut s=self.state.borrow_mut();
+            let sinks=[s.thread_sink,s.focus_sink];s.thread_sink=TF_INVALID_COOKIE;s.focus_sink=TF_INVALID_COOKIE;
+            let client=std::mem::replace(&mut s.client,0);
+            s.park_engine();
+            (s.thread.take(),client,sinks,s.bar.take(),s.button.take(),s.candidates.take(),s.watcher.take(),s.observer.take())
+        };
+        if let Some(thread)=thread {unsafe{
+            if let Ok(keys)=thread.cast::<ITfKeystrokeMgr>(){let _=keys.UnadviseKeyEventSink(client);}
+            if let Ok(source)=thread.cast::<ITfSource>(){for cookie in sinks{if cookie!=TF_INVALID_COOKIE{let _=source.UnadviseSink(cookie);}}}
+        }}
+        if let (Some(bar),Some(button))=(&bar,&button){unsafe{let _=bar.RemoveItem(button);}}
+        if let Some(c)=candidates{c.data.release();}
+        drop((watcher,observer,button,bar));
         cancelled
     }
     pub fn watch(self: &Rc<Self>, context: &ITfContext) -> Result<()> {
+        self.diagnostic("watch",Some(context),None,None);
         if self.state.borrow().context.as_ref() == Some(context) {
             return Ok(());
         }
@@ -498,6 +519,13 @@ impl Data {
         out: Snapshot,
         selected: bool,
     ) -> Result<()> {
+        self.diagnostic("apply.enter",Some(context),None,None);
+        #[cfg(feature="input-diagnostics")]
+        if crate::input_diagnostics::enabled() {
+            crate::input_diagnostics::emit("apply.output",serde_json::json!({
+                "handled":out.handled,"commit_utf16":out.commit.encode_utf16().count(),
+                "preedit_utf16":out.preedit.encode_utf16().count(),"cursor":out.cursor}));
+        }
         unsafe {
             if !out.handled && out.commit.is_empty() && out.preedit.is_empty() {
                 return Ok(());
@@ -510,6 +538,7 @@ impl Data {
                     .cast::<ITfInsertAtSelection>()?
                     .InsertTextAtSelection(cookie, TF_IAS_QUERYONLY, &[])?
             };
+            self.diagnostic_range("apply.initial_range",&range,cookie,0);
             let width = self.state.borrow().full_width;
             let committed = if width {
                 out.commit
@@ -530,7 +559,10 @@ impl Data {
             if !out.commit.is_empty() {
                 // Commit only the final prefix. A remaining preedit gets its
                 // own composition and must not be sent as committed text.
-                range.SetText(cookie, 0, &committed.encode_utf16().collect::<Vec<_>>())?;
+                self.diagnostic_range("write.commit.begin",&range,cookie,committed.encode_utf16().count());
+                let result=range.SetText(cookie, 0, &committed.encode_utf16().collect::<Vec<_>>());
+                self.diagnostic("write.commit.end",Some(context),None,Some(result.as_ref().err().map_or(0,|e|e.code().0)));
+                result?;
                 if let Some(c) = composition.take() {
                     self.ending.set(true);
                     let result = c.EndComposition(cookie);
@@ -543,15 +575,21 @@ impl Data {
             if !out.preedit.is_empty() {
                 if composition.is_none() {
                     let sink: ITfCompositionSink = self.owner().cast()?;
+                    self.diagnostic("composition.start.begin",Some(context),None,None);
                     let created = context
                         .cast::<ITfContextComposition>()?
-                        .StartComposition(cookie, &range, &sink)?;
-                    self.state.borrow_mut().composition = Some(created);
+                        .StartComposition(cookie, &range, &sink);
+                    self.diagnostic("composition.start.end",Some(context),None,Some(created.as_ref().err().map_or(0,|e|e.code().0)));
+                    self.state.borrow_mut().composition = Some(created?);
                 }
                 // Start before the first write, avoiding TSF's temporary
                 // composition that otherwise commits the first character.
-                range.SetText(cookie, 0, &out.preedit.encode_utf16().collect::<Vec<_>>())?;
+                self.diagnostic_range("write.preedit.begin",&range,cookie,out.preedit.encode_utf16().count());
+                let result=range.SetText(cookie, 0, &out.preedit.encode_utf16().collect::<Vec<_>>());
+                self.diagnostic("write.preedit.end",Some(context),None,Some(result.as_ref().err().map_or(0,|e|e.code().0)));
+                result?;
             } else if let Some(c) = composition {
+                self.diagnostic_range("write.clear.begin",&range,cookie,0);
                 range.SetText(cookie, 0, &[])?;
                 self.state.borrow_mut().composition = None;
                 self.ending.set(true);
@@ -580,6 +618,8 @@ impl Data {
             let mut selections = [selection];
             let result = context.SetSelection(cookie, &selections);
             drop(std::mem::ManuallyDrop::take(&mut selections[0].range));
+            self.diagnostic_range("selection.request",&caret,cookie,0);
+            self.diagnostic("selection.result",Some(context),None,Some(result.as_ref().err().map_or(0,|e|e.code().0)));
             result?;
             let candidates = {
                 let mut s = self.state.borrow_mut();
@@ -839,7 +879,7 @@ impl Data {
                     .set(current.get("candidates", "anchor", "right") == "right");
             }
         }
-        if let Some(popup)=self.word_popup.borrow_mut().as_mut(){let _=popup.set_theme(current.number("appearance","theme",0));}
+        if let Some(popup)=self.word_popup.borrow().as_ref(){let _=popup.set_theme(current.number("appearance","theme",0));}
         self.prepare_engine()?;
         if self.state.borrow().engine.is_open() {
             let mut operations=std::collections::VecDeque::from(option_operations(&current));
@@ -966,6 +1006,11 @@ unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
             }
             2 => data.retry_pending(),
             4 => data.open_word_popup(),
+            5 => data.expire_handoff(),
+            6 => { let _=data.read_word(); },
+            7 => data.fallback_word(),
+            8 => data.poll_word(),
+            9 => data.word_closed(),
             _ => {
                 let _ = data.refresh();
             }
@@ -982,6 +1027,7 @@ impl ITfTextInputProcessor_Impl for Service_Impl {
 }
 impl ITfTextInputProcessorEx_Impl for Service_Impl {
     fn ActivateEx(&self, thread: Ref<ITfThreadMgr>, client: u32, _: u32) -> Result<()> {
+        self.data.diagnostic("activate.enter",None,None,None);
         let result = (|| unsafe {
             let thread = thread.ok()?.clone();
             let preferences =
@@ -1088,6 +1134,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
 }
 impl ITfCompositionSink_Impl for Service_Impl {
     fn OnCompositionTerminated(&self, _: u32, ended: Ref<ITfComposition>) -> Result<()> {
+        self.data.diagnostic("composition.terminated",None,None,Some((self.data.state.borrow().composition.as_ref()==ended.as_ref()) as i32));
         if !self.data.ending.get()
             && self.data.state.borrow().composition.as_ref() == ended.as_ref()
         {
@@ -1099,9 +1146,11 @@ impl ITfCompositionSink_Impl for Service_Impl {
 }
 impl ITfThreadFocusSink_Impl for Service_Impl {
     fn OnSetThreadFocus(&self) -> Result<()> {
+        self.data.diagnostic("thread_focus.gained",None,None,None);
         Ok(())
     }
     fn OnKillThreadFocus(&self) -> Result<()> {
+        self.data.diagnostic("thread_focus.lost",None,None,None);
         self.data.cancel()
     }
 }
@@ -1117,15 +1166,16 @@ impl ITfThreadMgrEventSink_Impl for Service_Impl {
         current: Ref<ITfDocumentMgr>,
         previous: Ref<ITfDocumentMgr>,
     ) -> Result<()> {
-        if current.as_ref() != previous.as_ref() {
-            self.data.cancel()?;
-        }
-        Ok(())
+        self.data.diagnostic("document_focus",None,None,Some((current.as_ref()!=previous.as_ref()) as i32));
+        self.data.diagnostic_focus(current.as_ref(),previous.as_ref());
+        self.data.document_focus(current.as_ref(),previous.as_ref())
     }
-    fn OnPushContext(&self, _: Ref<ITfContext>) -> Result<()> {
+    fn OnPushContext(&self, context: Ref<ITfContext>) -> Result<()> {
+        self.data.diagnostic("context.push",context.as_ref(),None,None);
         Ok(())
     }
     fn OnPopContext(&self, context: Ref<ITfContext>) -> Result<()> {
+        self.data.diagnostic("context.pop",context.as_ref(),None,None);
         if self.data.state.borrow().context.as_ref() == context.as_ref() {
             self.data.cancel()?;
         }
@@ -1152,6 +1202,7 @@ impl ITfTextEditSink_Impl for Service_Impl {
         cookie: u32,
         record: Ref<ITfEditRecord>,
     ) -> Result<()> {
+        self.data.diagnostic("edit.notification",context.as_ref(),None,None);
         unsafe {
             if self.data.editing.get()
                 || self.data.state.borrow().context.as_ref() != context.as_ref()
@@ -1160,8 +1211,9 @@ impl ITfTextEditSink_Impl for Service_Impl {
             }
             let record=record.ok()?;
             let selection_changed=record.GetSelectionStatus()?.as_bool();
+            self.data.diagnostic("edit.selection_changed",context.as_ref(),None,Some(selection_changed as i32));
             let word_open=self.data.word_popup.borrow().as_ref().is_some_and(|p|p.active())
-                || self.data.word_selection.borrow().is_some();
+                || self.data.word_selection.borrow().is_some() || self.data.word_lookup.borrow().is_some();
             let text_changed=word_open && record.GetTextAndPropertyUpdates(TF_GTP_INCL_TEXT,&[]).is_ok_and(|updated| {
                 let mut ranges=[None]; let mut count=0;
                 updated.Next(&mut ranges,&mut count).is_ok() && count!=0
@@ -1176,6 +1228,7 @@ impl ITfTextEditSink_Impl for Service_Impl {
                 TF_ANCHOR_END
             };
             let caret = range(selected);
+            self.data.diagnostic_range("selection.host",&caret,cookie,0);
             let (composition, association) = {
                 let s = self.data.state.borrow();
                 (s.composition.clone(), s.association_caret.clone())

@@ -1,6 +1,8 @@
 mod candidates;
+mod diagnostics;
 mod add_word;
 mod keys;
+mod focus_handoff;
 mod mode;
 mod modifiers;
 mod profile_refresh;

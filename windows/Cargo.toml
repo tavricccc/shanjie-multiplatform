@@ -1,7 +1,15 @@
 [package]
 name = "shanjie-windows"
-version = "0.12.1"
+version = "0.12.2"
 edition = "2021"
+
+[features]
+input-diagnostics = []
+
+[[bin]]
+name = "shanjie-diagnostics"
+path = "src/bin/shanjie-diagnostics.rs"
+required-features = ["input-diagnostics"]
 
 [lib]
 name = "shanjie_windows"

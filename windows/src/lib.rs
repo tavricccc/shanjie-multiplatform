@@ -1,10 +1,14 @@
 mod bridge;
+#[cfg(feature = "input-diagnostics")]
+pub mod input_diagnostics;
 pub mod model_store;
 pub mod broker;
 pub mod candidate;
 mod dictionary_store;
 mod word_store;
 mod word_popup;
+mod selection_text;
+mod selection_notice;
 pub mod engine;
 pub mod input;
 pub mod installation;

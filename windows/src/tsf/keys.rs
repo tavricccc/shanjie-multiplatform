@@ -50,9 +50,19 @@ impl Data {
         let physical = if key.0==17 { if flags.0 & (1<<24)!=0 { 0xa3 } else { 0xa2 } } else { key.0 };
         let side = p.number("shortcuts","add_word_side",0);
         let pure = (side==0 || physical==if side==1 { 0xa2 } else { 0xa3 })
-            && !(1..=254).any(|vk| ![17,0xa2,0xa3].contains(&vk) && held(VIRTUAL_KEY(vk as u16)));
+            && !(1..=254).any(|vk| ![17,physical].contains(&vk) && held(VIRTUAL_KEY(vk as u16)));
         let fired = self.ctrl_gesture.borrow_mut().observe(physical,down,flags.0 & (1<<30)!=0,
-            super::modifiers::epoch(),pure,p.number("shortcuts","add_word_interval",450).clamp(200,1000));
+            super::modifiers::control_epoch(),pure,p.number("shortcuts","add_word_interval",450).clamp(200,1000));
+        #[cfg(feature="input-diagnostics")]
+        if crate::input_diagnostics::enabled() && [17,0xa2,0xa3].contains(&key.0) {
+            crate::input_diagnostics::emit("ctrl.gesture",serde_json::json!({
+                "physical_side":if physical==0xa2 {"LEFT"} else {"RIGHT"},
+                "configured_side":side,"down":down,"pure":pure,"fired":fired,
+                "interval":p.number("shortcuts","add_word_interval",450).clamp(200,1000),
+                "observer_epoch":super::modifiers::control_epoch(),"has_context":context.is_some(),
+                "message":crate::input_diagnostics::key_metadata(key.0,flags.0)
+            }));
+        }
         if fired { if let Some(context)=context { self.show_word(context)?; } }
         Ok(())
     }
@@ -78,14 +88,21 @@ impl Data {
         flags: LPARAM,
     ) -> Result<bool> {
         if system_shortcut(vk) {
+            self.diagnostic("wants.system_shortcut",Some(context),Some(vk),Some(0));
             return Ok(false);
         }
         unsafe {
             let status = context.GetStatus()?;
-            if status.dwStaticFlags & TF_SD_READONLY != 0
-                || compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED)
-                || compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT)
-            {
+            if status.dwStaticFlags & TF_SD_READONLY != 0 {
+                self.diagnostic("wants.readonly",Some(context),Some(vk),Some(0));
+                return Ok(false);
+            }
+            if compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED) {
+                self.diagnostic("wants.disabled",Some(context),Some(vk),Some(0));
+                return Ok(false);
+            }
+            if compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT) {
+                self.diagnostic("wants.empty_context",Some(context),Some(vk),Some(0));
                 return Ok(false);
             }
             if self.add_word_shortcut(vk) || self.popup_accepts(vk) { return Ok(true); }
@@ -97,6 +114,10 @@ impl Data {
                 vk.0 as u32
             };
             let side = p.number("shortcuts", "shift_side", 0);
+            #[cfg(feature = "input-diagnostics")]
+            if shift(vk) {
+                self.diagnostic_shift_probe(vk,flags,physical,side,p.flag("shortcuts","shift_toggle",true));
+            }
             if p.flag("shortcuts", "shift_toggle", true)
                 && shift(vk)
                 && (side == 0 || physical == if side == 1 { 160 } else { 161 })
@@ -649,28 +670,39 @@ impl Data {
 }
 impl ITfKeyEventSink_Impl for Service_Impl {
     fn OnSetFocus(&self, focused: BOOL) -> Result<()> {
+        self.data.diagnostic("key_focus",None,None,Some(focused.0));
         if !focused.as_bool() {
             self.data.cancel()?;
         }
         Ok(())
     }
     fn OnTestKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.diagnostic("test_down.enter",context.as_ref(),Some(key),None);
+        self.data.key_handoff(context.as_ref())?;
         self.data.observe_modifier(key, true);
         self.data.ctrl_event(context.as_ref(),key,flags,true)?;
         if !self.data.popup_accepts(key) && ![16,17,160,161,162,163].contains(&key.0) {
-            if let Some(popup)=self.data.word_popup.borrow_mut().as_mut() { popup.close(); }
+            self.data.close_word();
         }
         if system_shortcut(key) {
             return Ok(false.into());
         }
-        Ok(self.data.wants(context.ok()?, key, flags)?.into())
+        let result=self.data.wants(context.ok()?, key, flags);
+        self.data.diagnostic("test_down.exit",context.as_ref(),Some(key),Some(match &result{Ok(v)=>*v as i32,Err(e)=>e.code().0}));
+        Ok(result?.into())
     }
     fn OnTestKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.diagnostic("test_up.enter",context.as_ref(),Some(key),None);
+        self.data.key_handoff(context.as_ref())?;
         self.data.observe_modifier(key, false);
         self.data.ctrl_event(context.as_ref(),key,flags,false)?;
-        Ok((shift(key) && self.data.state.borrow().shift_tap).into())
+        let result=shift(key) && self.data.state.borrow().shift_tap;
+        self.data.diagnostic("test_up.exit",context.as_ref(),Some(key),Some(result as i32));
+        Ok(result.into())
     }
     fn OnKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.diagnostic("down.enter",context.as_ref(),Some(key),None);
+        self.data.key_handoff(context.as_ref())?;
         self.data.observe_modifier(key, true);
         self.data.ctrl_event(context.as_ref(),key,flags,true)?;
         if self.data.add_word_shortcut(key) {
@@ -679,13 +711,15 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         }
         if self.data.popup_accepts(key) {
             let ch=translate(key,flags).and_then(|k|char::from_u32(k.ch));
-            if let Some(popup)=self.data.word_popup.borrow_mut().as_mut() { popup.key(key.0,ch,held(VK_CONTROL)); }
+            if let Some(popup)=self.data.word_popup.borrow().as_ref() { popup.key(key.0,ch,held(VK_CONTROL)); }
             return Ok(true.into());
         }
         if system_shortcut(key) {
             return Ok(false.into());
         }
-        match self.data.dispatch_key(context.ok()?, key, flags) {
+        let result=self.data.dispatch_key(context.ok()?, key, flags);
+        self.data.diagnostic("down.exit",context.as_ref(),Some(key),Some(match &result{Ok(v)=>*v as i32,Err(e)=>e.code().0}));
+        match result {
             Ok(handled) => Ok(handled.into()),
             Err(e) => {
                 super::trace(format_args!("key: {e}"));
@@ -694,9 +728,19 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         }
     }
     fn OnKeyUp(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
+        self.data.diagnostic("up.enter",context.as_ref(),Some(key),None);
+        self.data.key_handoff(context.as_ref())?;
         self.data.observe_modifier(key, false);
         self.data.ctrl_event(context.as_ref(),key,flags,false)?;
         if shift(key) && self.data.state.borrow().shift_tap {
+            #[cfg(feature="input-diagnostics")]
+            if crate::input_diagnostics::enabled(){
+                let s=self.data.state.borrow();
+                crate::input_diagnostics::emit("shift.decision",serde_json::json!({
+                    "physical_released":physical_shift(key,flags),"physical_started":s.shift_physical,
+                    "used":s.shift_used,"epoch_started":s.shift_epoch,"epoch_now":super::modifiers::epoch(),
+                    "other_key_held":other_held(s.shift_physical)}));
+            }
             let toggle = {
                 let mut s = self.data.state.borrow_mut();
                 s.shift_tap = false;
@@ -706,10 +750,15 @@ impl ITfKeyEventSink_Impl for Service_Impl {
                 toggle
             };
             if toggle {
+                self.data.diagnostic("shift.toggle",context.as_ref(),Some(key),Some(1));
                 self.data.toggle(context.as_ref().cloned())?;
+            } else {
+                self.data.diagnostic("shift.cancelled",context.as_ref(),Some(key),Some(0));
             }
+            self.data.diagnostic("up.exit",context.as_ref(),Some(key),Some(1));
             return Ok(true.into());
         }
+        self.data.diagnostic("up.exit",context.as_ref(),Some(key),Some(0));
         Ok(false.into())
     }
     fn OnPreservedKey(&self, _: Ref<ITfContext>, _: *const GUID) -> Result<BOOL> {

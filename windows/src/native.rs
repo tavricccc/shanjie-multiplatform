@@ -6,6 +6,7 @@ use windows::{
         UI::{HiDpi::*, WindowsAndMessaging::*},
     },
 };
+pub(crate) const WORD_CLOSED_MESSAGE:u32=WM_APP+94;
 pub struct ControlChannel {
     window: HWND,
     callback: unsafe extern "C" fn(*mut std::ffi::c_void, u32),
@@ -14,6 +15,7 @@ pub struct ControlChannel {
     restart: u32,
     legacy_message: u32,
     legacy_restart: u32,
+    word_closed:std::cell::Cell<usize>,
 }
 impl ControlChannel {
     pub unsafe fn new(
@@ -24,6 +26,7 @@ impl ControlChannel {
             window: HWND::default(),
             callback,
             context,
+            word_closed:std::cell::Cell::new(0),
             message: RegisterWindowMessageW(PCWSTR(crate::wide(crate::profile::CHANGED_MESSAGE).as_ptr())),
             restart: RegisterWindowMessageW(PCWSTR(crate::wide(crate::profile::RESTART_MESSAGE).as_ptr())),
             legacy_message: RegisterWindowMessageW(w!("Shanjie.ProfileChanged.v1")),
@@ -58,7 +61,24 @@ impl ControlChannel {
             SetTimer(Some(self.window), 42, 50, None);
         }
     }
-    pub fn add_word(&self) { unsafe { let _ = PostMessageW(Some(self.window),WM_APP+91,WPARAM(0),LPARAM(0)); } }
+    pub fn add_word(&self) { unsafe {
+        let result = PostMessageW(Some(self.window),WM_APP+91,WPARAM(0),LPARAM(0));
+        #[cfg(feature="input-diagnostics")]
+        if crate::input_diagnostics::enabled() { crate::input_diagnostics::emit("word.post.result",serde_json::json!({"result":result.as_ref().err().map_or(0,|e|e.code().0)})); }
+        let _ = result;
+    } }
+    pub fn focus_handoff(&self, pending:bool) { unsafe {
+        if pending { SetTimer(Some(self.window),43,100,None); }
+        else { let _=KillTimer(Some(self.window),43); }
+    } }
+    pub fn word_read(&self) { unsafe { let _=PostMessageW(Some(self.window),WM_APP+92,WPARAM(0),LPARAM(0)); } }
+    pub fn word_target(&self)->HWND {self.window}
+    pub fn take_word_closed(&self)->usize {self.word_closed.replace(0)}
+    pub fn word_fallback(&self) { unsafe { let _=PostMessageW(Some(self.window),WM_APP+93,WPARAM(0),LPARAM(0)); } }
+    pub fn word_poll(&self, pending:bool) { unsafe {
+        if pending { SetTimer(Some(self.window),44,40,None); }
+        else { let _=KillTimer(Some(self.window),44); }
+    } }
     pub fn stop_retry(&self) {
         unsafe {
             let _ = KillTimer(Some(self.window), 42);
@@ -101,6 +121,13 @@ unsafe extern "system" fn watcher_proc(
     if !p.is_null() && message == WM_APP+91 {
         ((*p).callback)((*p).context,4); return LRESULT(0);
     }
+    if !p.is_null() && message == WM_TIMER && wp.0 == 43 {
+        let _=KillTimer(Some(window),43); ((*p).callback)((*p).context,5); return LRESULT(0);
+    }
+    if !p.is_null() && message == WM_APP+92 { ((*p).callback)((*p).context,6); return LRESULT(0); }
+    if !p.is_null() && message == WM_APP+93 { ((*p).callback)((*p).context,7); return LRESULT(0); }
+    if !p.is_null() && message == WORD_CLOSED_MESSAGE { (*p).word_closed.set(wp.0); ((*p).callback)((*p).context,9); return LRESULT(0); }
+    if !p.is_null() && message == WM_TIMER && wp.0 == 44 { ((*p).callback)((*p).context,8); return LRESULT(0); }
     DefWindowProcW(window, message, wp, lp)
 }
 
