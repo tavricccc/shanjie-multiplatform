@@ -98,3 +98,12 @@ pub unsafe extern "C" fn sj_model_prepare(
         }
     }
 }
+#[no_mangle]
+pub unsafe extern "C" fn sj_catalog_validate(text:*const std::ffi::c_char)->*mut std::ffi::c_char{
+    let result=(||->Result<String>{
+        if text.is_null(){return Err("缺少清單".into());}
+        let c=shanjie_shell::catalog::parse(std::ffi::CStr::from_ptr(text).to_bytes())?;
+        Ok(serde_json::to_string(&c)?)
+    })();
+    match result{Ok(s)=>std::ffi::CString::new(s).unwrap().into_raw(),Err(e)=>{crate::bridge::failure(e);std::ptr::null_mut()}}
+}

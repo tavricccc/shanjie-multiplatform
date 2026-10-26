@@ -529,6 +529,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
     )
     .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.
+    crate::word_helper::start_resident(data);
     let sessions: session::Sessions = Default::default();
     loop {
         let connected = unsafe {

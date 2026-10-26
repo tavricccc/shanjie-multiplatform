@@ -18,6 +18,7 @@ internal static class Native
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_error();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern void sj_string_free(nint value);
     [DllImport(Rust, CallingConvention=CallingConvention.Cdecl)] internal static extern nint sj_models_scan();
+    [DllImport(Rust, CallingConvention=CallingConvention.Cdecl)] internal static extern nint sj_catalog_validate([MarshalAs(UnmanagedType.LPUTF8Str)] string content);
     [DllImport(Rust, CallingConvention=CallingConvention.Cdecl)] internal static extern nint sj_models_errors();
     [DllImport(Rust, CallingConvention=CallingConvention.Cdecl)] internal static extern nint sj_model_prepare([MarshalAs(UnmanagedType.LPUTF8Str)] string staging);
     internal static string Take(nint value) { if (value == 0) throw new InvalidDataException(Marshal.PtrToStringUTF8(sj_error())); try { return Marshal.PtrToStringUTF8(value)!; } finally { sj_string_free(value); } }

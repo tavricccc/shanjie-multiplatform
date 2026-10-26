@@ -18,13 +18,13 @@ struct Apartment;
 impl Drop for Apartment { fn drop(&mut self) { unsafe { CoUninitialize(); } } }
 struct Array(*mut SAFEARRAY);
 impl Drop for Array { fn drop(&mut self) { unsafe { let _=SafeArrayDestroy(self.0); } } }
-fn checked_word(text:&[u16])->Result<String> {
+pub(crate) fn checked_word(text:&[u16])->Result<String> {
     if text.len()>=65 { return Err(E_INVALIDARG.into()); }
     let word=String::from_utf16(text).map_err(|_|Error::from_hresult(E_INVALIDARG))?;
     crate::word_store::validate_word(&word).map_err(|_|Error::from_hresult(E_INVALIDARG))?;
     Ok(word)
 }
-unsafe fn rectangle(selected:&IUIAutomationTextRange)->Result<RECT> {
+pub(crate) unsafe fn rectangle(selected:&IUIAutomationTextRange)->Result<RECT> {
     let array=Array(selected.GetBoundingRectangles()?);
     if array.0.is_null() || SafeArrayGetDim(array.0)!=1 || SafeArrayGetVartype(array.0)?!=VT_R8 { return Err(E_FAIL.into()); }
     let size=(SafeArrayGetUBound(array.0,1)?-SafeArrayGetLBound(array.0,1)?+1) as usize;
@@ -36,17 +36,20 @@ unsafe fn rectangle(selected:&IUIAutomationTextRange)->Result<RECT> {
     SafeArrayUnaccessData(array.0)?;
     found.ok_or(E_FAIL.into())
 }
-unsafe fn selected(pattern:&IUIAutomationTextPattern)->Result<IUIAutomationTextRange> {
+pub(crate) unsafe fn selected(pattern:&IUIAutomationTextPattern)->Result<IUIAutomationTextRange> {
     let ranges=pattern.GetSelection()?;
     if ranges.Length()?!=1 { return Err(E_FAIL.into()); }
     ranges.GetElement(0)
 }
 unsafe fn inspect(element:&IUIAutomationElement)->Result<(IUIAutomationTextPattern,IUIAutomationTextRange,String)> {
+    let (pattern,range,word)=inspect_readonly(element)?;
+    if bool::try_from(&range.GetAttributeValue(UIA_IsReadOnlyAttributeId)?)? {return Err(E_ACCESSDENIED.into());}
+    Ok((pattern,range,word))
+}
+pub(crate) unsafe fn inspect_readonly(element:&IUIAutomationElement)->Result<(IUIAutomationTextPattern,IUIAutomationTextRange,String)> {
     if element.CurrentIsPassword()?.as_bool() {return Err(E_ACCESSDENIED.into());}
     let pattern:IUIAutomationTextPattern=element.GetCurrentPatternAs(UIA_TextPatternId)?;
     let range=selected(&pattern)?;
-    // Unknown/mixed editability is rejected rather than inspecting read-only UI.
-    if bool::try_from(&range.GetAttributeValue(UIA_IsReadOnlyAttributeId)?)? {return Err(E_ACCESSDENIED.into());}
     let word=checked_word(&range.GetText(65)?)?;
     Ok((pattern,range,word))
 }

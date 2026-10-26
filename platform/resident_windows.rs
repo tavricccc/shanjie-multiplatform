@@ -96,7 +96,8 @@ impl Engine {
         // The class pairing and optional side file are part of the load contract,
         // even after another session already holds a valid mapped model.
         let folder = path.parent().ok_or(EngineError::LoadFailed)?;
-        let mut paths = vec![path.to_owned(), folder.join("classes.sjc")];
+        let mut paths = vec![path.to_owned()];
+        if folder.join("classes.sjc").exists(){paths.push(folder.join("classes.sjc"));}
         for side in ["kn.sjkn", "trigram.sjt3"].map(|name| folder.join(name)) {
             if side.exists() {
                 paths.push(side);

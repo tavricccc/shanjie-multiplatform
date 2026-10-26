@@ -142,6 +142,12 @@ impl Engine {
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }
+            let tiny=model.with_file_name("tinylm.sjtl");
+            if tiny.is_file(){
+                let tiny=CString::new(tiny.to_str()?).ok()?;
+                if shanjie_engine_load_tinylm(e.handle,tiny.as_ptr())!=0{return None;}
+                e.operation(|h,o|shanjie_engine_set_rerank(h,1,o))?;
+            }
             // The word list only matters when upstream inline English is switched on; a missing
             // list leaves that mode inert instead of failing the engine.
             if let Some(list) = data.join("english-words.txt").to_str().and_then(|p| CString::new(p).ok()) {
@@ -258,7 +264,7 @@ impl Engine {
         unsafe {
             let r = &*raw;
             let string = |p| CStr::from_ptr(p).to_str().unwrap().to_owned();
-            let out = Snapshot {
+            let mut out = Snapshot {
                 handled: r.handled != 0,
                 commit: string(r.commit),
                 preedit: string(r.preedit),
@@ -277,6 +283,22 @@ impl Engine {
                 associated: false,
             };
             shanjie_output_free(raw);
+            // Serialized in the resident core, never on a keyboard hook. The upstream
+            // generation guard prevents stale application; commit is preserved once.
+            let mut job=ptr::null_mut();
+            if shanjie_engine_rerank_take(self.handle,&mut job)==0&&!job.is_null(){
+                if shanjie_rerank_run(job)==0 {
+                    let mut ranked=ptr::null_mut();
+                    if shanjie_engine_rerank_apply(self.handle,job,&mut ranked)==0&&!ranked.is_null(){
+                        let r=&*ranked;out.preedit=string(r.preedit);out.cursor=r.cursor_utf16;
+                        out.candidates=(0..r.candidate_count).map(|i|string(*r.candidates.add(i as usize))).collect();
+                        out.selected=usize::try_from(r.candidate_selected).ok();out.columns=r.candidate_columns;
+                        out.first=r.candidate_first;out.total=r.candidate_total;
+                        shanjie_output_free(ranked);
+                    }
+                }
+                shanjie_rerank_free(job);
+            }
             Some(out)
         }
     }

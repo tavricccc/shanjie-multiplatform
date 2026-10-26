@@ -1,4 +1,5 @@
 mod bridge;
+#[cfg(test)]mod mixed_regression;
 #[cfg(feature = "input-diagnostics")]
 pub mod input_diagnostics;
 pub mod model_store;
@@ -7,6 +8,8 @@ pub mod candidate;
 mod dictionary_store;
 mod word_store;
 mod word_popup;
+mod word_gesture;
+pub mod word_helper;
 mod selection_text;
 mod selection_notice;
 pub mod engine;

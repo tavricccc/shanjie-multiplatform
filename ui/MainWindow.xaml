@@ -33,7 +33,7 @@
                         <controls:SettingToggle Label="預設字元寬度" OnText="全形" OffText="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="語言模型" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
-                        <ComboBox x:Name="ModelSelector" Header="模型配置" ItemsSource="{x:Bind Vm.AvailableModels}" DisplayMemberPath="Name" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
+                        <ComboBox x:Name="ModelSelector" Header="模型配置" ItemsSource="{x:Bind Vm.AvailableModels}" DisplayMemberPath="Name" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged" HorizontalAlignment="Stretch"/>
                         <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="取得其他模型…" Click="OnlineModels"/><Button Content="開啟模型資料夾" Click="OpenModelsFolder"/><Button Content="重新掃描" Click="RescanModels"/></StackPanel>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
                         <TextBlock Style="{StaticResource HelpText}" Text="線上清單只提供已確認相容的配套；新版本不代表所有情境的準確度都更高。"/>

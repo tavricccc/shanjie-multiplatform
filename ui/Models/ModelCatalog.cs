@@ -6,17 +6,17 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 namespace Shanjie_UI.Models;
 
-public sealed record ModelChoice(string Id, string Name, string Revision="");
+public sealed record ModelChoice(string Id, string Name, string Revision="",ModelEntry? Catalog=null);
 public sealed record ModelSpec(
     string Id, string Name, string ModelRelease, string ClassesRelease,
-    string ModelSha256, string ClassesSha256, long ModelSize, long ClassesSize);
+    string ModelSha256, string ClassesSha256, long ModelSize, long ClassesSize,ModelEntry? Catalog=null);
 public sealed record CatalogRow(string Name, string State, ModelSpec? Spec, bool Available);
 public sealed record CatalogResult(List<CatalogRow> Rows, string Status);
 internal sealed record Asset(string Name, long Size, string? Digest, string BrowserDownloadUrl);
 internal sealed record Release(string TagName, bool Draft, bool Prerelease, List<Asset> Assets);
 internal sealed record Compatibility(int Format, List<ModelSpec> Models);
 
-public static class ModelCatalog
+public static partial class ModelCatalog
 {
     public const string Builtin = "model-v6-classes-v5";
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy=JsonNamingPolicy.SnakeCaseLower, PropertyNameCaseInsensitive=true };
@@ -32,7 +32,7 @@ public static class ModelCatalog
     private static HttpClient CreateClient()
     {
         var client=new HttpClient {Timeout=Timeout.InfiniteTimeSpan};
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shanjie-Windows/0.12.2");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shanjie-Windows/0.13.0");
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }
@@ -44,7 +44,7 @@ public static class ModelCatalog
     public static List<ModelChoice> Installed()
     {
         var list=JsonSerializer.Deserialize<List<ModelSpec>>(Interop.Native.Take(Interop.Native.sj_models_scan()),Json)??[];
-        return list.Select(x=>new ModelChoice(x.Id,x.Name+"（已下載）",File.GetLastWriteTimeUtc(Path.Combine(Folder,x.Id,"model.json")).Ticks.ToString())).ToList();
+        return list.Select(x=>new ModelChoice(x.Id,x.Name+"（已下載）",File.GetLastWriteTimeUtc(Path.Combine(Folder,x.Id,"model.json")).Ticks.ToString(),x.Catalog)).ToList();
     }
     public static string[] Issues()=>JsonSerializer.Deserialize<string[]>(Interop.Native.Take(Interop.Native.sj_models_errors()),Json)??[];
     private static async Task<string> Fetch(string url,CancellationToken token)
@@ -90,7 +90,8 @@ public static class ModelCatalog
             if(remote is {Format:1,Models:not null}) foreach(var spec in remote.Models.Where(ValidSpec)) if(known.All(x=>x.Id!=spec.Id))known.Add(spec);
         }
         catch(Exception e) when(e is HttpRequestException or IOException or JsonException or OperationCanceledException){token.ThrowIfCancellationRequested();}
-        return Rows(releases,known,status);
+        var legacy=Rows(releases,known,status);
+        return await WithVersionTwo(legacy,releases,token);
     }
     private static bool ValidSpec(ModelSpec s)=>s is not null&&s.Id is {Length:>0 and <=80}&&s.Name is {Length:>0 and <=240}
         &&s.ModelRelease is not null&&s.ClassesRelease is not null&&s.ModelSha256 is not null&&s.ClassesSha256 is not null
@@ -153,6 +154,7 @@ public static class ModelCatalog
     }
     public static async Task<ModelChoice> Download(ModelSpec spec,IProgress<string> progress,CancellationToken token)
     {
+        if(spec.Catalog is not null)return await DownloadBundle(spec,progress,token);
         if(!ValidSpec(spec))throw new InvalidDataException("此模型配套資訊無效。");
         if(spec.Id==Builtin)return new(Builtin,"model-v6＋classes-v5（內建）");
         var existing=(await Task.Run(Installed,token)).FirstOrDefault(x=>x.Id==spec.Id);if(existing is not null)return existing;

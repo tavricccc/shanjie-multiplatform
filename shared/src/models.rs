@@ -21,6 +21,8 @@ pub struct Spec {
     pub classes_sha256: String,
     pub model_size: u64,
     pub classes_size: u64,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub catalog:Option<crate::catalog::Model>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Installed {
@@ -76,6 +78,16 @@ pub fn check_source(path: &Path, size: u64, sha: &str) -> Result<()> {
     Ok(())
 }
 pub fn validate_spec(spec: &Spec) -> Result<()> {
+    if let Some(m)=&spec.catalog {
+        crate::catalog::validate(m)?;
+        let main=m.assets.iter().find(|a|a.role=="bigram").ok_or("缺少主模型")?;
+        let classes=m.assets.iter().find(|a|a.role=="classes");
+        if spec.id!=m.id||spec.name!=m.name||main.sha256!=spec.model_sha256||main.size!=spec.model_size
+            ||main.release!=spec.model_release||classes.map_or("",|a|a.sha256.as_str())!=spec.classes_sha256
+            ||classes.map_or(0,|a|a.size)!=spec.classes_size
+            ||classes.map_or("",|a|a.release.as_str())!=spec.classes_release {return Err("模型資訊與完整配套不符。".into());}
+        return Ok(());
+    }
     if !valid_id(&spec.id)
         || spec.name.is_empty()
         || spec.name.len() > 240
@@ -89,6 +101,11 @@ pub fn validate_spec(spec: &Spec) -> Result<()> {
 type Stamp = Vec<(u64, SystemTime)>;
 static CHECKED: OnceLock<Mutex<Vec<(PathBuf, Stamp, Installed)>>> = OnceLock::new();
 pub fn checked(folder: &Path) -> Result<Installed> {
+    let metadata=folder.join("model.json");
+    regular(&metadata)?;
+    if fs::metadata(&metadata)?.len()>262144{return Err("模型資訊過大。".into());}
+    let receipt:Installed=serde_json::from_slice(&fs::read(&metadata)?)?;
+    if receipt.spec.catalog.is_some(){return checked_bundle(folder,receipt);}
     if ["kn.sjkn", "trigram.sjt3", "tinylm.sjtl"]
         .iter()
         .any(|name| folder.join(name).exists())
@@ -186,6 +203,7 @@ pub fn prepare(root: &Path, staging: &str) -> Result<Installed> {
         return Err("模型資訊過大。".into());
     }
     let spec: Spec = serde_json::from_slice(&fs::read(metadata)?)?;
+    if spec.catalog.is_some(){return prepare_bundle(root,folder,spec);}
     validate_spec(&spec)?;
     let source = folder.join("bigram.sjlm");
     let classes = folder.join("classes.sjc");
@@ -225,6 +243,60 @@ pub fn prepare(root: &Path, staging: &str) -> Result<Installed> {
         return Err("已有同名模型資料夾；請先透過模型資料夾保留或重新命名，再重試。".into());
     }
     fs::rename(&folder, &destination)?;
+    checked(&destination)
+}
+fn checked_bundle(folder:&Path,item:Installed)->Result<Installed>{
+    validate_spec(&item.spec)?;
+    let m=item.spec.catalog.as_ref().unwrap();
+    if !crate::catalog::usable(m)||fs::symlink_metadata(folder)?.file_type().is_symlink()
+        ||folder.file_name().and_then(|p|p.to_str())!=Some(item.spec.id.as_str()){return Err("此模型配套不支援目前載入能力。".into());}
+    let map=folder.join("bigram.winmap");regular(&map)?;
+    if hash(&map)?!=item.map_sha256||mapped_source(&map)?!=item.spec.model_sha256{return Err("模型快取已變動。".into());}
+    check_bundle_assets(folder,m,false)?;
+    let lm=shanjie_core::lm::Lm::load(&map).map_err(|_|"模型及附加檔載入失敗。")?;
+    if m.assets.iter().any(|a|a.role=="semantic"){
+        shanjie_core::tinylm::TinyLm::load_paired(&folder.join("tinylm.sjtl"),&lm).map_err(|_|"語意模型配對錯誤。")?;
+    }
+    Ok(item)
+}
+fn check_bundle_assets(folder:&Path,m:&crate::catalog::Model,main:bool)->Result<()> {
+    let declared:std::collections::BTreeSet<_>=m.assets.iter().map(|a|a.filename.as_str()).collect();
+    for name in ["kn.sjkn","trigram.sjt3","tinylm.sjtl","classes.sjc","colloquial.sjlm"]{
+        if folder.join(name).exists()&&!declared.contains(name){return Err("發現未列入配套的附加檔。".into());}
+    }
+    for a in &m.assets {
+        if a.role=="bigram"&&!main{continue;}
+        let path=folder.join(&a.filename);check_source(&path,a.size,&a.sha256)?;
+        if !["attribution","license"].contains(&a.role.as_str()){
+            let mut magic=[0u8;8];fs::File::open(path)?.read_exact(&mut magic)?;
+            if magic!=a.format_magic.as_bytes(){return Err("附件實際格式與清單不符。".into());}
+        }
+    }
+    Ok(())
+}
+fn prepare_bundle(root:&Path,folder:PathBuf,spec:Spec)->Result<Installed>{
+    validate_spec(&spec)?;
+    let m=spec.catalog.as_ref().unwrap();
+    if !crate::catalog::usable(m){return Err("本版核心不支援此配套。".into());}
+    check_bundle_assets(&folder,m,true)?;
+    let main=m.assets.iter().find(|a|a.role=="bigram").unwrap();
+    let bytes=fs::read(folder.join(&main.filename))?;
+    let table=m.assets.iter().find(|a|a.role=="classes").map(|a|fs::read(folder.join(&a.filename))).transpose()?;
+    let parsed=match &table {Some(t)=>shanjie_core::lm::Lm::parse_with_classes(&bytes,t),None=>shanjie_core::lm::Lm::parse(&bytes)}
+        .map_err(|_|"模型與詞類格式／配對不相容。")?;
+    let mapped=folder.join("bigram.winmap");
+    parsed.write_windows_map(&mapped,&bytes,table.as_deref()).map_err(|_|"模型映射失敗。")?;
+    let loaded=shanjie_core::lm::Lm::load(&mapped).map_err(|_|"附加模型配對或載入失敗。")?;
+    if !parsed.windows_map_matches(&loaded){return Err("模型映射不等價。".into());}
+    if m.assets.iter().any(|a|a.role=="semantic"){
+        shanjie_core::tinylm::TinyLm::load_paired(&folder.join("tinylm.sjtl"),&loaded).map_err(|_|"語意模型配對錯誤。")?;
+    }
+    drop(loaded);drop(parsed);
+    let item=Installed{spec,map_sha256:hash(&mapped)?};
+    fs::write(folder.join("model.json"),serde_json::to_vec_pretty(&item)?)?;
+    let destination=root.join(&item.spec.id);
+    if destination.exists(){return checked(&destination);}
+    fs::rename(&folder,&destination)?;
     checked(&destination)
 }
 /// Why each package folder under `root` is not listed (at most eight).

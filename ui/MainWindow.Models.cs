@@ -5,6 +5,26 @@ using System.Diagnostics;
 namespace Shanjie_UI;
 public sealed partial class MainWindow
 {
+    private bool selectingModel;
+    private async void ModelSelectionChanged(object sender,SelectionChangedEventArgs args)
+    {
+        if(selectingModel||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
+        selectingModel=true;
+        try
+        {
+            bool accepted=choice.Id==ModelCatalog.Builtin||choice.Catalog is {Advisories.Count:0};
+            if(!accepted)
+            {
+                var text=new TextBlock{Text=ModelCatalog.Notes(choice.Catalog),TextWrapping=TextWrapping.Wrap,MaxWidth=520};
+                var dialog=new ContentDialog{XamlRoot=Root.XamlRoot,Title="選用模型前請確認",Content=new ScrollViewer{Content=text,MaxHeight=420},
+                    PrimaryButtonText="仍然選用",CloseButtonText="取消",DefaultButton=ContentDialogButton.Close};
+                accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
+            }
+            if(accepted)Vm.SelectModel(choice.Id);
+            else ModelSelector.SelectedIndex=Vm.AvailableModels.ToList().FindIndex(m=>m.Id==Vm.ModelId);
+        }
+        finally{selectingModel=false;}
+    }
     private FileSystemWatcher? modelWatcher;
     private CancellationTokenSource? modelScan;
     private CancellationTokenSource? modelOperation;
@@ -56,11 +76,18 @@ public sealed partial class MainWindow
         var info=new TextBlock {Text="正在取得線上清單…",TextWrapping=TextWrapping.Wrap};
         var progress=new ProgressBar {IsIndeterminate=true};
         var choices=new ListView {MaxHeight=260,SelectionMode=ListViewSelectionMode.Single};
+        var notes=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxWidth=520};
         var panel=new StackPanel {Spacing=12,MinWidth=420};panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
+        panel.Children.Add(new ScrollViewer{Content=notes,MaxHeight=240});
         panel.Children.Add(new TextBlock {Text="只列相容配套供下載。完成後選入設定草稿，按主視窗「儲存」才套用；個人詞庫與學習資料保留。",TextWrapping=TextWrapping.Wrap});
         var dialog=new ContentDialog {XamlRoot=Root.XamlRoot,Title="取得其他模型",Content=panel,PrimaryButtonText="下載並選取",SecondaryButtonText="取消下載",CloseButtonText="關閉",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
         List<CatalogRow> rows=[];bool busy=false,closeRequested=false;
-        choices.SelectionChanged+=(_,_)=>dialog.IsPrimaryButtonEnabled=!busy&&choices.SelectedIndex>=0&&rows[choices.SelectedIndex].Available;
+        choices.SelectionChanged+=(_,_)=>{
+            var row=choices.SelectedIndex>=0?rows[choices.SelectedIndex]:null;
+            notes.Text=row is null?"":ModelCatalog.Notes(row.Spec?.Catalog);
+            dialog.PrimaryButtonText=row?.Spec?.Catalog is {Advisories.Count:0}?"下載並選取":"仍然選用並下載";
+            dialog.IsPrimaryButtonEnabled=!busy&&row?.Available==true;
+        };
         dialog.Closing+=(_,e)=>{if(busy){e.Cancel=true;closeRequested=true;cancel.Cancel();}else cancel.Cancel();};
         dialog.SecondaryButtonClick+=(_,e)=>{e.Cancel=true;cancel.Cancel();info.Text="正在取消；下載片段會保留供下次續傳。";};
         dialog.PrimaryButtonClick+=async(_,e)=>{

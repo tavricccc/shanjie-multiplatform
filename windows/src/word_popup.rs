@@ -22,6 +22,7 @@ struct Panel {
     control: Rc<Control>,
     paint: Rc<Cell<Paint>>,
     owner: HWND,
+    standalone: bool,
     reading_control: HWND,
     status: HWND,
     inspection_control:HWND,
@@ -85,18 +86,24 @@ impl Popup {
     }
     pub fn set_theme(&self,theme:u32)->Result<()> {if self.control.closing.get(){return Ok(());}unsafe{PostMessageW(Some(self.control.window.get()),THEME,WPARAM(theme as usize),LPARAM(0))}}
     pub unsafe fn open(owner:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND)->Result<Box<Self>> {
+        Self::open_with(owner,None,anchor,word,data,layout,theme,notify)
+    }
+    pub unsafe fn open_helper(helper:HWND,source:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32)->Result<Box<Self>>{
+        Self::open_with(helper,Some(source),anchor,word,data,layout,theme,HWND::default())
+    }
+    unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND)->Result<Box<Self>> {
         let (sender,receiver)=mpsc::channel(); let colors=Colors::read(theme)?;
         let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify});
         let background=CreateSolidBrush(colors.background);let border=CreateSolidBrush(colors.border);
         let paint=Rc::new(Cell::new(Paint{font:HFONT::default(),background,border,colors}));
-        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner,reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless:std::env::var_os("SHANJIE_HEADLESS").is_some(),revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
+        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless:std::env::var_os("SHANJIE_HEADLESS").is_some(),revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
         if panel.background.is_invalid()||panel.border.is_invalid(){return Err(Error::from_thread());}
         let state=Rc::new(WindowState{panel:RefCell::new(panel),control:control.clone(),paint,_count:crate::tsf::Count::new()});
         let module=HINSTANCE(crate::tsf::module().0);
         let class=WNDCLASSW{lpfnWndProc:Some(procedure),hInstance:module,hCursor:LoadCursorW(None,IDC_ARROW)?,lpszClassName:w!("Shanjie.AddWord.Popup.v1"),..Default::default()};
         RegisterClassW(&class);
         let (width,height,x,y)={let panel=state.panel.borrow();
-            let dpi=GetDpiForWindow(owner).max(96) as i32;let scale=|v:i32|v*dpi/96;
+            let dpi=GetDpiForWindow(source.unwrap_or(owner)).max(96) as i32;let scale=|v:i32|v*dpi/96;
             let title_height=28*((panel.word.chars().count()+36)/24) as i32;
             let reading_height=30*((panel.word.chars().count()*5+23)/24).max(1) as i32;
             let (width,height)=(scale(440),scale(18+title_height+28+reading_height+8+68+64+50));
@@ -108,11 +115,17 @@ impl Popup {
             (width,height,x,y)
         };
         let raw=Rc::into_raw(state.clone());
-        let created=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,class.lpszClassName,w!("善解：新增詞條"),WS_POPUP|WS_BORDER,x,y,width,height,Some(owner),None,Some(module),Some(raw.cast()));
+        let style=if source.is_some(){WS_EX_TOOLWINDOW}else{WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW};
+        let created=CreateWindowExW(style,class.lpszClassName,w!("善解：新增詞條"),WS_POPUP|WS_BORDER,x,y,width,height,Some(owner),None,Some(module),Some(raw.cast()));
         let window=match created {Ok(w)=>w,Err(e)=>{if control.window_reference.replace(false){drop(Rc::from_raw(raw));}return Err(e);}};
         let handle=Box::new(Self{control});
-        {let mut panel=state.panel.borrow_mut();panel.init_controls(owner)?;panel.inspect(true);}
-        if !handle.control.closing.get(){let _=ShowWindow(window,SW_SHOWNOACTIVATE);SetTimer(Some(window),1,100,None);}
+        {let mut panel=state.panel.borrow_mut();panel.init_controls(source.unwrap_or(owner))?;panel.inspect(true);}
+        if !handle.control.closing.get(){
+            let headless=state.panel.borrow().headless;
+            let _=ShowWindow(window,if source.is_some()&&!headless{SW_SHOW}else{SW_SHOWNOACTIVATE});
+            if source.is_some()&&!headless{let _=windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(window));}
+            SetTimer(Some(window),1,100,None);
+        }
         Ok(handle)
     }
 }
@@ -215,7 +228,8 @@ impl Panel {
     }
     unsafe fn poll(&mut self) {
         let foreground = GetForegroundWindow();
-        if !self.headless && !foreground.is_invalid() && GetAncestor(foreground,GA_ROOT) != GetAncestor(self.owner,GA_ROOT) { self.close(); return; }
+        if !self.headless && !foreground.is_invalid() && GetAncestor(foreground,GA_ROOT) != GetAncestor(self.owner,GA_ROOT)
+            && !(self.standalone&&GetAncestor(foreground,GA_ROOT)==self.window) { self.close(); return; }
         if self.check_due.is_some_and(|due|Instant::now()>=due){self.inspect(false);}
         while let Ok(answer) = self.receiver.try_recv() {
             if !self.active() { continue; }
@@ -293,7 +307,21 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             SetWindowLongPtrW(window,GWLP_USERDATA,0);state.control.window.set(HWND::default());state.control.closing.set(true);
             if state.control.window_reference.replace(false){drop(Rc::from_raw(raw));}
         },
-        WM_MOUSEACTIVATE=>return LRESULT(MA_NOACTIVATE as isize),
+        WM_MOUSEACTIVATE=>return LRESULT(if state.panel.borrow().standalone{MA_ACTIVATE}else{MA_NOACTIVATE} as isize),
+        WM_CHAR if state.panel.borrow().standalone=>return LRESULT(0),
+        WM_KEYDOWN if state.panel.borrow().standalone=>{
+            use windows::Win32::UI::Input::KeyboardAndMouse::*;
+            let held=|vk:VIRTUAL_KEY|GetKeyState(vk.0 as i32) as u16&0x8000!=0;
+            if Panel::accepts(wp.0,held(VK_CONTROL),held(VK_MENU),held(VK_LWIN)||held(VK_RWIN)){
+                if wp.0==27{state.control.close();}
+                else{
+                    let mut key=shanjie_core::ffi::ShanjieKey{kind:0,ch:0,modifiers:0};
+                    let ch=if crate::bridge::sj_translate(wp.0,lp.0,&mut key){char::from_u32(key.ch)}else{None};
+                    let _=PostMessageW(Some(window),KEY,WPARAM(wp.0|((held(VK_CONTROL) as usize)<<16)),LPARAM(ch.map_or(0,|c|c as isize+1)));
+                }
+                return LRESULT(0);
+            }
+        },
         WM_CTLCOLORSTATIC=>{
             let paint=state.paint.get();let dc=HDC(wp.0 as _);SetBkColor(dc,paint.colors.background);SetTextColor(dc,paint.colors.text);return LRESULT(paint.background.0 as isize);
         },
@@ -301,8 +329,11 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
         WM_DRAWITEM if lp.0!=0=>{draw_button(state.paint.get(),&*(lp.0 as *const DRAWITEMSTRUCT));return LRESULT(1);},
         CLOSE=>{
             // No panel/Data borrow crosses a Win32 focus/lifetime callback.
+            let restore={let panel=state.panel.borrow();if panel.standalone&&GetForegroundWindow()==window{Some(panel.owner)}else{None}};
             let _=KillTimer(Some(window),1);let _=ShowWindow(window,SW_HIDE);
-            if IsWindow(Some(window)).as_bool(){let _=DestroyWindow(window);}return LRESULT(0);
+            if IsWindow(Some(window)).as_bool(){let _=DestroyWindow(window);}
+            if let Some(owner)=restore{if IsWindow(Some(owner)).as_bool(){let _=SetForegroundWindow(owner);}}
+            return LRESULT(0);
         },
         WM_CLOSE=>{state.control.close();return LRESULT(0);},
         WM_COMMAND=>{

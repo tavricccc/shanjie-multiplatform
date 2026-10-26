@@ -55,6 +55,7 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
         Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
         Preserve-Output "$root/dist/tools/shanjie-core.exe"
         Copy-Item "$root/windows/target/$target/release/shanjie-core.exe" "$root/dist/tools" -Force
+        Copy-Item "$root/windows/target/$target/release/shanjie-word-helper.exe" "$root/dist/tools" -Force
         # Package-root launcher for the WinUI setup window.
         New-Item -ItemType Directory "$root/dist/setup" -Force | Out-Null
         Copy-Item "$root/windows/target/$target/release/shanjie-setup.exe" "$root/dist/setup/安裝善解.exe" -Force

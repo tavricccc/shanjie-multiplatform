@@ -9,3 +9,7 @@
 
 # Local backups and private working notes
 .deleted_files/
+
+# Python maintenance bytecode
+**/__pycache__/
+*.pyc

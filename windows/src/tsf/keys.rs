@@ -45,6 +45,9 @@ fn other_held(physical: u32) -> bool {
 }
 impl Data {
     fn ctrl_event(self: &Rc<Self>, context: Option<&ITfContext>, key:WPARAM, flags:LPARAM, down:bool) -> Result<()> {
+        // The ready coordinator is the single gesture owner. Without it the
+        // existing TSF route remains available for editable fields.
+        if crate::word_helper::running(){self.ctrl_gesture.borrow_mut().reset();return Ok(());}
         let p = self.state.borrow().prefs.clone();
         if !p.flag("shortcuts","add_word",true) || p.number("shortcuts","add_word_shortcut",0)!=0 { return Ok(()); }
         let physical = if key.0==17 { if flags.0 & (1<<24)!=0 { 0xa3 } else { 0xa2 } } else { key.0 };
