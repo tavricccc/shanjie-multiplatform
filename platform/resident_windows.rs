@@ -119,10 +119,14 @@ impl Engine {
             .position(|(key, lex, _)| key == &stamp && Arc::ptr_eq(lex, &self.lex))
         {
             let entry = cache.remove(index);
+            self.invalidate();
+            self.tinylm=None;
+            self.digit_cache=None;
             if self.predict_on {
                 entry.2.capped.predict_index(&entry.2.lm);
             }
             self.lm = Some(entry.2.clone());
+            self.digit_env();
             cache.push(entry);
             return Ok(());
         }
@@ -133,6 +137,22 @@ impl Engine {
         }
         cache.push((stamp, self.lex.clone(), self.lm.as_ref().unwrap().clone()));
         Ok(())
+    }
+}
+impl Engine{
+    pub fn load_tinylm(&mut self,path:&Path)->Result<(),EngineError>{
+        type CachedTiny=(std::path::PathBuf,u64,Option<std::time::SystemTime>,String,Option<[u8;32]>,Arc<TinyLm>);
+        static CACHE:OnceLock<Mutex<Vec<CachedTiny>>>=OnceLock::new();
+        let lm=self.lm.as_ref().ok_or(EngineError::LoadFailed)?;
+        let sha=lm.lm.sha256().to_owned();let kn=lm.lm.kn_sha256();
+        let meta=std::fs::metadata(path).map_err(|_|EngineError::LoadFailed)?;
+        let mut cache=CACHE.get_or_init(Default::default).lock().map_err(|_|EngineError::LoadFailed)?;
+        if let Some(entry)=cache.iter().find(|e|e.0==path&&e.1==meta.len()&&e.2==meta.modified().ok()&&e.3==sha&&e.4==kn){
+            let tiny=entry.5.clone();self.invalidate();self.tinylm=Some(tiny);return Ok(());
+        }
+        self.load_tinylm_uncached(path)?;
+        if cache.len()>=4{cache.remove(0);}
+        cache.push((path.to_owned(),meta.len(),meta.modified().ok(),sha,kn,self.tinylm.as_ref().unwrap().clone()));Ok(())
     }
 }
 

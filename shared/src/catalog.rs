@@ -64,7 +64,8 @@ pub fn asset_capability(a:&Asset)->Result<Option<&'static str>> {
         ("semantic","SJTL0002","tinylm.sjtl")=>Some("semantic.sjtl2"),
         ("semantic","SJTL0003","tinylm.sjtl")=>Some("semantic.sjtl3"),
         ("semantic","SJTL0004","tinylm.sjtl")=>Some("semantic.sjtl4"),
-        ("attribution"|"license","TEXT0001",_)=>None,
+        ("attribution","TEXT0001","colloquial-attribution.tsv")=>None,
+        ("license","TEXT0001",name) if name.ends_with(".NOTICE.txt")||name=="LICENSE.txt"=>None,
         _=>return fail("模型含未知格式／附件角色，需要更新核心。"),
     };Ok(cap)
 }
@@ -82,6 +83,15 @@ pub fn validate(m:&Model)->Result<()> {
         for h in &a.requires_assets {if !hashes.contains(h.as_str())||h==&a.sha256{return fail("模型附件依賴有誤。");}}
     }
     if !roles.contains("bigram"){return fail("缺少主模型。");}
+    let main=m.assets.iter().find(|a|a.role=="bigram").unwrap();
+    for a in &m.assets {
+        if ["classes","smoothing","trigram","semantic"].contains(&a.role.as_str())&&!a.requires_assets.contains(&main.sha256){return fail("附加模型未聲明主模型依賴。");}
+        if a.role=="semantic" {
+            if let Some(kn)=m.assets.iter().find(|a|a.role=="smoothing"){
+                if !a.requires_assets.contains(&kn.sha256){return fail("語意模型未聲明平滑模型依賴。");}
+            }
+        }
+    }
     if !roles.contains("classes"){caps.insert("lm.classless");}
     let mut graph:BTreeMap<&str,Vec<&str>>=m.assets.iter().map(|a|(a.sha256.as_str(),a.requires_assets.iter().map(String::as_str).collect())).collect();
     while !graph.is_empty(){
@@ -106,6 +116,7 @@ pub fn validate(m:&Model)->Result<()> {
     Ok(())
 }
 pub fn usable(m:&Model)->bool {
+    if !cfg!(windows){return false;} // Linux keeps v1 until its own reader and advisory UI are integrated.
     let target=if cfg!(target_pointer_width="32"){"windows-x86"}else{"windows-x64"};
     validate(m).is_ok()&&m.compatibility.iter().any(|c|c.target==target&&c.profile_id==PROFILE
         &&c.state=="usable"&&c.source_commit.len()==40&&c.source_commit.bytes().all(|b|b.is_ascii_hexdigit())

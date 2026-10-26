@@ -8,7 +8,7 @@ public sealed partial class MainWindow
     private bool selectingModel;
     private async void ModelSelectionChanged(object sender,SelectionChangedEventArgs args)
     {
-        if(selectingModel||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
+        if(selectingModel||Vm.UpdatingModels||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
         selectingModel=true;
         try
         {
@@ -22,6 +22,11 @@ public sealed partial class MainWindow
             }
             if(accepted)Vm.SelectModel(choice.Id);
             else ModelSelector.SelectedIndex=Vm.AvailableModels.ToList().FindIndex(m=>m.Id==Vm.ModelId);
+        }
+        catch(Exception error)when(error is IOException or UnauthorizedAccessException){
+            Vm.Status="尚未變更模型："+error.Message;
+            ModelSelector.SelectedIndex=Vm.AvailableModels.ToList().FindIndex(m=>m.Id==Vm.ModelId);
+            ShowLoadFeedback();
         }
         finally{selectingModel=false;}
     }

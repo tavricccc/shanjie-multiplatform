@@ -9,6 +9,7 @@ try {
         & "$PSScriptRoot/build.ps1"
     }
     $output = Join-Path $root 'dist/package'
+    if(!(Test-Path -LiteralPath "$root/dist/tools/shanjie-word-helper.exe")){throw 'Missing per-user add-word helper; refusing an incomplete package.'}
     if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
     Preserve-Output $output
     New-Item -ItemType Directory -Path $output -Force | Out-Null

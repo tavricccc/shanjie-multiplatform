@@ -29,6 +29,8 @@ pub struct Installed {
     #[serde(flatten)]
     pub spec: Spec,
     pub map_sha256: String,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub bundle_map_sha256:Option<String>,
 }
 pub fn valid_id(id: &str) -> bool {
     !id.is_empty()
@@ -227,6 +229,7 @@ pub fn prepare(root: &Path, staging: &str) -> Result<Installed> {
     let item = Installed {
         spec,
         map_sha256: hash(&mapped)?,
+        bundle_map_sha256:None,
     };
     fs::write(folder.join("model.json"), serde_json::to_vec_pretty(&item)?)?;
     // Original download remains in the shared Assets cache; only generated staging copies go away.
@@ -251,12 +254,21 @@ fn checked_bundle(folder:&Path,item:Installed)->Result<Installed>{
     if !crate::catalog::usable(m)||fs::symlink_metadata(folder)?.file_type().is_symlink()
         ||folder.file_name().and_then(|p|p.to_str())!=Some(item.spec.id.as_str()){return Err("此模型配套不支援目前載入能力。".into());}
     let map=folder.join("bigram.winmap");regular(&map)?;
-    if hash(&map)?!=item.map_sha256||mapped_source(&map)?!=item.spec.model_sha256{return Err("模型快取已變動。".into());}
-    check_bundle_assets(folder,m,false)?;
+    let mut paths=vec![folder.join("model.json"),map.clone()];
+    paths.extend(m.assets.iter().map(|a|folder.join(&a.filename)));
+    let stamp:Stamp=paths.iter().map(|p|{regular(p)?;let s=fs::metadata(p)?;Ok((s.len(),s.modified()?))}).collect::<Result<_>>()?;
+    let cache=CHECKED.get_or_init(Default::default);
+    if let Some((_,_,cached))=cache.lock().unwrap().iter().find(|(p,s,_)|p==folder&&s==&stamp){return Ok(cached.clone());}
+    let wanted=item.bundle_map_sha256.as_deref().ok_or("缺少 v2 快取識別。")?;
+    // Old readers require a hex map_sha256 and therefore cannot silently load a
+    // new bundle while ignoring its advisories. Legacy receipts keep their hash.
+    if item.map_sha256!="catalog-v2"||!digest_ok(wanted)||hash(&map)?!=wanted||mapped_source(&map)?!=item.spec.model_sha256{return Err("模型快取已變動。".into());}
+    check_bundle_assets(folder,m,true)?;
     let lm=shanjie_core::lm::Lm::load(&map).map_err(|_|"模型及附加檔載入失敗。")?;
     if m.assets.iter().any(|a|a.role=="semantic"){
         shanjie_core::tinylm::TinyLm::load_paired(&folder.join("tinylm.sjtl"),&lm).map_err(|_|"語意模型配對錯誤。")?;
     }
+    let mut entries=cache.lock().unwrap();if entries.len()>=16{entries.remove(0);}entries.push((folder.to_owned(),stamp,item.clone()));
     Ok(item)
 }
 fn check_bundle_assets(folder:&Path,m:&crate::catalog::Model,main:bool)->Result<()> {
@@ -292,7 +304,7 @@ fn prepare_bundle(root:&Path,folder:PathBuf,spec:Spec)->Result<Installed>{
         shanjie_core::tinylm::TinyLm::load_paired(&folder.join("tinylm.sjtl"),&loaded).map_err(|_|"語意模型配對錯誤。")?;
     }
     drop(loaded);drop(parsed);
-    let item=Installed{spec,map_sha256:hash(&mapped)?};
+    let item=Installed{spec,map_sha256:"catalog-v2".into(),bundle_map_sha256:Some(hash(&mapped)?)};
     fs::write(folder.join("model.json"),serde_json::to_vec_pretty(&item)?)?;
     let destination=root.join(&item.spec.id);
     if destination.exists(){return checked(&destination);}

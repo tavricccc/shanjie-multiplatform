@@ -45,7 +45,8 @@ public static partial class ModelCatalog
     {
         var list=JsonSerializer.Deserialize<List<ModelSpec>>(Interop.Native.Take(Interop.Native.sj_models_scan()),Json)??[];
         var notes=CachedNotes();
-        return list.Select(x=>new ModelChoice(x.Id,x.Name+"（已下載）",File.GetLastWriteTimeUtc(Path.Combine(Folder,x.Id,"model.json")).Ticks.ToString(),notes.GetValueOrDefault(x.Id)??x.Catalog)).ToList();
+        return list.Select(x=>new ModelChoice(x.Id,x.Name+"（已下載）",File.GetLastWriteTimeUtc(Path.Combine(Folder,x.Id,"model.json")).Ticks.ToString(),
+            notes.GetValueOrDefault(x.Id)??notes.Values.FirstOrDefault(m=>SameSources(m,x))??x.Catalog)).ToList();
     }
     public static string[] Issues()=>JsonSerializer.Deserialize<string[]>(Interop.Native.Take(Interop.Native.sj_models_errors()),Json)??[];
     private static async Task<string> Fetch(string url,CancellationToken token)

@@ -70,6 +70,7 @@ impl Data {
         Ok(())
     }
     fn add_word_shortcut(&self, vk:WPARAM) -> bool {
+        if crate::word_helper::running(){return false;}
         let s=self.state.borrow();
         s.prefs.flag("shortcuts","add_word",true) && s.prefs.number("shortcuts","add_word_shortcut",0)==1
             && vk.0==0x7b && held(VK_CONTROL) && held(VK_SHIFT) && !held(VK_MENU)

@@ -63,10 +63,10 @@ jobs:
       - name: Summary
         run: |
           $c=Get-Content build/model-catalog/publication/MODEL-CATALOG-V2.json -Raw|ConvertFrom-Json
-          "Verified $($c.models.Count) bundles. Revision: $($c.revision). Accuracy never gates availability." >> $env:GITHUB_STEP_SUMMARY
+          "Verified $($c.models.Count) bundles. Revision: $($c.revision). Accuracy never gates availability. Last successful check: $([DateTime]::UtcNow.ToString('o'))" >> $env:GITHUB_STEP_SUMMARY
   publish:
     needs: verify
-    if: (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish') || (github.event_name == 'schedule' && vars.MODEL_CATALOG_AUTOPUBLISH == 'true')
+    if: (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish') || ((github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && vars.MODEL_CATALOG_AUTOPUBLISH == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

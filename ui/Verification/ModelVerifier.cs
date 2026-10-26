@@ -26,14 +26,15 @@ internal static class ModelVerifier
         settings.Vm.DictionaryText="ㄇㄠ 貓";settings.Vm.HasChanges=true;string draft=settings.Vm.DictionaryText;
         byte[]? before=File.Exists(ProfileStore.Path)?await File.ReadAllBytesAsync(ProfileStore.Path):null;
         var catalog=await ModelCatalog.Online(CancellationToken.None);
-        Check(catalog.Rows.Any(x=>x.Spec?.Id=="model-v6-classes-v4"&&x.Available),"live GitHub assets and digests identify the v4 pair");
+        string classV4=ModelCatalog.Known().Single(x=>x.Id=="model-v6-classes-v4").ClassesSha256;
+        Check(catalog.Rows.Any(x=>x.Spec?.ClassesSha256==classV4&&x.Available),"live GitHub assets and digests identify the v4 pair");
         Check(catalog.Rows.Any(x=>x.Spec?.Id==ModelCatalog.Builtin&&!x.Available),"built-in model is already available without a redundant download");
         Note(catalog.Status);
         using(var offline=new HttpClient(new Replies(_=>new(HttpStatusCode.ServiceUnavailable))))
         {
             ModelCatalog.VerifyWith(offline);
             var cached=await ModelCatalog.Online(CancellationToken.None);
-            Check(cached.Rows.Any(x=>x.Spec?.Id=="model-v6-classes-v4"&&x.Available)&&cached.Status.Contains("快取"),"offline catalog uses the last successful metadata");
+            Check(cached.Rows.Any(x=>x.Spec?.ClassesSha256==classV4&&x.Available)&&cached.Status.Contains("快取"),"offline catalog uses the last successful metadata");
             ModelCatalog.VerifyWith(null);
         }
         var v4=ModelCatalog.Known().Single(x=>x.Id=="model-v6-classes-v4");

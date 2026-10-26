@@ -16,6 +16,7 @@ use windows::{
 pub use shanjie_shell::protocol::{Failure, Snapshot};
 pub struct Engine {
     pub handle: *mut ShanjieEngine,
+    pub rerank_jobs_run:u64,
     remote: Option<crate::broker::Client>,
     mutex: Option<HANDLE>,
     folder: PathBuf,
@@ -34,6 +35,7 @@ impl Default for Engine {
     fn default() -> Self {
         Self {
             handle: ptr::null_mut(),
+            rerank_jobs_run:0,
             remote: None,
             mutex: None,
             folder: PathBuf::new(),
@@ -288,6 +290,7 @@ impl Engine {
             let mut job=ptr::null_mut();
             if shanjie_engine_rerank_take(self.handle,&mut job)==0&&!job.is_null(){
                 if shanjie_rerank_run(job)==0 {
+                    self.rerank_jobs_run=self.rerank_jobs_run.saturating_add(1);
                     let mut ranked=ptr::null_mut();
                     if shanjie_engine_rerank_apply(self.handle,job,&mut ranked)==0&&!ranked.is_null(){
                         let r=&*ranked;out.preedit=string(r.preedit);out.cursor=r.cursor_utf16;

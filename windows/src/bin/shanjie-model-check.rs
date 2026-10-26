@@ -20,13 +20,16 @@ fn run(){
     let root=Path::new(&args[2]);let id=&args[3];let data=Path::new(&args[4]);
     assert_eq!(root,std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join("Shanjie/Models"));
     if args[1]=="prepare" {
-        let item=shanjie_shell::models::prepare(root,id).expect("source, dependency and mapping validation");
+        let item=if root.join(".staging").join(id).join("model.json").is_file(){
+            shanjie_shell::models::prepare(root,id)
+        }else{shanjie_shell::models::checked(&root.join(id))}.expect("source, dependency and mapping validation");
         assert_eq!(item.spec.id,*id);
         let mut e=engine(data,id,0);
-        for ch in "su3".chars(){key(&mut e,1,ch);}
+        for ch in "su3cl3".chars(){key(&mut e,1,ch);}
         let out=key(&mut e,3,'\0');assert!(!out.commit.is_empty()&&out.preedit.is_empty());
         assert!(key(&mut e,3,'\0').commit.is_empty(),"commit must occur once");
-        println!("{}",json!({"usable":true,"mapped_equivalent":true,"source_and_side_pairs_checked":true,"native_input_and_commit":true}));
+        if item.spec.catalog.as_ref().is_some_and(|m|m.assets.iter().any(|a|a.role=="semantic")){assert!(e.rerank_jobs_run>0,"semantic model must actually run");}
+        println!("{}",json!({"usable":true,"mapped_equivalent":true,"source_and_side_pairs_checked":true,"native_input_and_commit":true,"semantic_jobs_run":e.rerank_jobs_run}));
     } else {
         assert_eq!(args[1],"evaluate");let text=fs::read_to_string(&args[5]).unwrap();
         let rows:Vec<_>=text.lines().filter(|l|!l.is_empty()&&!l.starts_with('#')).map(|l|{

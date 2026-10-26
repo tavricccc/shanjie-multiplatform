@@ -50,6 +50,7 @@ pub fn migrate_legacy(data: &Path) -> Result<()> {
     let receipt = Installed {
         spec,
         map_sha256: hash(&stage.join("bigram.winmap"))?,
+        bundle_map_sha256:None,
     };
     fs::write(
         stage.join("model.json"),

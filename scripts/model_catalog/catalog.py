@@ -85,6 +85,7 @@ def download(a,cache):
     if temp.stat().st_size!=size or filehash(temp)!=sha[7:]:raise ValueError("Official asset digest mismatch")
     os.replace(temp,path);return path
 def model(assets,label):
+    if len(label)>240:label=label[:237]+"..."
     assets=copy.deepcopy(assets);assets.sort(key=lambda a:(a["role"],a["sha256"]))
     caps=sorted({"map.sjwm2",*(CAPS[a["format_magic"]] for a in assets if a["role"] in NAMES.values())}
                 |({"lm.classless"} if not any(a["role"]=="classes" for a in assets) else set()))
@@ -134,7 +135,8 @@ def discover(out):
             assets=[b]+([dict(c["asset"],requires_assets=[b["sha256"]])] if c else [])+legal
             m=model(assets,b["release"]+(" ＋ "+c["asset"]["release"] if c else "（獨立無詞類模型）"))
             candidates.append(m)
-            if b["release"]=="model-v6" and c and c["asset"]["release"]=="classes-v5":baseline=m["id"]
+            builtin=next(x for x in read(ROOT/"MODEL-CATALOG.json")["models"] if x["id"]=="model-v6-classes-v5")
+            if b["sha256"]==builtin["model_sha256"] and c and c["asset"]["sha256"]==builtin["classes_sha256"]:baseline=m["id"]
         default=options[0]
         standard=[b]+([dict(default["asset"],requires_assets=[b["sha256"]])] if default else [])+legal
         for extra in (x for x in found if x["pair"]==b["sha256"] and x["asset"]["role"] in ("smoothing","trigram","semantic")):
@@ -151,7 +153,7 @@ def discover(out):
     for x in found:
         if x["asset"]["sha256"] not in used:
             pending.append({"release":x["asset"]["release"],"filename":x["asset"]["filename"],"state":"unsupported","reason":"No complete paired dependency set found"})
-    if not baseline:raise ValueError("Public baseline pair not found; refusing incomplete discovery")
+    if not baseline:pending.append({"state":"unverified","reason":"Baseline unavailable; technical availability is independent of advisory evaluation"})
     dataset=ROOT/"scripts/model_catalog/evaluation.txt"
     plan={"source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
           "profile":PROFILE,"head":head,"previous":old,"previous_state":state,"sources":sources,"pending":pending,
@@ -168,8 +170,9 @@ def run_child(exe,args,env,timeout):
     return json.loads(p.stdout.decode("utf-8-sig"))
 def probe(out,exe,data,target):
     plan=read(out/"plan.json");work=out/target;work.mkdir(parents=True,exist_ok=True)
-    env=os.environ.copy();env.update(LOCALAPPDATA=str(work/"userdata"),SHANJIE_CORE_LOCAL="1",SHANJIE_TEST_PROFILE="1",SHANJIE_NO_WORD_HELPER="1")
-    for name in ("GH_TOKEN","GITHUB_TOKEN"):env.pop(name,None)
+    allowed={"SYSTEMROOT","WINDIR","COMSPEC","TEMP","TMP","PATH","PATHEXT","USERPROFILE","HOMEDRIVE","HOMEPATH","PROGRAMDATA","PROGRAMFILES","PROGRAMFILES(X86)","PROCESSOR_ARCHITECTURE","NUMBER_OF_PROCESSORS"}
+    env={k:v for k,v in os.environ.items() if k.upper() in allowed}
+    env.update(LOCALAPPDATA=str(work/"userdata"),SHANJIE_CORE_LOCAL="1",SHANJIE_TEST_PROFILE="1",SHANJIE_NO_WORD_HELPER="1")
     models=work/"userdata/Shanjie/Models";reports=[];cache=out/"probe-cache";cache.mkdir(exist_ok=True)
     for original in plan["candidates"]:
         m=copy.deepcopy(original)
@@ -210,6 +213,7 @@ def probe(out,exe,data,target):
     write(work/"results.json",reports)
 def validate(c):
     if c.get("format")!=2 or c.get("example_only") is not False:raise ValueError("Not a production v2 catalog")
+    if len(c["models"])>1000 or len(encoded(c))>8*1024*1024:raise ValueError("Catalog exceeds reader bounds")
     if c.get("revision")!=digest(semantic(c)):raise ValueError("Catalog revision mismatch")
     ids=set()
     for m in c["models"]:
@@ -222,8 +226,18 @@ def validate(c):
         roles=set();hashes={a["sha256"] for a in m["assets"]};graph={}
         for a in m["assets"]:
             if a["role"] in roles or a["repository"]!=UPSTREAM or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
+            if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
+            allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
+                     "semantic":{f"SJTL000{i}" for i in range(1,5)},"attribution":{"TEXT0001"},"license":{"TEXT0001"}}
+            if a["format_magic"] not in allowed.get(a["role"],set()):raise ValueError("Wrong role/format")
+            if a["role"]=="attribution" and a["filename"]!="colloquial-attribution.tsv":raise ValueError("Unknown attribution file")
+            if a["role"]=="license" and not(a["filename"].endswith(".NOTICE.txt") or a["filename"]=="LICENSE.txt"):raise ValueError("Unknown license file")
+            if a["role"] not in ("license","attribution") and NAMES.get(a["filename"])!=a["role"]:raise ValueError("Unknown loader filename")
             roles.add(a["role"]);graph[a["sha256"]]=set(a["requires_assets"])
             if not graph[a["sha256"]]<=hashes or a["sha256"] in graph[a["sha256"]]:raise ValueError("Missing/self dependency")
+        main=next(a for a in m["assets"] if a["role"]=="bigram")
+        for a in m["assets"]:
+            if a["role"] in ("classes","smoothing","trigram","semantic") and main["sha256"] not in a["requires_assets"]:raise ValueError("Missing main dependency")
         while graph:
             leaves={h for h,deps in graph.items() if not deps}
             if not leaves:raise ValueError("Cyclic dependency")
@@ -292,7 +306,8 @@ def publish(out):
         if filehash(folder/name)!=sha:raise ValueError("Publication plan content changed")
     for a in plan["sources"]:
         current=api(f"repos/{UPSTREAM}/releases/assets/{a['asset_id']}")
-        if any(current[k]!=a[v] for k,v in (("size","size"),("name","filename"),("digest","digest"))):raise ValueError("Upstream asset changed; rediscover before publishing")
+        expected=f"https://github.com/{UPSTREAM}/releases/download/{a['release']}/{a['filename']}"
+        if current["browser_download_url"]!=expected or any(current[k]!=a[v] for k,v in (("size","size"),("name","filename"),("digest","digest"))):raise ValueError("Upstream asset changed; rediscover before publishing")
     for attempt in range(3):
         head,old,old_state=previous();catalog=read(folder/"MODEL-CATALOG-V2.json");validate(catalog)
         if head!=plan["head"]:

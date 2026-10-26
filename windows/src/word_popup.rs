@@ -49,6 +49,7 @@ struct Panel {
 mod button;
 const CLOSE: u32=WM_APP+201;
 const KEY: u32=WM_APP+202;
+pub(crate) const ROUTE_KEY:u32=KEY;
 const ACTION: u32=WM_APP+203;
 const THEME: u32=WM_APP+204;
 static NEXT_ID:AtomicUsize=AtomicUsize::new(1);
@@ -63,7 +64,7 @@ impl Control {
         unsafe {
             if !self.notify.is_invalid() {let _=PostMessageW(Some(self.notify),crate::native::WORD_CLOSED_MESSAGE,WPARAM(self.id),LPARAM(0));}
             let window=self.window.get();
-            if !window.is_invalid(){let _=PostMessageW(Some(window),CLOSE,WPARAM(0),LPARAM(0));}
+            if !window.is_invalid(){let _=RemovePropW(window,w!("Shanjie.AddWord.Active.v1"));let _=PostMessageW(Some(window),CLOSE,WPARAM(0),LPARAM(0));}
         }
     }
     fn active(&self)->bool { !self.closing.get() && unsafe {IsWindowVisible(self.window.get()).as_bool()} }
@@ -78,6 +79,8 @@ impl Popup {
     pub fn active(&self)->bool {self.control.active()}
     pub fn close(&self) {self.control.close();}
     pub fn id(&self)->usize {self.control.id}
+    pub fn window(&self)->HWND{self.control.window.get()}
+    pub fn contains(&self,window:HWND)->bool{unsafe{GetAncestor(window,GA_ROOT)==self.control.window.get()}}
     pub fn accepts(vk:usize,ctrl:bool,alt:bool,win:bool)->bool {Panel::accepts(vk,ctrl,alt,win)}
     pub fn key(&self,vk:usize,ch:Option<char>,ctrl:bool) {
         if vk==27 {self.close();return;}
@@ -86,17 +89,17 @@ impl Popup {
     }
     pub fn set_theme(&self,theme:u32)->Result<()> {if self.control.closing.get(){return Ok(());}unsafe{PostMessageW(Some(self.control.window.get()),THEME,WPARAM(theme as usize),LPARAM(0))}}
     pub unsafe fn open(owner:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND)->Result<Box<Self>> {
-        Self::open_with(owner,None,anchor,word,data,layout,theme,notify)
+        Self::open_with(owner,None,anchor,word,data,layout,theme,notify,std::env::var_os("SHANJIE_HEADLESS").is_some())
     }
     pub unsafe fn open_helper(helper:HWND,source:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32)->Result<Box<Self>>{
-        Self::open_with(helper,Some(source),anchor,word,data,layout,theme,HWND::default())
+        Self::open_with(helper,Some(source),anchor,word,data,layout,theme,HWND::default(),std::env::var_os("SHANJIE_HEADLESS").is_some())
     }
-    unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND)->Result<Box<Self>> {
+    unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND,headless:bool)->Result<Box<Self>> {
         let (sender,receiver)=mpsc::channel(); let colors=Colors::read(theme)?;
         let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify});
         let background=CreateSolidBrush(colors.background);let border=CreateSolidBrush(colors.border);
         let paint=Rc::new(Cell::new(Paint{font:HFONT::default(),background,border,colors}));
-        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless:std::env::var_os("SHANJIE_HEADLESS").is_some(),revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
+        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless,revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
         if panel.background.is_invalid()||panel.border.is_invalid(){return Err(Error::from_thread());}
         let state=Rc::new(WindowState{panel:RefCell::new(panel),control:control.clone(),paint,_count:crate::tsf::Count::new()});
         let module=HINSTANCE(crate::tsf::module().0);
@@ -115,15 +118,14 @@ impl Popup {
             (width,height,x,y)
         };
         let raw=Rc::into_raw(state.clone());
-        let style=if source.is_some(){WS_EX_TOOLWINDOW}else{WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW};
+        let style=WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW;
         let created=CreateWindowExW(style,class.lpszClassName,w!("善解：新增詞條"),WS_POPUP|WS_BORDER,x,y,width,height,Some(owner),None,Some(module),Some(raw.cast()));
         let window=match created {Ok(w)=>w,Err(e)=>{if control.window_reference.replace(false){drop(Rc::from_raw(raw));}return Err(e);}};
         let handle=Box::new(Self{control});
         {let mut panel=state.panel.borrow_mut();panel.init_controls(source.unwrap_or(owner))?;panel.inspect(true);}
         if !handle.control.closing.get(){
-            let headless=state.panel.borrow().headless;
-            let _=ShowWindow(window,if source.is_some()&&!headless{SW_SHOW}else{SW_SHOWNOACTIVATE});
-            if source.is_some()&&!headless{let _=windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(window));}
+            SetPropW(window,w!("Shanjie.AddWord.Active.v1"),Some(HANDLE(1usize as _)))?;
+            let _=ShowWindow(window,SW_SHOWNOACTIVATE);
             SetTimer(Some(window),1,100,None);
         }
         Ok(handle)
@@ -307,7 +309,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             SetWindowLongPtrW(window,GWLP_USERDATA,0);state.control.window.set(HWND::default());state.control.closing.set(true);
             if state.control.window_reference.replace(false){drop(Rc::from_raw(raw));}
         },
-        WM_MOUSEACTIVATE=>return LRESULT(if state.panel.borrow().standalone{MA_ACTIVATE}else{MA_NOACTIVATE} as isize),
+        WM_MOUSEACTIVATE=>return LRESULT(MA_NOACTIVATE as isize),
         WM_CHAR if state.panel.borrow().standalone=>return LRESULT(0),
         WM_KEYDOWN if state.panel.borrow().standalone=>{
             use windows::Win32::UI::Input::KeyboardAndMouse::*;
@@ -356,4 +358,29 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
         _=>{}
     }
     DefWindowProcW(window,message,wp,lp)
+}
+#[cfg(test)]mod tests{
+    use super::*;
+    #[test]fn standalone_cancel_escape_and_reopen_keep_source_alive(){unsafe{
+        let module=HINSTANCE(crate::tsf::module().0);
+        let helper=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!("owned helper"),WS_POPUP,-12000,-12000,300,100,None,None,Some(module),None).unwrap();
+        let source=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!("回家"),WS_POPUP,-12000,-12000,300,100,None,None,Some(module),None).unwrap();
+        for (i,theme) in [1,2,0,1,2,0].into_iter().enumerate(){
+            let p=Popup::open_with(helper,Some(source),RECT{left:0,top:0,right:100,bottom:30},"回家".into(),
+                PathBuf::from("owned-missing-test-data"),Layout::Standard,theme,HWND::default(),true).unwrap();
+            let window=p.control.window.get();assert!(p.active());
+            if i%2==0{
+                let button=GetDlgItem(Some(window),11).unwrap();
+                SendMessageW(window,WM_COMMAND,Some(WPARAM(11)),Some(LPARAM(button.0 as isize)));
+            }else{p.key(27,None,false);}
+            let until=Instant::now()+Duration::from_secs(1);
+            while IsWindow(Some(window)).as_bool()&&Instant::now()<until{
+                let mut m=MSG::default();while PeekMessageW(&mut m,None,0,0,PM_REMOVE).as_bool(){let _=TranslateMessage(&m);DispatchMessageW(&m);}
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            assert!(!IsWindow(Some(window)).as_bool());assert!(IsWindow(Some(source)).as_bool());
+            let mut text=[0u16;8];let n=GetWindowTextW(source,&mut text);assert_eq!(String::from_utf16_lossy(&text[..n as usize]),"回家");
+        }
+        let _=DestroyWindow(source);let _=DestroyWindow(helper);
+    }}
 }

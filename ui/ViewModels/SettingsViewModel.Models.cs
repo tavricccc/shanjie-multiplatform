@@ -3,6 +3,7 @@ using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel
 {
+    internal bool UpdatingModels=>loading;
     public ObservableCollection<ModelChoice> AvailableModels { get; } = [new(ModelCatalog.Builtin,"model-v6＋classes-v5（內建）")];
     public string ModelId { get; private set; } = ModelCatalog.Builtin;
     public string ModelRevision { get; private set; } = "";

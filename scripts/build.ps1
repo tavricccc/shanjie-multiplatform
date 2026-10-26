@@ -23,7 +23,7 @@ try {
     if(!$UseCurrentToolchain){
         $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
         if (!$vs) { throw 'Install Visual Studio Build Tools with the Windows SDK resource compiler.' }
-    }elseif(!(Get-Command cl.exe,rc.exe -ErrorAction SilentlyContinue | Measure-Object).Count -eq 2){
+    }elseif((@(Get-Command cl.exe,rc.exe -ErrorAction SilentlyContinue)).Count -ne 2){
         throw 'UseCurrentToolchain requires MSVC cl.exe and Windows SDK rc.exe on PATH.'
     }
     $objects = Join-Path $root "build/native-$Architecture"
