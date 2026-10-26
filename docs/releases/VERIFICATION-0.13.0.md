@@ -23,6 +23,13 @@
 
 原生建置保留既有 COM export／測試 extern 宣告警告，WinUI 保留既有 x:Bind analyzer 警告。此環境的 NuGet vulnerability feed 無法連線，不宣稱完成線上弱點稽核。共享模組獨立工作區解析曾受網路與快取版本限制，改以 Windows 已鎖定相依執行後 12 項通過。
 
+## GitHub 發布與線上驗證
+
+- [0.13.0 pre-release](https://github.com/tavricccc/shanjie-multiplatform/releases/tag/v0.13.0) 已發布；[release run 40408380255](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40408380255) 成功，附單檔安裝程式、zip 與各自 SHA-256。建置 source 為 `b9b16222fe6f03fa24fc46df1c868d604b0e7866`；Linux 工作依本次 Windows 發布範圍略過。
+- [model-catalog run 40408380240](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40408380240) 的 verify／publish 都成功，已啟用每日自動發布。公開端點實際下載後，通過 Python 與本版原生 reader 驗證：16 組、兩架構均可用、pending 0；其中 13 組具有至少一項固定小測試集低於基準的備註，仍全部保留可選。
+- 首次資料 revision 為 `e2e0cc27c3c098d529cf7b70d7cc76108a2c469de1453cf5a2e153f88a32b221`。未來成功排程可更新資料與證據，不必重建本版安裝程式。
+- 發布後再次查證最新正式版仍為 `v0.12.2`、0.13.0 為 prerelease、模型 workflow 為 active。main 的 README.md blob 與更新前相同：`e6587589d408799d7fa4c45c418151c2c6169540`。
+
 ## 尚未實際安裝驗收
 
 本輪不執行安裝、UAC、輸入法註冊、登入工作修改或重啟 Explorer。以下仍需安裝 pre-release 後由使用者驗收，不能以自建視窗或 API 成功代替：
