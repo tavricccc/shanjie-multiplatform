@@ -33,10 +33,11 @@ foreach($item in @(@('OX3','我'),@('XO3↓1','ㄨㄛˇ'),@('B ','b '))) {
 $cases += [pscustomobject]@{keys='1 ';expected='1 ';mixed=1;symbols=0;keyboard=1;space=1;big5=0}
 $cases += [pscustomobject]@{keys='JI3↓1';expected='ㄨㄛˇ';mixed=0;symbols=0;keyboard=1;space=0;big5=1}
 foreach($upstream in 0,1){foreach($tones in 0,1){
- foreach($digits in @('13','14','16','17','13467','1234567890')) {
-  $cases += [pscustomobject]@{keys=$digits;expected=$digits;mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
+ foreach($digits in @('13','14','16','17','13467','1234567890','R3','R4','R6','R7','R3467','R3A','Q3','W3','E3','S3','D3','F3','A3','Z3','X3','C3','V3')) {
+  $cases += [pscustomobject]@{keys=$digits;expected=$digits.ToLowerInvariant();mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
  }
  $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
+ $cases += [pscustomobject]@{keys='R3SU3';expected='r3你';mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
 }}
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $results=@()

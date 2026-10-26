@@ -1,10 +1,10 @@
 #Requires -Version 7
-param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings)
+param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain)
 $ErrorActionPreference = 'Stop'
 # Default builds both: x86 is the DLL that 32-bit apps on 64-bit Windows load.
 if ($Architecture -eq 'all') {
-    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings
-    & $PSCommandPath -Architecture x86 -UseExistingCore
+    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain
+    & $PSCommandPath -Architecture x86 -UseExistingCore -UseCurrentToolchain:$UseCurrentToolchain
     return
 }
 $root = Split-Path $PSScriptRoot -Parent
@@ -20,15 +20,19 @@ try {
     rustup target add $target
     if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
-    $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if (!$vs) { throw 'Install Visual Studio Build Tools with the Windows SDK resource compiler.' }
+    if(!$UseCurrentToolchain){
+        $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (!$vs) { throw 'Install Visual Studio Build Tools with the Windows SDK resource compiler.' }
+    }elseif(!(Get-Command cl.exe,rc.exe -ErrorAction SilentlyContinue | Measure-Object).Count -eq 2){
+        throw 'UseCurrentToolchain requires MSVC cl.exe and Windows SDK rc.exe on PATH.'
+    }
     $objects = Join-Path $root "build/native-$Architecture"
     $output = Join-Path $root "dist/$Architecture"
     New-Item -ItemType Directory -Path $objects,$output -Force | Out-Null
-    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
+    $toolchainSetup = if($UseCurrentToolchain){''}else{'call "'+(Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat')+'" '+$Architecture+' >nul'}
     $command = @"
 @echo off
-call "$vcvars" $Architecture >nul
+$toolchainSetup
 if errorlevel 1 exit /b 1
 rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/resources.rc"
 if errorlevel 1 exit /b 1

@@ -33,7 +33,7 @@ impl Worker{
             .creation_flags(0x08000000).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()?;
         let pipe=child.stdout.take().unwrap();let (send,receiver)=mpsc::channel();
         std::thread::spawn(move||{
-            for line in BufReader::new(pipe.take(65536)).lines(){
+            for line in BufReader::new(pipe.take(262144)).lines(){
                 let Ok(line)=line else{break;};if line.len()>8192{break;}
                 let Ok(value)=serde_json::from_str(&line) else{break;};if send.send(value).is_err(){break;}
             }
@@ -44,9 +44,16 @@ impl Worker{
 struct State{
     window:HWND,source:HWND,data:PathBuf,prefs:crate::profile::Document,refresh:Instant,
     gesture:Gesture,held:[bool;256],epoch:u64,worker:Option<Worker>,popup:Option<Box<Popup>>,parent:Option<HANDLE>,
+    notice:Option<crate::selection_notice::Notice>,
 }
 impl State{
-    fn close(&mut self){self.worker.take();if let Some(p)=self.popup.take(){p.close();}self.gesture.reset();}
+    fn close(&mut self){self.worker.take();if let Some(p)=self.popup.take(){p.close();}self.notice.take();self.gesture.reset();}
+    unsafe fn failed(&mut self){
+        self.close();
+        if GetAncestor(GetForegroundWindow(),GA_ROOT)==self.source{
+            self.notice=crate::selection_notice::Notice::open_at(self.window,self.source,self.prefs.number("appearance","theme",0)).ok();
+        }
+    }
     unsafe fn input(&mut self,key:usize,down:bool)->bool{
         if key>=256{return false;}
         let source=GetAncestor(GetForegroundWindow(),GA_ROOT);
@@ -76,7 +83,8 @@ impl State{
         if self.popup.as_ref().is_some_and(|p|!p.active()){self.close();return;}
         let Some(worker)=self.worker.as_mut() else{return;};
         let answer=worker.receiver.try_recv();
-        if !worker.delivered&&Instant::now()>worker.deadline{self.close();return;}
+        if Instant::now()>worker.deadline{if worker.delivered{self.close();}else{self.failed();}return;}
+        if answer.is_ok(){worker.deadline=Instant::now()+Duration::from_secs(2);}
         match answer{
             Ok(m) if m.ready&&!worker.delivered=>{
                 worker.delivered=true;
@@ -90,7 +98,7 @@ impl State{
                 }
             },
             Ok(m) if !m.ready=>self.close(),
-            Err(mpsc::TryRecvError::Disconnected)=>self.close(),
+            Err(mpsc::TryRecvError::Disconnected)=>if worker.delivered{self.close()}else{self.failed()},
             _=>{}
         }
     }
@@ -123,7 +131,7 @@ pub fn serve(parent:u32)->Result<()> {unsafe{
     let mutex=CreateMutexW(None,false,PCWSTR(name.as_ptr()))?;
     struct Singleton(HANDLE);impl Drop for Singleton{fn drop(&mut self){unsafe{let _=ReleaseMutex(self.0);let _=CloseHandle(self.0);}}}
     let singleton=Singleton(mutex);
-    if WaitForSingleObject(mutex,0)!=WAIT_OBJECT_0{return Ok(());}
+    if ![WAIT_OBJECT_0,WAIT_ABANDONED].contains(&WaitForSingleObject(mutex,0)){return Ok(());}
     if running(){return Ok(());}
     let module=HINSTANCE(GetModuleHandleW(None)?.0);
     RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(procedure),hInstance:module,lpszClassName:CLASS,..Default::default()});
@@ -133,7 +141,7 @@ pub fn serve(parent:u32)->Result<()> {unsafe{
     let data=std::env::current_exe().map_err(|_|Error::from_hresult(E_FAIL))?.parent().unwrap().parent().unwrap().join("data");
     let handle=if parent==0{None}else{Some(OpenProcess(PROCESS_SYNCHRONIZE,false,parent)?)};
     STATE.with(|s|*s.borrow_mut()=Some(State{window,source:HWND::default(),data,prefs:crate::profile::load(&crate::profile::path()).unwrap(),
-        refresh:Instant::now(),gesture:Gesture::default(),held:[false;256],epoch:0,worker:None,popup:None,parent:handle}));
+        refresh:Instant::now(),gesture:Gesture::default(),held:[false;256],epoch:0,worker:None,popup:None,parent:handle,notice:None}));
     SetTimer(Some(window),1,80,None);
     let mut message=MSG::default();while GetMessageW(&mut message,None,0,0).as_bool(){let _=TranslateMessage(&message);DispatchMessageW(&message);}
     STATE.with(|s|{if let Some(mut s)=s.borrow_mut().take(){s.close();if let Some(h)=s.parent{let _=CloseHandle(h);}}});
@@ -188,6 +196,8 @@ pub fn capture(source:usize,helper:usize)->Result<()> {unsafe{
     let _=std::io::stdout().flush();
     while IsWindow(Some(helper)).as_bool(){
         std::thread::sleep(Duration::from_millis(160));if !unchanged()?{break;}
+        println!("{}",serde_json::to_string(&Message{ready:true,word:String::new(),rect:[0;4]}).unwrap());
+        let _=std::io::stdout().flush();
     }
     println!("{}",serde_json::to_string(&Message{ready:false,word:String::new(),rect:[0;4]}).unwrap());Ok(())
 }}

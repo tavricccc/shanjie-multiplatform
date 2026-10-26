@@ -124,6 +124,10 @@ pub(crate) fn start(owner:HWND)->Option<Lookup> {
                     let settings:IUIAutomation2=automation.cast()?;
                     settings.SetConnectionTimeout(300)?;settings.SetTransactionTimeout(500)?;
                     let element=automation.ElementFromHandle(HWND(address as _))?;
+                    if label=="readonly"{
+                        let (_,_,word)=inspect_readonly(&element)?;
+                        assert_eq!(word,"回家","readonly provider is accepted by the helper policy");
+                    }
                     let (pattern,range,word)=inspect(&element)?;
                     assert!(same_selection(&pattern,&range,&word)?);
                     SendMessageW(HWND(address as _),EM_SETSEL,Some(WPARAM(0)),Some(LPARAM(1)));

@@ -11,6 +11,17 @@ public static partial class ModelCatalog
     private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4"];
     public static bool Supported(ModelEntry entry)=>entry.RequiredCapabilities.All(Capabilities.Contains)&&entry.Compatibility.Any(c=>c.Target=="windows-x64"&&c.ProfileId=="windows-bundle-v1"&&c.State=="usable");
     public static string Notes(ModelEntry? entry)=>entry is null?"尚無此配套的評測／備註資料。":string.Join("\n\n",entry.Advisories.Select(a=>a.Title+"\n"+a.Body));
+    private static Dictionary<string,ModelEntry> CachedNotes()
+    {
+        string path=Path.Combine(Folder,"catalog-v2-cache.json");
+        if(!File.Exists(path))return [];
+        try{
+            var verified=Interop.Native.Take(Interop.Native.sj_catalog_validate(File.ReadAllText(path)));
+            var list=JsonSerializer.Deserialize<ModelList>(verified,Json);
+            return list?.Models.Where(Supported).ToDictionary(m=>m.Id)??[];
+        }
+        catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){return [];}
+    }
     private static ModelSpec Spec(ModelEntry m)
     {
         var main=m.Assets.Single(a=>a.Role=="bigram");var classes=m.Assets.SingleOrDefault(a=>a.Role=="classes");

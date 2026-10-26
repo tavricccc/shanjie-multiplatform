@@ -6,6 +6,7 @@ All native parsers run in disposable child processes with a private LOCALAPPDATA
 from __future__ import annotations
 import argparse, copy, datetime, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
 import urllib.request, urllib.error
+if hasattr(sys.stdout,"reconfigure"):sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = "tavricccc/shanjie-multiplatform"
 UPSTREAM = "Nanako0129/shanjie"
@@ -113,7 +114,8 @@ def discover(out):
                       "format_magic":magic,"size":a["size"],"sha256":a["digest"][7:],"requires_assets":[]}
                 pair=None;kn=None
                 if item["role"]=="classes":pair=header[8:40].hex()
-                elif item["role"] in ("smoothing","trigram"):pair=header[12:44].hex()
+                elif item["role"]=="smoothing":pair=header[12:44].hex()
+                elif item["role"]=="trigram":pair=header[20:52].hex()
                 elif item["role"]=="semantic":
                     pair=header[68:100].hex()
                     if magic=="SJTL0004" and header[212:244]!=bytes(32):kn=header[212:244].hex()
@@ -145,6 +147,10 @@ def discover(out):
             assets.append(dict(extra["asset"],requires_assets=sorted(deps)))
             candidates.append(model(assets," ＋ ".join(a["release"] for a in assets)))
     candidates=list({m["id"]:m for m in candidates}.values())
+    used={a["sha256"] for m in candidates for a in m["assets"]}
+    for x in found:
+        if x["asset"]["sha256"] not in used:
+            pending.append({"release":x["asset"]["release"],"filename":x["asset"]["filename"],"state":"unsupported","reason":"No complete paired dependency set found"})
     if not baseline:raise ValueError("Public baseline pair not found; refusing incomplete discovery")
     dataset=ROOT/"scripts/model_catalog/evaluation.txt"
     plan={"source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
@@ -195,6 +201,7 @@ def probe(out,exe,data,target):
         reports.append(result);print(target,m["name"],result["state"],flush=True)
     for r in reports:
         if r["state"]!="usable" or "evaluation" in r:continue
+        print(target,r["id"],"advisory evaluation",flush=True)
         try:
             r["evaluation"]=run_child(exe,["evaluate",models,r["id"],data,ROOT/"scripts/model_catalog/evaluation.txt"],env,180)
         except Exception as e:r["evaluation"]={"state":"not_evaluated","reason":str(e)[:600]}
@@ -261,6 +268,9 @@ def assemble(out):
             lower=any(n["candidate"]<n["baseline"] for n in measurements)
             note("quality-regression" if lower else "evaluation","部分評測低於基準" if lower else "公開評測資料",body+"。此比較只代表固定測試集，您仍可選用。",measurements)
         else:note("not-evaluated","尚未完成可比評測","已通過完整性、配對與載入測試；目前沒有可比的準確率資料，仍可選用。")
+        note("performance-unmeasured","效能尚未比較","未提供同場速度與記憶體測量；不以缺少效能資料限制選用。")
+        if any(r["state"]!="usable" for r in matches):
+            note("platform-support","部分架構尚未確認","只對清單中通過驗證的架構宣稱可用。其他架構的應用程式會使用內建備援模型。")
         if any(r.get("evaluation",{}).get("state")!="evaluated" for r in usable):
             note("partial-evaluation","部分平台尚未評測","未取得成績的平台不沿用其他平台分數；技術上可用者仍可選用。")
         if any(a["sha256"] in plan["prereleases"] for a in m["assets"]):note("preview","預覽模型","包含上游預覽資料，可能有使用差異；仍可選用。")
@@ -288,7 +298,7 @@ def publish(out):
         if head!=plan["head"]:
             merged={m["id"]:m for m in old["models"]};merged.update({m["id"]:m for m in catalog["models"]})
             catalog["models"]=sorted(merged.values(),key=lambda m:m["id"]);catalog["revision"]=digest(semantic(catalog));validate(catalog)
-        if old.get("revision")==catalog["revision"] and digest(old_state)==digest(read(folder/"MODEL-CATALOG-STATE.json")):
+        if old.get("revision")==catalog["revision"] and digest(semantic(old_state))==digest(semantic(read(folder/"MODEL-CATALOG-STATE.json"))):
             print("No semantic catalog change; no empty commit");return
         tree_entries=[]
         for name in sorted(plan["files"]):

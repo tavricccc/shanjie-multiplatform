@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
@@ -74,5 +75,6 @@ public partial class SettingsViewModel : ObservableObject
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
         ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"
+            +(ModelId==ModelCatalog.Builtin?"":"\n\n"+ModelCatalog.Notes(AvailableModels.First(m=>m.Id==ModelId).Catalog))
         : "所選配套目前不存在或未通過驗證，輸入時使用內建模型。原選擇已保留，可重新下載；選取其他模型並儲存可更換。";
 }

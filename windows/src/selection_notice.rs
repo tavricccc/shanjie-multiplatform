@@ -4,13 +4,16 @@ pub(crate) struct Notice(HWND);
 impl Drop for Notice { fn drop(&mut self) { unsafe { let _=DestroyWindow(self.0); } } }
 impl Notice {
     pub(crate) unsafe fn open(owner:HWND,theme:u32)->Result<Self> {
+        Self::open_at(owner,owner,theme)
+    }
+    pub(crate) unsafe fn open_at(owner:HWND,source:HWND,theme:u32)->Result<Self> {
         let class=w!("Shanjie.Selection.Notice.v1");
         RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(procedure),hInstance:HINSTANCE(crate::tsf::module().0),lpszClassName:class,..Default::default()});
-        let mut rect=RECT::default(); GetWindowRect(owner,&mut rect)?;
-        let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(owner).max(96) as i32;
+        let mut rect=RECT::default(); GetWindowRect(source,&mut rect)?;
+        let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(source).max(96) as i32;
         let width=390*dpi/96; let height=60*dpi/96;
         let mut monitor=MONITORINFO{cbSize:std::mem::size_of::<MONITORINFO>() as u32,..Default::default()};
-        GetMonitorInfoW(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&mut monitor).ok()?;
+        GetMonitorInfoW(MonitorFromWindow(source,MONITOR_DEFAULTTONEAREST),&mut monitor).ok()?;
         let x=rect.left.clamp(monitor.rcWork.left,(monitor.rcWork.right-width).max(monitor.rcWork.left));
         let y=(rect.top+40).clamp(monitor.rcWork.top,(monitor.rcWork.bottom-height).max(monitor.rcWork.top));
         let window=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,class,

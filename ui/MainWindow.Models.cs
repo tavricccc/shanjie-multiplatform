@@ -33,7 +33,11 @@ public sealed partial class MainWindow
     private async Task RefreshModels()
     {
         var inventory=await Task.Run(()=>new {Models=ModelCatalog.Installed(),Issues=ModelCatalog.Issues()});
-        if(!modelsClosed){Vm.RefreshModels(inventory.Models);modelIssues=string.Join("\n",inventory.Issues);if(modelIssues.Length>0){Vm.Status="未列入模型：\n"+modelIssues;ShowLoadFeedback();}}
+        if(!modelsClosed){
+            bool previous=selectingModel;selectingModel=true;
+            try{Vm.RefreshModels(inventory.Models);}finally{selectingModel=previous;}
+            modelIssues=string.Join("\n",inventory.Issues);if(modelIssues.Length>0){Vm.Status="未列入模型：\n"+modelIssues;ShowLoadFeedback();}
+        }
     }
     private async void InitializeModels(object sender,RoutedEventArgs args)
     {
