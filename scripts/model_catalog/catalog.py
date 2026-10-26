@@ -251,6 +251,9 @@ def assemble(out):
     plan=read(out/"plan.json");all_results=[]
     for p in out.glob("windows-*/results.json"):all_results+=read(p)
     if not all_results:raise ValueError("No native probe results")
+    expected={(m["id"],t) for m in plan["candidates"] for t in ("windows-x64","windows-x86")}
+    actual=[(r["id"],r["target"]) for r in all_results]
+    if len(actual)!=len(set(actual)) or set(actual)!=expected:raise ValueError("Incomplete or duplicate architecture probe results")
     by_id={m["id"]:copy.deepcopy(m) for m in plan["previous"].get("models",[])}
     published=out/"publication";published.mkdir(exist_ok=True);pending=list(plan["pending"])
     baseline={r["target"]:r.get("evaluation",{}) for r in all_results if r["id"]==plan["baseline"] and r["state"]=="usable"}
@@ -301,6 +304,7 @@ def assemble(out):
     print(f"Catalog has {len(catalog['models'])} usable bundles; {len(pending)} pending; revision {catalog['revision']}")
 def publish(out):
     plan=read(out/"publication-plan.json");folder=out/"publication"
+    if not {"MODEL-CATALOG-V2.json","MODEL-CATALOG-STATE.json"}<=set(plan["files"]):raise ValueError("Incomplete publication plan")
     for name,sha in plan["files"].items():
         if name not in ("MODEL-CATALOG-V2.json","MODEL-CATALOG-STATE.json") and not re.fullmatch(r"reports/[a-f0-9]{64}\.json",name):raise ValueError("Publication path not allowed")
         if filehash(folder/name)!=sha:raise ValueError("Publication plan content changed")

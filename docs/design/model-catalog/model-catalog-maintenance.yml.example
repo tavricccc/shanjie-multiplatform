@@ -1,0 +1,182 @@
+# 設計草案；不在 .github/workflows，也不是 .yml，GitHub 不會執行。
+# 引用的 scripts/model_catalog/* 尚待實作；不能直接改名後宣稱已完成。
+# 正式啟用前將第三方 actions 釘至核對過的完整 commit SHA。
+name: model-catalog-maintenance
+
+on:
+  schedule:
+    - cron: '23 1 * * *' # UTC 01:23 = Asia/Taipei 09:23
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify 只產生報告；publish 經驗證後更新純資料分支'
+        required: true
+        default: verify
+        type: choice
+        options: [verify, publish]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-catalog-maintenance
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_candidates: ${{ steps.plan.outputs.has_candidates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Snapshot sources and plan known loader profiles
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/model_catalog/discover.py
+          --upstream Nanako0129/shanjie
+          --catalog-branch model-catalog
+          --profiles scripts/model_catalog/profiles.json
+          --out build/model-catalog/plan
+          --github-output "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-catalog-plan
+          path: build/model-catalog/plan/
+          if-no-files-found: error
+          retention-days: 30
+
+  compatibility:
+    needs: discover
+    if: needs.discover.outputs.has_candidates == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-catalog-plan
+          path: build/model-catalog/plan
+      - name: Isolated loader checks and advisory measurements
+        shell: pwsh
+        env:
+          PROFILE_ID: ${{ matrix.profile_id }}
+          TARGET_ID: ${{ matrix.target_id }}
+        run: >-
+          ./scripts/model_catalog/probe.ps1
+          -Plan build/model-catalog/plan
+          -ProfileId $env:PROFILE_ID
+          -TargetId $env:TARGET_ID
+          -Output build/model-catalog/results
+          -AdvisoryEvaluation
+      # probe.ps1 必須區分：技術驗證結果 vs 備註評測錯誤。
+      # 評測退步／未測不得令技術結果失敗；runner 真的故障則保留失敗並停止發布。
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-catalog-probe-${{ matrix.profile_id }}-${{ matrix.target_id }}
+          # 內含 profiles/<profile_id>/<target_id>/result.json，合併時不互相覆寫。
+          path: build/model-catalog/results/
+          if-no-files-found: error
+          retention-days: 30
+
+  assemble:
+    needs: [discover, compatibility]
+    if: >-
+      always() && needs.discover.result == 'success' &&
+      (needs.compatibility.result == 'success' || needs.compatibility.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.catalog.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-catalog-plan
+          path: build/model-catalog/plan
+      - uses: actions/download-artifact@v4
+        if: needs.discover.outputs.has_candidates == 'true'
+        with:
+          pattern: model-catalog-probe-*
+          merge-multiple: true
+          path: build/model-catalog/results
+      - name: Assemble every technically usable package with advisories
+        id: catalog
+        run: >-
+          python scripts/model_catalog/assemble.py
+          --plan build/model-catalog/plan
+          --results build/model-catalog/results
+          --schema docs/design/model-catalog/catalog-v2.schema.json
+          --out build/model-catalog/publish
+          --github-output "$GITHUB_OUTPUT"
+      # assemble 必須拒絕 example_only、缺失／不符的技術證據。
+      # 不提供準確率／速度／記憶體門檻；這些資料只能形成 advisories。
+      - name: Validate catalog contract and summary
+        run: >-
+          python scripts/model_catalog/check_contract.py
+          --plan build/model-catalog/plan
+          --catalog build/model-catalog/publish/MODEL-CATALOG-V2.json
+          --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-catalog-publish
+          path: build/model-catalog/publish/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: assemble
+    if: >-
+      needs.assemble.outputs.changed == 'true' &&
+      ((github.event_name == 'schedule' && vars.MODEL_CATALOG_AUTOPUBLISH == 'true') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-catalog-publish
+          path: build/model-catalog/publish
+      - name: Recheck provenance and atomically publish data only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/model_catalog/publish.py
+          --branch model-catalog
+          --input build/model-catalog/publish
+          --allow MODEL-CATALOG-V2.json MODEL-CATALOG-STATE.json 'reports/*.json'
+          --require-expected-head
+          --no-force
+      # 發布器只更新已預先建立的 model-catalog 分支，main 與程式 Release 不變。
+      # 來源／分支競態必須重新驗證，不能藉 force push 或跳過檢查處理。

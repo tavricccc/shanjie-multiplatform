@@ -9,17 +9,21 @@ public sealed partial class MainWindow
     private async void ModelSelectionChanged(object sender,SelectionChangedEventArgs args)
     {
         if(selectingModel||Vm.UpdatingModels||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
+        await SelectModelWithConfirmation(choice,async()=>
+        {
+            var text=new TextBlock{Text=ModelCatalog.Notes(choice.Catalog),TextWrapping=TextWrapping.Wrap,MaxWidth=520};
+            var dialog=new ContentDialog{XamlRoot=Root.XamlRoot,Title="選用模型前請確認",Content=new ScrollViewer{Content=text,MaxHeight=420},
+                PrimaryButtonText="仍然選用",CloseButtonText="取消",DefaultButton=ContentDialogButton.Close};
+            return await dialog.ShowAsync()==ContentDialogResult.Primary;
+        });
+    }
+    internal async Task SelectModelWithConfirmation(ModelChoice choice,Func<Task<bool>> confirm)
+    {
         selectingModel=true;
         try
         {
             bool accepted=choice.Id==ModelCatalog.Builtin||choice.Catalog is {Advisories.Count:0};
-            if(!accepted)
-            {
-                var text=new TextBlock{Text=ModelCatalog.Notes(choice.Catalog),TextWrapping=TextWrapping.Wrap,MaxWidth=520};
-                var dialog=new ContentDialog{XamlRoot=Root.XamlRoot,Title="選用模型前請確認",Content=new ScrollViewer{Content=text,MaxHeight=420},
-                    PrimaryButtonText="仍然選用",CloseButtonText="取消",DefaultButton=ContentDialogButton.Close};
-                accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
-            }
+            if(!accepted)accepted=await confirm();
             if(accepted)Vm.SelectModel(choice.Id);
             else ModelSelector.SelectedIndex=Vm.AvailableModels.ToList().FindIndex(m=>m.Id==Vm.ModelId);
         }

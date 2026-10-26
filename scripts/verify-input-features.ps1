@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[int[]]$CaseIndices,[switch]$ResidentCore)
+param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[int[]]$CaseIndices,[switch]$ResidentCore,[switch]$UseCurrentToolchain)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/input-features-'+[guid]::NewGuid().ToString('N'))}
@@ -14,7 +14,8 @@ foreach($arch in $Architectures){
 Copy-Item "$root/dist/data","$root/dist/tools" $payload -Recurse -Force
 # Portable fixture exposes both layouts without changing real TSF registration.
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
-$vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+$vs=if(!$UseCurrentToolchain){& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath}
+if($UseCurrentToolchain -and $Architectures.Count -ne 1){throw 'UseCurrentToolchain requires exactly one matching architecture.'}
 $cases=@()
 foreach($mixed in 0,1) {
  foreach($item in @(@('3','3'),@('4','4'),@('\','\'),@('SU3()','你()'),@('SU3\','你\'),@('SU(3','你('))) {
@@ -46,9 +47,10 @@ try {
  foreach($arch in $Architectures) {
   $out=Join-Path $ResultRoot $arch;New-Item -ItemType Directory -Path $out -Force | Out-Null
   $exe=Join-Path $out 'input-features.exe'
+  $setup=if($UseCurrentToolchain){''}else{'call "'+$vs+'/VC/Auxiliary/Build/vcvarsall.bat" '+$arch+' >nul'}
   $command=@"
 @echo off
-call "$vs/VC/Auxiliary/Build/vcvarsall.bat" $arch >nul
+$setup
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/submission.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@

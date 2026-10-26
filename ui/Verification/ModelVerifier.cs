@@ -2,9 +2,47 @@ using Shanjie_UI.Models;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text.Json;
 namespace Shanjie_UI.Verification;
 internal static class ModelVerifier
 {
+    internal static async Task RunVersionTwo(MainWindow settings,string output,string fixtures)
+    {
+        if(Environment.GetEnvironmentVariable("SHANJIE_TEST_PROFILE")!="1")throw new InvalidDataException("Isolated profile required");
+        settings.AppWindow.Move(new Windows.Graphics.PointInt32(-12000,-12000));settings.AppWindow.Show(false);
+        string log=Path.Combine(output,"models-v2.log");void Check(bool ok,string what){if(!ok)throw new InvalidDataException(what);File.AppendAllText(log,"PASS "+what+Environment.NewLine);}
+        var catalog=JsonSerializer.Deserialize<ModelList>(await File.ReadAllTextAsync(Path.Combine(fixtures,"fixture-v2.json")),ModelCatalog.Json)!;
+        var selected=catalog.Models.First(m=>m.Assets.Any(a=>a.Role=="semantic")&&m.Advisories.Count>0);
+        var files=catalog.Models.SelectMany(m=>m.Assets).DistinctBy(a=>a.Sha256).ToList();
+        using var client=new HttpClient(new Replies(request=>{
+            string url=request.RequestUri!.AbsoluteUri;
+            if(url==ModelCatalog.V2Endpoint)return new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,"fixture-v2.json")))};
+            if(url.Contains("/releases?"))return new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,"upstream-releases.json")))};
+            if(url.EndsWith("/main/MODEL-CATALOG.json"))return new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,"../../MODEL-CATALOG.json")))};
+            var a=files.FirstOrDefault(a=>url==$"https://github.com/{a.Repository}/releases/download/{a.Release}/{a.Filename}");
+            return a is null?new(HttpStatusCode.NotFound):new(HttpStatusCode.OK){Content=new StreamContent(File.OpenRead(Path.Combine(fixtures,"../model-catalog/assets",a.Sha256)))};
+        }));
+        ModelCatalog.VerifyWith(client);
+        try{
+            settings.Vm.DictionaryText="ㄇㄠ 貓";settings.Vm.HasChanges=true;string draft=settings.Vm.DictionaryText;
+            byte[]? before=File.Exists(ProfileStore.Path)?await File.ReadAllBytesAsync(ProfileStore.Path):null;
+            var online=await ModelCatalog.Online(CancellationToken.None);
+            Check(online.Rows.Any(r=>r.Spec?.Id==selected.Id&&r.Available&&r.State.Contains("退步")),"regression advisory remains downloadable in v2 UI");
+            var main=selected.Assets.Single(a=>a.Role=="bigram");var classes=selected.Assets.Single(a=>a.Role=="classes");
+            var spec=new ModelSpec(selected.Id,selected.Name,main.Release,classes.Release,main.Sha256,classes.Sha256,main.Size,classes.Size,selected);
+            var choice=await ModelCatalog.Download(spec,new ProgressLog(_=>{}),CancellationToken.None);
+            Check(ModelCatalog.Installed().Any(m=>m.Id==choice.Id&&m.Catalog?.Advisories.Count>0),"native bundle download retains offline advisory metadata");
+            settings.Vm.RefreshModels(ModelCatalog.Installed());string original=settings.Vm.ModelId;int prompts=0;
+            await settings.SelectModelWithConfirmation(choice,()=>{prompts++;return Task.FromResult(false);});
+            Check(prompts==1&&settings.Vm.ModelId==original&&settings.Vm.DictionaryText==draft&&settings.Vm.HasChanges,"cancel keeps original model and unrelated unsaved draft");
+            await settings.SelectModelWithConfirmation(choice,()=>{prompts++;return Task.FromResult(true);});
+            Check(prompts==2&&settings.Vm.ModelId==choice.Id,"explicit acceptance selects the model draft");
+            Check(before is null?!File.Exists(ProfileStore.Path):(await File.ReadAllBytesAsync(ProfileStore.Path)).SequenceEqual(before),"download and selection do not save settings implicitly");
+            using var offline=new HttpClient(new Replies(_=>new(HttpStatusCode.ServiceUnavailable)));
+            ModelCatalog.VerifyWith(offline);var cached=await ModelCatalog.Online(CancellationToken.None);
+            Check(cached.Rows.Any(r=>r.Spec?.Id==choice.Id&&r.Spec.Catalog?.Advisories.Count>0)&&cached.Status.Contains("快取"),"offline v2 list retains advisories");
+        }finally{ModelCatalog.VerifyWith(null);}
+    }
     private sealed class ProgressLog(Action<string> write):IProgress<string>{public void Report(string text)=>write(text);}
     private sealed class Replies(Func<HttpRequestMessage,HttpResponseMessage> reply):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(reply(request));}

@@ -4,7 +4,7 @@ on:
     - cron: '23 1 * * *'
   push:
     branches: [main, codex/todo-0130]
-    paths: ['scripts/model_catalog/**', 'shared/src/catalog.rs', 'shared/src/models.rs', '.github/workflows/model-catalog-maintenance.yml']
+    paths: ['scripts/model_catalog/**', 'shared/src/catalog.rs', 'shared/src/models.rs', 'windows/src/engine.rs', 'windows/src/bin/shanjie-model-check.rs', 'platform/**', 'scripts/prepare-*.ps1', 'UPSTREAM.json', '.github/workflows/model-catalog-maintenance.yml']
   workflow_dispatch:
     inputs:
       mode:

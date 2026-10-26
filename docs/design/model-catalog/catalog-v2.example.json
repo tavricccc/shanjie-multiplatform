@@ -1,0 +1,80 @@
+{
+  "$schema": "catalog-v2.schema.json",
+  "format": 2,
+  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+  "generated_at": "2026-10-24T00:00:00+08:00",
+  "example_only": true,
+  "models": [
+    {
+      "id": "example-only-v6-v4",
+      "name": "示意配套：model-v6＋classes-v4（下列結果非實測）",
+      "required_capabilities": [
+        "models.bigram-sjlm0001",
+        "models.classes-sjcl0001",
+        "cache.winmap-sjwm0002"
+      ],
+      "assets": [
+        {
+          "role": "bigram",
+          "repository": "Nanako0129/shanjie",
+          "release": "model-v6",
+          "filename": "bigram.sjlm",
+          "format_magic": "SJLM0001",
+          "size": 83445569,
+          "sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
+          "requires_assets": []
+        },
+        {
+          "role": "classes",
+          "repository": "Nanako0129/shanjie",
+          "release": "classes-v4",
+          "filename": "classes.sjc",
+          "format_magic": "SJCL0001",
+          "size": 5656826,
+          "sha256": "efac3184170e9795cef35855fc6615cf5672882bc0e20c624b620597aeab7a56",
+          "requires_assets": ["fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42"]
+        }
+      ],
+      "compatibility": [
+        {
+          "target": "windows-x64",
+          "profile_id": "example-only-loader",
+          "source_commit": "0000000000000000000000000000000000000000",
+          "state": "usable",
+          "checked_at": "2026-10-24T00:00:00+08:00",
+          "report": "reports/example-only-loader.json",
+          "reason": "僅示意 state=usable 與評測退步可以同時存在；不是實測證據。"
+        }
+      ],
+      "advisory_revision": "1111111111111111111111111111111111111111111111111111111111111111",
+      "advisories": [
+        {
+          "code": "benchmark_regression",
+          "title": "示意：部分評測低於基準",
+          "body": "下列三筆數據只示意 UI 與清單結構，並非任何模型的真實成績。正式系統必須使用本次實測值；即使有退步，技術驗證通過後仍可選用。",
+          "measurements": [
+            {
+              "metric": "top1_correct_sentences",
+              "unit": "sentences",
+              "dataset_id": "example-only-three-cases",
+              "dataset_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "configuration_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "sample_count": 3,
+              "baseline_model_id": "example-only-baseline",
+              "baseline": 3,
+              "candidate": 2,
+              "measured_at": "2026-10-24T00:00:00+08:00",
+              "context": "示意資料，不是實測；不可發布為正式模型清單。"
+            }
+          ]
+        },
+        {
+          "code": "performance_not_measured",
+          "title": "示意：速度與記憶體尚未評測",
+          "body": "沒有可比較的測量資料時，明確顯示未測，不虛構數字，也不阻止選用。",
+          "measurements": []
+        }
+      ]
+    }
+  ]
+}
