@@ -155,7 +155,7 @@ pub fn checked(folder: &Path) -> Result<Installed> {
     }
     drop(mapped);
     let mut entries = cache.lock().unwrap();
-    if entries.len() >= 16 {
+    if entries.len() >= 64 {
         entries.remove(0);
     }
     entries.push((folder.to_owned(), stamp, item.clone()));
@@ -268,7 +268,7 @@ fn checked_bundle(folder:&Path,item:Installed)->Result<Installed>{
     if m.assets.iter().any(|a|a.role=="semantic"){
         shanjie_core::tinylm::TinyLm::load_paired(&folder.join("tinylm.sjtl"),&lm).map_err(|_|"語意模型配對錯誤。")?;
     }
-    let mut entries=cache.lock().unwrap();if entries.len()>=16{entries.remove(0);}entries.push((folder.to_owned(),stamp,item.clone()));
+    let mut entries=cache.lock().unwrap();if entries.len()>=64{entries.remove(0);}entries.push((folder.to_owned(),stamp,item.clone()));
     Ok(item)
 }
 fn check_bundle_assets(folder:&Path,m:&crate::catalog::Model,main:bool)->Result<()> {

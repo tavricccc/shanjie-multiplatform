@@ -59,7 +59,7 @@ public static partial class ModelCatalog
         var builtinNotes=list.Models.FirstOrDefault(m=>SameSources(m,builtin));
         int builtinIndex=rows.FindIndex(r=>r.Spec?.Id==Builtin);
         if(builtinIndex>=0&&builtinNotes is not null)rows[builtinIndex]=rows[builtinIndex] with{Spec=builtin with{Catalog=builtinNotes}};
-        var installed=Installed().SelectMany(m=>new[]{m.Id,m.Catalog?.Id??m.Id}).ToHashSet();
+        var installed=(await Task.Run(Installed,token)).SelectMany(m=>new[]{m.Id,m.Catalog?.Id??m.Id}).ToHashSet();
         foreach(var m in list.Models)
         {
             if(SameSources(m,builtin))continue;

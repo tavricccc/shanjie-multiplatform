@@ -94,6 +94,7 @@ impl State{
         ROUTE.with(|r|r.set(None));
         if let Some(h)=self.hook.take(){unsafe{let _=UnhookWindowsHookEx(h);}}
         self.worker.take();if let Some(p)=self.popup.take(){p.close();}self.notice.take();self.gesture.reset();
+        unsafe{SetTimer(Some(self.window),1,1000,None);}
     }
     unsafe fn failed(&mut self){
         self.close();
@@ -127,6 +128,7 @@ impl State{
         self.close();let source=GetAncestor(GetForegroundWindow(),GA_ROOT);
         if source.is_invalid()||source==self.window{return;}
         self.source=source;self.worker=Worker::start(source,self.window).ok();
+        SetTimer(Some(self.window),1,80,None);
     }
     unsafe fn mouse(&mut self,buttons:u16){
         if buttons&0x0d55==0{return;}
@@ -147,7 +149,7 @@ impl State{
         if self.popup.as_ref().is_some_and(|p|!p.active()){self.close();return;}
         // During an upgrade a host may still hold the old TIP. Its existing
         // editable panel wins; never close or send messages to that host panel.
-        if legacy_panel(self.source){self.close();return;}
+        if (self.worker.is_some()||self.popup.is_some())&&legacy_panel(self.source){self.close();return;}
         let Some(worker)=self.worker.as_mut() else{return;};
         let answer=worker.receiver.try_recv();
         if Instant::now()>worker.deadline{if worker.delivered{self.close();}else{self.failed();}return;}
@@ -224,7 +226,7 @@ pub fn serve(parent:u32)->Result<()> {unsafe{
     STATE.with(|s|*s.borrow_mut()=Some(State{window,source:HWND::default(),data,prefs:crate::profile::load(&crate::profile::path()).unwrap(),
         refresh:Instant::now(),gesture:Gesture::default(),held:[false;256],epoch:0,worker:None,popup:None,parent:handle,notice:None,hook:None}));
     SetPropW(window,w!("Shanjie.WordHelper.Ready.v1"),Some(HANDLE(1usize as _)))?;
-    SetTimer(Some(window),1,80,None);
+    SetTimer(Some(window),1,1000,None);
     let mut message=MSG::default();while GetMessageW(&mut message,None,0,0).as_bool(){let _=TranslateMessage(&message);DispatchMessageW(&message);}
     STATE.with(|s|{if let Some(mut s)=s.borrow_mut().take(){s.close();if let Some(h)=s.parent{let _=CloseHandle(h);}}});
     let _=RemovePropW(window,w!("Shanjie.WordHelper.Ready.v1"));let _=DestroyWindow(window);drop(singleton);Ok(())

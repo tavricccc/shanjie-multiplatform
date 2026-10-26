@@ -92,7 +92,7 @@ public static partial class ModelCatalog
             if(remote is {Format:1,Models:not null}) foreach(var spec in remote.Models.Where(ValidSpec)) if(known.All(x=>x.Id!=spec.Id))known.Add(spec);
         }
         catch(Exception e) when(e is HttpRequestException or IOException or JsonException or OperationCanceledException){token.ThrowIfCancellationRequested();}
-        var legacy=Rows(releases,known,status);
+        var legacy=await Task.Run(()=>Rows(releases,known,status),token);
         return await WithVersionTwo(legacy,releases,token);
     }
     private static bool ValidSpec(ModelSpec s)=>s is not null&&s.Id is {Length:>0 and <=80}&&s.Name is {Length:>0 and <=240}
