@@ -386,6 +386,7 @@ mod tests {
             classes_sha256: "b".repeat(64),
             model_size: 1048576,
             classes_size: 1048576,
+            catalog: None,
         }
     }
 
