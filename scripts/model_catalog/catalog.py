@@ -213,7 +213,7 @@ def probe(out,exe,data,target):
     write(work/"results.json",reports)
 def validate(c):
     if c.get("format")!=2 or c.get("example_only") is not False:raise ValueError("Not a production v2 catalog")
-    if len(c["models"])>1000 or len(encoded(c))>8*1024*1024:raise ValueError("Catalog exceeds reader bounds")
+    if not c["models"] or len(c["models"])>1000 or len(encoded(c))>8*1024*1024:raise ValueError("Catalog empty or exceeds reader bounds")
     if c.get("revision")!=digest(semantic(c)):raise ValueError("Catalog revision mismatch")
     ids=set()
     for m in c["models"]:

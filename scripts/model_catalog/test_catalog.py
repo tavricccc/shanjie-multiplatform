@@ -27,6 +27,9 @@ class Contract(unittest.TestCase):
     def test_example_cannot_publish(self):
         x=self.catalog(self.bundle());x["example_only"]=True
         with self.assertRaises(ValueError):c.validate(x)
+    def test_empty_catalog_cannot_replace_last_good_data(self):
+        x=self.catalog(self.bundle());x["models"]=[];x["revision"]=c.digest(c.semantic(x))
+        with self.assertRaises(ValueError):c.validate(x)
     def test_changed_asset_cannot_keep_identity(self):
         m=self.bundle();m["assets"][0]["sha256"]="c"*64
         with self.assertRaises(ValueError):c.validate(self.catalog(m))
