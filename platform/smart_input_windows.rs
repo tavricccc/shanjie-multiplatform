@@ -40,16 +40,22 @@ mod windows_smart_tests {
         std::fs::remove_dir_all(&folder).ok();
     }
     #[test]
-    fn numeric_prefix_keeps_unconvertible_tone_keys() {
-        let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
+    fn incomplete_reading_keeps_unconvertible_tone_digits() {
+        let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄐㄧˇ 己 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
         for english in [false,true] {
             let mut e=Engine::with_lexicon(lex.clone(),Layout::Standard);
             e.set_mixed_input(true);e.set_upstream_english(english,true).unwrap();
-            for digits in ["13","14","16","17","13467","1234567890"] {
+            for digits in ["13","14","16","17","13467","1234567890",
+                "r3","r4","r6","r7","r3467","q3","w3","e3","s3","d3","f3","a3","z3","x3","c3","v3","r3a"] {
                 assert_eq!(type_keys(&mut e,digits).preedit,digits,"english={english}");
                 assert_eq!(e.reset(ResetMode::Commit).commit,digits);
             }
             assert_eq!(type_keys(&mut e,"13su3").preedit,"13你");e.reset(ResetMode::Discard);
+            assert_eq!(type_keys(&mut e,"r3su3").preedit,"r3你");e.reset(ResetMode::Discard);
+            type_keys(&mut e,"r3");e.key(Key::new(KeyKind::Backspace)).unwrap();
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"r");
+            type_keys(&mut e,"r4");e.reset(ResetMode::Discard);
+            assert_eq!(type_keys(&mut e,"ru3").preedit,"己");e.reset(ResetMode::Discard);
             assert_eq!(type_keys(&mut e,"184").preedit,"爸","a complete valid syllable still converts");e.reset(ResetMode::Discard);
             assert_eq!(type_keys(&mut e,"su3").preedit,"你");
         }
@@ -559,10 +565,10 @@ impl Engine {
             self.mixed_raw.pop();
         } else {
             let previous = std::mem::take(&mut self.mixed_raw);
-            // An incomplete initial such as 1 (ㄅ) has no reading for any tone.
-            // Preserve the number key instead of restoring the raw prefix alone.
-            if !previous.is_empty() && previous.bytes().all(|c|c.is_ascii_digit())
-                && key.kind==KeyKind::Char && key.modifiers==0 {
+            // Incomplete readings such as 1 (ㄅ) and r (ㄐ) cannot take a tone.
+            // Keep the entire literal run and digit instead of losing the tone key.
+            if !previous.is_empty() && key.kind==KeyKind::Char
+                && key.modifiers==0 && key.ch.is_ascii_digit() {
                 if let Some(tone)=self.layout.tone_of(key.ch) {
                     let complete=self.mixed_reading_order(&previous,false).is_some_and(|mut reading| {
                         reading.push_str(TONE_MARKS[tone]);!self.lex.entries(&[reading]).is_empty()
