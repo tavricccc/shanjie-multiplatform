@@ -17,7 +17,7 @@
 | 建置 | Windows release x64／x86、WinUI x64 0.13.1 成功；未啟用 input-diagnostics |
 | 混打與輸入 | x64／x86 各 135/135，保留數字、r3／r4／r6／r7、有效注音與標點等既有案例 |
 | TSF／取消 | 兩架構各 18/18 相容性、15/15 浮層生命週期；不切換的私有桌面，覆蓋 Shift、交接、cmd 單次提交、取消／重入／來源存活 |
-| 單元與 helper | Windows 45 passed、4 ignored；其中三項指定 helper 後另測通過，僅隔離 HKCU registry fixture 未執行。跨程序 UIA 可編輯／唯讀取詞、保護欄位、逾時回收及浮層測試通過 |
+| 單元與 helper | Windows x64／x86 各 45 passed、4 ignored；各有三項指定 64 位元 helper 後另測通過，僅隔離 HKCU registry fixture 未執行。跨程序 UIA 可編輯／唯讀取詞、保護欄位、逾時回收及浮層測試通過 |
 | 浮層 DPI／層級 | 本機實際 192 DPI：跨程序三種來源 awareness 各測滑鼠取消／Esc，尺寸 880×588，native owner 為 helper、實際 z-order 在來源上方、未改前景、來源仍存活。單元另測來源重新置頂後浮層回到其上方。100／150% 與混合螢幕尚未實機覆蓋 |
 | 使用者資料 | 真正原生介面在一般、封裝 LocalAppData、systemprofile 環境傳入下均回同一使用者位置；不讀寫真實個人資料。WinUI 隔離字典 LF／CRLF／CR 各兩列往返通過 |
 | 受限檔案操作 | 既有 ShellExperienceHost AppContainer 權杖下，舊 DOS canonicalize 仍回 Win32 5；本版 NT 檔案身分、內容雜湊、明確權杖的已知資料夾均與一般使用者一致。只作檔案／API 驗證，不是 Store 的完整 TSF 實機驗收 |
