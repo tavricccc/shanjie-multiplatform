@@ -37,6 +37,14 @@
 
 [模型乾跑 40869322882](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40869322882) 成功，21 組可用配套；另有 `sj-cx-2-950k` 的新附件角色 `trigram-chat.sjt3` 為 unsupported，未冒稱支援新輔助模型。artifact SHA-256、archive 目錄契約與 publication plan 全檔雜湊均通過，註記無 Node.js 20 警告。此乾跑未更新線上資料。
 
+## 正式部署結果
+
+- [0.13.1 pre-release](https://github.com/tavricccc/shanjie-multiplatform/releases/tag/v0.13.1) 已發布；[main release 40873126320](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40873126320) 成功，建置 source `b1816739d631f386790a6927fd73fad15353a71b`。單檔安裝程式、ZIP 與兩個 SHA-256 sidecar 共四項資產完整，下載的 sidecar 與 GitHub 資產 digest 一致。
+- [main 模型 40873126211](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40873126211) 的 verify／publish 成功，包含 Node.js 24 的 artifact 上傳／下載與資料分支更新；兩個主流程均未留下 Node.js 20 註記。排程 workflow 為 active、自動發布變數仍為 true。
+- 公開資料分支 head `e5671608f003648ad1a3cac9b58a695d256a88cf`，catalog revision `b97f91d79e2f42cf9e502fc96270e118f4cb67270c7b174cb56b7ee5825c7485`。實際下載後由 Python 契約與本版原生 reader 驗證通過；21 組可用、1 個新附件角色 unsupported。
+- 發布後查詢時，既有 0.13.0 已為正式版且 GitHub latest 指向 0.13.0；本次未改動該狀態，0.13.1 保持 pre-release，版本說明依原先要求仍建議一般使用者先用 0.12.2。
+- README.md blob 全程維持 `e6587589d408799d7fa4c45c418151c2c6169540`。本機 TODO 不提交或打包；個人字典、學習與診斷資料不進安裝包。本輪不替使用者安裝。
+
 ## 實機界線
 
 本輪不執行 UAC 安裝、不更動登入排程或系統 DPI，也不重啟 Explorer。修正後的 Store 中文完整輸入、真正宿主顯示、不同螢幕縮放與登入單例仍需安裝後驗收。不可把自建跨程序視窗或 API 測試寫成這些已通過。
