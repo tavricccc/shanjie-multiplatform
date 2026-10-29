@@ -5,6 +5,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(nint window);
     private const string Rust = "shanjie_windows.dll";
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_load_text();
+    [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_path();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] [return: MarshalAs(UnmanagedType.I1)] internal static extern bool sj_profile_save([MarshalAs(UnmanagedType.LPUTF8Str)] string content);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_document_json([MarshalAs(UnmanagedType.LPUTF8Str)] string content);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_preset([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.I1)] bool windows);

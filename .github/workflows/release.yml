@@ -1,15 +1,21 @@
 name: release
 
 # 版本號（windows/Cargo.toml）變更並推送後，若還沒有對應 tag 就建立 GitHub Release，
-# 再建置 Windows zip 與 Linux tar.gz 附上。手動執行時重建並覆蓋目前版本的安裝包。
+# 再建置 Windows zip 與 Linux tar.gz 附上。手動預設僅驗證，不覆寫既有 Release。
 on:
   push:
     branches: [main]
     paths: [windows/Cargo.toml]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify: build only; publish: create a new version only'
+        type: choice
+        default: verify
+        options: [verify, publish]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
@@ -18,15 +24,21 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       build_linux: ${{ steps.release.outputs.build_linux }}
+      publish: ${{ steps.release.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
+        with:
+          persist-credentials: false
       - name: Create release when the version has no tag yet
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'publish' }}
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' windows/Cargo.toml | head -n 1)
           tag="v${version}"
@@ -38,6 +50,8 @@ jobs:
           if [ "$channel_version" != "$version" ]; then echo "Release channel version mismatch"; exit 1; fi
           prerelease=$(jq -r .prerelease RELEASE-CHANNEL.json)
           echo "build_linux=$(jq -r .build_linux RELEASE-CHANNEL.json)" >> "$GITHUB_OUTPUT"
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          if [ "$VERIFY_ONLY" = "true" ]; then echo "Build verification only"; exit 0; fi
           flags=()
           if [ "$prerelease" = "true" ]; then
             flags=(--prerelease --latest=false)
@@ -45,28 +59,34 @@ jobs:
             echo "Invalid release channel"; exit 1
           fi
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" "${flags[@]}" --notes-file "$notes"
-            echo "$tag 已有 release，沿用發布頻道並更新安裝包"
+            echo "$tag 已有 release；僅驗證，不修改發布內容或資產"
             exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag already exists without a release; review before publishing"; exit 1
           fi
           gh release create "$tag" --target "$GITHUB_SHA" \
             --title "善解輸入法 ${version}" --notes-file "$notes" "${flags[@]}"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
 
   windows:
     needs: release
     runs-on: windows-latest
+    permissions:
+      contents: write
     defaults:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
           submodules: true
-      - uses: actions/setup-dotnet@v4
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
         with:
           dotnet-version: 10.0.x
       - name: Cache upstream models
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
           path: build/model
           key: models-${{ hashFiles('MODEL-SOURCES.json') }}
@@ -75,6 +95,7 @@ jobs:
       - name: Unit tests
         run: cargo test --manifest-path windows/Cargo.toml --lib
       - name: Upload to the release
+        if: needs.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,8 +104,17 @@ jobs:
             Set-Content "dist/$name.sha256" "$hash  $name" -Encoding utf8NoBOM
             "dist/$name"; "dist/$name.sha256"
           }
-          gh release upload "${{ needs.release.outputs.tag }}" @assets --clobber
+          gh release upload "${{ needs.release.outputs.tag }}" @assets
           if ($LASTEXITCODE) { throw 'Release upload failed.' }
+      - name: Build evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: windows-package
+          path: |
+            dist/Shanjie-Windows.zip
+            dist/Shanjie-Windows-Setup.exe
+          if-no-files-found: error
+          retention-days: 7
 
   linux:
     needs: release
@@ -92,25 +122,29 @@ jobs:
     runs-on: ubuntu-latest
     # Linux 版的目標是 Fedora 44 GNOME；在同版容器建置，GTK 4／libadwaita 與 glibc 和使用者一致。
     container: fedora:44
+    permissions:
+      contents: write
     steps:
       - name: Install build tools
         run: |
           dnf install -y git gh rust cargo gcc pkgconf-pkg-config gtk4-devel libadwaita-devel \
             https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-1.rh.x86_64.rpm
           git config --global --add safe.directory '*'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
           submodules: true
+          persist-credentials: false
       - name: Cache upstream models
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
           path: build/model
           key: models-${{ hashFiles('MODEL-SOURCES.json') }}
       - name: Build the package
         run: linux/scripts/package.sh
       - name: Upload to the release
+        if: needs.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${{ needs.release.outputs.tag }}" build/linux/dist/shanjie-linux-*.tar.gz \
-            build/linux/dist/shanjie-linux-*.tar.gz.sha256 --clobber --repo "$GITHUB_REPOSITORY"
+            build/linux/dist/shanjie-linux-*.tar.gz.sha256 --repo "$GITHUB_REPOSITORY"

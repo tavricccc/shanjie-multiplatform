@@ -37,8 +37,14 @@ pub struct Client {
 }
 impl Client {
     pub fn open(data: &Path, config: Config) -> Option<Self> {
+        Self::try_open(data, config).map_err(|e| {
+            crate::runtime_log::io("client.open", &e);
+            crate::bridge::failure(format!("core open: kind={:?} win32={:?}",e.kind(),e.raw_os_error()));
+        }).ok()
+    }
+    fn try_open(data: &Path, config: Config) -> io::Result<Self> {
         let deadline = Instant::now() + COLD;
-        let pipe = connect(data, true, deadline).ok()?;
+        let pipe = connect(data, true, deadline).map_err(crate::runtime_log::at("client.connect"))?;
         let id = identity();
         pipe.send(
             &Request::Open {
@@ -49,11 +55,11 @@ impl Client {
             },
             deadline,
         )
-        .ok()?;
-        if !pipe.receive::<Reply>(deadline).ok()?.ok {
-            return None;
+        .map_err(crate::runtime_log::at("client.send_open"))?;
+        if !pipe.receive::<Reply>(deadline).map_err(crate::runtime_log::at("client.receive_open"))?.ok {
+            return Err(io::Error::other("Core refused session"));
         }
-        Some(Self {
+        Ok(Self {
             pipe: Some(pipe),
             data: data.into(),
             config,
@@ -108,6 +114,7 @@ impl Client {
         let uncertain = self.outstanding.is_some();
         if self.pipe.is_none() {
             if let Err(error) = self.reconnect(uncertain, Instant::now() + RECOVERY) {
+                crate::runtime_log::io("client.reconnect", &error);
                 if self.failure.is_none() {
                     self.failure = Some(classify(&error));
                 }
@@ -125,6 +132,7 @@ impl Client {
         let result = match pipe.send_tracked(&request, deadline) {
             Ok(()) => pipe.receive::<Reply>(deadline),
             Err(error) => {
+                crate::runtime_log::io("client.send_apply", &error.error);
                 if !error.possible {
                     self.outstanding = None;
                 }
@@ -134,6 +142,7 @@ impl Client {
         let result = match result {
             Ok(result) => result,
             Err(error) => {
+                crate::runtime_log::io("client.receive_apply", &error);
                 self.pipe = None;
                 self.failure = Some(classify(&error));
                 return None;

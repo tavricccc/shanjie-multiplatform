@@ -148,7 +148,7 @@ impl Pending {
             Load::Loading(receiver) => receiver.recv().ok().flatten(),
         };
         if result.is_none() {
-            crate::bridge::failure(format!("engine preload: {}", self.config.data.display()));
+            crate::runtime_log::io("preload.empty", &std::io::Error::other("Engine unavailable"));
         }
         result
     }

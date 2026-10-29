@@ -16,13 +16,35 @@ pub(crate) const CHANGED_MESSAGE: &str = "Shanjie.ProfileChanged.v2";
 pub(crate) const RESTART_MESSAGE: &str = "Shanjie.Restart.v2";
 
 pub fn folder() -> PathBuf {
-    // AppContainer LOCALAPPDATA is the package folder; the core endpoint uses the user's.
-    if crate::broker::app_container() {
-        if let Some(home) = std::env::var_os("USERPROFILE") {
-            return PathBuf::from(home).join("AppData").join("Local").join("Shanjie");
+    // Only explicit, owned test fixtures can redirect user data via environment.
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref()==Ok("1") {
+        return PathBuf::from(std::env::var_os("LOCALAPPDATA").expect("test LOCALAPPDATA")).join("Shanjie");
+    }
+    static USER:std::sync::OnceLock<PathBuf>=std::sync::OnceLock::new();
+    USER.get_or_init(user_folder).clone()
+}
+pub(crate) fn user_folder()->PathBuf {
+    use windows::Win32::{UI::Shell::*,System::Com::CoTaskMemFree};
+    unsafe {
+        let flags=KF_FLAG_NO_PACKAGE_REDIRECTION|KF_FLAG_DONT_VERIFY;
+        let result=SHGetKnownFolderPath(&FOLDERID_LocalAppData,flags,None);
+        match result {
+            Ok(value)=>{
+                let path=PathBuf::from(value.to_string().expect("known folder UTF-16"));
+                CoTaskMemFree(Some(value.0.cast()));
+                path.join("Shanjie")
+            },
+            Err(e)=>{
+                crate::runtime_log::io("profile.known_folder",&std::io::Error::from_raw_os_error(e.code().0));
+                // A trusted profile path still avoids a packaged/systemprofile
+                // environment inherited from a host. Do not create the folder.
+                let value=SHGetKnownFolderPath(&FOLDERID_Profile,flags,None).expect("Windows user profile unavailable");
+                let path=PathBuf::from(value.to_string().expect("profile UTF-16"));
+                CoTaskMemFree(Some(value.0.cast()));
+                path.join("AppData/Local/Shanjie")
+            }
         }
     }
-    PathBuf::from(std::env::var_os("LOCALAPPDATA").expect("LOCALAPPDATA")).join("Shanjie")
 }
 pub fn path() -> PathBuf {
     folder().join("profile.ini")

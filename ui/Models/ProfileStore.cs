@@ -2,7 +2,7 @@ using Shanjie_UI.Interop;
 namespace Shanjie_UI.Models;
 public static class ProfileStore
 {
-    public static string Path => System.IO.Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA")!, "Shanjie", "profile.ini");
+    public static string Path => Native.Take(Native.sj_profile_path());
     public static ProfileDocument Defaults(bool windows)
     {
         using var resource = typeof(ProfileStore).Assembly.GetManifestResourceStream($"Profiles.{(windows ? "windows" : "shanjie")}.ini")!;

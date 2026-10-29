@@ -979,8 +979,7 @@ fn reject_live_test_mutation() -> Result<()> {
     Ok(())
 }
 pub fn record_manager_failure(message: &str) -> Result<PathBuf> {
-    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or("個人紀錄位置無法辨識。")?)
-        .join("Shanjie/installer-logs");
+    let root = crate::profile::folder().join("installer-logs");
     safe_tree(&root)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?

@@ -34,6 +34,10 @@ pub unsafe extern "C" fn sj_string_free(p: *mut c_char) {
     }
 }
 #[no_mangle]
+pub extern "C" fn sj_profile_path() -> *mut c_char {
+    CString::new(profile::path().to_string_lossy().as_bytes()).unwrap().into_raw()
+}
+#[no_mangle]
 pub unsafe extern "C" fn sj_profile_load_text() -> *mut c_char {
     match profile::load(&profile::path()) {
         Ok(d) => CString::new(d.content()).unwrap().into_raw(),

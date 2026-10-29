@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 type Raw = *mut c_void;
+mod identity;
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn CreateNamedPipeW(
@@ -133,7 +134,10 @@ fn executable(data: &Path) -> PathBuf {
     data.parent().unwrap_or(data).join("tools/shanjie-core.exe")
 }
 fn endpoint(data: &Path) -> io::Result<String> {
-    let exe = executable(data).canonicalize()?;
+    // Hash the path and contents of the same opened file. The NT identity works
+    // in both normal and AppContainer tokens, unlike Rust's DOS canonicalize.
+    let mut exe = File::open(executable(data)).map_err(crate::runtime_log::at("endpoint.open"))?;
+    let identity = identity::file_path(&exe).map_err(crate::runtime_log::at("endpoint.identity"))?;
     let mut session = 0;
     unsafe {
         if ProcessIdToSessionId(GetCurrentProcessId(), &mut session) == 0 {
@@ -141,9 +145,11 @@ fn endpoint(data: &Path) -> io::Result<String> {
         }
     }
     let mut hash = Sha256::new();
-    hash.update(exe.to_string_lossy().to_lowercase());
+    hash.update(identity.to_string_lossy().as_bytes());
     // Replacing a binary in an existing output directory must not reuse an old core.
-    hash.update(std::fs::read(&exe)?);
+    let mut bytes=Vec::new();
+    exe.read_to_end(&mut bytes).map_err(crate::runtime_log::at("endpoint.read"))?;
+    hash.update(bytes);
     hash.update(crate::profile::folder().to_string_lossy().to_lowercase());
     Ok(format!(
         "\\\\.\\pipe\\Shanjie-{}-{session}-{:x}",
@@ -227,7 +233,8 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
 fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {
     use std::os::windows::fs::OpenOptionsExt;
     let name = endpoint(data)?;
-    let expected = executable(data).canonicalize()?;
+    let launch = executable(data);
+    let expected = identity::path(&launch).map_err(crate::runtime_log::at("connect.identity"))?;
     let mut launched = false;
     let mut full_since: Option<Instant> = None;
     loop {
@@ -253,11 +260,11 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
                 }
                 let mut path = vec![0u16; 32768];
                 let mut len = path.len() as u32;
-                let ok = QueryFullProcessImageNameW(process, 0, path.as_mut_ptr(), &mut len);
+                let ok = QueryFullProcessImageNameW(process, 1, path.as_mut_ptr(), &mut len);
+                let error=io::Error::last_os_error();
                 CloseHandle(process);
-                if ok == 0
-                    || PathBuf::from(String::from_utf16_lossy(&path[..len as usize]))
-                        .canonicalize()?
+                if ok==0 {return Err(error);}
+                if PathBuf::from(String::from_utf16_lossy(&path[..len as usize]).to_lowercase())
                         != expected
                 {
                     return Err(io::Error::other("Unexpected core server"));
@@ -282,7 +289,7 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
                     && !app_container()
                     && !elevated()
                 {
-                    start_core(&expected)?;
+                    start_core(&launch).map_err(crate::runtime_log::at("connect.start"))?;
                     launched = true;
                 }
                 std::thread::sleep(Duration::from_millis(20));
@@ -296,7 +303,7 @@ pub fn retire_and_start(data: &Path) -> io::Result<()> {
     if elevated() {
         return Err(io::Error::other("Elevated process cannot start the user core"));
     }
-    let current = executable(data).canonicalize()?;
+    let current = identity::path(&executable(data))?;
     let mut session = 0;
     unsafe {
         if ProcessIdToSessionId(GetCurrentProcessId(), &mut session) == 0 {
@@ -342,8 +349,9 @@ fn stop_retired(path: &str, current: &Path) -> io::Result<()> {
         PathBuf::from(String::from_utf16_lossy(&buffer[..len as usize]))
     };
     // Only Shanjie cores, never the current one or an unrelated server on a similar name.
+    let image_identity=identity::path(&image)?;
     if image.file_name().is_none_or(|n| !n.eq_ignore_ascii_case("shanjie-core.exe"))
-        || image.canonicalize().ok().as_deref() == Some(current)
+        || image_identity == current
     {
         return Ok(());
     }

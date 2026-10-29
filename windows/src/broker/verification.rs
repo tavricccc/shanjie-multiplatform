@@ -1,5 +1,41 @@
 //! Isolated checks invoked by the verification executable, never by input flow.
 use super::*;
+pub fn profile_root() {
+    let expected=crate::profile::user_folder();
+    let fixture=std::env::var_os("LOCALAPPDATA").unwrap();
+    std::env::remove_var("SHANJIE_TEST_PROFILE");
+    let actual=crate::profile::folder();
+    assert_eq!(actual,expected,"inherited LOCALAPPDATA and USERPROFILE cannot redirect real data");
+    assert_ne!(actual,PathBuf::from(fixture).join("Shanjie"));
+    println!("PASS trusted user folder ignores inherited packaged/systemprofile environment (no user-data access)");
+}
+pub fn log_failure(data:&Path) {
+    for _ in 0..20 {assert!(Client::open(data,config(false)).is_none());}
+    println!("PASS failed opens retain failure stage; throttled metadata log written");
+}
+/// Read-only probe of the exact identity code with an existing Store token.
+/// No injection, ACL changes, target messages or user-data reads/writes.
+pub fn restricted_identity(data:&Path,pid:u32) {unsafe{
+    use windows::Win32::{Foundation::*,Security::*,System::Threading::*};
+    let process=windows::Win32::System::Threading::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,false,pid).unwrap();
+    let mut image=[0u16;32768];let mut length=image.len() as u32;
+    windows::Win32::System::Threading::QueryFullProcessImageNameW(process,PROCESS_NAME_WIN32,windows::core::PWSTR(image.as_mut_ptr()),&mut length).unwrap();
+    assert!(PathBuf::from(String::from_utf16_lossy(&image[..length as usize])).file_name().unwrap().eq_ignore_ascii_case("WinStore.App.exe"));
+    let mut token=HANDLE::default();windows::Win32::System::Threading::OpenProcessToken(process,TOKEN_QUERY|TOKEN_DUPLICATE,&mut token).unwrap();
+    struct Handles(HANDLE,HANDLE);impl Drop for Handles{fn drop(&mut self){unsafe{let _=windows::Win32::Foundation::CloseHandle(self.0);let _=windows::Win32::Foundation::CloseHandle(self.1);}}}
+    let _handles=Handles(process,token);
+    let expected=endpoint(data).unwrap();
+    let expected_folder=crate::profile::user_folder();
+    ImpersonateLoggedOnUser(token).unwrap();
+    struct Revert;impl Drop for Revert{fn drop(&mut self){unsafe{RevertToSelf().unwrap();}}}
+    let _revert=Revert;
+    let old=executable(data).canonicalize();
+    let actual=endpoint(data).expect("Store token NT identity");
+    assert_eq!(crate::profile::user_folder(),expected_folder,"known folder is stable under Store token");
+    assert_eq!(actual,expected,"restricted and normal tokens choose the same endpoint");
+    assert_eq!(old.unwrap_err().raw_os_error(),Some(5),"control still reproduces DOS failure");
+    println!("PASS Store token: DOS canonicalize denied; actual NT endpoint identical; content hash readable; trusted known folder identical");
+}}
 use crate::pipe_io::Pipe;
 use std::os::windows::fs::OpenOptionsExt;
 pub fn start_fixture(data:&Path) {

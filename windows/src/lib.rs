@@ -24,6 +24,7 @@ pub mod registration;
 pub mod setup_bundle;
 mod registry_snapshot;
 mod tsf;
+mod runtime_log;
 
 pub fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()

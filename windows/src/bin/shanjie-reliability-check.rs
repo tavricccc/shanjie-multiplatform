@@ -14,6 +14,9 @@ fn main() {
         "ambiguous" => broker::verification::ambiguous(data),
         "capacity" => broker::verification::capacity(data),
         "restart" => broker::verification::restart(data),
+        "restricted-identity" => broker::verification::restricted_identity(data,args[3].parse().unwrap()),
+        "profile-root" => broker::verification::profile_root(),
+        "log-failure" => broker::verification::log_failure(data),
         _ => panic!("Unknown isolated check"),
     }
 }

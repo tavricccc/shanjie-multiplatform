@@ -23,6 +23,7 @@ struct Panel {
     paint: Rc<Cell<Paint>>,
     owner: HWND,
     standalone: bool,
+    dpi:u32,
     reading_control: HWND,
     status: HWND,
     inspection_control:HWND,
@@ -52,11 +53,13 @@ const KEY: u32=WM_APP+202;
 pub(crate) const ROUTE_KEY:u32=KEY;
 const ACTION: u32=WM_APP+203;
 const THEME: u32=WM_APP+204;
+const LAYOUT: u32=WM_APP+205;
 static NEXT_ID:AtomicUsize=AtomicUsize::new(1);
 #[derive(Clone,Copy)]
 struct Paint {font:HFONT,background:HBRUSH,border:HBRUSH,colors:Colors}
 struct Control {
     window:Cell<HWND>, closing:Cell<bool>, window_reference:Cell<bool>, id:usize, notify:HWND,
+    anchor:Cell<RECT>,
 }
 impl Control {
     fn close(&self) {
@@ -80,6 +83,12 @@ impl Popup {
     pub fn close(&self) {self.control.close();}
     pub fn id(&self)->usize {self.control.id}
     pub fn window(&self)->HWND{self.control.window.get()}
+    pub fn anchor(&self,rect:RECT){
+        let old=self.control.anchor.get();
+        if (old.left,old.top,old.right,old.bottom)==(rect.left,rect.top,rect.right,rect.bottom){return;}
+        self.control.anchor.set(rect);
+        unsafe{let _=PostMessageW(Some(self.window()),LAYOUT,WPARAM(0),LPARAM(0));}
+    }
     pub fn contains(&self,window:HWND)->bool{unsafe{GetAncestor(window,GA_ROOT)==self.control.window.get()}}
     pub fn accepts(vk:usize,ctrl:bool,alt:bool,win:bool)->bool {Panel::accepts(vk,ctrl,alt,win)}
     pub fn key(&self,vk:usize,ch:Option<char>,ctrl:bool) {
@@ -96,17 +105,18 @@ impl Popup {
     }
     unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND,headless:bool)->Result<Box<Self>> {
         let (sender,receiver)=mpsc::channel(); let colors=Colors::read(theme)?;
-        let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify});
+        let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify,anchor:Cell::new(anchor)});
         let background=CreateSolidBrush(colors.background);let border=CreateSolidBrush(colors.border);
         let paint=Rc::new(Cell::new(Paint{font:HFONT::default(),background,border,colors}));
-        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless,revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
+        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),dpi:0,reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless,revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
         if panel.background.is_invalid()||panel.border.is_invalid(){return Err(Error::from_thread());}
         let state=Rc::new(WindowState{panel:RefCell::new(panel),control:control.clone(),paint,_count:crate::tsf::Count::new()});
         let module=HINSTANCE(crate::tsf::module().0);
         let class=WNDCLASSW{lpfnWndProc:Some(procedure),hInstance:module,hCursor:LoadCursorW(None,IDC_ARROW)?,lpszClassName:w!("Shanjie.AddWord.Popup.v1"),..Default::default()};
         RegisterClassW(&class);
         let (width,height,x,y)={let panel=state.panel.borrow();
-            let dpi=GetDpiForWindow(source.unwrap_or(owner)).max(96) as i32;let scale=|v:i32|v*dpi/96;
+            // Create on the anchor's monitor, then size using our own HWND's DPI.
+            let scale=|v:i32|v;
             let title_height=28*((panel.word.chars().count()+36)/24) as i32;
             let reading_height=30*((panel.word.chars().count()*5+23)/24).max(1) as i32;
             let (width,height)=(scale(440),scale(18+title_height+28+reading_height+8+68+64+50));
@@ -122,7 +132,7 @@ impl Popup {
         let created=CreateWindowExW(style,class.lpszClassName,w!("善解：新增詞條"),WS_POPUP|WS_BORDER,x,y,width,height,Some(owner),None,Some(module),Some(raw.cast()));
         let window=match created {Ok(w)=>w,Err(e)=>{if control.window_reference.replace(false){drop(Rc::from_raw(raw));}return Err(e);}};
         let handle=Box::new(Self{control});
-        {let mut panel=state.panel.borrow_mut();panel.init_controls(source.unwrap_or(owner))?;panel.inspect(true);}
+        {let mut panel=state.panel.borrow_mut();panel.init_controls(window)?;panel.relayout()?;panel.inspect(true);}
         if !handle.control.closing.get(){
             SetPropW(window,w!("Shanjie.AddWord.Active.v1"),Some(HANDLE(1usize as _)))?;
             let _=ShowWindow(window,SW_SHOWNOACTIVATE);
@@ -160,6 +170,39 @@ impl Panel {
         let add=label(w!("BUTTON"),"加入",10,236,button_y,88,32,BS_OWNERDRAW as u32)?;
         let cancel=label(w!("BUTTON"),"取消",11,336,button_y,88,32,BS_OWNERDRAW as u32)?;
         button::install(add)?; button::install(cancel)?;
+        Ok(())
+    }
+    unsafe fn relayout(&mut self)->Result<()> {
+        let anchor=self.control.anchor.get();
+        let mut info=MONITORINFO{cbSize:std::mem::size_of::<MONITORINFO>() as u32,..Default::default()};
+        GetMonitorInfoW(MonitorFromRect(&anchor,MONITOR_DEFAULTTONEAREST),&mut info).ok()?;
+        // Move first so a monitor transition updates the HWND's actual DPI.
+        if self.standalone&&!self.headless {
+            SetWindowPos(self.window,None,anchor.left,anchor.bottom,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)?;
+        }
+        let dpi=GetDpiForWindow(self.window).max(96);
+        let scale=|v:i32|v*dpi as i32/96;
+        let title=28*((self.word.chars().count()+36)/24) as i32;
+        let reading=30*((self.word.chars().count()*5+23)/24).max(1) as i32;
+        let ry=18+title+28;let iy=ry+reading+8;let sy=iy+68;let by=sy+64;
+        let width=scale(440);let height=scale(by+50);
+        let work=info.rcWork;
+        let x=if self.headless{-12000}else{anchor.left.clamp(work.left,(work.right-width).max(work.left))};
+        let y=if self.headless{-12000}else if anchor.bottom+height<=work.bottom{anchor.bottom}else{(anchor.top-height).max(work.top)};
+        SetWindowPos(self.window,Some(if self.standalone{HWND_TOPMOST}else{HWND_TOP}),x,y,width,height,SWP_NOACTIVATE)?;
+        if self.dpi!=dpi {
+            self.dpi=dpi;
+            let font=CreateFontW(-scale(16),0,0,0,400,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH.0 as u32,w!("Microsoft JhengHei UI"));
+            if font.is_invalid(){return Err(Error::from_thread());}
+            let old=self.font;self.font=font;
+            self.paint.set(Paint{font,background:self.background,border:self.border,colors:self.colors});
+            for (id,x,y,w,h) in [(1,14,12,410,title),(2,14,18+title,410,22),(3,14,ry,410,reading),(5,14,iy,410,64),(4,14,sy,410,46),(10,236,by,88,32),(11,336,by,88,32)]{
+                let control=GetDlgItem(Some(self.window),id)?;
+                SetWindowPos(control,None,scale(x),scale(y),scale(w),scale(h),SWP_NOZORDER|SWP_NOACTIVATE)?;
+                SendMessageW(control,WM_SETFONT,Some(WPARAM(font.0 as usize)),Some(LPARAM(1)));
+            }
+            if !old.is_invalid(){let _=DeleteObject(old.into());}
+        }
         Ok(())
     }
     fn display(&self) { unsafe { let _ = SetWindowTextW(self.reading_control,PCWSTR(crate::wide(&self.reading).as_ptr())); } }
@@ -230,6 +273,7 @@ impl Panel {
     }
     unsafe fn poll(&mut self) {
         let foreground = GetForegroundWindow();
+        if !self.headless&&(!IsWindow(Some(self.owner)).as_bool()||IsIconic(self.owner).as_bool()){self.close();return;}
         if !self.headless && !foreground.is_invalid() && GetAncestor(foreground,GA_ROOT) != GetAncestor(self.owner,GA_ROOT)
             && !(self.standalone&&GetAncestor(foreground,GA_ROOT)==self.window) { self.close(); return; }
         if self.check_due.is_some_and(|due|Instant::now()>=due){self.inspect(false);}
@@ -337,6 +381,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             if let Some(owner)=restore{if IsWindow(Some(owner)).as_bool(){let _=SetForegroundWindow(owner);}}
             return LRESULT(0);
         },
+        WM_DPICHANGED=>{let _=PostMessageW(Some(window),LAYOUT,WPARAM(0),LPARAM(0));return LRESULT(0);},
         WM_CLOSE=>{state.control.close();return LRESULT(0);},
         WM_COMMAND=>{
             let id=wp.0&0xffff;let notification=(wp.0>>16)&0xffff;
@@ -346,11 +391,12 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             }
             return LRESULT(0);
         },
-        KEY|ACTION|THEME|WM_TIMER|WM_SETTINGCHANGE|WM_THEMECHANGED|WM_SYSCOLORCHANGE=>{
+        KEY|ACTION|THEME|LAYOUT|WM_TIMER|WM_SETTINGCHANGE|WM_THEMECHANGED|WM_SYSCOLORCHANGE=>{
             if state.control.closing.get(){return LRESULT(0);}
             if let Ok(mut panel)=state.panel.try_borrow_mut(){match message {
                 KEY=>panel.key(wp.0&0xffff,if lp.0==0{None}else{char::from_u32((lp.0-1) as u32)},wp.0&(1<<16)!=0),
                 ACTION=>panel.save(),THEME=>{let _=panel.set_theme(wp.0 as u32);},
+                LAYOUT=>{let _=panel.relayout();},
                 WM_TIMER=>panel.poll(),_=>{let _=panel.refresh_colors();}
             }}else if message!=WM_TIMER {let _=PostMessageW(Some(window),message,wp,lp);}
             return LRESULT(0);
@@ -361,6 +407,32 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
 }
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn helper_uses_own_dpi_above_sources_with_different_awareness(){unsafe{
+        let original=SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        struct Restore(DPI_AWARENESS_CONTEXT);impl Drop for Restore{fn drop(&mut self){unsafe{SetThreadDpiAwarenessContext(self.0);}}}
+        let _restore=Restore(original);
+        let helper=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,-12000,-12000,1,1,None,None,None,None).unwrap();
+        for context in [DPI_AWARENESS_CONTEXT_UNAWARE,DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2]{
+            SetThreadDpiAwarenessContext(context);
+            let source=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP|WS_VISIBLE,-12000,-12000,100,100,None,None,None,None).unwrap();
+            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            let foreground=GetForegroundWindow();
+            let p=Popup::open_with(helper,Some(source),RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),Layout::Standard,0,HWND::default(),true).unwrap();
+            let window=p.window();let dpi=GetDpiForWindow(window) as i32;
+            let mut rect=RECT::default();GetWindowRect(window,&mut rect).unwrap();
+            assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));
+            assert!(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize!=0);
+            assert_eq!(GetWindow(window,GW_OWNER).unwrap(),helper,"retain in-process owner");
+            assert_eq!(GetForegroundWindow(),foreground,"show does not activate");
+            let font=HFONT(SendMessageW(GetDlgItem(Some(window),3).unwrap(),WM_GETFONT,None,None).0 as _);
+            let mut metrics=LOGFONTW::default();GetObjectW(font.into(),std::mem::size_of::<LOGFONTW>() as i32,Some((&mut metrics as *mut LOGFONTW).cast()));
+            assert_eq!(metrics.lfHeight,-16*dpi/96);
+            p.key(27,None,false);
+            let mut message=MSG::default();while PeekMessageW(&mut message,None,0,0,PM_REMOVE).as_bool(){DispatchMessageW(&message);}
+            assert!(!IsWindow(Some(window)).as_bool());assert!(IsWindow(Some(source)).as_bool());let _=DestroyWindow(source);
+        }
+        let _=DestroyWindow(helper);
+    }}
     #[test]fn standalone_cancel_escape_and_reopen_keep_source_alive(){unsafe{
         let module=HINSTANCE(crate::tsf::module().0);
         let helper=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!("owned helper"),WS_POPUP,-12000,-12000,300,100,None,None,Some(module),None).unwrap();

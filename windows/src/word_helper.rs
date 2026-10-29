@@ -5,6 +5,11 @@ use std::{cell::{RefCell,Cell},collections::VecDeque,io::{BufRead,BufReader,Writ
 use windows::{core::*,Win32::{Foundation::*,System::{Com::*,LibraryLoader::GetModuleHandleW,Threading::*},
     UI::{Accessibility::*,Input::*,WindowsAndMessaging::*}}};
 use crate::{selection_text as selected,word_gesture::Gesture,word_popup::Popup};
+pub fn initialize_dpi()->Result<()> {unsafe{
+    use windows::Win32::UI::HiDpi::*;
+    if AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(),DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).as_bool(){return Ok(());}
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+}}
 const CLASS:PCWSTR=w!("Shanjie.WordHelper.Coordinator.v1");
 const START:u32=WM_APP+211;
 const QUIT:u32=WM_APP+212;
@@ -173,6 +178,7 @@ impl State{
                 }
             },
             Ok(m) if !m.ready=>self.close(),
+            Ok(m) if m.ready=>{if let Some(p)=&self.popup{p.anchor(RECT{left:m.rect[0],top:m.rect[1],right:m.rect[2],bottom:m.rect[3]});}},
             Err(mpsc::TryRecvError::Disconnected)=>if worker.delivered{self.close()}else{self.failed()},
             _=>{}
         }
@@ -280,7 +286,8 @@ pub fn capture(source:usize,helper:usize)->Result<()> {unsafe{
     let _=std::io::stdout().flush();
     while IsWindow(Some(helper)).as_bool(){
         std::thread::sleep(Duration::from_millis(160));if !unchanged()?{break;}
-        println!("{}",serde_json::to_string(&Message{ready:true,word:String::new(),rect:[0;4]}).unwrap());
+        let rect=selected::rectangle(&range)?;
+        println!("{}",serde_json::to_string(&Message{ready:true,word:String::new(),rect:[rect.left,rect.top,rect.right,rect.bottom]}).unwrap());
         let _=std::io::stdout().flush();
     }
     println!("{}",serde_json::to_string(&Message{ready:false,word:String::new(),rect:[0;4]}).unwrap());Ok(())
@@ -300,6 +307,33 @@ pub fn capture_fixture(source:usize,owner:u32)->Result<()> {unsafe{
         println!("{}",serde_json::to_string(&Message{ready:true,word,rect:[rect.left,rect.top,rect.right,rect.bottom]}).unwrap());Ok(())
     })();CoUninitialize();result
 }}
+/// Owned, offscreen cross-process display check; no desktop enumeration or input.
+pub fn display_fixture(source:usize,owner:u32)->Result<()> {unsafe{
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref()!=Ok("1")||std::env::var_os("SHANJIE_HEADLESS").is_none(){return Err(E_ACCESSDENIED.into());}
+    let source=HWND(source as _);let mut pid=0;GetWindowThreadProcessId(source,Some(&mut pid));
+    let mut name=[0u16;80];let length=GetClassNameW(source,&mut name);
+    if owner==0||pid!=owner||pid==std::process::id()||String::from_utf16_lossy(&name[..length as usize])!="Shanjie.WordHelper.OwnedFixture.v1"{return Err(E_ACCESSDENIED.into());}
+    let helper=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,w!("STATIC"),w!(""),WS_POPUP,-12000,-12000,1,1,None,None,None,None)?;
+    for mouse in [true,false]{
+        let foreground=GetForegroundWindow();
+        let p=Popup::open_helper(helper,source,RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),shanjie_core::engine::Layout::Standard,0)?;
+        let w=p.window();let mut rect=RECT::default();GetWindowRect(w,&mut rect)?;
+        let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(w) as i32;
+        assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));
+        assert_eq!(GetWindow(w,GW_OWNER)?,helper);assert_eq!(GetForegroundWindow(),foreground);
+        assert!(GetWindowLongPtrW(w,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize!=0);
+        let mut cursor=GetTopWindow(None)?;let mut saw_popup=false;
+        while !cursor.is_invalid(){if cursor==w{saw_popup=true;}if cursor==source{assert!(saw_popup,"popup above source in actual z-order");break;}
+            cursor=GetWindow(cursor,GW_HWNDNEXT).unwrap_or_default();}
+        if mouse{let b=GetDlgItem(Some(w),11)?;SendMessageW(w,WM_COMMAND,Some(WPARAM(11)),Some(LPARAM(b.0 as isize)));}else{p.key(27,None,false);}
+        let deadline=Instant::now()+Duration::from_secs(2);
+        while IsWindow(Some(w)).as_bool()&&Instant::now()<deadline{
+            let mut m=MSG::default();while PeekMessageW(&mut m,None,0,0,PM_REMOVE).as_bool(){DispatchMessageW(&m);}std::thread::sleep(Duration::from_millis(2));}
+        assert!(!IsWindow(Some(w)).as_bool());assert!(IsWindow(Some(source)).as_bool());
+        println!("PASS cross-process popup: dpi={dpi} width={} height={} above source, no activation, safe cancel",rect.right-rect.left,rect.bottom-rect.top);
+    }
+    let _=DestroyWindow(helper);Ok(())
+}}
 #[cfg(test)]mod tests{
     #[test]fn panel_keys_do_not_capture_shortcuts_or_modifiers(){
         for vk in [8,13,27,32,46,0x41,0x33,0xbf]{assert!(super::reading_key(vk,false,false,false));}
@@ -311,6 +345,27 @@ pub fn capture_fixture(source:usize,owner:u32)->Result<()> {unsafe{
     unsafe extern "system" fn fixture_proc(w:HWND,m:u32,a:WPARAM,b:LPARAM)->LRESULT{DefWindowProcW(w,m,a,b)}
     use super::*;
     use windows::Win32::UI::Controls::EM_SETSEL;
+    #[test]#[ignore="Run with explicitly built helper on owned offscreen fixtures"]
+    fn cross_process_popup_dpi_zorder_and_cancellation(){unsafe{
+        use windows::Win32::UI::HiDpi::*;
+        let exe=std::env::var_os("SHANJIE_WORD_HELPER_TEST_EXE").unwrap();
+        let original=GetThreadDpiAwarenessContext();
+        let class=w!("Shanjie.WordHelper.OwnedFixture.v1");let module=HINSTANCE(GetModuleHandleW(None).unwrap().0);
+        RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(fixture_proc),hInstance:module,lpszClassName:class,..Default::default()});
+        for context in [DPI_AWARENESS_CONTEXT_UNAWARE,DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2]{
+            SetThreadDpiAwarenessContext(context);
+            let root=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,class,w!(""),WS_POPUP|WS_VISIBLE,-12000,-12000,300,100,None,None,Some(module),None).unwrap();
+            let mut child=Command::new(&exe).args(["--fixture-display",&(root.0 as usize).to_string(),&std::process::id().to_string()])
+                .creation_flags(0x08000000).env("SHANJIE_TEST_PROFILE","1").env("SHANJIE_HEADLESS","1").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            let deadline=Instant::now()+Duration::from_secs(10);
+            while child.try_wait().unwrap().is_none(){
+                if Instant::now()>deadline{let _=child.kill();panic!("owned display fixture timed out");}
+                let mut m=MSG::default();while PeekMessageW(&mut m,None,0,0,PM_REMOVE).as_bool(){DispatchMessageW(&m);}std::thread::sleep(Duration::from_millis(5));}
+            let output=child.wait_with_output().unwrap();assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+            println!("{}",String::from_utf8_lossy(&output.stdout));let _=DestroyWindow(root);
+        }
+        SetThreadDpiAwarenessContext(original);
+    }}
     #[test]#[ignore="Run with explicitly built helper on owned offscreen fixtures"]
     fn cross_process_readonly_selection_password_empty_and_limit(){unsafe{
         let exe=std::env::var_os("SHANJIE_WORD_HELPER_TEST_EXE").expect("explicit fixture helper");
