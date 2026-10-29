@@ -40,3 +40,11 @@ Actions 的 `model-catalog-publication` artifact 保留 30 天，含清單、狀
 - 用戶端離線：用成功快取與本機 receipt 備註；故障不自動切換使用中的模型。
 
 本機契約測試：`python -m unittest discover -s scripts/model_catalog -p "test_*.py" -v`。`probe.ps1` 需要 Windows、兩架構 MSVC 與 Rust；原生檢查使用公開資料，不讀個人字典或學習檔。
+
+## Actions 執行環境
+
+0.13.1 將模型與 release 工作流程的官方 Actions 固定為 Node.js 24 版本：checkout 7.0.1、cache 6.1.0、setup-python 7.1.0、setup-dotnet 6.0.0、upload-artifact 7.0.2、download-artifact 8.0.2，均使用完整 commit SHA。版本依各官方 repository 的 release、action.yml 與 README 核對；例如 [checkout 的 runner／憑證變更](https://github.com/actions/checkout/tree/v7.0.1)、[artifact 的 archive 契約](https://github.com/actions/upload-artifact/tree/v7.0.2)。
+
+runner 最低 2.327.1；目前使用 GitHub 託管 runner。未使用 Docker action 的認證轉送、fork PR 特權入口或新的非 archive 模式；checkout 保持 `persist-credentials: false`。模型 artifact 原目錄、最小權限、verify／publish 分流與非強制原子資料分支更新不變。
+
+release 的手動執行預設 `verify`，只建置測試並留下 artifact。`publish` 只建立尚不存在的版本；既有 Release 不編輯、不上傳覆寫。新版本沿用 RELEASE-CHANNEL.json 的 pre-release／latest 政策；0.13.1 不取代 0.12.2 為建議正式版。

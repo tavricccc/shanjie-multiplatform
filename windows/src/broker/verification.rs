@@ -20,21 +20,33 @@ pub fn restricted_identity(data:&Path,pid:u32) {unsafe{
     let process=windows::Win32::System::Threading::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,false,pid).unwrap();
     let mut image=[0u16;32768];let mut length=image.len() as u32;
     windows::Win32::System::Threading::QueryFullProcessImageNameW(process,PROCESS_NAME_WIN32,windows::core::PWSTR(image.as_mut_ptr()),&mut length).unwrap();
-    assert!(PathBuf::from(String::from_utf16_lossy(&image[..length as usize])).file_name().unwrap().eq_ignore_ascii_case("WinStore.App.exe"));
-    let mut token=HANDLE::default();windows::Win32::System::Threading::OpenProcessToken(process,TOKEN_QUERY|TOKEN_DUPLICATE,&mut token).unwrap();
+    let image=PathBuf::from(String::from_utf16_lossy(&image[..length as usize]));
+    assert!(["WinStore.App.exe","ShellExperienceHost.exe"].iter().any(|name|image.file_name().unwrap().eq_ignore_ascii_case(name)));
+    let mut token=HANDLE::default();windows::Win32::System::Threading::OpenProcessToken(process,TOKEN_QUERY|TOKEN_DUPLICATE|TOKEN_IMPERSONATE,&mut token).unwrap();
+    let mut ac=0u32;let mut needed=0;windows::Win32::Security::GetTokenInformation(token,TokenIsAppContainer,Some((&mut ac as *mut u32).cast()),4,&mut needed).unwrap();assert_eq!(ac,1);
     struct Handles(HANDLE,HANDLE);impl Drop for Handles{fn drop(&mut self){unsafe{let _=windows::Win32::Foundation::CloseHandle(self.0);let _=windows::Win32::Foundation::CloseHandle(self.1);}}}
     let _handles=Handles(process,token);
-    let expected=endpoint(data).unwrap();
+    let expected_identity=identity::path(&executable(data)).unwrap();
+    let expected_contents=Sha256::digest(std::fs::read(executable(data)).unwrap());
     let expected_folder=crate::profile::user_folder();
     ImpersonateLoggedOnUser(token).unwrap();
     struct Revert;impl Drop for Revert{fn drop(&mut self){unsafe{RevertToSelf().unwrap();}}}
     let _revert=Revert;
     let old=executable(data).canonicalize();
-    let actual=endpoint(data).expect("Store token NT identity");
-    assert_eq!(crate::profile::user_folder(),expected_folder,"known folder is stable under Store token");
-    assert_eq!(actual,expected,"restricted and normal tokens choose the same endpoint");
+    // Impersonation cannot query this desktop probe's process token as though
+    // it belonged to the package. Probe the exact file-identity/read operations
+    // separately; full IPC/TSF acceptance still requires the installed host.
+    let mut file=File::open(executable(data)).expect("restricted file read");
+    let actual=identity::file_path(&file).expect("restricted NT identity");
+    let mut contents=Vec::new();file.read_to_end(&mut contents).unwrap();
+    use windows::Win32::{UI::Shell::*,System::Com::CoTaskMemFree};
+    let folder=SHGetKnownFolderPath(&FOLDERID_LocalAppData,KF_FLAG_NO_PACKAGE_REDIRECTION|KF_FLAG_DONT_VERIFY,Some(token)).unwrap();
+    let actual_folder=PathBuf::from(folder.to_string().unwrap()).join("Shanjie");CoTaskMemFree(Some(folder.0.cast()));
+    assert_eq!(actual_folder,expected_folder,"known folder is stable under AppContainer token");
+    assert_eq!(actual,expected_identity,"restricted and normal tokens resolve identical file identity");
+    assert_eq!(Sha256::digest(contents),expected_contents);
     assert_eq!(old.unwrap_err().raw_os_error(),Some(5),"control still reproduces DOS failure");
-    println!("PASS Store token: DOS canonicalize denied; actual NT endpoint identical; content hash readable; trusted known folder identical");
+    println!("PASS AppContainer token: DOS canonicalize denied; NT identity identical; content hash identical; explicit-token known folder identical");
 }}
 use crate::pipe_io::Pipe;
 use std::os::windows::fs::OpenOptionsExt;

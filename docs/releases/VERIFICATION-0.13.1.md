@@ -10,7 +10,28 @@
 
 ## 本版驗證
 
-執行證據保存在本機 `build/release-0.13.1/`；完成結果於發布前補齊。測試僅使用自建視窗、公開詞例與隔離資料，不安裝或改動真實輸入法。
+執行證據保存在本機 `build/release-0.13.1/`。測試僅使用自建視窗、公開詞例與隔離資料，不安裝或改動真實輸入法。
+
+| 範圍 | 已完成結果與界線 |
+| --- | --- |
+| 建置 | Windows release x64／x86、WinUI x64 0.13.1 成功；未啟用 input-diagnostics |
+| 混打與輸入 | x64／x86 各 135/135，保留數字、r3／r4／r6／r7、有效注音與標點等既有案例 |
+| TSF／取消 | 兩架構各 18/18 相容性、15/15 浮層生命週期；不切換的私有桌面，覆蓋 Shift、交接、cmd 單次提交、取消／重入／來源存活 |
+| 單元與 helper | Windows 45 passed、4 ignored；其中三項指定 helper 後另測通過，僅隔離 HKCU registry fixture 未執行。跨程序 UIA 可編輯／唯讀取詞、保護欄位、逾時回收及浮層測試通過 |
+| 浮層 DPI／層級 | 本機實際 192 DPI：跨程序三種來源 awareness 各測滑鼠取消／Esc，尺寸 880×588，native owner 為 helper、實際 z-order 在來源上方、未改前景、來源仍存活。單元另測來源重新置頂後浮層回到其上方。100／150% 與混合螢幕尚未實機覆蓋 |
+| 使用者資料 | 真正原生介面在一般、封裝 LocalAppData、systemprofile 環境傳入下均回同一使用者位置；不讀寫真實個人資料。WinUI 隔離字典 LF／CRLF／CR 各兩列往返通過 |
+| 受限檔案操作 | 既有 ShellExperienceHost AppContainer 權杖下，舊 DOS canonicalize 仍回 Win32 5；本版 NT 檔案身分、內容雜湊、明確權杖的已知資料夾均與一般使用者一致。只作檔案／API 驗證，不是 Store 的完整 TSF 實機驗收 |
+| 核心恢復 | x64／x86 客戶端各 8 項，使用隔離的 64 位元測試核心：期限、遺失回覆、忙碌、重啟、模糊結果及容量回復通過 |
+| 失敗紀錄 | 20 次失敗開啟只寫三個階段，保留 Win32 3／HRESULT，測試識別字與資料路徑未寫入 |
+| 模型故障契約 | Python 18/18 通過；保留退步可選、完整性、競態／網路故障與非空發布保護 |
+
+首次一般元件測試在受限執行環境碰到排程／pipe 查詢限制；相同測試在獨立資料與正常桌面權限下重跑通過。舊相容性 harness 和已安裝 0.13.0 的 helper 共用桌面，會被正常手勢接管，因此 0.13.0 與新版都不會開啟舊 TSF 面板；harness 已補獨立桌面，回歸通過，未為測試停用真正 helper。
+
+建置仍有既有 COM export／extern 宣告與 WinUI x:Bind analyzer 警告；本機 NuGet vulnerability feed 無法連線，不宣稱完成線上弱點稽核。真正受限程序、不同 DPI／長時間仍依下方界線驗收。
+
+## GitHub 工作流程
+
+[Node.js 24 release 乾跑 40869327960](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40869327960) 成功，source `71f82a3412db2a5c256ede368507be7e96f0b9de`；不建立 Release、不覆寫既有資產，建置 artifact 上傳成功。檢查註記沒有 Node.js 20 警告，保留既有 WinUI analyzer 警告及 Ubuntu runner 系統更新通知。
 
 ## 實機界線
 

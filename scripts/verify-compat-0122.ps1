@@ -45,6 +45,8 @@ try {
   $start.UseShellExecute=$false;$start.CreateNoWindow=$true
   $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
   $start.Environment['LOCALAPPDATA']=$fixture
+  New-Item -ItemType Directory -Path "$fixture/temp" -Force|Out-Null
+  $start.Environment['TEMP']="$fixture/temp";$start.Environment['TMP']="$fixture/temp"
   foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL')){$start.Environment[$key]='1'}
   $start.Environment['SHANJIE_TEST_ROOT']=$fixture
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}

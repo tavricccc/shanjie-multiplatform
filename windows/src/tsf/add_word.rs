@@ -156,7 +156,7 @@ impl Data {
                 let retired=self.word_popup.borrow_mut().replace(popup);drop(retired);
                 self.diagnostic("word.popup.result",Some(&selected.context),None,Some(0));
             },
-            Err(e)=>{self.diagnostic("word.popup.result",Some(&selected.context),None,Some(e.code().0));super::trace(format_args!("word popup: {}",e.code()))}
+            Err(e)=>{crate::runtime_log::io("word.popup.open",&std::io::Error::from_raw_os_error(e.code().0));self.diagnostic("word.popup.result",Some(&selected.context),None,Some(e.code().0));super::trace(format_args!("word popup: {}",e.code()))}
         }
     }
     pub(super) fn word_closed(&self) {

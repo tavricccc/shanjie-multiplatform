@@ -9,6 +9,12 @@ HWND panel() { HWND window=nullptr; while((window=FindWindowExW(nullptr,window,L
 int wmain(int argc,wchar_t**argv) {
     require(argc==3,900);std::wstring scenario=argv[2];
     require(GetEnvironmentVariableW(L"SHANJIE_HEADLESS",nullptr,0)>0,901);
+    // Isolate from the user's resident helper. A ready helper correctly disables
+    // the legacy TSF gesture on its own desktop; that is not a popup regression.
+    auto desktopName=L"Shanjie.Compat."+std::to_wstring(GetCurrentProcessId());
+    auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+    require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+    std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),902);
     auto dll=LoadLibraryW(argv[1]);require(dll!=nullptr,903);
     auto get=(HRESULT(WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject");require(get!=nullptr,904);

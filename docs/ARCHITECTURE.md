@@ -20,6 +20,12 @@ Windows 版是原生 Rust TSF 輸入法，Linux 版是 IBus 引擎，兩者共�
 
 Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入）。所有前端透過本機管道連到同一個 x64 常駐核心 `ShanjieCore`，詞庫與模型只載入一次。核心忙碌或斷線時，前端依請求序號確認結果，只重建已確認的未提交組字。
 
+核心端點以使用者 SID、工作階段、核心檔案的 NT 路徑與內容、正式個人資料位置區分。NT 身分由已開啟的同一檔案取得，避免 AppContainer 無法解析 DOS 裝置路徑；啟動仍使用原 Windows 執行路徑。一般客戶端以伺服器的 NT image path 比對；受限宿主沿用僅能連至同使用者端點的既有隔離政策。
+
+個人資料由明確的目前程序權杖呼叫 Windows Known Folder API，停用封裝重新導向；核心、TSF 與 WinUI 共用原生介面，不依宿主傳入的 LOCALAPPDATA／USERPROFILE 決定位置。只有明確的隔離測試旗標允許測試資料重導向。既有個人資料不重寫或自動合併其他位置副本。
+
+唯讀加詞由一般使用者權限的 `shanjie-word-helper.exe` 協調，在可回收的子程序取得 UIA 選取。helper 在任何視窗建立前啟用 PerMonitorV2；浮層依自身 HWND DPI 單次換算，使用實體錨點，並隨選取位置更新。native owner 留在 helper 內，以 NOACTIVATE／TOOLWINDOW 暫時置頂，來源失效即關閉，取消非同步處理；不變更 TSF 宿主程序的 DPI 或服務權限。
+
 ## 候選窗
 
 單一 Win32 layered popup，由 Rust 以 Direct2D／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點，沒有陰影與動畫；alpha 只用於外側圓角抗鋸齒，正文不透明。

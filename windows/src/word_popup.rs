@@ -276,6 +276,20 @@ impl Panel {
         if !self.headless&&(!IsWindow(Some(self.owner)).as_bool()||IsIconic(self.owner).as_bool()){self.close();return;}
         if !self.headless && !foreground.is_invalid() && GetAncestor(foreground,GA_ROOT) != GetAncestor(self.owner,GA_ROOT)
             && !(self.standalone&&GetAncestor(foreground,GA_ROOT)==self.window) { self.close(); return; }
+        if self.standalone {
+            // A source can raise itself after ShowWindow (including a topmost
+            // source). Reassert only if it is actually above this transient panel.
+            let source=GetAncestor(self.owner,GA_ROOT);
+            let mut cursor=GetTopWindow(None).unwrap_or_default();
+            for _ in 0..512 {
+                if cursor.is_invalid()||cursor==self.window{break;}
+                if cursor==source {
+                    let _=SetWindowPos(self.window,Some(HWND_TOPMOST),0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
+                    break;
+                }
+                cursor=GetWindow(cursor,GW_HWNDNEXT).unwrap_or_default();
+            }
+        }
         if self.check_due.is_some_and(|due|Instant::now()>=due){self.inspect(false);}
         while let Ok(answer) = self.receiver.try_recv() {
             if !self.active() { continue; }
@@ -424,6 +438,13 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             assert!(GetWindowLongPtrW(window,GWL_EXSTYLE) as isize&WS_EX_TOPMOST.0 as isize!=0);
             assert_eq!(GetWindow(window,GW_OWNER).unwrap(),helper,"retain in-process owner");
             assert_eq!(GetForegroundWindow(),foreground,"show does not activate");
+            SetWindowPos(source,Some(HWND_TOPMOST),0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE).unwrap();
+            SendMessageW(window,WM_TIMER,Some(WPARAM(1)),Some(LPARAM(0)));
+            let mut cursor=GetTopWindow(None).unwrap();
+            for _ in 0..512 {
+                assert_ne!(cursor,source,"source raising itself must not cover the panel");
+                if cursor==window{break;}cursor=GetWindow(cursor,GW_HWNDNEXT).unwrap();
+            }
             let font=HFONT(SendMessageW(GetDlgItem(Some(window),3).unwrap(),WM_GETFONT,None,None).0 as _);
             let mut metrics=LOGFONTW::default();GetObjectW(font.into(),std::mem::size_of::<LOGFONTW>() as i32,Some((&mut metrics as *mut LOGFONTW).cast()));
             assert_eq!(metrics.lfHeight,-16*dpi/96);
