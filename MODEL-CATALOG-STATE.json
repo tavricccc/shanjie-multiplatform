@@ -1,9 +1,80 @@
 {
   "format": 1,
   "loader_profile": "windows-bundle-v1",
-  "pending": [],
-  "source_snapshot": "e3657dd42d17932d8f11223fecf84924a2acca12917424babe82aa9e05fac7d0",
+  "pending": [
+    {
+      "filename": "trigram-chat.sjt3",
+      "reason": "Unknown model attachment role",
+      "release": "sj-cx-2-950k",
+      "state": "unsupported"
+    }
+  ],
+  "source_snapshot": "813b1eb45f326906472af29600fb01a4a9eee6ead9bff39065221a6b67812979",
   "sources": [
+    {
+      "asset_id": 684859823,
+      "digest": "sha256:4c1071f2d6fb609c47724ddb1aace69f9b458c2cc69026ea9fe4d4b749a8ff43",
+      "filename": "classes.sjc",
+      "release": "sj-wc-6-512c",
+      "release_id": 426614517,
+      "size": 6091126
+    },
+    {
+      "asset_id": 684861896,
+      "digest": "sha256:f7d0ac6377bfe973cf4239a949d7a763f1acb0095e50bc6c1323bd3ed09d3478",
+      "filename": "tinylm.sjtl",
+      "release": "sj-sr-7-15m",
+      "release_id": 426615379,
+      "size": 14886880
+    },
+    {
+      "asset_id": 684858208,
+      "digest": "sha256:e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a",
+      "filename": "bigram.sjlm",
+      "release": "sj-lm-7-9.7m",
+      "release_id": 426614173,
+      "size": 88467490
+    },
+    {
+      "asset_id": 684860094,
+      "digest": "sha256:880ee87c6cbedf4097a8f73540de335a5bfe6abb48413513a83e7f75254e985a",
+      "filename": "kn.sjkn",
+      "release": "sj-kn-2-397k",
+      "release_id": 426614610,
+      "size": 1587772
+    },
+    {
+      "asset_id": 684860333,
+      "digest": "sha256:34305a2d749dcd7f8528250e03f24a8cb7f1042a940669a415374cdfbbc8d8eb",
+      "filename": "trigram.sjt3",
+      "release": "sj-cx-2-7.7m",
+      "release_id": 426614708,
+      "size": 133297536
+    },
+    {
+      "asset_id": 684862218,
+      "digest": "sha256:eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22",
+      "filename": "colloquial-attribution.tsv",
+      "release": "sj-cl-2-69k",
+      "release_id": 426615480,
+      "size": 2000233
+    },
+    {
+      "asset_id": 684862213,
+      "digest": "sha256:81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4",
+      "filename": "colloquial.sjlm",
+      "release": "sj-cl-2-69k",
+      "release_id": 426615480,
+      "size": 4713933
+    },
+    {
+      "asset_id": 684862219,
+      "digest": "sha256:a3263ef3682f6bad26bc0728ebe2165981275f74fc1f80d5abb1c617c2a931a9",
+      "filename": "sj-cl-2-69k.NOTICE.txt",
+      "release": "sj-cl-2-69k",
+      "release_id": 426615480,
+      "size": 2830
+    },
     {
       "asset_id": 660257933,
       "digest": "sha256:eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22",
