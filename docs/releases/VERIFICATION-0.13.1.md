@@ -35,6 +35,8 @@
 
 [Node.js 24 release 乾跑 40869327960](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40869327960) 成功，source `71f82a3412db2a5c256ede368507be7e96f0b9de`；不建立 Release、不覆寫既有資產，建置 artifact 上傳成功。檢查註記沒有 Node.js 20 警告，保留既有 WinUI analyzer 警告及 Ubuntu runner 系統更新通知。
 
+[模型乾跑 40869322882](https://github.com/tavricccc/shanjie-multiplatform/actions/runs/40869322882) 成功，21 組可用配套；另有 `sj-cx-2-950k` 的新附件角色 `trigram-chat.sjt3` 為 unsupported，未冒稱支援新輔助模型。artifact SHA-256、archive 目錄契約與 publication plan 全檔雜湊均通過，註記無 Node.js 20 警告。此乾跑未更新線上資料。
+
 ## 實機界線
 
 本輪不執行 UAC 安裝、不更動登入排程或系統 DPI，也不重啟 Explorer。修正後的 Store 中文完整輸入、真正宿主顯示、不同螢幕縮放與登入單例仍需安裝後驗收。不可把自建跨程序視窗或 API 測試寫成這些已通過。
