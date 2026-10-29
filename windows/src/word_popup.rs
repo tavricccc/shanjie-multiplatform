@@ -421,7 +421,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             let window=p.window();let dpi=GetDpiForWindow(window) as i32;
             let mut rect=RECT::default();GetWindowRect(window,&mut rect).unwrap();
             assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));
-            assert!(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize!=0);
+            assert!(GetWindowLongPtrW(window,GWL_EXSTYLE) as isize&WS_EX_TOPMOST.0 as isize!=0);
             assert_eq!(GetWindow(window,GW_OWNER).unwrap(),helper,"retain in-process owner");
             assert_eq!(GetForegroundWindow(),foreground,"show does not activate");
             let font=HFONT(SendMessageW(GetDlgItem(Some(window),3).unwrap(),WM_GETFONT,None,None).0 as _);

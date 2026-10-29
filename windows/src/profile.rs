@@ -24,10 +24,16 @@ pub fn folder() -> PathBuf {
     USER.get_or_init(user_folder).clone()
 }
 pub(crate) fn user_folder()->PathBuf {
-    use windows::Win32::{UI::Shell::*,System::Com::CoTaskMemFree};
+    use windows::Win32::{UI::Shell::*,System::{Com::CoTaskMemFree,Threading::*},Security::*,Foundation::*};
     unsafe {
+        // An explicit process token makes Shell use this user's profile rather
+        // than expanding a host-supplied USERPROFILE environment variable.
+        let mut token=HANDLE::default();
+        OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY|TOKEN_IMPERSONATE,&mut token).expect("Windows user token unavailable");
+        struct Token(HANDLE);impl Drop for Token{fn drop(&mut self){unsafe{let _=CloseHandle(self.0);}}}
+        let _token=Token(token);
         let flags=KF_FLAG_NO_PACKAGE_REDIRECTION|KF_FLAG_DONT_VERIFY;
-        let result=SHGetKnownFolderPath(&FOLDERID_LocalAppData,flags,None);
+        let result=SHGetKnownFolderPath(&FOLDERID_LocalAppData,flags,Some(token));
         match result {
             Ok(value)=>{
                 let path=PathBuf::from(value.to_string().expect("known folder UTF-16"));
@@ -38,7 +44,7 @@ pub(crate) fn user_folder()->PathBuf {
                 crate::runtime_log::io("profile.known_folder",&std::io::Error::from_raw_os_error(e.code().0));
                 // A trusted profile path still avoids a packaged/systemprofile
                 // environment inherited from a host. Do not create the folder.
-                let value=SHGetKnownFolderPath(&FOLDERID_Profile,flags,None).expect("Windows user profile unavailable");
+                let value=SHGetKnownFolderPath(&FOLDERID_Profile,flags,Some(token)).expect("Windows user profile unavailable");
                 let path=PathBuf::from(value.to_string().expect("profile UTF-16"));
                 CoTaskMemFree(Some(value.0.cast()));
                 path.join("AppData/Local/Shanjie")

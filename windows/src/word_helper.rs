@@ -321,7 +321,7 @@ pub fn display_fixture(source:usize,owner:u32)->Result<()> {unsafe{
         let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(w) as i32;
         assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));
         assert_eq!(GetWindow(w,GW_OWNER)?,helper);assert_eq!(GetForegroundWindow(),foreground);
-        assert!(GetWindowLongPtrW(w,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize!=0);
+        assert!(GetWindowLongPtrW(w,GWL_EXSTYLE) as isize&WS_EX_TOPMOST.0 as isize!=0);
         let mut cursor=GetTopWindow(None)?;let mut saw_popup=false;
         while !cursor.is_invalid(){if cursor==w{saw_popup=true;}if cursor==source{assert!(saw_popup,"popup above source in actual z-order");break;}
             cursor=GetWindow(cursor,GW_HWNDNEXT).unwrap_or_default();}
