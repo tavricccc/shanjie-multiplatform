@@ -35,7 +35,7 @@ impl Config {
             data: data.to_owned(),
             keyboard,
             model_revision: p.get("engine", "model_revision", "").into(),
-            engine: crate::broker::Config::from_profile(p, layout),
+            engine: crate::broker::Config { ranking: p.ranking(program().as_deref()), ..crate::broker::Config::from_profile(p, layout) },
         }
     }
     fn load(&self) -> Option<(Engine, Pinyin)> {
@@ -56,6 +56,10 @@ enum Load {
 pub(super) struct Pending {
     config: Config,
     load: Load,
+}
+/// The executable this input method is loaded into, for `[engine] ranking=auto`; never logged or sent to the core.
+fn program() -> Option<String> {
+    Some(std::env::current_exe().ok()?.file_name()?.to_str()?.to_owned())
 }
 // Keep one spare core per process, including a load still in flight. Active
 // services own separate engines; composition state is never shared.
