@@ -9,7 +9,7 @@ use crate::{
 use shanjie_core::ffi::ShanjieKey;
 use shanjie_shell::{
     input::{self, Associated, Pinyin, Special},
-    profile::Document,
+    profile::{Document, REBUILD},
     protocol::{Failure, Op, Snapshot},
 };
 use std::{collections::BTreeSet, path::PathBuf};
@@ -37,14 +37,8 @@ pub fn config(data: &std::path::Path, p: &Document) -> (Config, u32) {
         Config {
             data: data.to_owned(),
             folder: profile::folder(),
-            layout: layout(keyboard),
-            ranking: (p.get("engine", "ranking", "chat") == "formal") as u32,
-            right: p.get("candidates", "anchor", "right") == "right",
-            learning: p.flag("input", "learning", true),
-            big5: p.flag("candidates", "big5", false),
-            dictionary: p.get("input", "dictionary", "dictionary.tsv").to_owned(),
-            prediction: p.flag("engine", "prediction", false),
             model: profile::model(data, &p.model_id()),
+            engine: shanjie_shell::protocol::Config::from_profile(p, layout(keyboard)),
         },
         keyboard,
     )
@@ -691,23 +685,6 @@ impl Shanjie {
     }
 }
 
-/// service.rs `refresh`: settings that change how the core is built.
-const REBUILD: [(&str, &str); 14] = [
-    ("input", "keyboard"),
-    ("engine", "ranking"),
-    ("engine", "class_table"),
-    ("engine", "model_id"),
-    ("engine", "model_revision"),
-    ("candidates", "anchor"),
-    ("input", "learning"),
-    ("candidates", "big5"),
-    ("input", "dictionary"),
-    ("input", "context"),
-    ("input", "mixed_input"),
-    ("input", "upstream_english"),
-    ("input", "english_inline"),
-    ("input", "space_inputs_zhuyin"),
-];
 
 impl Session for Shanjie {
     fn key(&mut self, keyval: u32, keycode: u32, state: u32, out: &mut Effects) -> bool {

@@ -20,14 +20,9 @@ const LOCK_WAIT: Duration = Duration::from_millis(250);
 pub struct Config {
     pub data: PathBuf,
     pub folder: PathBuf,
-    pub layout: u32,
-    pub ranking: u32,
-    pub right: bool,
-    pub learning: bool,
-    pub big5: bool,
-    pub dictionary: String,
-    pub prediction: bool,
+    /// The resolved main model; its side files sit beside it.
     pub model: PathBuf,
+    pub engine: shanjie_shell::protocol::Config,
 }
 
 pub struct Engine {
@@ -62,8 +57,9 @@ impl Engine {
             learning_loaded: false,
             failure: None,
         };
-        let personal = config.folder.join(&config.dictionary);
-        if config.dictionary != "dictionary.tsv" && !personal.exists() {
+        let (engine, model) = (&config.engine, &config.model);
+        let personal = config.folder.join(&engine.dictionary);
+        if engine.dictionary != "dictionary.tsv" && !personal.exists() {
             return None;
         }
         let dictionary = if personal.exists() && personal.metadata().ok()?.len() != 0 {
@@ -71,34 +67,45 @@ impl Engine {
         } else {
             None
         };
+        let side = |name: &str| CString::new(model.with_file_name(name).to_str()?).ok();
         unsafe {
             if shanjie_windows_engine_new(
                 CString::new(config.data.to_str()?).ok()?.as_ptr(),
                 dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
-                config.layout,
-                shanjie_core::engine::PACK_ACG,
+                engine.layout,
+                engine.packs(),
                 &mut e.handle,
             ) != 0
             {
                 return None;
             }
-            e.operation(|h, o| shanjie_engine_set_prediction(h, config.prediction as u32, o))?;
-            let lm = CString::new(config.model.to_str()?).ok()?;
+            let lm = CString::new(model.to_str()?).ok()?;
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }
-            // The word list only matters when upstream inline English is switched on; a missing
-            // list leaves that mode inert instead of failing the engine.
+            // Missing or failed: the n-gram alone. 常談 only serves the small model's rerank.
+            if side("tinylm.sjtl").is_some_and(|t| shanjie_engine_load_tinylm(e.handle, t.as_ptr()) == 0) {
+                if let Some(table) = side("colloquial.sjlm") {
+                    shanjie_engine_load_colloquial(e.handle, table.as_ptr());
+                }
+            }
+            // A missing list leaves inline English inert instead of failing the engine.
             if let Some(list) = config.data.join("english-words.txt").to_str().and_then(|p| CString::new(p).ok()) {
                 shanjie_engine_load_english(e.handle, list.as_ptr());
             }
-            e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;
-            if shanjie_windows_set_candidate_anchor(e.handle, config.right as u32) != 0
-                || shanjie_windows_set_candidate_charset(e.handle, config.big5 as u32) != 0
+            // A new engine starts with the core's defaults, so every switch is sent each time.
+            e.operation(|h, o| shanjie_engine_set_prediction(h, engine.prediction as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_english_key_order(h, engine.english_key_order as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_fuzzy(h, engine.fuzzy, o))?;
+            e.operation(|h, o| shanjie_engine_set_rerank(h, engine.rerank as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_rerank_level(h, engine.rerank_level, o))?;
+            e.operation(|h, o| shanjie_engine_set_profile(h, engine.ranking, o))?;
+            if shanjie_windows_set_candidate_anchor(e.handle, engine.right as u32) != 0
+                || shanjie_windows_set_candidate_charset(e.handle, engine.big5 as u32) != 0
             {
                 return None;
             }
-            if config.learning {
+            if engine.learning {
                 e.lock = Some(lock::open(&config.folder, lock::LEARNING).ok()?);
                 e.folder = config.folder.clone();
                 if !e.begin() {
@@ -179,7 +186,7 @@ impl Engine {
         unsafe {
             let r = &*raw;
             let string = |p| CStr::from_ptr(p).to_str().unwrap().to_owned();
-            let out = Snapshot {
+            let mut out = Snapshot {
                 handled: r.handled != 0,
                 commit: string(r.commit),
                 preedit: string(r.preedit),
@@ -195,6 +202,24 @@ impl Engine {
                 associated: false,
             };
             shanjie_output_free(raw);
+            // The engine process is the resident core; like Windows, a queued rerank runs here, between
+            // keys. The upstream generation guard drops a stale result.
+            let mut job = ptr::null_mut();
+            if shanjie_engine_rerank_take(self.handle, &mut job) == 0 && !job.is_null() {
+                let mut ranked = ptr::null_mut();
+                if shanjie_rerank_run(job) == 0 && shanjie_engine_rerank_apply(self.handle, job, &mut ranked) == 0 && !ranked.is_null() {
+                    let r = &*ranked;
+                    out.preedit = string(r.preedit);
+                    out.cursor = r.cursor_utf16;
+                    out.candidates = (0..r.candidate_count).map(|i| string(*r.candidates.add(i as usize))).collect();
+                    out.selected = usize::try_from(r.candidate_selected).ok();
+                    out.columns = r.candidate_columns;
+                    out.first = r.candidate_first;
+                    out.total = r.candidate_total;
+                    shanjie_output_free(ranked);
+                }
+                shanjie_rerank_free(job);
+            }
             Some(out)
         }
     }

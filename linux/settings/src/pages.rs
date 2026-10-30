@@ -406,7 +406,7 @@ fn about(ui: &Shared) -> Vec<adw::PreferencesGroup> {
 
     let microsoft = group("與微軟注音的差異", "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。");
     microsoft.add(&link(ui, "微軟注音官方操作說明", "https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime"));
-    microsoft.add(&link(ui, "上游 model-v6 與詞類表說明", "https://github.com/Nanako0129/shanjie/releases/tag/model-v6"));
+    microsoft.add(&link(ui, "上游模型與詞類表說明", "https://github.com/Nanako0129/shanjie/blob/main/data/models.tsv"));
 
     let gnome = group("GNOME 上的差異", "候選框由 GNOME 繪製，外觀、字型大小與主題跟隨系統；中／英狀態顯示在頂端列，沒有游標旁提示。尚未提供反白加詞（連按兩次 Ctrl／Ctrl＋Shift＋F12）。翻頁可用空白、Page Up 與 Page Down。設定檔與詞庫位於 ~/.local/share/shanjie。");
     vec![about, microsoft, gnome]

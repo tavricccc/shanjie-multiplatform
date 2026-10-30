@@ -8,36 +8,9 @@ if ([IO.Path]::IsPathRooted($Output) -or $Output.Split('/') -contains '..') { th
 $target = [IO.Path]::GetFullPath((Join-Path $root $Output))
 $stage = "$target.stage"
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-New-Item -ItemType Directory -Path "$stage/LICENSES","$root/build/model" -Force | Out-Null
-$manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
-function Get-VerifiedAsset($asset,[string]$name) {
-    $source = Join-Path $root "build/model/$($asset.source)"
-    if (!(Test-Path -LiteralPath $source) -or (Get-FileHash -LiteralPath $source).Hash.ToLowerInvariant() -ne $asset.sha256) {
-        & "$root/scripts/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$($asset.release)/$name" -Destination $source -Size $asset.size -Sha256 $asset.sha256
-    }
-    return $source
-}
-foreach ($entry in $manifest.models) {
-    $source = Get-VerifiedAsset $entry 'bigram.sjlm'
-    $mapped = Join-Path $stage $entry.mapped
-    New-Item -ItemType Directory -Path (Split-Path $mapped -Parent) -Force | Out-Null
-    $classes = '-'
-    if ($entry.classes) {
-        $classes = Get-VerifiedAsset $entry.classes 'classes.sjc'
-        Copy-Item -LiteralPath $classes -Destination (Join-Path (Split-Path $mapped -Parent) 'classes.sjc') -Force
-    }
-    cargo run --release --quiet --manifest-path "$root/build/core/Cargo.toml" --bin map-model -- $source $mapped $classes
-    if ($LASTEXITCODE) { throw "Mapped model equivalence verification failed: $($entry.release)" }
-}
-Copy-Item "$root/upstream/shanjie/data/lexicon/*" $stage -Force
-Copy-Item "$root/data/pinyin-map.tsv" $stage -Force
-New-Item -ItemType Directory -Path "$stage/packs" -Force | Out-Null
-Copy-Item "$root/upstream/shanjie/data/packs/acg-add.tsv","$root/upstream/shanjie/data/packs/acg-sources.tsv","$root/upstream/shanjie/data/packs/acg.json" "$stage/packs" -Force
-# Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
-& "$root/scripts/prepare-english.ps1" | Out-Null
-Copy-Item "$root/build/english-words.txt" "$stage/english-words.txt" -Force
-Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$stage/LICENSES" -Force
-Copy-Item "$root/data/README.md" "$stage/LICENSES/pinyin-data.md" -Force
+New-Item -ItemType Directory -Path $stage -Force | Out-Null
+& "$root/scripts/prepare-models.ps1" -Output "$Output.stage" | Out-Null
+& "$root/scripts/prepare-data.ps1" -Output "$Output.stage"
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 Move-Item -LiteralPath $stage -Destination $target
 Write-Output "prepared $Output"

@@ -161,8 +161,7 @@ impl Draft {
     }
 
     fn write_model(&mut self) {
-        let table = if self.model_id == "model-v6-classes-v4" { 4 } else { 5 };
-        self.doc.set("engine", "class_table", table);
+
         self.doc.set("engine", "model_id", &self.model_id);
         self.doc.set("engine", "model_revision", &self.model_revision);
     }
@@ -397,7 +396,7 @@ mod tests {
         assert_eq!(draft.number("appearance", "font_size"), 16);
         // Loading migrates, which fills missing keys from the operation set's template.
         assert_eq!(draft.text("candidates", "open"), "both");
-        assert_eq!(draft.number("engine", "class_table"), 5);
+        assert_eq!(draft.text("engine", "model_id"), shanjie_shell::profile::BUILTIN);
     }
 
     #[test]

@@ -19,7 +19,7 @@ const AGENT: &str = concat!("Shanjie-Linux/", env!("CARGO_PKG_VERSION"));
 const LIST_LIMIT: u64 = 8 * 1024 * 1024;
 const RELEASES: &str = "https://api.github.com/repos/Nanako0129/shanjie/releases";
 const REMOTE_CATALOG: &str = "https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/main/MODEL-CATALOG.json";
-pub const BUILTIN_NAME: &str = "model-v6＋classes-v5（內建）";
+pub const BUILTIN_NAME: &str = "SJ-LM-7＋SJ-WC-6 完整配套（內建）";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Choice {
@@ -120,20 +120,18 @@ fn has_asset(releases: &[Release], tag: &str, name: &str, size: u64, hash: &str)
 
 pub fn rows(releases: &[Release], known: &[Spec], installed: &[Choice]) -> Vec<Row> {
     let releases: Vec<_> = releases.iter().filter(|r| r.tag_name.is_some() && r.assets.is_some()).cloned().collect();
-    let mut out = Vec::new();
+    let mut out = vec![Row { name: BUILTIN_NAME.into(), state: "內建".into(), spec: None, available: false }];
     for spec in known.iter().filter(|s| valid_spec(s)) {
         let available = has_asset(&releases, &spec.model_release, "bigram.sjlm", spec.model_size, &spec.model_sha256)
             && has_asset(&releases, &spec.classes_release, "classes.sjc", spec.classes_size, &spec.classes_sha256);
-        let state = if spec.id == BUILTIN {
-            "內建".to_owned()
-        } else if installed.iter().any(|c| c.id == spec.id) {
+        let state = if installed.iter().any(|c| c.id == spec.id) {
             "已下載".to_owned()
         } else if available {
             format!("可下載 · {:.1} MiB", (spec.model_size + spec.classes_size) as f64 / 1048576.0)
         } else {
             "線上附件無法核對".to_owned()
         };
-        out.push(Row { name: spec.name.clone(), state, spec: Some(spec.clone()), available: available && spec.id != BUILTIN });
+        out.push(Row { name: spec.name.clone(), state, spec: Some(spec.clone()), available });
     }
     for release in &releases {
         let tag = release.tag_name.as_deref().unwrap_or_default();
@@ -434,9 +432,10 @@ mod tests {
     }
 
     #[test]
-    fn bundled_catalog_lists_the_builtin_package() {
+    fn bundled_catalog_offers_the_old_builtin_as_a_download() {
         let known = known();
-        assert!(known.iter().any(|s| s.id == BUILTIN && valid_spec(s)));
+        assert!(known.iter().all(|s| s.id != BUILTIN));
+        assert!(known.iter().any(|s| s.id == "model-v6-classes-v5" && valid_spec(s)));
     }
 }
 
