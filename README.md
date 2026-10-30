@@ -3,8 +3,8 @@
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 與 Linux 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，並加了一些我們想要的功能，例如微軟注音鍵位、中英混打、雙 Ctrl 加詞、線上模型管理。
 
 - **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.12.2**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
-- **Linux**：Fedora GNOME 上的 IBus 輸入法，測試版 **0.12.1**。
-- **上游**：使用善解 v0.4.7 Release 的核心、詞庫與模型。
+- **Linux**：Fedora GNOME 上的 IBus 輸入法，最後測試版 **0.12.1**，已停止維護。
+- **上游**：使用善解 v0.6.0 的核心、詞庫與整組模型。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。
 
@@ -64,7 +64,9 @@
 
 個人設定在 `%LOCALAPPDATA%\Shanjie\profile.ini`。直接改檔後，按設定頁的「重新啟動輸入法」或重新啟用善解才會讀取；這個按鈕不會終止 App，也換不掉 App 已載入的舊版 DLL。
 
-## Linux（Fedora GNOME／IBus）
+## Linux（Fedora GNOME／IBus，已停止維護）
+
+Linux 版停在 0.12.1，不再發布，也不再驗證。`linux/` 已跟著共用的引擎設定改寫到上游 v0.6.0，但沒有編譯與測試過，可能無法建置。
 
 IBus 引擎、GTK 4＋libadwaita 設定程式與安裝腳本都是 Rust／shell，與 Windows 共用 `shared/` 和同一份 `build/core`。差異見 [Linux 0.10.2 版本說明](docs/releases/RELEASE-NOTES-linux-0.10.2.md)。
 
@@ -90,7 +92,7 @@ pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建�
 pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 ```
 
-推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式、zip 與 Linux tar.gz（Fedora 44 容器）附上；手動執行 workflow 會重建並覆蓋目前版本的安裝包。
+推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式與 zip 附上（Linux tar.gz 的工作由 `RELEASE-CHANNEL.json` 的 `build_linux` 控制，目前關閉）；手動執行 workflow 會重建並覆蓋目前版本的安裝包。
 
 `build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
 
