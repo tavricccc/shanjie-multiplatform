@@ -45,18 +45,21 @@ public static partial class ModelCatalog
             string raw=await Fetch(V2Endpoint,token);
             string verified=await Task.Run(()=>Interop.Native.Take(Interop.Native.sj_catalog_validate(raw)),token);
             list=JsonSerializer.Deserialize<ModelList>(verified,Json)??throw new InvalidDataException("清單無內容。");
-            await File.WriteAllTextAsync(path+".download",verified,token);File.Move(path+".download",path,true);
+            // The signed original is cached: entries this build drops would no longer match its revision.
+            await File.WriteAllTextAsync(path+".download",raw,token);File.Move(path+".download",path,true);
             status+=" 自動維護清單已更新。";
         }
-        catch(Exception error)when(error is IOException or System.Net.Http.HttpRequestException or JsonException or OperationCanceledException)
+        catch(Exception error)when(error is IOException or System.Net.Http.HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
         {
             token.ThrowIfCancellationRequested();
-            if(File.Exists(path))
+            try
             {
+                if(!File.Exists(path))throw new FileNotFoundException();
                 var verified=Interop.Native.Take(Interop.Native.sj_catalog_validate(await File.ReadAllTextAsync(path,token)));
                 list=JsonSerializer.Deserialize<ModelList>(verified,Json);cached=true;status+=" 自動維護清單使用離線快取。";
             }
-            else status+=" 自動維護清單暫時無法取得，仍可使用既有模型。";
+            catch(Exception cache)when(cache is IOException or JsonException or InvalidDataException)
+            {status+=error is InvalidDataException?" 自動維護清單未通過驗證（"+error.Message+"），仍可使用既有模型。":" 自動維護清單暫時無法取得，仍可使用既有模型。";}
         }
         if(list is null)return legacy with {Status=status};
         var rows=legacy.Rows.Where(r=>r.Spec is not null

@@ -130,16 +130,32 @@ pub fn usable(m:&Model)->bool {
 }
 pub fn parse(bytes:&[u8])->Result<Catalog>{
     if bytes.len()>8*1024*1024{return fail("線上模型清單過大。");}
-    let c:Catalog=serde_json::from_slice(bytes)?;
+    let mut c:Catalog=serde_json::from_slice(bytes)?;
     if c.format!=2||c.example_only||c.models.len()>1000||c.revision!=digest(&semantic(serde_json::to_value(&c)?)){return fail("模型清單格式或修訂無效。");}
     let mut ids=BTreeSet::new();
-    for m in &c.models {
-        if m.required_capabilities.iter().all(|x|CAPABILITIES.contains(&x.as_str())){validate(m)?;}
-        else if m.id!=identity(m)||m.advisory_revision!=advisory_revision(m)
-            ||m.assets.iter().any(|a|a.repository!="Nanako0129/shanjie"||!safe_name(&a.filename,120)||!safe_name(&a.release,96)){
-            return fail("未知能力的模型資訊有誤。");
-        }
-        if !ids.insert(&m.id){return fail("模型識別重複。");}
-    }
+    for m in &c.models {if !ids.insert(m.id.as_str()){return fail("模型識別重複。");}}
+    // The list as a whole is signed by its revision; one entry this build cannot check only drops that entry.
+    c.models.retain(|m|if m.required_capabilities.iter().all(|x|CAPABILITIES.contains(&x.as_str())){validate(m).is_ok()}
+        else {m.id==identity(m)&&m.advisory_revision==advisory_revision(m)
+            &&m.assets.iter().all(|a|a.repository=="Nanako0129/shanjie"&&safe_name(&a.filename,120)&&safe_name(&a.release,96))});
     Ok(c)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn signed(mut v:Value)->Vec<u8>{v["revision"]=Value::String(digest(&semantic(v.clone())));serde_json::to_vec(&v).unwrap()}
+    fn model(id:&str,role:&str,file:&str)->Value{serde_json::json!({"id":id,"name":"n","required_capabilities":["lm.sjlm1","lm.classless","map.sjwm2"],
+        "assets":[{"role":role,"repository":"Nanako0129/shanjie","release":"r","filename":file,"format_magic":"SJLM0001","size":1,"sha256":"a".repeat(64),"requires_assets":[]}],
+        "compatibility":[],"advisory_revision":"","advisories":[]})}
+    #[test]
+    fn an_entry_that_fails_validation_is_dropped_not_the_list(){
+        let list=serde_json::json!({"format":2,"revision":"","generated_at":"2026-10-30T15:40:05+08:00","example_only":false,"models":[model("bad","bigram","colloquial.sjlm")]});
+        assert!(parse(&signed(list)).unwrap().models.is_empty());
+    }
+    #[test]
+    fn a_changed_list_is_still_refused(){
+        let mut list:Value=serde_json::from_slice(&signed(serde_json::json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[]}))).unwrap();
+        list["models"]=serde_json::json!([model("added","bigram","bigram.sjlm")]);
+        assert!(parse(&serde_json::to_vec(&list).unwrap()).is_err());
+    }
 }
