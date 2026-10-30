@@ -101,10 +101,11 @@ public sealed partial class MainWindow
         if(modelOperation is not null)return;
         using var cancel=new CancellationTokenSource();modelOperation=cancel;
         var info=new TextBlock {Text="正在取得線上清單…",TextWrapping=TextWrapping.Wrap};
+        var listTime=new TextBlock {Text=ModelCatalog.ListTime(null,false),TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"]};
         var progress=new ProgressBar {IsIndeterminate=true};
         var choices=new ListView {MaxHeight=260,SelectionMode=ListViewSelectionMode.Single};
         var notes=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxWidth=520};
-        var panel=new StackPanel {Spacing=12,MaxWidth=520};panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
+        var panel=new StackPanel {Spacing=12,MaxWidth=520};panel.Children.Add(listTime);panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
         panel.Children.Add(new ScrollViewer{Content=notes,MaxHeight=240});
         panel.Children.Add(new TextBlock {Text="只列相容配套供下載。完成後選入設定草稿，按主視窗「儲存」才套用；個人詞庫與學習資料保留。",TextWrapping=TextWrapping.Wrap});
         var dialog=new ContentDialog {XamlRoot=Root.XamlRoot,Title="取得其他模型",Content=panel,PrimaryButtonText="下載並選取",SecondaryButtonText="取消下載",CloseButtonText="關閉",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
@@ -137,7 +138,7 @@ public sealed partial class MainWindow
         {
             var result=await ModelCatalog.Online(cancel.Token);rows=result.Rows;
             foreach(var row in rows)choices.Items.Add(CatalogItem(row));
-            info.Text=result.Status;progress.IsIndeterminate=false;
+            info.Text=result.Status;listTime.Text=ModelCatalog.ListTime(result.ListGenerated,result.ListCached);progress.IsIndeterminate=false;
         }
         catch(OperationCanceledException){}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException or InvalidDataException or System.Net.Http.HttpRequestException or System.Text.Json.JsonException){info.Text="無法取得線上清單："+error.Message;progress.IsIndeterminate=false;}

@@ -11,7 +11,8 @@ public sealed record ModelSpec(
     string Id, string Name, string ModelRelease, string ClassesRelease,
     string ModelSha256, string ClassesSha256, long ModelSize, long ClassesSize,ModelEntry? Catalog=null);
 public sealed record CatalogRow(string Name, string State, ModelSpec? Spec, bool Available, string Summary="");
-public sealed record CatalogResult(List<CatalogRow> Rows, string Status);
+/// ListGenerated is the maintained list's own generated_at; ListCached marks it as the offline copy.
+public sealed record CatalogResult(List<CatalogRow> Rows, string Status, DateTimeOffset? ListGenerated=null, bool ListCached=false);
 internal sealed record Asset(string Name, long Size, string? Digest, string BrowserDownloadUrl);
 internal sealed record Release(string TagName, bool Draft, bool Prerelease, List<Asset> Assets);
 internal sealed record Compatibility(int Format, List<ModelSpec> Models);

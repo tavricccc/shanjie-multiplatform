@@ -49,6 +49,10 @@ internal static class VisualVerifier
     }
     private static void VerifyCatalogText()
     {
+        var time = Models.ModelCatalog.ListTime(DateTimeOffset.Parse("2026-10-30T06:05:00Z"), false);
+        if (time != "清單更新時間：2026/10/30 14:05（臺灣時間 UTC+8）") throw new InvalidDataException("List time is not Taiwan time: " + time);
+        if (!Models.ModelCatalog.ListTime(DateTimeOffset.Parse("2026-10-30T14:05:00+08:00"), true).EndsWith("・快取")) throw new InvalidDataException("Cached list time is not marked");
+        if (!Models.ModelCatalog.ListTime(null, false).Contains("未知")) throw new InvalidDataException("Missing list time is not marked unknown");
         string longName = string.Concat(Enumerable.Repeat("SJ-LM-7＋SJ-WC-6＋語意重排＋常談 很長的配套名稱 ", 4));
         var item = MainWindow.CatalogItem(new(longName, "可下載", null, true, string.Join("、", Enumerable.Repeat("輸入法實測退步：較長的評測備註標題", 4))));
         foreach (double width in new[] { 240d, 520d })

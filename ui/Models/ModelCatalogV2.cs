@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 namespace Shanjie_UI.Models;
 public sealed record ModelAsset(string Role,string Repository,string Release,string Filename,string FormatMagic,long Size,string Sha256,List<string> RequiresAssets);
@@ -10,6 +11,9 @@ public static partial class ModelCatalog
     public const string V2Endpoint="https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/model-catalog/MODEL-CATALOG-V2.json";
     private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","colloquial.sjlm1"];
     public static bool Supported(ModelEntry entry)=>entry.RequiredCapabilities.All(Capabilities.Contains)&&entry.Compatibility.Any(c=>c.Target=="windows-x64"&&c.ProfileId=="windows-bundle-v1"&&c.State=="usable");
+    /// Taiwan has no daylight saving, so a fixed UTC+8 offset is its local time.
+    public static string ListTime(DateTimeOffset? generated,bool cached)=>generated is not {} at?"清單更新時間：未知／尚未取得"
+        :$"清單更新時間：{at.ToOffset(TimeSpan.FromHours(8)):yyyy/MM/dd HH:mm}（臺灣時間 UTC+8）"+(cached?"・快取":"");
     public static string Notes(ModelEntry? entry)=>entry is null?"尚無此配套的評測／備註資料。":string.Join("\n\n",entry.Advisories.Select(a=>a.Title+"\n"+a.Body));
     private static bool SameSources(ModelEntry m,ModelSpec s)=>m.Assets.All(a=>a.Role is "bigram" or "classes")
         &&m.Assets.SingleOrDefault(a=>a.Role=="bigram")?.Sha256==s.ModelSha256
@@ -35,7 +39,7 @@ public static partial class ModelCatalog
     }
     private static async Task<CatalogResult> WithVersionTwo(CatalogResult legacy,List<Release> releases,CancellationToken token)
     {
-        string path=Path.Combine(Folder,"catalog-v2-cache.json"),status=legacy.Status;ModelList? list=null;
+        string path=Path.Combine(Folder,"catalog-v2-cache.json"),status=legacy.Status;ModelList? list=null;bool cached=false;
         try
         {
             string raw=await Fetch(V2Endpoint,token);
@@ -50,7 +54,7 @@ public static partial class ModelCatalog
             if(File.Exists(path))
             {
                 var verified=Interop.Native.Take(Interop.Native.sj_catalog_validate(await File.ReadAllTextAsync(path,token)));
-                list=JsonSerializer.Deserialize<ModelList>(verified,Json);status+=" 自動維護清單使用離線快取。";
+                list=JsonSerializer.Deserialize<ModelList>(verified,Json);cached=true;status+=" 自動維護清單使用離線快取。";
             }
             else status+=" 自動維護清單暫時無法取得，仍可使用既有模型。";
         }
@@ -70,7 +74,7 @@ public static partial class ModelCatalog
             string state=!supported?"需要更新核心／格式支援":installed.Contains(m.Id)?"已下載":source?"可下載":"來源附件暫時無法核對";
             rows.Add(new(m.Name,state,Spec(m),supported&&source,string.Join("、",m.Advisories.Select(a=>a.Title))));
         }
-        return new(rows,status);
+        return new(rows,status,DateTimeOffset.TryParse(list.GeneratedAt,CultureInfo.InvariantCulture,DateTimeStyles.None,out var at)?at:null,cached);
     }
     private static async Task<ModelChoice> DownloadBundle(ModelSpec spec,IProgress<string> progress,CancellationToken token)
     {
