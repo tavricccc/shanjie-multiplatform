@@ -4,7 +4,7 @@ namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel
 {
     internal bool UpdatingModels=>loading;
-    public ObservableCollection<ModelChoice> AvailableModels { get; } = [new(ModelCatalog.Builtin,"model-v6＋classes-v5（內建）")];
+    public ObservableCollection<ModelChoice> AvailableModels { get; } = [new(ModelCatalog.Builtin,ModelCatalog.BuiltinName)];
     public string ModelId { get; private set; } = ModelCatalog.Builtin;
     public string ModelRevision { get; private set; } = "";
     partial void OnModelVariantChanged(int value)
@@ -16,7 +16,7 @@ public partial class SettingsViewModel
         bool previous=loading;loading=true;
         try
         {
-            AvailableModels.Clear();AvailableModels.Add(new(ModelCatalog.Builtin,"model-v6＋classes-v5（內建）"));
+            AvailableModels.Clear();AvailableModels.Add(new(ModelCatalog.Builtin,ModelCatalog.BuiltinName));
             foreach(var model in models.Where(m=>m.Id!=ModelCatalog.Builtin).DistinctBy(m=>m.Id))AvailableModels.Add(model);
             ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             var selected=AvailableModels.FirstOrDefault(m=>m.Id==ModelId);

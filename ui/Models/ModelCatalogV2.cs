@@ -8,12 +8,15 @@ internal sealed record ModelList(int Format,string Revision,string GeneratedAt,b
 public static partial class ModelCatalog
 {
     public const string V2Endpoint="https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/model-catalog/MODEL-CATALOG-V2.json";
-    private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4"];
+    private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","colloquial.sjlm1"];
     public static bool Supported(ModelEntry entry)=>entry.RequiredCapabilities.All(Capabilities.Contains)&&entry.Compatibility.Any(c=>c.Target=="windows-x64"&&c.ProfileId=="windows-bundle-v1"&&c.State=="usable");
     public static string Notes(ModelEntry? entry)=>entry is null?"尚無此配套的評測／備註資料。":string.Join("\n\n",entry.Advisories.Select(a=>a.Title+"\n"+a.Body));
     private static bool SameSources(ModelEntry m,ModelSpec s)=>m.Assets.All(a=>a.Role is "bigram" or "classes")
         &&m.Assets.SingleOrDefault(a=>a.Role=="bigram")?.Sha256==s.ModelSha256
         &&(m.Assets.SingleOrDefault(a=>a.Role=="classes")?.Sha256??"")==s.ClassesSha256;
+    /// The catalog's entry for the package's own set: the same model files (license notices are not part of it).
+    private static bool IsBuiltin(ModelEntry m)=>m.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256).ToHashSet()
+        .SetEquals(BuiltinAssets.Value.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256));
     private static Dictionary<string,ModelEntry> CachedNotes()
     {
         string path=Path.Combine(Folder,"catalog-v2-cache.json");
@@ -52,17 +55,16 @@ public static partial class ModelCatalog
             else status+=" 自動維護清單暫時無法取得，仍可使用既有模型。";
         }
         if(list is null)return legacy with {Status=status};
-        var builtin=Known().Single(m=>m.Id==Builtin);
         var rows=legacy.Rows.Where(r=>r.Spec is not null
             ?r.Spec.Id==Builtin||!list.Models.Any(m=>SameSources(m,r.Spec))
             :!list.Models.Any(m=>m.Assets.Any(a=>a.Role=="bigram"&&a.Release==r.Name))).ToList();
-        var builtinNotes=list.Models.FirstOrDefault(m=>SameSources(m,builtin));
+        var builtinNotes=list.Models.FirstOrDefault(IsBuiltin);
         int builtinIndex=rows.FindIndex(r=>r.Spec?.Id==Builtin);
-        if(builtinIndex>=0&&builtinNotes is not null)rows[builtinIndex]=rows[builtinIndex] with{Spec=builtin with{Catalog=builtinNotes}};
+        if(builtinIndex>=0&&builtinNotes is not null)rows[builtinIndex]=rows[builtinIndex] with{Spec=BuiltinSpec with{Catalog=builtinNotes}};
         var installed=(await Task.Run(Installed,token)).SelectMany(m=>new[]{m.Id,m.Catalog?.Id??m.Id}).ToHashSet();
         foreach(var m in list.Models)
         {
-            if(SameSources(m,builtin))continue;
+            if(IsBuiltin(m))continue;
             bool supported=Supported(m);
             bool source=m.Assets.All(a=>releases.Any(r=>r.TagName==a.Release&&!r.Draft&&r.Assets.Any(x=>x.Name==a.Filename&&x.Size==a.Size&&x.Digest=="sha256:"+a.Sha256&&x.BrowserDownloadUrl==$"https://github.com/Nanako0129/shanjie/releases/download/{a.Release}/{a.Filename}")));
             string state=!supported?"需要更新核心／格式支援":installed.Contains(m.Id)?"已下載":source?"可下載":"來源附件暫時無法核對";

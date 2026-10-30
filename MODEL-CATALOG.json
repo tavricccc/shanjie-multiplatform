@@ -3,7 +3,7 @@
   "models": [
     {
       "id": "model-v6-classes-v5",
-      "name": "model-v6＋classes-v5（預設配套）",
+      "name": "model-v6＋classes-v5（舊版內建）",
       "model_release": "model-v6",
       "classes_release": "classes-v5",
       "model_sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",

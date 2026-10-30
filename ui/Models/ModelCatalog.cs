@@ -15,10 +15,14 @@ public sealed record CatalogResult(List<CatalogRow> Rows, string Status);
 internal sealed record Asset(string Name, long Size, string? Digest, string BrowserDownloadUrl);
 internal sealed record Release(string TagName, bool Draft, bool Prerelease, List<Asset> Assets);
 internal sealed record Compatibility(int Format, List<ModelSpec> Models);
+internal sealed record BuiltinAsset(string Role, string Release, string Filename, long Size, string Sha256);
+internal sealed record BuiltinSet(string Id, List<BuiltinAsset> Assets);
+internal sealed record ModelSources(int Format, BuiltinSet Builtin);
 
 public static partial class ModelCatalog
 {
-    public const string Builtin = "model-v6-classes-v5";
+    public const string Builtin = "builtin";
+    public const string BuiltinName = "SJ-LM-7＋SJ-WC-6 完整配套（內建）";
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy=JsonNamingPolicy.SnakeCaseLower, PropertyNameCaseInsensitive=true };
     public static string Folder => Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, "Models");
     private static readonly HttpClient LiveClient = CreateClient();
@@ -40,6 +44,20 @@ public static partial class ModelCatalog
     {
         using var stream=typeof(ModelCatalog).Assembly.GetManifestResourceStream("Models.catalog.json")!;
         return JsonSerializer.Deserialize<Compatibility>(stream,Json)!.Models;
+    }
+    /// The package's own model set (MODEL-SOURCES.json); it is never downloaded.
+    internal static readonly Lazy<List<BuiltinAsset>> BuiltinAssets = new(() =>
+    {
+        using var stream=typeof(ModelCatalog).Assembly.GetManifestResourceStream("Models.sources.json")!;
+        return JsonSerializer.Deserialize<ModelSources>(stream,Json)!.Builtin.Assets;
+    });
+    public static ModelSpec BuiltinSpec
+    {
+        get
+        {
+            var main=BuiltinAssets.Value.Single(a=>a.Role=="bigram");var classes=BuiltinAssets.Value.Single(a=>a.Role=="classes");
+            return new(Builtin,BuiltinName,main.Release,classes.Release,main.Sha256,classes.Sha256,main.Size,classes.Size);
+        }
     }
     public static List<ModelChoice> Installed()
     {
@@ -108,13 +126,13 @@ public static partial class ModelCatalog
     internal static CatalogResult Rows(List<Release> releases,List<ModelSpec> known,string status)
     {
         releases=releases.Where(r=>r is not null&&r.TagName is not null&&r.Assets is not null).ToList();
-        var installed=Installed().Select(x=>x.Id).ToHashSet();var rows=new List<CatalogRow>();
+        var installed=Installed().Select(x=>x.Id).ToHashSet();var rows=new List<CatalogRow>{new(BuiltinName,"內建",BuiltinSpec,false)};
         foreach(var spec in known.Where(ValidSpec))
         {
             bool available=HasAsset(releases,spec.ModelRelease,"bigram.sjlm",spec.ModelSize,spec.ModelSha256)
                 &&HasAsset(releases,spec.ClassesRelease,"classes.sjc",spec.ClassesSize,spec.ClassesSha256);
-            var state=spec.Id==Builtin?"內建":installed.Contains(spec.Id)?"已下載":available?$"可下載 · {(spec.ModelSize+spec.ClassesSize)/1048576d:F1} MiB":"線上附件無法核對";
-            rows.Add(new(spec.Name,state,spec,available&&spec.Id!=Builtin));
+            var state=installed.Contains(spec.Id)?"已下載":available?$"可下載 · {(spec.ModelSize+spec.ClassesSize)/1048576d:F1} MiB":"線上附件無法核對";
+            rows.Add(new(spec.Name,state,spec,available));
         }
         foreach(var release in releases.Where(r=>!r.Draft&&r.TagName.StartsWith("model-v",StringComparison.Ordinal)&&known.All(x=>x.ModelRelease!=r.TagName)))
             rows.Add(new(release.TagName,release.Prerelease?"預覽資料，尚未支援":"尚未確認相容配套",null,false));
@@ -158,7 +176,7 @@ public static partial class ModelCatalog
     {
         if(spec.Catalog is not null)return await DownloadBundle(spec,progress,token);
         if(!ValidSpec(spec))throw new InvalidDataException("此模型配套資訊無效。");
-        if(spec.Id==Builtin)return new(Builtin,"model-v6＋classes-v5（內建）");
+        if(spec.Id==Builtin)return new(Builtin,BuiltinName);
         var existing=(await Task.Run(Installed,token)).FirstOrDefault(x=>x.Id==spec.Id);if(existing is not null)return existing;
         string model=await AssetFile(spec.ModelRelease,"bigram.sjlm",spec.ModelSize,spec.ModelSha256,progress,token);
         string classes=await AssetFile(spec.ClassesRelease,"classes.sjc",spec.ClassesSize,spec.ClassesSha256,progress,token);

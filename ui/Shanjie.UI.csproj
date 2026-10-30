@@ -25,6 +25,7 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../MODEL-CATALOG.json" LogicalName="Models.catalog.json" />
+    <EmbeddedResource Include="../MODEL-SOURCES.json" LogicalName="Models.sources.json" />
     <EmbeddedResource Include="../profiles/windows.ini" LogicalName="Profiles.windows.ini" />
     <EmbeddedResource Include="../profiles/shanjie.ini" LogicalName="Profiles.shanjie.ini" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" PrivateAssets="all" />
