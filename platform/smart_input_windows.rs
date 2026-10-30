@@ -33,8 +33,9 @@ mod windows_smart_tests {
         let folder=std::env::temp_dir().join(format!("shanjie-run-order-{}",std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();let path=folder.join("english.txt");
         std::fs::write(&path,"hello\n").unwrap();e.load_english(&path).unwrap();e.set_upstream_english(true,true).unwrap();
+        e.set_windows_input_options(1 << 22);
         e.key(Key::ch('s',0)).unwrap();
-        assert_eq!(e.key(Key::ch('\\',MOD_CONTROL)).unwrap().preedit,"ㄋ、","Windows keeps the unfinished reading");
+        assert_eq!(e.key(Key::ch('\\',MOD_CONTROL)).unwrap().preedit,"ㄋ、","the kept unfinished reading");
         assert_eq!(e.key(Key::ch('a',MOD_SHIFT)).unwrap().preedit,"、A");
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"、A");
         std::fs::remove_dir_all(&folder).ok();

@@ -31,7 +31,7 @@ mod windows_composition_tests {
     fn windows_punctuation_contract_across_layouts_and_mixed_modes() {
         for layout in [Layout::Standard,Layout::Eten] { for mixed in [false,true] {
             for key in [Key::ch(',',MOD_SHIFT),Key::ch('\\',MOD_CONTROL),Key::ch('(',0)] {
-                let mut e=engine(mixed,true); e.layout=layout; e.set_windows_input_options((1<<20)-1);
+                let mut e=engine(mixed,true); e.layout=layout; e.set_windows_input_options(((1<<20)-1) | 1<<22);
                 let keys:String="ㄋㄧ".chars().map(|s|layout.key_of_symbol(s).unwrap()).collect();
                 type_keys(&mut e,&keys);
                 let out=e.key(key).unwrap();
@@ -60,9 +60,17 @@ mod windows_composition_tests {
         assert_eq!(type_keys(&mut e,"abc()\\").preedit,"abc()\\");
     }
     #[test]
-    fn punctuation_preserves_an_unfinished_reading() {
+    fn punctuation_drops_an_unfinished_reading_unless_kept() {
         for mixed in [false,true] {
             let mut e = engine(mixed,true);
+            type_keys(&mut e,"su3cl");
+            let out = type_keys(&mut e,"\\(");
+            assert!(out.commit.is_empty() && !e.windows_phonetic_pending(),"{mixed}");
+            assert_eq!(out.preedit,"你\\(","{mixed}: as upstream, the pending ㄏ is gone");
+        }
+        for mixed in [false,true] {
+            let mut e = engine(mixed,true);
+            e.set_windows_input_options(1 << 22);
             type_keys(&mut e,"su");
             let out = type_keys(&mut e,"\\()");
             assert!(out.commit.is_empty() && e.windows_phonetic_pending());
@@ -215,9 +223,15 @@ impl Engine {
         self.cands = None;
         self.clear_pred();
         if self.windows_phonetic_pending() && !self.mixed_latin {
-            // Symbols typed during a reading follow it until that reading is completed.
-            self.pending_literal.push_str(text);
-            return self.handled();
+            if self.punctuation_keeps_reading {
+                // Symbols typed during a reading follow it until that reading is completed.
+                self.pending_literal.push_str(text);
+                return self.handled();
+            }
+            // Upstream: the unfinished reading is dropped and the mark goes in.
+            self.clear_pend();
+            self.mixed_raw.clear();
+            self.windows_raw.clear();
         }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
