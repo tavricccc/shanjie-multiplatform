@@ -6,6 +6,9 @@
 - `build/core` 是產生檔，不在其中手改。升版時同時更新子模組 pin 與 `UPSTREAM.json`，重新核對覆蓋契約。
 - Windows 對核心的變更包含核心擴充，不要描述成「只改 config」。
 - 新功能與上游差異分批 commit，完成並測試後直接 commit，不必先詢問；push 與發布仍先確認。文件只寫目前狀態，保持精簡；各版變更寫在 `Changelog.md` 與 `docs/releases/`，`TODO.md` 只列必須由使用者實機確認的項目，能用腳本測的先自己測。
+- 修改前先查上游（Nanako0129/shanjie）是否有比 `UPSTREAM.json` 更新的 release，有就提醒使用者更新。
+- 預設值或行為與上游不同時（新增或改變的設定），明確告訴使用者。
+- 每次回報列出這輪改了哪些文件（`TODO.md`、`Changelog.md`、`README.md`、`docs/` 等）及改了什麼。
 - 建置、CI 與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。測試盡量平行用滿 CPU，以記憶體上限保護（`test-core.ps1 -MemoryLimit`）。
 - 上游 PR 留待使用者與作者討論後另行整理。
 - 使用 PowerShell 7，遵循使用者的繁體中文、模組化、必要測試與介面 skill 要求。
