@@ -2,12 +2,14 @@
 # Upstream's whole core test suite against the Windows-built core, with upstream's own model set
 # (scripts/fetch-models.sh in upstream): every Windows overlay must keep upstream's assertions, apart
 # from the documented Windows policies that prepare-test-contracts.ps1 adapts.
-param([string[]]$Tests, [switch]$NoUnitTests)
+# -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $upstream = Join-Path $root 'upstream/shanjie'
 Push-Location $root
 try {
+    if (!$UseExistingCore) { & "$PSScriptRoot/prepare-core.ps1" }
     # The models upstream's tests read from data/lm (ignored by its git): the built-in set, checked against data/*.sha256.
     & "$PSScriptRoot/prepare-models.ps1" | Out-Null
     $manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
