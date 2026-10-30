@@ -549,9 +549,13 @@ impl Data {
             context,
             TF_ES_SYNC | TF_ES_READWRITE,
             move |cookie| unsafe {
-                if data.state.borrow().snapshot.preedit.is_empty()
-                    && p.flag("input", "context", true)
-                {
+                let composing = !data.state.borrow().snapshot.preedit.is_empty();
+                if !composing {
+                    // A composition starts here: what was before the cursor last time is no longer known.
+                    data.state.borrow_mut().spacing_prev = None;
+                }
+                let spacing = p.flag("input", "cjk_spacing", false);
+                if !composing && (p.flag("input", "context", true) || spacing) {
                     let left = range(selection(&current, cookie)?);
                     left.Collapse(cookie, TF_ANCHOR_START)?;
                     let mut moved = 0;
@@ -570,12 +574,13 @@ impl Data {
                         String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?,
                     )
                     .unwrap();
-                    output(
-                        data.state
-                            .borrow_mut()
-                            .engine
-                            .perform(crate::broker::Op::Context(value.to_str().unwrap().into())),
-                    )?;
+                    let value = value.to_str().unwrap();
+                    if spacing {
+                        data.state.borrow_mut().spacing_prev = shanjie_shell::spacing::last(value);
+                    }
+                    if p.flag("input", "context", true) {
+                        output(data.state.borrow_mut().engine.perform(crate::broker::Op::Context(value.into())))?;
+                    }
                 }
                 let out = {
                     let mut s = data.state.borrow_mut();

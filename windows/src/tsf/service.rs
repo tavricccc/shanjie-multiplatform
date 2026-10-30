@@ -76,6 +76,8 @@ pub struct State {
     pub shift_epoch: u64,
     observer: Option<super::modifiers::Observer>,
     pub raw_reading: String,
+    /// The character before the cursor for 中英文之間自動加空格 (upstream cjk-spacing section 1); `None` when unknown.
+    pub spacing_prev: Option<char>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -110,6 +112,7 @@ impl Default for State {
             shift_epoch: 0,
             observer: None,
             raw_reading: String::new(),
+            spacing_prev: None,
         }
     }
 }
@@ -421,6 +424,7 @@ impl Data {
         s.associated.clear();
         s.association_caret = None;
         s.raw_reading.clear();
+        s.spacing_prev = None;
         s.snapshot = Snapshot::default();
         if let Some(c) = s.candidates.as_ref() {
             c.data.close();
@@ -528,6 +532,8 @@ impl Data {
         }
         unsafe {
             if !out.handled && out.commit.is_empty() && out.preedit.is_empty() {
+                // The application handles the key itself, so what is before the cursor is no longer known.
+                self.state.borrow_mut().spacing_prev = None;
                 return Ok(());
             }
             let mut composition = self.state.borrow().composition.clone();
@@ -555,6 +561,19 @@ impl Data {
                     .collect::<String>()
             } else {
                 out.commit.clone()
+            };
+            // Only the text sent to the application gains the spaces; the core's commit and learning stay as they are.
+            let committed = {
+                let mut s = self.state.borrow_mut();
+                let committed = if s.prefs.flag("input", "cjk_spacing", false) {
+                    shanjie_shell::spacing::apply(s.spacing_prev, &committed)
+                } else {
+                    committed
+                };
+                if !committed.is_empty() { s.spacing_prev = shanjie_shell::spacing::last(&committed); }
+                // A key the application handles itself may move the cursor or type text.
+                if !out.handled { s.spacing_prev = None; }
+                committed
             };
             if !out.commit.is_empty() {
                 // Commit only the final prefix. A remaining preedit gets its
