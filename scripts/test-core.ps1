@@ -3,8 +3,43 @@
 # (scripts/fetch-models.sh in upstream): every Windows overlay must keep upstream's assertions, apart
 # from the documented Windows policies that prepare-test-contracts.ps1 adapts.
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore)
+# -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
 $ErrorActionPreference = 'Stop'
+function Get-MemoryUse {
+    $os = Get-CimInstance Win32_OperatingSystem
+    100 * (1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize)
+}
+# Runs up to one binary per core, starting the next only under the memory limit; prints a failed binary's output.
+function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArguments, [int]$limit) {
+    $logs = Join-Path $directory 'target/test-logs'
+    New-Item -ItemType Directory $logs -Force | Out-Null
+    $env:CARGO_MANIFEST_DIR = $directory  # what cargo test gives each binary
+    $queue = [Collections.Generic.Queue[object]]::new([object[]]@($binaries))
+    $running = @(); $failed = @()
+    while ($queue.Count -or $running.Count) {
+        foreach ($job in @($running | Where-Object { $_.Process.HasExited })) {
+            $running = @($running | Where-Object { $_ -ne $job })
+            $job.Process.WaitForExit()
+            $seconds = [int]((Get-Date) - $job.Started).TotalSeconds
+            if ($job.Process.ExitCode) { $failed += $job; Write-Host "FAIL $($job.Name) (${seconds}s)" } else { Write-Host "ok   $($job.Name) (${seconds}s)" }
+        }
+        # A binary just started has not loaded its models yet: wait a moment before judging the memory again.
+        if ($queue.Count -and $running.Count -lt [Environment]::ProcessorCount -and ($running.Count -eq 0 -or (Get-MemoryUse) -lt $limit) -and
+            !($running | Where-Object { ((Get-Date) - $_.Started).TotalSeconds -lt 3 })) {
+            $next = $queue.Dequeue()
+            $log = Join-Path $logs (($next.Name -replace '[^\w-]', '_') + '.txt')
+            $process = Start-Process -FilePath $next.Path -ArgumentList $skipArguments -WorkingDirectory $directory -NoNewWindow -PassThru `
+                -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+            $null = $process.Handle  # keeps the exit code readable after the process ends
+            $running += [pscustomobject]@{ Name = $next.Name; Process = $process; Log = $log; Started = Get-Date }
+            continue
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    foreach ($job in $failed) { Write-Host "---- $($job.Name)"; Get-Content $job.Log, "$($job.Log).err" }
+    if ($failed) { throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')" }
+}
 $root = Split-Path $PSScriptRoot -Parent
 $upstream = Join-Path $root 'upstream/shanjie'
 Push-Location $root
@@ -82,12 +117,13 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     [IO.File]::WriteAllText($learn, $unixOnly.Replace($content, "#[cfg(unix)]`n`$1fn `$2("), [Text.UTF8Encoding]::new($false))
     foreach ($name in $excluded) { Remove-Item -LiteralPath (Join-Path $tree "tests/$name.rs") }
     & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $tree 'tests')
-    if (!$NoUnitTests) {
-        cargo test --release --manifest-path "$tree/Cargo.toml" --lib -- @skipArguments
-        if ($LASTEXITCODE) { throw 'Upstream unit tests failed.' }
-    }
     $selected = if ($Tests) { $Tests } else { Get-ChildItem -LiteralPath "$tree/tests" -Filter *.rs | ForEach-Object BaseName }
-    $arguments = foreach ($test in $selected) { '--test'; $test }
-    cargo test --release --manifest-path "$tree/Cargo.toml" @arguments -- @skipArguments
-    if ($LASTEXITCODE) { throw 'Upstream engine tests failed.' }
+    $arguments = @(foreach ($test in $selected) { '--test'; $test }) + @(if (!$NoUnitTests) { '--lib' })
+    # Build every test binary once, then run them side by side: each binary has few tests and they mostly
+    # decode on one thread, so cargo's one-binary-at-a-time run leaves most cores idle.
+    $built = cargo test --release --no-run --message-format=json --manifest-path "$tree/Cargo.toml" @arguments
+    if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
+    $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
+        ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
+    Invoke-TestBinaries $binaries $tree $skipArguments $MemoryLimit
 } finally { Pop-Location }
