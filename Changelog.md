@@ -2,7 +2,7 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
-## 0.14.0（Windows pre-release）
+## 0.14.0
 
 詳見 [0.14.0 版本說明](docs/releases/RELEASE-NOTES-0.14.0.md)。
 
