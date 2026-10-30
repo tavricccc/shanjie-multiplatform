@@ -199,33 +199,11 @@ pub fn clear_learning() -> Result<()> {
 pub fn apply_preset(source: &Path) -> Result<()> {
     let mut preset = Document::parse(&fs::read_to_string(source)?)?;
     if path().exists() {
-        let previous = load(&path())?;
-        for (section, keys) in [
-            ("engine", &["ranking", "demote", "acg_pack", "class_table", "model_id", "model_revision"][..]),
-            (
-                "input",
-                &[
-                    "dictionary",
-                    "keyboard",
-                    "learning",
-                    "context",
-                    "chinese",
-                    "full_width",
-                ][..],
-            ),
-            ("candidates", &["big5"][..]),
-            ("appearance", &["theme", "font_size", "mode_indicator"][..]),
-        ] {
-            for key in keys {
-                if let Some(value) = previous.0.get(section).and_then(|s| s.get(*key)) {
-                    preset.set(section, key, value);
-                }
-            }
-        }
+        return save(&path(), &merge_preset(&load(&path())?, preset));
     }
+    preset.migrate();
     save(&path(), &preset.content())
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

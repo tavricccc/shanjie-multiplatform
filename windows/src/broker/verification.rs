@@ -119,18 +119,7 @@ pub fn pipe_deadlines() {
     println!("PASS connected read and blocked write cancellation");
 }
 fn config(learning: bool) -> Config {
-    Config {
-        model: String::new(),
-        classes: 5,
-        layout: 0,
-        ranking: 0,
-        right: true,
-        learning,
-        big5: false,
-        dictionary: "dictionary.tsv".into(),
-        prediction: false,
-        acg: true,
-    }
+    Config { learning, prediction: false, ..Config::default() }
 }
 fn key(ch: char) -> Op {
     Op::Key {

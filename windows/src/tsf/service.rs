@@ -817,23 +817,7 @@ impl Data {
         }
         let current = profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
         let old = self.state.borrow().prefs.clone();
-        let rebuild = [
-            ("input", "keyboard"),
-            ("engine", "ranking"),
-            ("engine", "class_table"),
-            ("engine", "model_id"),
-            ("engine", "model_revision"),
-            ("engine", "acg_pack"),
-            ("candidates", "anchor"),
-            ("input", "learning"),
-            ("candidates", "big5"),
-            ("input", "dictionary"),
-            ("input", "context"),
-            ("input", "mixed_input"),
-            ("input", "upstream_english"),
-            ("input", "english_inline"),
-            ("input", "space_inputs_zhuyin"),
-        ]
+        let rebuild = profile::REBUILD
         .iter()
         .any(|(s, k)| current.get(s, k, "") != old.get(s, k, ""));
         let mode_changed = current.get("input", "chinese", "") != old.get("input", "chinese", "");

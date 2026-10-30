@@ -1,10 +1,11 @@
 //! Isolated maintenance probe. Never registers the IME or loads an installed profile.
-use shanjie_windows::{engine::Engine,broker::Op};
+use shanjie_windows::{engine::Engine,broker::{Config,Op}};
 use shanjie_core::{engine::Layout,ffi::ShanjieKey};
 use serde_json::json;
 use std::{path::Path,fs};
 fn engine(data:&Path,id:&str,ranking:u32)->Engine{
-    Engine::open_local_model(data,0,ranking,false,false,false,"dictionary.tsv",false,5,id,true).expect("native bundle load")
+    let config=Config{model:id.into(),ranking,right:false,prediction:false,..Config::default()};
+    Engine::open_local(data,&config).expect("native bundle load")
 }
 fn key(engine:&mut Engine,kind:u32,ch:char)->shanjie_shell::protocol::Snapshot{
     engine.key(ShanjieKey{kind,ch:ch as u32,modifiers:0}).expect("native input")

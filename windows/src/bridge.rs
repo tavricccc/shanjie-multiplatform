@@ -260,17 +260,17 @@ pub unsafe extern "C" fn sj_engine_new(
     flags: u32,
     dictionary: *const c_char,
 ) -> *mut Engine {
-    Engine::open(
-        Path::new(text(data)),
+    let config = crate::broker::Config {
         layout,
         ranking,
-        flags & 1 != 0,
-        flags & 2 != 0,
-        flags & 4 != 0,
-        text(dictionary),
-        flags & 8 != 0,
-    )
-    .map_or(ptr::null_mut(), |e| Box::into_raw(Box::new(e)))
+        right: flags & 1 != 0,
+        learning: flags & 2 != 0,
+        big5: flags & 4 != 0,
+        dictionary: text(dictionary).into(),
+        prediction: flags & 8 != 0,
+        ..Default::default()
+    };
+    Engine::open(Path::new(text(data)), &config).map_or(ptr::null_mut(), |e| Box::into_raw(Box::new(e)))
 }
 #[no_mangle]
 pub unsafe extern "C" fn sj_engine_free(p: *mut Engine) {

@@ -90,19 +90,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                     } else if states.len() >= 256 {
                         None
                     } else {
-                        Engine::open_local_model(
-                            &data,
-                            config.layout,
-                            config.ranking,
-                            config.right,
-                            config.learning,
-                            config.big5,
-                            &config.dictionary,
-                            config.prediction,
-                            config.classes,
-                            &config.model,
-                            config.acg,
-                        )
+                        Engine::open_local(&data, &config)
                         .and_then(|mut engine| {
                             if engine.replay(&replay) {
                                 let mut initial = reply(Some(&engine), None, true);

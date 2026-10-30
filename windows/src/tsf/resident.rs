@@ -22,52 +22,24 @@ use windows::{
 pub(super) struct Config {
     data: PathBuf,
     keyboard: u32,
-    layout: u32,
-    ranking: u32,
-    right: bool,
-    learning: bool,
-    big5: bool,
-    dictionary: String,
-    prediction: bool,
-    classes: u32,
-    model: String,
+    // A replaced package under the same id must not reuse the spare engine.
     model_revision: String,
-    acg: bool,
+    engine: crate::broker::Config,
 }
 impl Config {
     pub fn new(data: &Path, p: &Document, profile_layout: u32) -> Self {
         let available = crate::installation::available();
         let keyboard = crate::installation::keyboard(p.number("input", "keyboard", 0), available);
+        let layout = crate::installation::layout(keyboard, profile_layout, available);
         Self {
             data: data.to_owned(),
             keyboard,
-            layout: crate::installation::layout(keyboard, profile_layout, available),
-            ranking: (p.get("engine", "ranking", "chat") == "formal") as u32,
-            right: p.get("candidates", "anchor", "right") == "right",
-            learning: p.flag("input", "learning", true),
-            big5: p.flag("candidates", "big5", false),
-            dictionary: p.get("input", "dictionary", "dictionary.tsv").to_owned(),
-            prediction: p.flag("engine", "prediction", false),
-            classes: p.class_table(),
-            model: p.model_id(),
-            model_revision: p.get("engine","model_revision","").into(),
-            acg: p.flag("engine", "acg_pack", true),
+            model_revision: p.get("engine", "model_revision", "").into(),
+            engine: crate::broker::Config::from_profile(p, layout),
         }
     }
     fn load(&self) -> Option<(Engine, Pinyin)> {
-        let engine = Engine::open_model(
-            &self.data,
-            self.layout,
-            self.ranking,
-            self.right,
-            self.learning,
-            self.big5,
-            &self.dictionary,
-            self.prediction,
-            self.classes,
-            &self.model,
-            self.acg,
-        )?;
+        let engine = Engine::open(&self.data, &self.engine)?;
         let pinyin = if self.keyboard >= 3 {
             Pinyin::load(&self.data, self.keyboard == 4).ok()?
         } else {

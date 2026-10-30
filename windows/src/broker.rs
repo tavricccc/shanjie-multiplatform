@@ -522,20 +522,10 @@ pub fn serve(data: &Path) -> io::Result<()> {
         .map_err(|e| io::Error::other(e.to_string()))?;
     let keyboard = p.number("input", "keyboard", 0);
     let layout = crate::installation::layout(keyboard, 0, crate::installation::available());
-    let warm = Engine::open_local_model(
-        data,
-        layout,
-        (p.get("engine", "ranking", "chat") == "formal") as u32,
-        false,
-        false,
-        false,
-        p.get("input", "dictionary", "dictionary.tsv"),
-        p.flag("engine", "prediction", false),
-        p.class_table(),
-        &p.model_id(),
-        p.flag("engine", "acg_pack", true),
-    )
-    .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
+    // The shared resources only: learning stays closed in the warm engine.
+    let config = Config { learning: false, ..Config::from_profile(&p, layout) };
+    let warm = Engine::open_local(data, &config)
+        .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.
     crate::word_helper::start_resident(data);
     let sessions: session::Sessions = Default::default();

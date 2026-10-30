@@ -59,68 +59,24 @@ impl Drop for Engine {
     }
 }
 impl Engine {
-    pub fn open(
-        data: &Path,
-        layout: u32,
-        ranking: u32,
-        right: bool,
-        learning: bool,
-        big5: bool,
-        dictionary: &str,
-        prediction: bool,
-    ) -> Option<Self> {
-        Self::open_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
-    }
-    pub fn open_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
-        Self::open_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"",true)
-    }
-    pub fn open_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str,acg:bool)->Option<Self> {
-        if ![4,5].contains(&classes) { return None; }
+    /// An engine in the resident core (SHANJIE_CORE_LOCAL: in this process instead).
+    pub fn open(data: &Path, config: &crate::broker::Config) -> Option<Self> {
         if std::env::var_os("SHANJIE_CORE_LOCAL").is_some() {
-            return Self::open_local_model(
-                data, layout, ranking, right, learning, big5, dictionary, prediction, classes, model, acg,
-            );
+            return Self::open_local(data, config);
         }
-        let config = crate::broker::Config {
-            model: model.into(),
-            classes,
-            layout,
-            ranking,
-            right,
-            learning,
-            big5,
-            dictionary: dictionary.into(),
-            prediction,
-            acg,
-        };
-        let remote = crate::broker::Client::open(data, config)?;
+        let remote = crate::broker::Client::open(data, config.clone())?;
         let mut engine = Self::default();
         engine.remote = Some(remote);
         Some(engine)
     }
-    pub fn open_local(
-        data: &Path,
-        layout: u32,
-        ranking: u32,
-        right: bool,
-        learning: bool,
-        big5: bool,
-        dictionary: &str,
-        prediction: bool,
-    ) -> Option<Self> {
-        Self::open_local_variant(data,layout,ranking,right,learning,big5,dictionary,prediction,5)
-    }
-    pub fn open_local_variant(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32) -> Option<Self> {
-        Self::open_local_model(data,layout,ranking,right,learning,big5,dictionary,prediction,classes,"",true)
-    }
-    pub fn open_local_model(data:&Path,layout:u32,ranking:u32,right:bool,learning:bool,big5:bool,dictionary:&str,prediction:bool,classes:u32,model:&str,acg:bool)->Option<Self> {
-        let legacy=match classes {5=>"model-v6-classes-v5",4=>"model-v6-classes-v4",_=>return None};
-        let old=data.join("models/model-v6-classes-v4/bigram.winmap");
-        let model=if model.is_empty() && classes==4 && old.is_file(){old}else{crate::model_store::resolve(data,if model.is_empty(){legacy}else{model})};
+    /// Builds the engine in this process, in the order of upstream's Shell.build(): a failing side
+    /// model only turns its feature off, as there.
+    pub fn open_local(data: &Path, config: &crate::broker::Config) -> Option<Self> {
+        let model = crate::model_store::resolve(data, &config.model);
         let mut e = Self::default();
         let folder = crate::profile::folder();
-        let personal = folder.join(dictionary);
-        if dictionary != "dictionary.tsv" && !personal.exists() {
+        let personal = folder.join(&config.dictionary);
+        if config.dictionary != "dictionary.tsv" && !personal.exists() {
             return None;
         }
         let dictionary = if personal.exists() && personal.metadata().ok()?.len() != 0 {
@@ -128,40 +84,45 @@ impl Engine {
         } else {
             None
         };
+        let side = |name: &str| CString::new(model.with_file_name(name).to_str()?).ok();
         unsafe {
             if shanjie_windows_engine_new(
                 CString::new(data.to_str()?).ok()?.as_ptr(),
                 dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
-                layout,
-                if acg { shanjie_core::engine::PACK_ACG } else { 0 },
+                config.layout,
+                config.packs(),
                 &mut e.handle,
             ) != 0
             {
                 return None;
             }
-            e.operation(|h, o| shanjie_engine_set_prediction(h, prediction as u32, o))?;
             let lm = CString::new(model.to_str()?).ok()?;
             if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
                 return None;
             }
-            let tiny=model.with_file_name("tinylm.sjtl");
-            if tiny.is_file(){
-                let tiny=CString::new(tiny.to_str()?).ok()?;
-                if shanjie_engine_load_tinylm(e.handle,tiny.as_ptr())!=0{return None;}
-                e.operation(|h,o|shanjie_engine_set_rerank(h,1,o))?;
+            // Missing or failed: the n-gram alone. 常談 only serves the small model's rerank.
+            if side("tinylm.sjtl").is_some_and(|t| shanjie_engine_load_tinylm(e.handle, t.as_ptr()) == 0) {
+                if let Some(table) = side("colloquial.sjlm") {
+                    shanjie_engine_load_colloquial(e.handle, table.as_ptr());
+                }
             }
-            // The word list only matters when upstream inline English is switched on; a missing
-            // list leaves that mode inert instead of failing the engine.
+            // A missing list leaves inline English inert instead of failing the engine.
             if let Some(list) = data.join("english-words.txt").to_str().and_then(|p| CString::new(p).ok()) {
                 shanjie_engine_load_english(e.handle, list.as_ptr());
             }
-            e.operation(|h, o| shanjie_engine_set_profile(h, ranking, o))?;
-            if shanjie_windows_set_candidate_anchor(e.handle, right as u32) != 0
-                || shanjie_windows_set_candidate_charset(e.handle, big5 as u32) != 0
+            // A new engine starts with the core's defaults, so every switch is sent each time.
+            e.operation(|h, o| shanjie_engine_set_prediction(h, config.prediction as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_english_key_order(h, config.english_key_order as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_fuzzy(h, config.fuzzy, o))?;
+            e.operation(|h, o| shanjie_engine_set_rerank(h, config.rerank as u32, o))?;
+            e.operation(|h, o| shanjie_engine_set_rerank_level(h, config.rerank_level, o))?;
+            e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;
+            if shanjie_windows_set_candidate_anchor(e.handle, config.right as u32) != 0
+                || shanjie_windows_set_candidate_charset(e.handle, config.big5 as u32) != 0
             {
                 return None;
             }
-            if learning {
+            if config.learning {
                 let name = format!(
                     "Local\\ShanjieLearning-{}",
                     folder.to_str()?.to_uppercase().replace('\\', "_")
