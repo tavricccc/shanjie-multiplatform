@@ -1,6 +1,6 @@
 # 模型清單自動維護
 
-0.13.0 Windows 新增 format:2 reader、配套驗證與備註確認。內建模型是 `MODEL-SOURCES.json` 所記錄、與上游 App 相同的整組模型（id `builtin`）；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
+Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄、與上游 App 相同的整組模型（id `builtin`）；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
 
 ## 上線與日常操作
 
@@ -10,7 +10,7 @@
 - `publish`：先驗證，再以有限寫入權限發布資料。
 - Repository variable `MODEL_CATALOG_AUTOPUBLISH=true`：允許排程及 main 的相關變更在成功驗證後自動發布；移除／設為 false 即停用自動發布，手動 verify 仍可用。
 
-初次以功能分支乾跑成功後才啟用自動發布。GitHub 公開 repo 長期無活動（60 天）可能停用排程；若缺少近期成功紀錄，請在 Actions 重新啟用並手動 verify。排程可能延遲。
+GitHub 公開 repo 長期無活動（60 天）可能停用排程；若缺少近期成功紀錄，請在 Actions 重新啟用並手動 verify。排程可能延遲。
 
 `model-catalog` 為初始無程式碼歷史的獨立資料分支，只寫 `MODEL-CATALOG-V2.json`、`MODEL-CATALOG-STATE.json`、`reports/<sha256>.json`。端點：
 
@@ -43,8 +43,8 @@ Actions 的 `model-catalog-publication` artifact 保留 30 天，含清單、狀
 
 ## Actions 執行環境
 
-0.13.1 將模型與 release 工作流程的官方 Actions 固定為 Node.js 24 版本：checkout 7.0.1、cache 6.1.0、setup-python 7.1.0、setup-dotnet 6.0.0、upload-artifact 7.0.2、download-artifact 8.0.2，均使用完整 commit SHA。版本依各官方 repository 的 release、action.yml 與 README 核對；例如 [checkout 的 runner／憑證變更](https://github.com/actions/checkout/tree/v7.0.1)、[artifact 的 archive 契約](https://github.com/actions/upload-artifact/tree/v7.0.2)。
+模型與 release 工作流程的官方 Actions 固定為 Node.js 24 版本：checkout 7.0.1、cache 6.1.0、setup-python 7.1.0、setup-dotnet 6.0.0、upload-artifact 7.0.2、download-artifact 8.0.2，均使用完整 commit SHA。版本依各官方 repository 的 release、action.yml 與 README 核對；例如 [checkout 的 runner／憑證變更](https://github.com/actions/checkout/tree/v7.0.1)、[artifact 的 archive 契約](https://github.com/actions/upload-artifact/tree/v7.0.2)。
 
 runner 最低 2.327.1；目前使用 GitHub 託管 runner。未使用 Docker action 的認證轉送、fork PR 特權入口或新的非 archive 模式；checkout 保持 `persist-credentials: false`。模型 artifact 原目錄、最小權限、verify／publish 分流與非強制原子資料分支更新不變。
 
-release 的手動執行預設 `verify`，只建置測試並留下 artifact。`publish` 只建立尚不存在的版本；既有 Release 不編輯、不上傳覆寫。新版本沿用 RELEASE-CHANNEL.json 的 pre-release／latest 政策；0.13.1 不取代 0.12.2 為建議正式版。
+release 的手動執行預設 `verify`，只建置測試並留下 artifact。`publish` 只建立尚不存在的版本；既有 Release 不編輯、不上傳覆寫。新版本的 pre-release／latest 依 `RELEASE-CHANNEL.json`。
