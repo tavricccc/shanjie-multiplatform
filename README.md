@@ -1,30 +1,31 @@
-# 善解（Windows／Linux）
+# 善解（Windows）
 
-[善解注音](https://github.com/Nanako0129/shanjie)的 Windows 與 Linux 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，並加了一些我們想要的功能，例如微軟注音鍵位、中英混打、雙 Ctrl 加詞、線上模型管理。
+[善解注音](https://github.com/Nanako0129/shanjie)的 Windows 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，另外加了微軟注音鍵位、中英混打、雙 Ctrl 加詞與線上模型管理。
 
-- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.14.0**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
-- **Linux**：Fedora GNOME 上的 IBus 輸入法，最後測試版 **0.12.1**，已停止維護。
+- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前版本 **0.14.0**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
 - **上游**：使用善解 v0.6.0 的核心、詞庫與整組模型。
+- **Linux**：IBus 版停在 0.12.1，已停止維護；`linux/` 的原始碼沒有再編譯或測試。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。
 
 ## Windows 安裝
 
-1. 從 Release 下載 `Shanjie-Windows-Setup.exe` 並雙擊。它先解開安裝畫面本身並開啟，模型與資料在背景繼續解開；畫面顯示這次是全新安裝還是升級。
-2. 選擇標準注音或倚天注音（升級時預選目前的配置），按「安裝」後 Windows 會要求 UAC，畫面逐步顯示進度；失敗時會顯示回復結果與紀錄位置。之後要換鍵盤，重新執行安裝程式即可。
+1. 從 [Release](https://github.com/tavricccc/shanjie-multiplatform/releases/latest) 下載 `Shanjie-Windows-Setup.exe` 並執行。
+2. 選擇標準注音或倚天注音（更新時預選目前的配置），按「安裝」並同意 UAC。之後要換鍵盤，重新執行安裝程式即可。
 3. 登出再登入，在輸入法清單選「善解注音」。
-安裝時只把善解加到輸入法清單的最後面（沒有中文（台灣）時一併加入），不改動其他語言與輸入法。登入時由工作排程器的 `ShanjieCore` 登入工作在背景啟動常駐核心，預載詞庫與模型，所有 App 共用同一個核心；切換到善解時若核心還沒啟動，輸入法也會在背景喚醒它。
 
-更新時先校驗並註冊新版，成功後才清除舊版；被 App 占用而刪不掉的舊檔只留下那幾個檔案，重新登入或重新開機後刪除。已開啟的 App 要重新開啟才會用到新版。任何一步失敗都會嘗試完整回復。
+安裝只把善解加到輸入法清單最後（沒有中文（台灣）時一併加入），不改動其他語言與輸入法。所有 App 共用一個登入時啟動的常駐核心。
+
+更新直接執行新版安裝程式，個人詞庫、學習、設定與下載的模型都會沿用。已開啟的 App 要重新開啟才會用到新版；任何一步失敗都會嘗試完整回復。
 
 ### 解除安裝
 
-從「已安裝的應用程式」移除，或在設定的「關於與相容性」頁按「解除安裝善解…」。解除安裝畫面會先把自己複製到暫存資料夾再執行，結束後刪掉這份暫存。程式檔案會直接刪除，`%ProgramFiles%\Shanjie` 不留副本；仍被開啟中 App 載入的 DLL 等檔案由一次性的系統排程 `ShanjieCleanup` 在重新登入或重新開機後刪除，排程完成後自行移除。舊版留下的 `.deleted_files` 副本也會一併清掉。個人資料可以選：
+從「已安裝的應用程式」移除，或在設定的「關於與相容性」頁按「解除安裝善解…」。仍被 App 載入的檔案在重新登入或重新開機後刪除。個人資料可以選：
 
 - **保留個人詞庫與選字學習**（預設）：移除程式與設定，詞庫與學習供重新安裝使用。
 - **一併移除個人詞庫、學習與設定**。
 
-選擇移除時個人資料會直接刪除，無法復原。安裝目錄的 `uninstall.cmd` 仍可用，會以對話框詢問同樣的選擇。命令列可用 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data` 或 `--delete-user-data`。
+選擇移除時個人資料會直接刪除，無法復原。命令列可用安裝目錄的 `uninstall.cmd`，或 `tools/shanjie-manager.exe --elevate uninstall --keep-user-data`／`--delete-user-data`。
 
 ### 疑難排解
 
@@ -62,23 +63,6 @@
 
 個人設定在 `%LOCALAPPDATA%\Shanjie\profile.ini`。直接改檔後，按設定頁的「重新啟動輸入法」或重新啟用善解才會讀取；這個按鈕不會終止 App，也換不掉 App 已載入的舊版 DLL。
 
-## Linux（Fedora GNOME／IBus，已停止維護）
-
-Linux 版停在 0.12.1，不再發布，也不再驗證。`linux/` 已跟著共用的引擎設定改寫到上游 v0.6.0，但沒有編譯與測試過，可能無法建置。
-
-IBus 引擎、GTK 4＋libadwaita 設定程式與安裝腳本都是 Rust／shell，與 Windows 共用 `shared/` 和同一份 `build/core`。差異見 [Linux 0.10.2 版本說明](docs/releases/RELEASE-NOTES-linux-0.10.2.md)。
-
-從原始碼安裝需要 PowerShell 7（prepare 腳本）、Rust、curl、`gtk4-devel`、`libadwaita-devel`：
-
-```bash
-git submodule update --init
-linux/scripts/install.sh      # 建置後以 sudo 安裝並加入 GNOME 輸入來源
-linux/scripts/package.sh      # 產生 build/linux/dist/shanjie-linux-<版本>-<架構>.tar.gz
-linux/scripts/uninstall.sh    # 移除；--delete-user-data 一併刪除個人資料
-```
-
-個人資料在 `~/.local/share/shanjie`。`linux/tests/run-scenarios.sh` 在私有 ibus-daemon 上跑按鍵情境，各 crate 另有 `cargo test`。
-
 ## 開發
 
 需要 PowerShell 7、Git、Rust MSVC、Visual Studio Build Tools（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
@@ -97,8 +81,7 @@ pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
 - [上游差異](UPSTREAM-CHANGES.md)：核心覆蓋與升版流程。更新上游前先讀。
 - [設計系統](docs/DESIGN.md)、[延遲與資源](docs/PERFORMANCE.md)、[待辦](TODO.md)。
-
-上游以固定 commit 的子模組 `upstream/shanjie` 引入，保持乾淨；對核心的差異只放在 `platform/` 與 prepare 腳本，`build/core` 是產生檔。
+- [維護規則](AGENTS.md)：上游子模組、commit 與發布、該跑哪些驗證。
 
 ## 授權
 
