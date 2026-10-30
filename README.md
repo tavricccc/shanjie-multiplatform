@@ -2,7 +2,7 @@
 
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 與 Linux 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，並加了一些我們想要的功能，例如微軟注音鍵位、中英混打、雙 Ctrl 加詞、線上模型管理。
 
-- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.12.2**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
+- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.13.1**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
 - **Linux**：Fedora GNOME 上的 IBus 輸入法，最後測試版 **0.12.1**，已停止維護。
 - **上游**：使用善解 v0.6.0 的核心、詞庫與整組模型。
 
@@ -13,9 +13,6 @@
 1. 從 Release 下載 `Shanjie-Windows-Setup.exe` 並雙擊。它先解開安裝畫面本身並開啟，模型與資料在背景繼續解開；畫面顯示這次是全新安裝還是升級。
 2. 選擇標準注音或倚天注音（升級時預選目前的配置），按「安裝」後 Windows 會要求 UAC，畫面逐步顯示進度；失敗時會顯示回復結果與紀錄位置。之後要換鍵盤，重新執行安裝程式即可。
 3. 登出再登入，在輸入法清單選「善解注音」。
-
-同一份安裝包也以 `Shanjie-Windows.zip` 提供：完整解壓後雙擊 `安裝善解.exe`。命令列安裝用 zip 裡的 `scripts\install.cmd`，或 `tools/shanjie-manager.exe --elevate install --keyboard standard`／`--keyboard eten`。
-
 安裝時只把善解加到輸入法清單的最後面（沒有中文（台灣）時一併加入），不改動其他語言與輸入法。登入時由工作排程器的 `ShanjieCore` 登入工作在背景啟動常駐核心，預載詞庫與模型，所有 App 共用同一個核心；切換到善解時若核心還沒啟動，輸入法也會在背景喚醒它。
 
 更新時先校驗並註冊新版，成功後才清除舊版；被 App 占用而刪不掉的舊檔只留下那幾個檔案，重新登入或重新開機後刪除。已開啟的 App 要重新開啟才會用到新版。任何一步失敗都會嘗試完整回復。
@@ -42,7 +39,7 @@
 
 ## 設定
 
-安裝完成畫面可直接開啟設定；之後在輸入法的中英模式按鈕按右鍵，或執行安裝目錄的 `settings.cmd`。修改後按「儲存」才套用，不需要管理員權限。也可以用 zip 裡 `scripts\` 的 `apply-windows.cmd`／`apply-shanjie.cmd` 直接套用操作範本。兩份範本的主要差異：
+安裝完成畫面可直接開啟設定；之後在輸入法的中英模式按鈕按右鍵，或執行安裝目錄的 `settings.cmd`。修改後按「儲存」才套用，不需要管理員權限。兩份操作範本的主要差異：
 
 | 項目 | Windows 範本 | 善解範本 |
 | --- | --- | --- |
@@ -88,12 +85,12 @@ linux/scripts/uninstall.sh    # 移除；--delete-user-data 一併刪除個人�
 
 ```powershell
 git submodule update --init
-pwsh -File scripts/package.ps1      # 建置並打包成 dist/Shanjie-Windows-Setup.exe 與 dist/Shanjie-Windows.zip
+pwsh -File scripts/package.ps1      # 建置並打包成 dist/Shanjie-Windows-Setup.exe
 pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建單一架構
 pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 ```
 
-推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式與 zip 附上（Linux tar.gz 的工作由 `RELEASE-CHANNEL.json` 的 `build_linux` 控制，目前關閉）；手動執行 workflow 會重建並覆蓋目前版本的安裝包。
+推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式附上；手動執行 workflow 預設只建置驗證，不覆寫既有 Release。
 
 `build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
 
