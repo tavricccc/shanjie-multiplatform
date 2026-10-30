@@ -39,12 +39,16 @@ public sealed partial class MainWindow
     private CancellationTokenSource? modelOperation;
     private bool modelsClosed;
     private string modelIssues="";
+    private int modelScans,appliedScan;
     private async Task RefreshModels()
     {
+        int scan=++modelScans;
         var inventory=await Task.Run(()=>new {Models=ModelCatalog.Installed(),Issues=ModelCatalog.Issues()});
-        if(!modelsClosed){
-            bool previous=selectingModel;selectingModel=true;
-            try{Vm.RefreshModels(inventory.Models);}finally{selectingModel=previous;}
+        // A scan that started earlier but finished later holds older files; keep the newer list.
+        if(!modelsClosed&&scan>appliedScan){
+            appliedScan=scan;bool previous=selectingModel;selectingModel=true;
+            try{Vm.RefreshModels(inventory.Models);if(ModelSelector.SelectedIndex!=Vm.ModelVariant)ModelSelector.SelectedIndex=Vm.ModelVariant;}
+            finally{selectingModel=previous;}
             modelIssues=string.Join("\n",inventory.Issues);if(modelIssues.Length>0){Vm.Status="未列入模型：\n"+modelIssues;ShowLoadFeedback();}
         }
     }

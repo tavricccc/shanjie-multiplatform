@@ -18,7 +18,8 @@ public partial class SettingsViewModel
         {
             AvailableModels.Clear();AvailableModels.Add(new(ModelCatalog.Builtin,ModelCatalog.BuiltinName));
             foreach(var model in models.Where(m=>m.Id!=ModelCatalog.Builtin).DistinctBy(m=>m.Id))AvailableModels.Add(model);
-            ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
+            // Clear() drops the selector's selection; an unchanged index would raise no change, so notify through -1.
+            ModelVariant=-1;ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             var selected=AvailableModels.FirstOrDefault(m=>m.Id==ModelId);
             if(selected is not null)ModelRevision=selected.Revision;
             OnPropertyChanged(nameof(ModelHelp));

@@ -21,6 +21,32 @@ internal static class VisualVerifier
         await encoder.FlushAsync(); stream.Seek(0);
         using var output = File.Create(path); await stream.AsStreamForRead().CopyToAsync(output);
     }
+    /// A rescan after download rebuilds the list; the selector must still show the draft model, without prompting or saving.
+    private static async Task VerifyModelRescans(MainWindow settings)
+    {
+        var installed = settings.Vm.AvailableModels.ToList();
+        Models.ModelChoice a = new("fixture-a", "測試配套 A（已下載）"), b = new("fixture-b", "測試配套 B（已下載）");
+        settings.Vm.RefreshModels([a, b]); settings.Vm.SelectModel(b.Id); settings.Vm.DictionaryText = "ㄇㄠ 貓";
+        string draft = settings.Vm.DictionaryText; byte[] saved = File.ReadAllBytes(Models.ProfileStore.Path);
+        async Task Expect(string id, string what)
+        {
+            await Task.Delay(60);
+            if (settings.ShownModelForVerification != id || settings.Vm.ModelId != b.Id || settings.Vm.DictionaryText != draft || !settings.Vm.HasChanges)
+                throw new InvalidDataException(what + $": shown={settings.ShownModelForVerification}, draft={settings.Vm.ModelId}");
+        }
+        await Expect(b.Id, "Selector after selection");
+        settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Rescan with the same index");
+        settings.ShowSection(MainWindow.Pages.Appearance); await Task.Delay(60); settings.Vm.RefreshModels([a, b]);
+        settings.ShowSection(MainWindow.Pages.General); await Expect(b.Id, "Rescan while another category is shown");
+        settings.Vm.RefreshModels([a, b]); settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Consecutive rescans");
+        settings.Vm.RefreshModels([b, a]); await Expect(b.Id, "Reordered list");
+        if (settings.Vm.ModelVariant != 1) throw new InvalidDataException("Reordered list kept a stale index");
+        settings.Vm.RefreshModels([a]);
+        if (settings.Vm.ModelId != b.Id || !settings.Vm.ModelHelp.Contains("不存在")) throw new InvalidDataException("Missing model lost the draft or its fallback notice");
+        settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Model listed again");
+        if (!File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved)) throw new InvalidDataException("Rescans saved the profile");
+        settings.Vm.RefreshModels(installed.Where(m => m.Id != Models.ModelCatalog.Builtin)); settings.Vm.Load();
+    }
     public static async Task Run(MainWindow settings, string output)
     {
         // Keep verification away from the user's windows and never activate the test surfaces.
@@ -49,6 +75,7 @@ internal static class VisualVerifier
             settings.Vm.Preset(true);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
+        await VerifyModelRescans(settings);
         // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");

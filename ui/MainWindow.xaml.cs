@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
     internal void SetModelForVerification(int value) => ModelSelector.SelectedIndex = value;
+    internal string? ShownModelForVerification => (ModelSelector.SelectedItem as Models.ModelChoice)?.Id;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedModeForVerification(int mode) => MixedModeSelector.SelectedIndex = mode;
     internal void SetEnglishInlineForVerification(bool value) => EnglishInlineToggle.SetToggleForVerification(value);
