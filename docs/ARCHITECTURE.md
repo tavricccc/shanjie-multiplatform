@@ -65,7 +65,7 @@ cargo test --manifest-path windows/Cargo.toml --lib
 pwsh -File scripts/package.ps1                                # 打包並校驗
 ```
 
-這些是背景 TSF harness、離屏 render 與單元測試。TSF harness 用真正的 Windows context 與 edit session，但鍵盤 sink 註冊以 ThreadProxy 代替。它們不等於在真實 App 中驗收；尚待實機確認的項目列在 [TODO.md](../TODO.md)。
+TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)；尚待實機確認的項目列在 [TODO.md](../TODO.md)。
 
 ## 尚未支援
 

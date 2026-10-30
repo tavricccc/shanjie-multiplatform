@@ -143,6 +143,5 @@ Windows 注音順序混打時，原始按鍵（如 `gj`）留在組字區，`mix
 
 - **Don't** 在候選窗加入毛玻璃、半透明正文、背景 HWND、陰影、動畫、WebView 或子程序。
 - **Don't** 恢復九欄格狀排列，或提供任意詞類表選單。
-- **Don't** 把離屏 render 或背景擷取說成前景 App、高對比、多螢幕、讀屏或實際安裝的驗收。
 
 介面沒有使用生成影像；素材來源見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/README.md`。
