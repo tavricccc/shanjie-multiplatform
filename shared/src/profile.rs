@@ -11,10 +11,14 @@ const OLD_BUILTIN: &str = "model-v6-classes-v5";
 pub const RERANK_LEVELS: [&str; 3] = ["conservative", "standard", "aggressive"];
 /// `[engine] fuzzy_*`, in the order of shanjie_engine_set_fuzzy's bits.
 pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"];
+/// Chat programs for `[engine] ranking=auto` (upstream Shell.chatApps, by Windows executable name); `[engine] chat_apps`
+/// replaces the list.
+pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 23] = [
+pub const REBUILD: [(&str, &str); 24] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
+    ("engine", "chat_apps"),
     ("engine", "model_id"),
     ("engine", "model_revision"),
     ("engine", "acg_pack"),
@@ -42,6 +46,20 @@ pub const REBUILD: [(&str, &str); 23] = [
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
     pub fn model_id(&self) -> String { self.get("engine", "model_id", BUILTIN).to_owned() }
+    /// shanjie_engine_set_profile: 0 chat, 1 formal. `auto` (upstream profile-choice section 2.2): the chat profile in a
+    /// chat program, formal elsewhere and when the program is unknown.
+    pub fn ranking(&self, app: Option<&str>) -> u32 {
+        match self.get("engine", "ranking", "auto") {
+            "chat" => 0,
+            "formal" => 1,
+            _ => {
+                let chat = app.filter(|a| !a.is_empty()).is_some_and(|app| {
+                    self.get("engine", "chat_apps", CHAT_APPS).split([';', ',', ' ', '\n']).any(|name| name.eq_ignore_ascii_case(app))
+                });
+                (!chat) as u32
+            }
+        }
+    }
     pub fn fuzzy(&self) -> u32 {
         FUZZY_KEYS.iter().enumerate().fold(0, |flags, (bit, key)| flags | (self.flag("engine", key, false) as u32) << bit)
     }
@@ -188,6 +206,10 @@ impl Document {
             }
             .to_owned();
             self.set("engine", "model_id", id);
+            // Earlier versions always kept an unfinished reading behind punctuation; new profiles drop it as upstream.
+            if self.get("input", "punctuation_keeps_reading", "").is_empty() {
+                self.set("input", "punctuation_keeps_reading", 1);
+            }
             self.remove("engine", "class_table");
             self.remove("engine", "model");
         }
@@ -259,6 +281,7 @@ impl Document {
         flags |= (!self.flag("input", "space_inputs_zhuyin", true) as u32) << 20;
         let windows = self.get("profile", "interaction", "windows") != "shanjie";
         flags |= (self.flag("candidates", "enter_to_cursor", windows) as u32) << 21;
+        flags |= (self.flag("input", "punctuation_keeps_reading", false) as u32) << 22;
         flags
     }
 }
@@ -292,17 +315,18 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "demote", "acg_pack", "it_pack", "model_id", "model_revision"]),
+    ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
+        "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",
-        &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],
+        &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
     ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("profile", "interaction", &["windows", "shanjie"]),
-    ("engine", "ranking", &["chat", "formal"]),
+    ("engine", "ranking", &["auto", "chat", "formal"]),
     ("engine", "rerank_level", &RERANK_LEVELS),
     ("input", "escape", &["staged", "clear", "ignore"]),
     ("candidates", "layout", &["horizontal", "vertical"]),
@@ -386,6 +410,25 @@ pub fn export_preset(content: &str, name: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn ranking_follows_the_program_when_automatic() {
+        let doc = super::Document::parse("[engine]\nranking=auto\n").unwrap();
+        assert_eq!((doc.ranking(Some("Discord.exe")), doc.ranking(Some("WINWORD.EXE")), doc.ranking(None)), (0, 1, 1));
+        let doc = super::Document::parse("[engine]\nranking=auto\nchat_apps=winword.exe; notepad.exe\n").unwrap();
+        assert_eq!((doc.ranking(Some("WINWORD.EXE")), doc.ranking(Some("Notepad.exe")), doc.ranking(Some("discord.exe"))), (0, 0, 1));
+        for (fixed, want) in [("chat", 0), ("formal", 1)] {
+            let doc = super::Document::parse(&format!("[engine]\nranking={fixed}\n")).unwrap();
+            assert_eq!((doc.ranking(Some("discord.exe")), doc.ranking(None)), (want, want));
+        }
+    }
+    #[test]
+    fn presets_keep_the_personal_engine_choices() {
+        assert!(super::FUZZY_KEYS.iter().all(|k| super::PERSONAL[0].1.contains(k)));
+        let mine = "[profile]\nschema=8\n[engine]\nrerank=0\nrerank_level=aggressive\nfuzzy_zh_z=1\n[input]\ncjk_spacing=1\n";
+        let doc = super::Document::parse(&super::preset(mine, false).unwrap()).unwrap();
+        assert!(!doc.flag("engine", "rerank", true) && doc.flag("engine", "fuzzy_zh_z", false) && doc.flag("input", "cjk_spacing", false));
+        assert_eq!(doc.get("engine", "rerank_level", ""), "aggressive");
+    }
+    #[test]
     fn model_selection_and_enter_migration_preserve_explicit_choices() {
         let mut old=super::Document::parse("[profile]\nschema=6\ninteraction=windows\n[engine]\nclass_table=4\n").unwrap();
         old.migrate();assert!(!old.flag("candidates","enter_to_cursor",true));assert_eq!(old.model_id(),"model-v6-classes-v4");
@@ -468,7 +511,8 @@ mod tests {
         assert!(!doc.0["input"].contains_key("shift_punctuation"));
         assert!(!doc.0["input"].contains_key("plain_punctuation"));
         assert!(SHIFT_KEYS.iter().all(|(c, _)| doc.shift_punctuation(*c)));
-        assert_eq!(doc.input_options(), 1 | 0x1fff << 1); // Existing profiles retain whole-line Enter.
+        // Existing profiles retain whole-line Enter and the kept unfinished reading.
+        assert_eq!(doc.input_options(), 1 | 0x1fff << 1 | 1 << 22);
         // Each mark is now independent: 「 on, 、 (backslash) still off.
         doc.set("punctuation", "plain_lbracket", 1);
         assert_eq!(doc.input_options() >> 14 & 0x3f, 1);
@@ -480,6 +524,10 @@ mod tests {
         old.migrate();
         assert!(old.flag("input", "space_inputs_zhuyin", false));
         assert_eq!(old.input_options() & (1 << 20),0);
+        assert_ne!(old.input_options() & (1 << 22),0,"an existing profile keeps its punctuation behavior");
+        for preset in [include_str!("../../profiles/windows.ini"), include_str!("../../profiles/shanjie.ini")] {
+            assert_eq!(Document::parse(preset).unwrap().input_options() & (1 << 22),0,"new profiles follow upstream");
+        }
         old.set("input", "space_inputs_zhuyin",0);
         let shared = export_preset(&old.content(),"注音候選").unwrap();
         let imported = Document::parse(&import_preset("[profile]\nschema=6\n",&shared).unwrap()).unwrap();

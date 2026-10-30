@@ -88,7 +88,7 @@ impl Config {
         Self {
             model: p.model_id(),
             layout,
-            ranking: (p.get("engine", "ranking", "chat") == "formal") as u32,
+            ranking: p.ranking(None),
             right: p.get("candidates", "anchor", "right") == "right",
             learning: p.flag("input", "learning", true),
             big5: p.flag("candidates", "big5", false),
