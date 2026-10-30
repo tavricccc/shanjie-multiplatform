@@ -41,9 +41,7 @@ try {
     Set-Content "$output/SHA256SUMS.txt" $hashes -Encoding utf8NoBOM
     & "$output/tools/shanjie-manager.exe" verify-package $output
     if ($LASTEXITCODE) { throw 'Native package verification failed.' }
-    Preserve-Output "$root/dist/Shanjie-Windows.zip"
-    Compress-Archive -Path "$output/*" -DestinationPath "$root/dist/Shanjie-Windows.zip"
-    # Single-file installer: the setup stub carrying this same verified package.
+    # The only distributed form is the single-file installer: the setup stub carrying this same verified package.
     $setup = Join-Path $root 'dist/Shanjie-Windows-Setup.exe'
     Preserve-Output $setup
     & "$root/dist/setup/shanjie-pack.exe" "$root/dist/setup/安裝善解.exe" $output $setup

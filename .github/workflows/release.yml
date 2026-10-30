@@ -1,7 +1,7 @@
 name: release
 
 # 版本號（windows/Cargo.toml）變更並推送後，若還沒有對應 tag 就建立 GitHub Release，
-# 再建置 Windows zip 與 Linux tar.gz 附上。手動預設僅驗證，不覆寫既有 Release。
+# 再建置 Windows 安裝檔（Shanjie-Windows-Setup.exe）附上。手動預設僅驗證，不覆寫既有 Release。
 on:
   push:
     branches: [main]
@@ -99,7 +99,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = foreach ($name in 'Shanjie-Windows-Setup.exe','Shanjie-Windows.zip') {
+          $assets = foreach ($name in @('Shanjie-Windows-Setup.exe')) {
             $hash = (Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
             Set-Content "dist/$name.sha256" "$hash  $name" -Encoding utf8NoBOM
             "dist/$name"; "dist/$name.sha256"
@@ -110,9 +110,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
         with:
           name: windows-package
-          path: |
-            dist/Shanjie-Windows.zip
-            dist/Shanjie-Windows-Setup.exe
+          path: dist/Shanjie-Windows-Setup.exe
           if-no-files-found: error
           retention-days: 7
 

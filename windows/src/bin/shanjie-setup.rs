@@ -46,9 +46,9 @@ fn run() -> Result<()> {
     let mut file = fs::File::open(&exe)?;
     let Some(bundle) = setup_bundle::find(&mut file)? else {
         let root = exe.parent().ok_or("找不到安裝程式所在的資料夾。")?;
-        // Usually opened straight from the zip, where ui\ is not next to this file.
+        // The unbundled stub only runs from a complete package folder (development builds).
         return launch(root).map(drop).map_err(|error| {
-            format!("無法開啟安裝程式：{error}\n請先把 Shanjie-Windows.zip 完整解壓縮，再執行「安裝善解」。").into()
+            format!("無法開啟安裝程式：{error}\n請改用 Shanjie-Windows-Setup.exe 安裝。").into()
         });
     };
     unsafe {
