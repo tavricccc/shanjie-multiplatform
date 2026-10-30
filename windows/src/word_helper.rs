@@ -55,7 +55,9 @@ unsafe extern "system" fn route_key(code:i32,message:WPARAM,data:LPARAM)->LRESUL
     }
     CallNextHookEx(None,code,message,data)
 }
-pub fn running()->bool{unsafe{FindWindowW(CLASS,None).is_ok_and(|w|!w.is_invalid()&&!GetPropW(w,w!("Shanjie.WordHelper.Ready.v1")).is_invalid())}}
+/// An isolated test profile never starts a helper (start_resident), so it must not hand gestures to the
+/// installed one either: its popup would open in another process with the user's dictionary.
+pub fn running()->bool{if std::env::var_os("SHANJIE_TEST_PROFILE").is_some(){return false;}unsafe{FindWindowW(CLASS,None).is_ok_and(|w|!w.is_invalid()&&!GetPropW(w,w!("Shanjie.WordHelper.Ready.v1")).is_invalid())}}
 pub(crate) fn start_resident(data:&std::path::Path){
     if std::env::var_os("SHANJIE_TEST_PROFILE").is_some()||std::env::var_os("SHANJIE_NO_WORD_HELPER").is_some(){return;}
     let executable=data.parent().unwrap_or(data).join("tools/shanjie-word-helper.exe");
