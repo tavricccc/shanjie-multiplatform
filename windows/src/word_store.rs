@@ -73,7 +73,7 @@ pub(crate) fn inspect(data:&Path,word:&str,reading:Option<&str>)->Result<Inspect
     let reading=reading.unwrap_or(&suggested).to_owned();
     let (builtin_word,builtin_exact,personal_word,personal_exact)=matches(&lex,&rows,word,&reading);
     let selected=doc.model_id();let path=crate::model_store::resolve(data,&selected);
-    let model_fallback=selected!=crate::model_store::BUILTIN&&path==data.join("models/model-v6/bigram.winmap");
+    let model_fallback=selected!=crate::model_store::BUILTIN&&path==shanjie_shell::models::builtin(data);
     let model_id=if model_fallback{crate::model_store::BUILTIN.into()}else{selected};
     let model_word=shanjie_core::engine::windows_model_contains(data,&path,word).ok();
     Ok(Inspection{reading,builtin_word,builtin_exact,personal_word,personal_exact,model_word,model_id,model_fallback})

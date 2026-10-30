@@ -151,13 +151,20 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "x64/Shanjie.dll",
         "x86/Shanjie.dll",
         "ui/Shanjie.UI.exe",
-        "data/models/model-v6/bigram.winmap",
-        "data/models/model-v6/classes.sjc",
+        // The built-in model set of MODEL-SOURCES.json, as upstream's app carries it.
+        "data/models/builtin/bigram.winmap",
+        "data/models/builtin/classes.sjc",
+        "data/models/builtin/kn.sjkn",
+        "data/models/builtin/trigram.sjt3",
+        "data/models/builtin/trigram-chat.sjt3",
+        "data/models/builtin/tinylm.sjtl",
+        "data/models/builtin/colloquial.sjlm",
         // Optional to the core (a missing file silently turns its feature off), so the package must
         // carry them, as upstream's check-app requires digits.tsv.
         "data/digits.tsv",
         "data/english-words.txt",
         "data/packs/acg-add.tsv",
+        "data/packs/it-add.tsv",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
         "安裝善解.exe",
@@ -171,9 +178,9 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
     }
     if listed
         .iter()
-        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/model-v6/"))
+        .any(|p| p.starts_with("data/models") && !p.starts_with("data/models/builtin/"))
     {
-        return Err("安裝包只內建 model-v6＋classes-v5；其他配套由使用者另行取得。".into());
+        return Err("安裝包只內建一套模型；其他配套由使用者另行取得。".into());
     }
     Ok(listed)
 }
