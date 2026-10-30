@@ -74,26 +74,32 @@ impl Engine {
         if !plain || digits {
             let kept = cands.rows.len();
             if self.candidate_big5 && !cands.english && cands.dalt.is_none() {
-                let tail = cands.list.split_off(kept.min(cands.list.len()));
-                cands.list.extend(tail.into_iter().filter(|(word,_)| fits_big5(word)));
+                let kept = kept.min(cands.list.len());
+                let keep: Vec<bool> = cands.list.iter().enumerate().map(|(i,(word,_))| i < kept || fits_big5(word)).collect();
+                retain_with_alt(&mut cands, &keep);
             }
             self.cands = (!cands.list.is_empty()).then_some(cands);
             return;
         }
         let list = std::mem::take(&mut cands.list);
-        self.cands = self.make_candidates(list);
+        self.cands = self.make_candidates_with(list, std::mem::take(&mut cands.alt));
     }
-    fn make_candidates(&self, mut list: Vec<(String,usize)>) -> Option<Cands> {
+    fn make_candidates(&self, list: Vec<(String,usize)>) -> Option<Cands> {
+        self.make_candidates_with(list, HashMap::new())
+    }
+    /// `alt` is upstream's map from a list position to a tolerant item's lexicon reading; it follows its items.
+    fn make_candidates_with(&self, list: Vec<(String,usize)>, alt: HashMap<usize,Vec<String>>) -> Option<Cands> {
         let (_,length) = list.first()?.clone();
-        if !self.space_inputs_zhuyin { list.retain(|(word,_)| !windows_reading_text(word)); }
-        if self.candidate_big5 { list.retain(|(word,_)| fits_big5(word)); }
+        let keep: Vec<bool> = list.iter().map(|(word,_)| (self.space_inputs_zhuyin || !windows_reading_text(word)) && (!self.candidate_big5 || fits_big5(word))).collect();
         let (start,end) = self.candidate_span(length);
         let mut cands = Cands::new(list, self.cand_vertical);
+        cands.alt = alt;
+        retain_with_alt(&mut cands, &keep);
         if end <= self.syls.len() && !(start..end).any(|index| self.is_punct(index)) {
             if !self.space_inputs_zhuyin {
                 let text = self.syls[start..end].concat();
                 let has_word = !cands.list.is_empty();
-                cands.list.insert(0,(text.clone(),length));
+                insert_with_alt(&mut cands, 0, (text.clone(),length));
                 cands.literals.insert(0,WindowsLiteralCandidate { text,start,end });
                 cands.sel = usize::from(has_word);
             }
@@ -102,13 +108,29 @@ impl Engine {
                 if let Some(original) = original {
                     let text = original.concat();
                     let index = (cands.sel + 1).min(cands.list.len());
-                    cands.list.insert(index,(text.clone(),length));
+                    insert_with_alt(&mut cands, index, (text.clone(),length));
                     cands.literals.insert(index,WindowsLiteralCandidate { text,start,end });
                 }
             }
         }
         (!cands.list.is_empty()).then_some(cands)
     }
+}
+fn retain_with_alt(cands: &mut Cands, keep: &[bool]) {
+    let mut alt = HashMap::new();
+    let mut next = 0;
+    let list = std::mem::take(&mut cands.list);
+    for (i, item) in list.into_iter().enumerate() {
+        if !keep[i] { continue; }
+        if let Some(reading) = cands.alt.remove(&i) { alt.insert(next, reading); }
+        cands.list.push(item);
+        next += 1;
+    }
+    cands.alt = alt;
+}
+fn insert_with_alt(cands: &mut Cands, index: usize, item: (String,usize)) {
+    cands.list.insert(index, item);
+    cands.alt = std::mem::take(&mut cands.alt).into_iter().map(|(i, reading)| (if i >= index { i + 1 } else { i }, reading)).collect();
 }
 /// The optional digit count table, read as upstream `new_with_packs` reads it (digits.md A.3.2):
 /// missing or malformed leaves the digit layer off.
