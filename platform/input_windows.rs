@@ -36,11 +36,8 @@ impl Engine {
         let mut overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
         let pack_text = if packs != 0 { read_packs_detailed(&pack_dir,packs).map_err(|_| EngineError::LoadFailed)? } else { String::new() };
         if !pack_text.is_empty() { overlay = join_overlays(overlay,&pack_text); }
-        for line in overlay.lines() {
-            let (reading,word,score) = crate::overlay_row(line).ok_or(EngineError::LoadFailed)?;
-            base.push_str(&format!("\n{reading} {word} {score}"));
-        }
-        let lex = Arc::new(Lexicon::parse(&base).map_err(|_| EngineError::LoadFailed)?);
+        // parse_with keeps the overlay tags, so upstream's ManualSet sees the manual rows.
+        let lex = Arc::new(Lexicon::parse_with(&base,Some(&overlay)).map_err(|_| EngineError::LoadFailed)?);
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
