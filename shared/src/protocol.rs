@@ -16,6 +16,9 @@ pub struct Snapshot {
     pub total: u32,
     pub selected: Option<usize>,
     pub candidates: Vec<String>,
+    /// The core is reranking this output in the background; `Op::Rerank` applies the result once it is ready.
+    #[serde(default)]
+    pub rerank: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Failure {
@@ -125,4 +128,7 @@ pub enum Op {
     Mixed(bool),
     Tolerance(bool),
     English(u32),
+    /// Applies the rerank of the last output, waiting for it if it is still running. The shell sends it only once the
+    /// core says the job is done, so replaying it after a restart gives what was shown.
+    Rerank,
 }

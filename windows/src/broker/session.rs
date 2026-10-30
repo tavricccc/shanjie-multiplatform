@@ -92,6 +92,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                     } else {
                         Engine::open_local(&data, &config)
                         .and_then(|mut engine| {
+                            engine.rerank_in_background();
                             if engine.replay(&replay) {
                                 let mut initial = reply(Some(&engine), None, true);
                                 initial.sequence = sequence;
@@ -156,6 +157,11 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 break;
             }
             Request::Status => reply(None, None, true),
+            Request::RerankReady => {
+                let mut r = reply(None, None, attached.is_some());
+                r.rerank_ready = attached.as_ref().is_some_and(|(_, state)| state.lock().unwrap().engine.rerank_ready());
+                r
+            }
             Request::Profile => {
                 let mut r = reply(None, None, true);
                 r.profile = std::fs::read_to_string(crate::profile::path()).ok();

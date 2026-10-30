@@ -4,6 +4,7 @@ use std::{
     os::windows::fs::MetadataExt,
     path::{Path, PathBuf},
     ptr,
+    sync::{Arc, Condvar, Mutex},
 };
 use windows::{
     core::PCWSTR,
@@ -14,9 +15,61 @@ use windows::{
 };
 
 pub use shanjie_shell::protocol::{Failure, Snapshot};
+/// A rerank job. It owns its data (S7c-2a section 2.5), so it may outlive the engine; freed once nothing holds it.
+struct Job(*mut ShanjieRerankJob);
+// The core makes the job Send and Sync from its fields (ffi.rs F8); only the pointer needs saying so.
+unsafe impl Send for Job {}
+unsafe impl Sync for Job {}
+impl Drop for Job {
+    fn drop(&mut self) {
+        unsafe { shanjie_rerank_free(self.0) }
+    }
+}
+/// Upstream's rerank runner (s7c2b section 2.1): one job at a time off the request thread, and only the latest output's
+/// job waits. `latest` counts outputs; a job is kept only while it belongs to the latest one.
+#[derive(Default)]
+struct Reranks {
+    latest: u64,
+    waiting: Option<(u64, Arc<Job>)>,
+    running: Option<u64>,
+    finished: Option<(u64, Arc<Job>, i32)>,
+    stop: bool,
+}
+impl Reranks {
+    fn busy(&self) -> bool {
+        self.waiting.is_some() || self.running == Some(self.latest)
+    }
+}
+type Runner = Arc<(Mutex<Reranks>, Condvar)>;
+fn rerank_worker(runner: Runner) {
+    let (slot, signal) = &*runner;
+    let mut r = slot.lock().unwrap();
+    loop {
+        if r.stop {
+            return;
+        }
+        let Some((id, job)) = r.waiting.take() else {
+            r = signal.wait(r).unwrap();
+            continue;
+        };
+        r.running = Some(id);
+        drop(r);
+        let code = unsafe { shanjie_rerank_run(job.0) };
+        r = slot.lock().unwrap();
+        r.running = None;
+        if id == r.latest {
+            r.finished = Some((id, job, code));
+        }
+        signal.notify_all();
+    }
+}
 pub struct Engine {
     pub handle: *mut ShanjieEngine,
     pub rerank_jobs_run:u64,
+    /// Set in the resident core: jobs run there instead of before the reply.
+    reranks: Option<Runner>,
+    /// The last output, which `Op::Rerank` reranks.
+    last: Snapshot,
     remote: Option<crate::broker::Client>,
     mutex: Option<HANDLE>,
     folder: PathBuf,
@@ -36,6 +89,8 @@ impl Default for Engine {
         Self {
             handle: ptr::null_mut(),
             rerank_jobs_run:0,
+            reranks: None,
+            last: Snapshot::default(),
             remote: None,
             mutex: None,
             folder: PathBuf::new(),
@@ -50,6 +105,11 @@ impl Default for Engine {
 }
 impl Drop for Engine {
     fn drop(&mut self) {
+        if let Some(runner) = self.reranks.take() {
+            // A job still running finishes on its own; nothing applies it.
+            runner.0.lock().unwrap().stop = true;
+            runner.1.notify_all();
+        }
         unsafe {
             shanjie_engine_free(self.handle);
             if let Some(h) = self.mutex {
@@ -141,6 +201,59 @@ impl Engine {
             }
         }
         Some(e)
+    }
+    /// From now on a rerank job runs on its own thread after the reply, as upstream runs it off the main thread.
+    pub fn rerank_in_background(&mut self) {
+        let runner: Runner = Default::default();
+        let worker = runner.clone();
+        if std::thread::Builder::new()
+            .name("Shanjie rerank".into())
+            .spawn(move || rerank_worker(worker))
+            .is_ok()
+        {
+            self.reranks = Some(runner);
+        }
+    }
+    /// Whether `Op::Rerank` would answer at once: no job of the last output is waiting or running.
+    pub fn rerank_ready(&mut self) -> bool {
+        if let Some(remote) = self.remote.as_mut() {
+            return remote.rerank_ready();
+        }
+        self.reranks.as_ref().is_none_or(|r| !r.0.lock().unwrap().busy())
+    }
+    /// The core's generation guard drops a result whose composition has changed since the job was taken.
+    unsafe fn apply_rerank(&mut self, job: &Job, out: &mut Snapshot) {
+        let string = |p| CStr::from_ptr(p).to_str().unwrap().to_owned();
+        let mut ranked = ptr::null_mut();
+        if shanjie_engine_rerank_apply(self.handle, job.0, &mut ranked) == 0 && !ranked.is_null() {
+            let r = &*ranked;
+            out.preedit = string(r.preedit);
+            out.cursor = r.cursor_utf16;
+            out.candidates = (0..r.candidate_count).map(|i| string(*r.candidates.add(i as usize))).collect();
+            out.selected = usize::try_from(r.candidate_selected).ok();
+            out.columns = r.candidate_columns;
+            out.first = r.candidate_first;
+            out.total = r.candidate_total;
+            shanjie_output_free(ranked);
+        }
+    }
+    fn rerank(&mut self) -> Snapshot {
+        let finished = self.reranks.clone().and_then(|runner| {
+            let (slot, signal) = &*runner;
+            let mut r = slot.lock().unwrap();
+            while r.busy() {
+                r = signal.wait(r).unwrap();
+            }
+            let latest = r.latest;
+            r.finished.take().filter(|f| f.0 == latest)
+        });
+        // Only the candidates can change; what the last output committed was already sent.
+        let mut out = Snapshot { commit: String::new(), rerank: false, ..self.last.clone() };
+        if let Some((_, job, 0)) = finished {
+            unsafe { self.apply_rerank(&job, &mut out) };
+        }
+        self.last = out.clone();
+        out
     }
     fn begin(&mut self) -> bool {
         unsafe {
@@ -244,25 +357,27 @@ impl Engine {
                     .map(|i| string(*r.candidates.add(i as usize)))
                     .collect(),
                 associated: false,
+                rerank: false,
             };
             shanjie_output_free(raw);
-            // Serialized in the resident core, never on a keyboard hook. The upstream
-            // generation guard prevents stale application; commit is preserved once.
             let mut job=ptr::null_mut();
-            if shanjie_engine_rerank_take(self.handle,&mut job)==0&&!job.is_null(){
-                if shanjie_rerank_run(job)==0 {
+            let job=(shanjie_engine_rerank_take(self.handle,&mut job)==0&&!job.is_null()).then(||Job(job));
+            if let Some(runner)=self.reranks.as_ref() {
+                // Every output makes the previous job stale; this one's, if any, waits for the runner.
+                let mut r=runner.0.lock().unwrap();
+                r.latest+=1;
+                r.finished=None;
+                r.waiting=job.map(|job|(r.latest,Arc::new(job)));
+                out.rerank=r.waiting.is_some();
+                runner.1.notify_all();
+            } else if let Some(job)=job {
+                // Tools without a runner rerank before returning; commit is preserved once.
+                if shanjie_rerank_run(job.0)==0 {
                     self.rerank_jobs_run=self.rerank_jobs_run.saturating_add(1);
-                    let mut ranked=ptr::null_mut();
-                    if shanjie_engine_rerank_apply(self.handle,job,&mut ranked)==0&&!ranked.is_null(){
-                        let r=&*ranked;out.preedit=string(r.preedit);out.cursor=r.cursor_utf16;
-                        out.candidates=(0..r.candidate_count).map(|i|string(*r.candidates.add(i as usize))).collect();
-                        out.selected=usize::try_from(r.candidate_selected).ok();out.columns=r.candidate_columns;
-                        out.first=r.candidate_first;out.total=r.candidate_total;
-                        shanjie_output_free(ranked);
-                    }
+                    self.apply_rerank(&job,&mut out);
                 }
-                shanjie_rerank_free(job);
             }
+            self.last=out.clone();
             Some(out)
         }
     }
@@ -395,6 +510,7 @@ impl Engine {
             Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
                 == 0)
                 .then(Snapshot::default),
+            Op::Rerank => (!self.handle.is_null()).then(|| self.rerank()),
         }
     }
     pub fn replay(&mut self, ops: &[crate::broker::Op]) -> bool {

@@ -157,6 +157,8 @@ pub struct Data {
     pub(super) word_selection: RefCell<Option<super::add_word::Selection>>,
     pub(super) focus_handoff: RefCell<Option<super::focus_handoff::Pending>>,
     pub(super) ctrl_gesture: RefCell<super::add_word::Gesture>,
+    pub(super) rerank_ticket: Cell<u64>,
+    pub(super) rerank_wait: Cell<Option<(u64, std::time::Instant)>>,
     watcher_context: RefCell<Option<Box<std::rc::Weak<Data>>>>,
     owner: Cell<*mut c_void>,
     _count: Count,
@@ -194,6 +196,8 @@ pub fn new() -> ITfTextInputProcessorEx {
         word_selection: RefCell::new(None),
         focus_handoff: RefCell::new(None),
         ctrl_gesture: RefCell::new(Default::default()),
+        rerank_ticket: Cell::new(0),
+        rerank_wait: Cell::new(None),
         watcher_context: RefCell::new(None),
         owner: Cell::new(std::ptr::null_mut()),
         _count: Count::new(),
@@ -323,6 +327,7 @@ impl Data {
     pub fn cancel(self: &Rc<Self>) -> Result<()> {
         self.diagnostic("cancel.enter",None,None,None);
         self.clear_handoff();
+        self.watch_rerank(false);
         let updating=self.profile_update.borrow_mut().take().is_some();
         self.close_word();
         self.generation.set(self.generation.get().wrapping_add(1));
@@ -524,6 +529,7 @@ impl Data {
         selected: bool,
     ) -> Result<()> {
         self.diagnostic("apply.enter",Some(context),None,None);
+        self.watch_rerank(out.rerank && !out.preedit.is_empty());
         #[cfg(feature="input-diagnostics")]
         if crate::input_diagnostics::enabled() {
             crate::input_diagnostics::emit("apply.output",serde_json::json!({
@@ -1014,6 +1020,7 @@ unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
             7 => data.fallback_word(),
             8 => data.poll_word(),
             9 => data.word_closed(),
+            10 => data.poll_rerank(),
             _ => {
                 let _ = data.refresh();
             }

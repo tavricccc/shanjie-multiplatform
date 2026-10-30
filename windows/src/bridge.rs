@@ -244,6 +244,7 @@ unsafe fn snapshot(r: *const Frame) -> Snapshot {
         candidates: (0..r.count as usize)
             .map(|i| text(*r.candidates.add(i)).into())
             .collect(),
+        rerank: false,
     }
 }
 #[no_mangle]

@@ -197,6 +197,8 @@ enum Request {
     Profile,
     Word { word: String, reading: Option<String> },
     InspectWord { word: String, reading: Option<String> },
+    /// Unsequenced: whether the attached session's rerank is done (`Reply::rerank_ready`).
+    RerankReady,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Reply {
@@ -214,6 +216,8 @@ pub struct Reply {
     pub profile: Option<String>,
     #[serde(default)]
     pub word_result: Option<std::result::Result<String, String>>,
+    #[serde(default)]
+    pub rerank_ready: bool,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -228,6 +232,7 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         failure: if ok { None } else { Some(Failure::Failed) },
         profile: None,
         word_result: None,
+        rerank_ready: false,
     }
 }
 fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {

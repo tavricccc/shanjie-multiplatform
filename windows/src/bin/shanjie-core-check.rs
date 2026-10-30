@@ -18,19 +18,53 @@ fn stop_fixture(data:&std::path::Path) {
     unsafe{CloseHandle(handle).unwrap();}
     assert_eq!(result,WAIT_OBJECT_0,"fixture core must exit before restart");
 }
+/// One key on the resident core and on a local engine that reranks before returning: the remote one waits until the core
+/// says its rerank is done, then asks for it. Returns whether a rerank was applied.
+fn rerank_step(remote: &mut broker::Client, local: &mut Engine, ch: char) -> bool {
+    let op = Op::Key { kind: 1, ch: ch as u32, modifiers: 0, latin: None };
+    let want = local.perform(op.clone()).unwrap();
+    // The first request after a core restart finds the old pipe gone; the next one reconnects and replays.
+    let mut got = (0..4)
+        .find_map(|_| {
+            let got = remote.perform(op.clone());
+            assert_ne!(remote.failure, Some(shanjie_windows::engine::Failure::Ambiguous));
+            if got.is_none() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            got
+        })
+        .expect("key did not recover within bounded attempts");
+    assert_eq!(got.commit, want.commit);
+    let reranked = got.rerank;
+    if reranked {
+        let until = Instant::now() + std::time::Duration::from_secs(10);
+        while !remote.rerank_ready() {
+            assert!(Instant::now() < until, "rerank did not finish");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let ranked = remote.perform(Op::Rerank).unwrap();
+        assert!(ranked.commit.is_empty() && !ranked.rerank);
+        got = ranked;
+    }
+    assert_eq!((got.preedit, got.candidates, got.selected), (want.preedit, want.candidates, want.selected), "background rerank");
+    reranked
+}
+/// Opening a core in this process replaces the panic hook with a silent one, so this one is set again after that.
+fn report_panics() {
+    std::panic::set_hook(Box::new(|info| {
+        if let Some(folder)=std::env::var_os("LOCALAPPDATA") {
+            let _=std::fs::write(PathBuf::from(folder).join("core-check-panic.txt"),info.to_string());
+        }
+        eprintln!("{info}");
+    }));
+}
 fn main() {
     let data = PathBuf::from(std::env::args().nth(1).expect("data directory"));
     assert!(
         std::env::var_os("SHANJIE_TEST_PROFILE").is_some(),
         "Use an isolated test profile"
     );
-    let default_hook=std::panic::take_hook();
-    std::panic::set_hook(Box::new(move|info| {
-        if let Some(folder)=std::env::var_os("LOCALAPPDATA") {
-            let _=std::fs::write(PathBuf::from(folder).join("core-check-panic.txt"),info.to_string());
-        }
-        default_hook(info);
-    }));
+    report_panics();
     let config = Config { prediction: false, ..Config::default() };
     let open = || Engine::open(&data, &config).unwrap();
     let key = |e: &mut Engine, ch: char| {
@@ -96,6 +130,20 @@ fn main() {
     start_fixture(&data);
     key(&mut a, '3');
     assert_eq!(a.reset(false).unwrap().commit, "你");
+    // The core reranks after replying, as upstream runs the job off the main thread; a restart replays the reranks.
+    let mut local = Engine::open_local(&data, &config).expect("local engine");
+    report_panics();
+    let mut remote = broker::Client::open(&data, config.clone()).unwrap();
+    let mut reranked = 0;
+    for ch in "su3cl".chars() {
+        reranked += rerank_step(&mut remote, &mut local, ch) as usize;
+    }
+    stop_fixture(&data);
+    start_fixture(&data);
+    reranked += rerank_step(&mut remote, &mut local, '3') as usize;
+    assert!(reranked > 0, "the built-in model must rerank");
+    assert_eq!(remote.perform(Op::Reset(false)).unwrap().commit, local.reset(false).unwrap().commit);
+    drop((local, remote));
     let status = broker::control(&data, false).unwrap();
     assert_eq!(status.lexicon_loads, 1);
     assert_eq!(status.model_loads, 1);
@@ -141,6 +189,6 @@ fn main() {
     assert_eq!(status.model_loads, 1);
     println!(
         "{}",
-        serde_json::json!({"first_open_ms":first_ms,"checks": ["separate_sessions","separate_processes","caps_display","restart_replay","concurrent_start"],"status":status})
+        serde_json::json!({"first_open_ms":first_ms,"checks": ["separate_sessions","separate_processes","caps_display","restart_replay","background_rerank","concurrent_start"],"status":status})
     );
 }

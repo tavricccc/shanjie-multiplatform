@@ -7,6 +7,7 @@ mod mode;
 mod modifiers;
 mod profile_refresh;
 mod recovery;
+mod rerank;
 mod resident;
 mod service;
 use std::sync::{

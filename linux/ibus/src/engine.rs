@@ -253,6 +253,8 @@ impl Engine {
                 shanjie_windows_key_with_latin(h, ShanjieKey { kind, ch, modifiers }, latin.map_or(0, |c| c as u32), o)
             }),
             Op::Reset(discard) => self.invoke(|h, o| unsafe { shanjie_engine_reset(h, discard as u32, o) }),
+            // Only the Windows core reranks in the background.
+            Op::Rerank => None,
             Op::Pick(index) => self.operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
             Op::Associate(s) => {
                 let s = string(s)?;

@@ -110,6 +110,10 @@ impl Client {
             self.failure = Some(Failure::Ambiguous);
             return None;
         }
+        // A rerank left unanswered goes first: the core may have applied it, and its sequence comes before this one.
+        if self.outstanding == Some(Op::Rerank) && op != Op::Rerank {
+            self.perform(Op::Rerank)?;
+        }
         self.failure = None;
         let uncertain = self.outstanding.is_some();
         if self.pipe.is_none() {
@@ -186,6 +190,28 @@ impl Client {
             }
         }
         result.snapshot
+    }
+}
+impl Client {
+    /// Whether the core finished reranking the last output. Unsequenced, so it changes nothing there; an unanswered
+    /// `Op::Rerank` counts as ready, to be sent again.
+    pub fn rerank_ready(&mut self) -> bool {
+        if self.outstanding.is_some() || self.failure.is_some() {
+            return self.outstanding == Some(Op::Rerank) && self.failure != Some(Failure::Ambiguous);
+        }
+        let Some(pipe) = self.pipe.as_ref() else {
+            return false;
+        };
+        let deadline = Instant::now() + Duration::from_millis(200);
+        match pipe.send(&Request::RerankReady, deadline).and_then(|()| pipe.receive::<Reply>(deadline)) {
+            Ok(reply) => reply.rerank_ready,
+            Err(error) => {
+                // A late answer would be read as the next request's; the next perform reconnects.
+                crate::runtime_log::io("client.rerank_ready", &error);
+                self.pipe = None;
+                false
+            }
+        }
     }
 }
 impl Drop for Client {
