@@ -48,6 +48,44 @@ class Contract(unittest.TestCase):
         m=self.bundle();m["advisories"]=[{"code":"evaluation","title":"Bad","body":"Bad","measurements":[{"sample_count":20,"unit":"sentences","baseline":21,"candidate":0}]}]
         m["advisory_revision"]=c.digest(c.semantic(m["advisories"]))
         with self.assertRaises(ValueError):c.validate(self.catalog(m))
+    def test_colloquial_needs_the_small_model(self):
+        m=self.bundle();m["assets"].append({"role":"colloquial","repository":c.UPSTREAM,"release":"SJ-cl","filename":"colloquial.sjlm","format_magic":"SJLM0001","size":64,"sha256":"d"*64,"requires_assets":[]})
+        m.update({k:v for k,v in c.model(m["assets"],m["name"]).items() if k in ("id","required_capabilities")})
+        with self.assertRaisesRegex(ValueError,"small model"):c.validate(self.catalog(m))
+    def test_discovery_offers_the_complete_set_and_finds_the_builtin_by_its_model_files(self):
+        main="1"*64;kn="3"*64
+        # Each release with its asset names and the header bytes the discovery reads (magic, then the pairing hashes).
+        def head(magic,at=(),pad=256):
+            b=bytearray(pad);b[:8]=magic.encode()
+            for offset,sha in at:b[offset:offset+32]=bytes.fromhex(sha)
+            return bytes(b)
+        files={"bigram.sjlm":(main,head("SJLM0001")),"classes.sjc":("2"*64,head("SJCL0001",[(8,main)])),
+               "kn.sjkn":(kn,head("SJKN0002",[(12,main)])),"trigram.sjt3":("4"*64,head("SJT30001",[(20,main)])),
+               "trigram-chat.sjt3":("5"*64,head("SJT30001",[(20,main)])),"tinylm.sjtl":("6"*64,head("SJTL0004",[(68,main),(212,kn)])),
+               "colloquial.sjlm":("7"*64,head("SJLM0001")),"colloquial-attribution.tsv":("8"*64,b"unit\tlicense\n"),"sj-cl.NOTICE.txt":("9"*64,b"notice\n")}
+        rows=[{"id":i,"tag_name":f"sj-{i}","prerelease":False,"draft":False,"assets":[]} for i in range(7)]
+        for i,names in enumerate([["bigram.sjlm"],["classes.sjc"],["kn.sjkn"],["trigram.sjt3"],["trigram-chat.sjt3"],["tinylm.sjtl"],["colloquial.sjlm","colloquial-attribution.tsv","sj-cl.NOTICE.txt"]]):
+            for name in names:
+                rows[i]["assets"].append({"id":100+len(name),"name":name,"size":len(files[name][1]),"digest":"sha256:"+files[name][0],
+                                          "browser_download_url":f"https://github.com/{c.UPSTREAM}/releases/download/sj-{i}/{name}"})
+        sources={"format":2,"builtin":{"assets":[{"role":r,"sha256":files[f][0]} for r,f in [("bigram","bigram.sjlm"),("classes","classes.sjc"),("smoothing","kn.sjkn"),
+                 ("trigram","trigram.sjt3"),("trigram-chat","trigram-chat.sjt3"),("semantic","tinylm.sjtl"),("colloquial","colloquial.sjlm"),("attribution","colloquial-attribution.tsv")]]}}
+        with fixture() as tmp:
+            out=pathlib.Path(tmp)
+            def download(a,cache):
+                path=out/a["name"];path.write_bytes(files[a["name"]][1]);return path
+            real_read=c.read
+            with patch.object(c,"releases",return_value=rows),patch.object(c,"previous",return_value=(None,{"format":2,"models":[]},{})),\
+                 patch.object(c,"download",side_effect=download),patch.object(c,"read",side_effect=lambda p:sources if str(p).endswith("MODEL-SOURCES.json") else real_read(p)):
+                c.discover(out)
+            plan=c.read(out/"plan.json")
+        complete=[m for m in plan["candidates"] if len(m["assets"])==9]
+        self.assertEqual(len(complete),1,"one complete set: every model file with the 常談 notices")
+        self.assertEqual(plan["baseline"],complete[0]["id"],"the NOTICE riding with 常談 does not hide the built-in set")
+        semantic=next(a for a in complete[0]["assets"] if a["role"]=="semantic")
+        self.assertEqual(semantic["requires_assets"],sorted([main,kn]),"the small model needs its model and the KN it was tuned on")
+        self.assertIn("colloquial.sjlm1",complete[0]["required_capabilities"])
+        self.assertTrue(all(any(a["role"]=="bigram" for a in m["assets"]) for m in plan["candidates"]),"常談 is never a main model")
     def test_complete_release_pagination(self):
         with patch.object(c,"api",side_effect=[[{"draft":False}]*100,[{"draft":True},{"draft":False}]]) as call:
             self.assertEqual(len(c.releases()),101);self.assertEqual(call.call_count,2)

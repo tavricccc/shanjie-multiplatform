@@ -13,10 +13,15 @@ UPSTREAM = "Nanako0129/shanjie"
 PROFILE = "windows-bundle-v1"
 BRANCH = "model-catalog"
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-NAMES = {"bigram.sjlm":"bigram", "colloquial.sjlm":"bigram", "classes.sjc":"classes",
-         "kn.sjkn":"smoothing", "trigram.sjt3":"trigram", "tinylm.sjtl":"semantic"}
+# The loader's file name of each role (shared/src/catalog.rs asset_capability). 常談 is the rerank's
+# word-pair table, read beside the small model; the two trigram tables are the formal and chat profiles'.
+NAMES = {"bigram.sjlm":"bigram", "classes.sjc":"classes", "kn.sjkn":"smoothing", "trigram.sjt3":"trigram",
+         "trigram-chat.sjt3":"trigram-chat", "tinylm.sjtl":"semantic", "colloquial.sjlm":"colloquial"}
 CAPS = {"SJLM0001":"lm.sjlm1","SJCL0001":"classes.sjcl1","SJKN0002":"kn.sjkn2",
         "SJT30001":"trigram.sjt30001", **{f"SJTL000{i}":f"semantic.sjtl{i}" for i in range(1,5)}}
+# Roles whose header carries the main model's hash.
+PAIRED = ("classes","smoothing","trigram","trigram-chat","semantic")
+def capability(a): return "colloquial.sjlm1" if a["role"]=="colloquial" else CAPS[a["format_magic"]]
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def encoded(x): return json.dumps(x, ensure_ascii=False, sort_keys=True, separators=(",",":")).encode()
 def digest(x): return hashlib.sha256(encoded(x)).hexdigest()
@@ -87,7 +92,7 @@ def download(a,cache):
 def model(assets,label):
     if len(label)>240:label=label[:237]+"..."
     assets=copy.deepcopy(assets);assets.sort(key=lambda a:(a["role"],a["sha256"]))
-    caps=sorted({"map.sjwm2",*(CAPS[a["format_magic"]] for a in assets if a["role"] in NAMES.values())}
+    caps=sorted({"map.sjwm2",*(capability(a) for a in assets if a["role"] in NAMES.values())}
                 |({"lm.classless"} if not any(a["role"]=="classes" for a in assets) else set()))
     identity={"assets":assets,"required_capabilities":caps}
     return {"id":"bundle-"+digest(identity),"name":label,"assets":assets,"required_capabilities":caps,
@@ -116,7 +121,7 @@ def discover(out):
                 pair=None;kn=None
                 if item["role"]=="classes":pair=header[8:40].hex()
                 elif item["role"]=="smoothing":pair=header[12:44].hex()
-                elif item["role"]=="trigram":pair=header[20:52].hex()
+                elif item["role"] in ("trigram","trigram-chat"):pair=header[20:52].hex()
                 elif item["role"]=="semantic":
                     pair=header[68:100].hex()
                     if magic=="SJTL0004" and header[212:244]!=bytes(32):kn=header[212:244].hex()
@@ -126,28 +131,38 @@ def discover(out):
             except Exception as e:
                 pending.append({"release":r["tag_name"],"filename":a["name"],"state":"unsupported" if isinstance(e,NotImplementedError) else "unverified","reason":str(e)[:600]})
     candidates=[];baseline=None
+    # The model files decide; license notices ride along with their release and are not part of the identity.
+    files=lambda assets:{a["sha256"] for a in assets if a["role"] not in ("license","attribution")}
+    builtin=files(read(ROOT/"MODEL-SOURCES.json")["builtin"]["assets"])
+    def legal_of(release):return [x["asset"] for x in found if x["asset"]["role"] in ("license","attribution") and x["asset"]["release"]==release]
+    # Newest first, as the releases API lists them: a complete bundle takes the newest release of each role.
+    colloquial=next((x["asset"] for x in found if x["asset"]["role"]=="colloquial"),None)
     for base in (x for x in found if x["asset"]["role"]=="bigram"):
         b=base["asset"];classes=[x for x in found if x["asset"]["role"]=="classes" and x["pair"]==b["sha256"]]
         # Offer every released paired class table. A genuinely classless model has its own capability.
         options=classes or [None]
         for c in options:
-            legal=[x["asset"] for x in found if x["asset"]["role"] in ("license","attribution") and x["asset"]["release"]==b["release"]]
-            assets=[b]+([dict(c["asset"],requires_assets=[b["sha256"]])] if c else [])+legal
-            m=model(assets,b["release"]+(" ＋ "+c["asset"]["release"] if c else "（獨立無詞類模型）"))
-            candidates.append(m)
-            builtin=next(x for x in read(ROOT/"MODEL-CATALOG.json")["models"] if x["id"]=="model-v6-classes-v5")
-            if b["sha256"]==builtin["model_sha256"] and c and c["asset"]["sha256"]==builtin["classes_sha256"]:baseline=m["id"]
+            assets=[b]+([dict(c["asset"],requires_assets=[b["sha256"]])] if c else [])+legal_of(b["release"])
+            candidates.append(model(assets,b["release"]+(" ＋ "+c["asset"]["release"] if c else "（獨立無詞類模型）")))
+        # The complete set, as upstream ships it: every paired side file, the small model when its recorded KN
+        # side file is in the set, and 常談 with the small model it serves.
         default=options[0]
-        standard=[b]+([dict(default["asset"],requires_assets=[b["sha256"]])] if default else [])+legal
-        for extra in (x for x in found if x["pair"]==b["sha256"] and x["asset"]["role"] in ("smoothing","trigram","semantic")):
-            assets=copy.deepcopy(standard);deps=[b["sha256"]]
-            if extra["kn"]:
-                side=next((x for x in found if x["asset"]["sha256"]==extra["kn"] and x["pair"]==b["sha256"]),None)
-                if side is None:
-                    pending.append({"release":extra["asset"]["release"],"state":"unsupported","reason":"Required paired KN attachment missing"});continue
-                assets.append(dict(side["asset"],requires_assets=[b["sha256"]]));deps.append(extra["kn"])
-            assets.append(dict(extra["asset"],requires_assets=sorted(deps)))
-            candidates.append(model(assets," ＋ ".join(a["release"] for a in assets)))
+        assets=[b]+([dict(default["asset"],requires_assets=[b["sha256"]])] if default else [])+legal_of(b["release"])
+        sides={}
+        for x in found:
+            if x["pair"]==b["sha256"] and x["asset"]["role"] in ("smoothing","trigram","trigram-chat") and x["asset"]["role"] not in sides:
+                sides[x["asset"]["role"]]=dict(x["asset"],requires_assets=[b["sha256"]])
+        assets+=sides.values()
+        semantic_model=next((x for x in found if x["pair"]==b["sha256"] and x["asset"]["role"]=="semantic"
+                             and (not x["kn"] or sides.get("smoothing",{}).get("sha256")==x["kn"])),None)
+        if semantic_model:
+            deps=[b["sha256"]]+([semantic_model["kn"]] if semantic_model["kn"] else [])
+            assets.append(dict(semantic_model["asset"],requires_assets=sorted(deps)))
+            if colloquial:assets+=[colloquial]+legal_of(colloquial["release"])
+        if len(assets)>len([b])+(1 if default else 0)+len(legal_of(b["release"])):
+            candidates.append(model(assets," ＋ ".join(dict.fromkeys(a["release"] for a in assets))))
+        for m in candidates:
+            if files(m["assets"])==builtin:baseline=m["id"]
     candidates=list({m["id"]:m for m in candidates}.values())
     used={a["sha256"] for m in candidates for a in m["assets"]}
     for x in found:
@@ -228,7 +243,8 @@ def validate(c):
             if a["role"] in roles or a["repository"]!=UPSTREAM or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
             if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
             allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
-                     "semantic":{f"SJTL000{i}" for i in range(1,5)},"attribution":{"TEXT0001"},"license":{"TEXT0001"}}
+                     "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,5)},"colloquial":{"SJLM0001"},
+                     "attribution":{"TEXT0001"},"license":{"TEXT0001"}}
             if a["format_magic"] not in allowed.get(a["role"],set()):raise ValueError("Wrong role/format")
             if a["role"]=="attribution" and a["filename"]!="colloquial-attribution.tsv":raise ValueError("Unknown attribution file")
             if a["role"]=="license" and not(a["filename"].endswith(".NOTICE.txt") or a["filename"]=="LICENSE.txt"):raise ValueError("Unknown license file")
@@ -237,7 +253,8 @@ def validate(c):
             if not graph[a["sha256"]]<=hashes or a["sha256"] in graph[a["sha256"]]:raise ValueError("Missing/self dependency")
         main=next(a for a in m["assets"] if a["role"]=="bigram")
         for a in m["assets"]:
-            if a["role"] in ("classes","smoothing","trigram","semantic") and main["sha256"] not in a["requires_assets"]:raise ValueError("Missing main dependency")
+            if a["role"] in PAIRED and main["sha256"] not in a["requires_assets"]:raise ValueError("Missing main dependency")
+            if a["role"]=="colloquial" and "semantic" not in {x["role"] for x in m["assets"]}:raise ValueError("Colloquial table without a small model")
         while graph:
             leaves={h for h,deps in graph.items() if not deps}
             if not leaves:raise ValueError("Cyclic dependency")
@@ -291,9 +308,11 @@ def assemble(out):
         if any(r.get("evaluation",{}).get("state")!="evaluated" for r in usable):
             note("partial-evaluation","部分平台尚未評測","未取得成績的平台不沿用其他平台分數；技術上可用者仍可選用。")
         if any(a["sha256"] in plan["prereleases"] for a in m["assets"]):note("preview","預覽模型","包含上游預覽資料，可能有使用差異；仍可選用。")
-        if any(a["role"]=="semantic" for a in m["assets"]):note("semantic-cost","包含語意重排","語意模型會增加記憶體與每個音節的計算量。本版在常駐核心使用標準重排強度；效能未作跨機器比較。")
-        if any(a["role"]=="trigram" for a in m["assets"]):note("trigram-profile","正式模式使用三元模型","依上游規則，三元模型用於正式模式；聊天模式仍使用二元模型。")
-        if any(a["filename"]=="colloquial.sjlm" for a in m["assets"]):note("standalone-colloquial","獨立口語模型","這個配套單獨使用口語語料模型，取代一般主模型；不是把它暗中混合進原模型。詞彙覆蓋與排序可能不同。")
+        if any(a["role"]=="semantic" for a in m["assets"]):note("semantic-cost","包含語意校正","語意模型會增加記憶體與每個音節的計算量，強度依設定；效能未作跨機器比較。")
+        roles={a["role"] for a in m["assets"]}
+        if ("trigram" in roles)!=("trigram-chat" in roles):
+            only="書面" if "trigram" in roles else "聊天"
+            note("trigram-profile","只有一種設定用三元模型",f"這個配套只有{only}設定的三元模型（連文），另一種設定只用二元模型。")
         m["advisory_revision"]=digest(semantic(m["advisories"]));by_id[m["id"]]=m
     catalog={"format":2,"example_only":False,"generated_at":now(),"models":sorted(by_id.values(),key=lambda m:m["id"])}
     catalog["revision"]=digest(semantic(catalog));validate(catalog)
