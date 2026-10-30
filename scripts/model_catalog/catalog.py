@@ -226,6 +226,40 @@ def probe(out,exe,data,target):
         key=digest({"id":r["id"],"commit":plan["source_commit"],"target":target,"dataset":plan["dataset_sha256"]})
         write(cache/(key+".json"),r)
     write(work/"results.json",reports)
+def validate_model(m):
+    """One bundle against the loader contract; the whole list adds identity, size and revision checks."""
+    expected=model(m["assets"],m["name"])
+    if m["id"]!=expected["id"] or m["required_capabilities"]!=expected["required_capabilities"]:raise ValueError("Bundle identity/capability mismatch")
+    if m["advisory_revision"]!=digest(semantic(m["advisories"])):raise ValueError("Advisory revision mismatch")
+    if not any(x["state"]=="usable" for x in m["compatibility"]):raise ValueError("No tested usable target")
+    roles=set();hashes={a["sha256"] for a in m["assets"]};graph={}
+    for a in m["assets"]:
+        if a["role"] in roles or a["repository"]!=UPSTREAM or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
+        if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
+        allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
+                 "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,5)},"colloquial":{"SJLM0001"},
+                 "attribution":{"TEXT0001"},"license":{"TEXT0001"}}
+        if a["format_magic"] not in allowed.get(a["role"],set()):raise ValueError("Wrong role/format")
+        if a["role"]=="attribution" and a["filename"]!="colloquial-attribution.tsv":raise ValueError("Unknown attribution file")
+        if a["role"]=="license" and not(a["filename"].endswith(".NOTICE.txt") or a["filename"]=="LICENSE.txt"):raise ValueError("Unknown license file")
+        if a["role"] not in ("license","attribution") and NAMES.get(a["filename"])!=a["role"]:raise ValueError("Unknown loader filename")
+        roles.add(a["role"]);graph[a["sha256"]]=set(a["requires_assets"])
+        if not graph[a["sha256"]]<=hashes or a["sha256"] in graph[a["sha256"]]:raise ValueError("Missing/self dependency")
+    main=next(a for a in m["assets"] if a["role"]=="bigram")
+    for a in m["assets"]:
+        if a["role"] in PAIRED and main["sha256"] not in a["requires_assets"]:raise ValueError("Missing main dependency")
+        if a["role"]=="colloquial" and "semantic" not in {x["role"] for x in m["assets"]}:raise ValueError("Colloquial table without a small model")
+    while graph:
+        leaves={h for h,deps in graph.items() if not deps}
+        if not leaves:raise ValueError("Cyclic dependency")
+        graph={h:deps-leaves for h,deps in graph.items() if h not in leaves}
+    for a in m["advisories"]:
+        for n in a["measurements"]:
+            if n["sample_count"]<1 or min(n["baseline"],n["candidate"])<0:raise ValueError("Invalid measurements")
+            if n["unit"]=="sentences" and max(n["baseline"],n["candidate"])>n["sample_count"]:raise ValueError("Wrong denominator")
+def valid_model(m):
+    try:validate_model(m);return True
+    except (ValueError,KeyError,StopIteration):return False
 def validate(c):
     if c.get("format")!=2 or c.get("example_only") is not False:raise ValueError("Not a production v2 catalog")
     if not c["models"] or len(c["models"])>1000 or len(encoded(c))>8*1024*1024:raise ValueError("Catalog empty or exceeds reader bounds")
@@ -233,36 +267,7 @@ def validate(c):
     ids=set()
     for m in c["models"]:
         if m["id"] in ids:raise ValueError("Duplicate bundle identity")
-        ids.add(m["id"])
-        expected=model(m["assets"],m["name"])
-        if m["id"]!=expected["id"] or m["required_capabilities"]!=expected["required_capabilities"]:raise ValueError("Bundle identity/capability mismatch")
-        if m["advisory_revision"]!=digest(semantic(m["advisories"])):raise ValueError("Advisory revision mismatch")
-        if not any(x["state"]=="usable" for x in m["compatibility"]):raise ValueError("No tested usable target")
-        roles=set();hashes={a["sha256"] for a in m["assets"]};graph={}
-        for a in m["assets"]:
-            if a["role"] in roles or a["repository"]!=UPSTREAM or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
-            if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
-            allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
-                     "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,5)},"colloquial":{"SJLM0001"},
-                     "attribution":{"TEXT0001"},"license":{"TEXT0001"}}
-            if a["format_magic"] not in allowed.get(a["role"],set()):raise ValueError("Wrong role/format")
-            if a["role"]=="attribution" and a["filename"]!="colloquial-attribution.tsv":raise ValueError("Unknown attribution file")
-            if a["role"]=="license" and not(a["filename"].endswith(".NOTICE.txt") or a["filename"]=="LICENSE.txt"):raise ValueError("Unknown license file")
-            if a["role"] not in ("license","attribution") and NAMES.get(a["filename"])!=a["role"]:raise ValueError("Unknown loader filename")
-            roles.add(a["role"]);graph[a["sha256"]]=set(a["requires_assets"])
-            if not graph[a["sha256"]]<=hashes or a["sha256"] in graph[a["sha256"]]:raise ValueError("Missing/self dependency")
-        main=next(a for a in m["assets"] if a["role"]=="bigram")
-        for a in m["assets"]:
-            if a["role"] in PAIRED and main["sha256"] not in a["requires_assets"]:raise ValueError("Missing main dependency")
-            if a["role"]=="colloquial" and "semantic" not in {x["role"] for x in m["assets"]}:raise ValueError("Colloquial table without a small model")
-        while graph:
-            leaves={h for h,deps in graph.items() if not deps}
-            if not leaves:raise ValueError("Cyclic dependency")
-            graph={h:deps-leaves for h,deps in graph.items() if h not in leaves}
-        for a in m["advisories"]:
-            for n in a["measurements"]:
-                if n["sample_count"]<1 or min(n["baseline"],n["candidate"])<0:raise ValueError("Invalid measurements")
-                if n["unit"]=="sentences" and max(n["baseline"],n["candidate"])>n["sample_count"]:raise ValueError("Wrong denominator")
+        ids.add(m["id"]);validate_model(m)
     return c
 def assemble(out):
     plan=read(out/"plan.json");all_results=[]
@@ -271,7 +276,8 @@ def assemble(out):
     expected={(m["id"],t) for m in plan["candidates"] for t in ("windows-x64","windows-x86")}
     actual=[(r["id"],r["target"]) for r in all_results]
     if len(actual)!=len(set(actual)) or set(actual)!=expected:raise ValueError("Incomplete or duplicate architecture probe results")
-    by_id={m["id"]:copy.deepcopy(m) for m in plan["previous"].get("models",[])}
+    # Earlier entries are kept only while they still meet the current contract (an older generator wrote some it now refuses).
+    by_id={m["id"]:copy.deepcopy(m) for m in plan["previous"].get("models",[]) if valid_model(m)}
     published=out/"publication";published.mkdir(exist_ok=True);pending=list(plan["pending"])
     baseline={r["target"]:r.get("evaluation",{}) for r in all_results if r["id"]==plan["baseline"] and r["state"]=="usable"}
     for m in copy.deepcopy(plan["candidates"]):

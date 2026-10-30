@@ -86,6 +86,11 @@ class Contract(unittest.TestCase):
         self.assertEqual(semantic["requires_assets"],sorted([main,kn]),"the small model needs its model and the KN it was tuned on")
         self.assertIn("colloquial.sjlm1",complete[0]["required_capabilities"])
         self.assertTrue(all(any(a["role"]=="bigram" for a in m["assets"]) for m in plan["candidates"]),"常談 is never a main model")
+    def test_earlier_entries_the_contract_now_refuses_are_not_carried_over(self):
+        good=self.bundle();old=self.bundle()
+        # An older generator published 常談 alone as a main model; that entry must not block a new list.
+        old["assets"][0].update(filename="colloquial.sjlm",release="sj-cl");old["id"]=c.model(old["assets"],old["name"])["id"]
+        self.assertTrue(c.valid_model(good));self.assertFalse(c.valid_model(old))
     def test_complete_release_pagination(self):
         with patch.object(c,"api",side_effect=[[{"draft":False}]*100,[{"draft":True},{"draft":False}]]) as call:
             self.assertEqual(len(c.releases()),101);self.assertEqual(call.call_count,2)
