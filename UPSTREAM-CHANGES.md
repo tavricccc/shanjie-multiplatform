@@ -14,7 +14,7 @@
 | `core/src/lm.rs` | 9 個模型陣列與 3 個詞類陣列改為唯讀映射；`.winmap`（SJWM0002）專用讀取與來源雜湊核對 | `prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、Big5 篩選、聯想、預測列種類查詢；預測關閉時不建索引。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字 | `prepare-keys.ps1`、`platform/key_options_windows.rs` |
-| `core/src/engine.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、標點保留未完成讀音、注音順序混打與容錯、Enter 只提交游標前。上游英文段、英文選單、數字串進行中直接交給上游 | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
+| `core/src/engine.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、注音順序混打與容錯、Enter 只提交游標前。上游英文段、英文選單、數字串進行中直接交給上游 | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
 | `core/src/engine.rs` 資源 | 常駐快取共用不可變詞庫、詞包、數字表、模型、會意與常談；詞庫快取鍵含所選詞包與 `names-add.tsv`、`digits.tsv`、`acg-add.tsv`、`it-add.tsv`，模型快取鍵含詞類表、KN 與兩個 trigram 表。命中快取時照上游 `load_lm`／`load_tinylm` 重設小模型、英文與數字快取 | `prepare-resident.ps1`、`platform/resident_windows.rs` |
 | `core/src/trigram.rs` | Windows 的 `Mapped` 改用與模型陣列相同的唯讀映射；`.winmap` 旁的 `trigram.sjt3`（書面）與 `trigram-chat.sjt3`（聊天）各自存在才載入，壞檔拒絕 | `prepare-trigram.ps1`、`platform/mapped_windows.rs` |
 | `core/src/ffi.rs` | 追加 Windows 專用的候選、輸入選項、標點、預測列查詢 ABI；不改上游既有簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
@@ -31,6 +31,9 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 | TSF 組字、提交、游標、sink、COM lifetime | `windows/src/tsf/` |
 | 候選窗繪製、滑鼠點選、DPI 定位 | `windows/src/candidate.rs`、`tsf/candidates.rs` |
 | 設定檔、詞庫／學習保存、WinUI 綁定、跨實例通知 | `shared/`、`windows/src/profile.rs`、`bridge.rs`、`native.rs`、`ui/` |
+| 中英文之間自動加空格（上游 cjk-spacing，殼層） | `shared/src/spacing.rs`、`tsf/service.rs`、`tsf/keys.rs` |
+| 依 App 自動選聊天／書面（上游 profile-choice） | `shared/src/profile.rs` 的 `ranking`、`tsf/resident.rs` |
+| 語意校正在背景執行（上游 s7c2b 2.1 的 runner） | `windows/src/engine.rs`、`broker/`、`tsf/rerank.rs` |
 | 常駐核心、管道 broker、使用者模型管理 | `windows/src/broker.rs`、`broker/`、`bin/shanjie-core.rs`、`model_store.rs` |
 | 註冊、安裝、更新、解除安裝 | `windows/src/registration.rs`、`installer.rs`、`bin/shanjie-manager.rs` |
 
@@ -38,10 +41,13 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 
 ## 與上游行為仍不同之處
 
-- 上游 App 預設開啟中英混打（含數字層）；Windows 範本 `upstream_english=0`，預設不開。改預設會改變現有使用者的打字結果，留待使用者決定。
+- 善解範本（`profiles/shanjie.ini`）與上游 App 一樣開啟上游英文詞表；Windows 範本（微軟注音風格）不開。
 - Windows 單獨聲調關閉（`standalone_tones=0`）時，閒置按聲調鍵仍輸入字面數字，不開上游數字串。
-- 標點保留未完成讀音：上游 `engine_digits_off` 的 r01／r02／r36 因此在測試中排除，其餘逐行比對上游基準。
-- 上游殼層的中英文自動加空格、各 App 個別設定 Windows 沒有。資訊／AI 詞包、模糊音、英文照按鍵順序、語意校正開關與強度已由設定檔帶進核心，設定介面尚未提供。
+- 「標點保留未完成讀音」是 Windows 選項（`[input] punctuation_keeps_reading`），新設定檔預設關、與上游相同；從舊版升級的設定檔設為開，維持原本打字結果。
+- 語意校正：上游在背景佇列跑完後回主執行緒套用；Windows 由常駐核心在每個會話的背景執行緒跑，TSF 每 15 ms 以不帶序號的請求查詢是否完成（最多 2 秒），完成後才送出有序號的 `Op::Rerank` 套用。這個請求記在重建組字的紀錄裡，核心重啟後照樣重放，候選順序與重啟前相同。
+- 依 App 自動：上游用 macOS bundle ID 與選單裡的「這個 App 用聊天設定」；Windows 用執行檔名稱，清單在設定頁直接編輯（`[engine] chat_apps`），沒有輸入法選單項目。
+- 中英文自動加空格：上游只在可讀游標前文且學習未暫停時取開頭字元；Windows 在未組字時讀游標前文（「使用游標前文」關閉時，只有這個開關開著才讀）。
+- 上游的 App 內「學習暫停（安全輸入／此 App）」與「不要備份選字記憶」是 macOS 殼層功能，Windows 沒有對應。
 - 預測列只在第一格標 Tab 符號（上游 header 註解），尚未核對 Windows 候選窗的畫法。
 
 ## 測試
@@ -51,7 +57,7 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 - 符號連結改為複製；不存在的來源以資料夾代替（同樣是「存在但讀不到」）。
 - 唯讀映射中的檔案不能刪除或改寫：`oc_tiny`、`tri_tiny` 先釋放模型再刪檔；`load_lm_refuses_a_bad_trigram_table` 跳過。
 - 上游 unix 學習檔（權限、FIFO、硬連結）由 Windows 儲存取代：`learn_store` 不跑，`engine_learn` 的三個 unix 測試與 `engine_fuzzy_rerank` 的權限設定不用；`english_codes_through_the_c_abi` 需要 `mkfifo`，跳過。
-- 標點保留未完成讀音的 Windows 政策由 `prepare-test-contracts.ps1` 改寫對應斷言。
+- Windows 自己的組字政策（標點保留讀音、注音順序混打等）預設關閉時與上游相同，上游斷言不改寫；開啟後的行為由 `platform/` 內的單元測試涵蓋。
 
 ## 升版流程
 

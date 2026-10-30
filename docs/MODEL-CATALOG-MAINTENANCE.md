@@ -1,6 +1,6 @@
 # 模型清單自動維護
 
-0.13.0 Windows 新增 format:2 reader、配套驗證與備註確認。內建模型仍是 `MODEL-SOURCES.json` 所記錄的 model-v6＋classes-v5；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
+0.13.0 Windows 新增 format:2 reader、配套驗證與備註確認。內建模型是 `MODEL-SOURCES.json` 所記錄、與上游 App 相同的整組模型（id `builtin`）；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
 
 ## 上線與日常操作
 

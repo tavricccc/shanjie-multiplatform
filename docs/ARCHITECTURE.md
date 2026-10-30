@@ -1,6 +1,6 @@
 # 架構
 
-Windows 版是原生 Rust TSF 輸入法，Linux 版是 IBus 引擎，兩者共用同一份由上游產生的核心。輸入內容只在本機處理，不上網傳送。
+Windows 版是原生 Rust TSF 輸入法，使用由上游產生的核心。Linux 版 IBus 引擎（`linux/`）已停止維護。輸入內容只在本機處理，不上網傳送。
 
 ## 模組
 
@@ -15,10 +15,10 @@ Windows 版是原生 Rust TSF 輸入法，Linux 版是 IBus 引擎，兩者共�
 | `windows/src/profile.rs`、`bridge.rs` | 設定範本、原子保存、個人詞庫、給 WinUI 的窄 C ABI |
 | `windows/src/registration.rs`、`installer.rs` | 註冊、校驗、更新與回復、舊版清理、解除安裝 |
 | `ui/` | WinUI 3 設定程式（C#／XAML），只負責控制項與草稿綁定 |
-| `linux/` | IBus 引擎、GTK 4＋libadwaita 設定程式、安裝腳本 |
+| `linux/` | IBus 引擎、GTK 4＋libadwaita 設定程式、安裝腳本（停止維護，未驗證） |
 | `tests/support/` | C++ 測試 adapter，不進安裝包 |
 
-Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入）。所有前端透過本機管道連到同一個 x64 常駐核心 `ShanjieCore`，詞庫與模型只載入一次。核心忙碌或斷線時，前端依請求序號確認結果，只重建已確認的未提交組字。
+Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入）。所有前端透過本機管道連到同一個 x64 常駐核心 `ShanjieCore`，詞庫與模型只載入一次。核心忙碌或斷線時，前端依請求序號確認結果，只重建已確認的未提交組字。語意校正在核心的背景執行緒跑，前端查到完成後才以有序號的請求套用，因此重建時也會重放。
 
 核心端點以使用者 SID、工作階段、核心檔案的 NT 路徑與內容、正式個人資料位置區分。NT 身分由已開啟的同一檔案取得，避免 AppContainer 無法解析 DOS 裝置路徑；啟動仍使用原 Windows 執行路徑。一般客戶端以伺服器的 NT image path 比對；受限宿主沿用僅能連至同使用者端點的既有隔離政策。
 
@@ -54,7 +54,9 @@ DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<
 ## 驗證
 
 ```powershell
-pwsh -File scripts/verify.ps1                                 # 核心、上游回歸與 Windows profile
+pwsh -File scripts/verify.ps1                                 # 建置、上游核心全部測試、TSF 冒煙與真實 TSF 回歸
+pwsh -File scripts/test-core.ps1                              # 只跑上游核心測試（-Tests 指定整合測試檔）
+pwsh -File scripts/verify-regressions.ps1 -Architecture x86   # 加詞浮層、英文鍵、焦點交接、浮層生命週期
 pwsh -File scripts/verify.ps1 -NativeOnly -Interaction shanjie
 pwsh -File scripts/verify-interaction.ps1
 pwsh -File scripts/verify-mode.ps1
