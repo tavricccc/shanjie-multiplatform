@@ -311,11 +311,11 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"engine",L"ranking",L"formal",profile.c_str()),196);
         localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforeReload && noCandidates(),197); // Engine replacement keeps pending text.
-        require(WritePrivateProfileStringW(L"engine",L"model",L"2",profile.c_str()),198);
+        require(WritePrivateProfileStringW(L"engine",L"rerank_level",L"aggressive",profile.c_str()),198);
         localNotify(L"Shanjie.ProfileChanged.v2");
         press('S',200); press('U',202); press('3',204); press(VK_DOWN,206); press(VK_RETURN,208);
         require(noCandidates(),210);
-        require(WritePrivateProfileStringW(L"engine",L"model",L"1",profile.c_str()),211);
+        require(WritePrivateProfileStringW(L"engine",L"rerank_level",L"standard",profile.c_str()),211);
         localNotify(L"Shanjie.ProfileChanged.v2");
         press('G',212); press('4',214); press(VK_DOWN,216); press(VK_RIGHT,218);
         UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 0 && tableCount <= 9,220);
@@ -333,8 +333,8 @@ int wmain(int argc, wchar_t** argv) {
         require(noCandidates(),255); press(VK_RETURN,256);
         press('S',230); press('U',232); press('3',234); press(VK_DOWN,236); press('1',238);
         require(noCandidates(),240); press(VK_RETURN,241);
-        for (const auto* model : {L"3",L"4"}) {
-            require(WritePrivateProfileStringW(L"engine",L"model",model,profile.c_str()),280);
+        for (const auto* pack : {L"0",L"1"}) { // Each value rebuilds the engine.
+            require(WritePrivateProfileStringW(L"engine",L"it_pack",pack,profile.c_str()),280);
             localNotify(L"Shanjie.ProfileChanged.v2");
             press('S',282); require(noCandidates(),284);
             require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),285);
@@ -357,7 +357,7 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"3",profile.c_str()),334);
         localNotify(L"Shanjie.ProfileChanged.v2");
         press('Z',335); press('H',337); press('U',339); auto beforePinyinReload = store->text;
-        require(WritePrivateProfileStringW(L"engine",L"model",L"3",profile.c_str()),341);
+        require(WritePrivateProfileStringW(L"engine",L"rerank_level",L"conservative",profile.c_str()),341);
         localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforePinyinReload && noCandidates(),342);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),380);

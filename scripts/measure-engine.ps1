@@ -24,10 +24,8 @@ try {
         foreach ($index in 0..7999) { [void]$rows.Append("字$([char](0x4e00+$index))`tㄋㄧˇ`t妳`t1`t$day`n") }
         [IO.File]::WriteAllText("$env:LOCALAPPDATA/Shanjie/learning.tsv",$rows.ToString())
     }
-    foreach ($model in @(5)) {
-        $arguments = @("$root/dist/data",$model)
-        if ($Learning) { $arguments += '--learning' }
-        & "$root/build/engine-perf.exe" @arguments
-        if ($LASTEXITCODE) { throw "Model $model benchmark failed." }
-    }
+    $arguments = @("$root/dist/data")
+    if ($Learning) { $arguments += '--learning' }
+    & "$root/build/engine-perf.exe" @arguments
+    if ($LASTEXITCODE) { throw 'Engine benchmark failed.' }
 } finally { $env:LOCALAPPDATA = $savedLocal }

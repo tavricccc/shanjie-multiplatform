@@ -11,7 +11,6 @@ struct Preferences {
     bool widthToggle = true;
     bool ctrlPunctuation = true;
     unsigned ranking = 0;
-    unsigned model = 5;
     bool prediction = false;
     bool demote = true;
     bool useContext = true;

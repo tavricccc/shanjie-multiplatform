@@ -103,8 +103,8 @@ int wmain(int argc,wchar_t** argv) {
         for (auto ch : std::string("zhuyin")) { key.ch = ch; assert(pinyin.key(key,engine,{},out,true,true)); }
         key.kind = 2; assert(pinyin.key(key,engine,{},out,true,true)); assert(out.preedit == L"注音");
     }
-    for (unsigned model : {5u}) {
-        shanjie::Engine engine; assert(engine.open(argv[1],0,0,true,false,false,L"dictionary.tsv",model));
+    {
+        shanjie::Engine engine; assert(engine.open(argv[1],0,0,true));
         assert(engine.inputOptions(false,false,false)); key.kind = 1; key.modifiers = 0; key.ch = '3';
         assert(engine.key(key,out)); assert(out.handled && out.preedit == L"3" && out.commit.empty()); // IME inserts the original digit reliably.
         assert(engine.reset(true,out));
@@ -156,17 +156,17 @@ int wmain(int argc,wchar_t** argv) {
     auto wrongData = std::filesystem::path(local) / L"wrong-data";
     std::filesystem::create_directory(wrongData);
     for (auto& file : std::filesystem::directory_iterator(argv[1])) if (file.is_regular_file()) std::filesystem::create_hard_link(file.path(),wrongData / file.path().filename());
-    auto wrongModel = wrongData / L"models/model-v6"; std::filesystem::create_directories(wrongModel);
-    std::filesystem::create_hard_link(modelRoot / L"model-v6/bigram.winmap",wrongModel / L"bigram.winmap");
-    shanjie::Engine wrong; assert(!wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
+    auto wrongModel = wrongData / L"models/builtin"; std::filesystem::create_directories(wrongModel);
+    std::filesystem::create_hard_link(modelRoot / L"builtin/bigram.winmap",wrongModel / L"bigram.winmap");
+    shanjie::Engine wrong; assert(!wrong.open(wrongData,0,0,true));
     std::ofstream(wrongModel / L"classes.sjc") << "wrong class pairing";
-    assert(!wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
-    std::filesystem::copy_file(modelRoot / L"model-v6/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
-    assert(wrong.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
+    assert(!wrong.open(wrongData,0,0,true));
+    std::filesystem::copy_file(modelRoot / L"builtin/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
+    assert(wrong.open(wrongData,0,0,true));
     std::ofstream(wrongModel / L"classes.sjc") << "changed after cache warmup";
-    shanjie::Engine invalidCached; assert(!invalidCached.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
-    std::filesystem::copy_file(modelRoot / L"model-v6/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
-    assert(invalidCached.open(wrongData,0,0,true,false,false,L"dictionary.tsv",5));
+    shanjie::Engine invalidCached; assert(!invalidCached.open(wrongData,0,0,true));
+    std::filesystem::copy_file(modelRoot / L"builtin/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
+    assert(invalidCached.open(wrongData,0,0,true));
     std::cout << "PASS: latest model, required class pairing, passive/entered prediction, live off, key options and composed punctuation\n";
     std::cout << "PASS: candidate policy, Unicode/Big5/symbols, interleaved learning, personal dictionary, associations, pinyin\n";
 }

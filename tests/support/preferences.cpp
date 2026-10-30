@@ -11,7 +11,6 @@ Preferences loadPreferences() {
     out.rightAnchor=read("candidates","anchor","right")=="right";
     out.ranking=read("engine","ranking","chat")=="formal"?1:0;
     auto escape=read("input","escape","staged");out.escape=escape=="clear"?EscapeAction::Clear:escape=="ignore"?EscapeAction::Ignore:EscapeAction::Staged;
-    out.model=5;
     out.shiftSide=number("shortcuts","shift_side",0);out.keyboard=number("input","keyboard",0);
     out.theme=number("appearance","theme",0);out.fontSize=number("appearance","font_size",18);
     out.dictionary=shanjie::wide(read("input","dictionary","dictionary.tsv").c_str());
