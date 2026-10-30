@@ -8,7 +8,7 @@ Push-Location $root
 try {
     if (!$NativeOnly) {
         if (!$UseExistingBuild) { & "$PSScriptRoot/build.ps1" -Architecture $Architecture }
-        & "$PSScriptRoot/test-core.ps1" -Tests $CoreTests
+        & "$PSScriptRoot/test-core.ps1" -Tests $CoreTests -UseExistingCore
     }
     if($CoreOnly){return}
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
@@ -31,8 +31,9 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     $profileRoot = Join-Path $root ("build/profile-tests/$Architecture/$Interaction/" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path "$profileRoot/Shanjie" -Force | Out-Null
     Copy-Item "profiles/$Interaction.ini" "$profileRoot/Shanjie/profile.ini" -Force
-    # Force Standard; desktop active profile and prior learning must not change fixtures.
-    $profileText = (Get-Content "$profileRoot/Shanjie/profile.ini" -Raw) -replace '(?m)^keyboard=.*','keyboard=1'
+    # Force Standard and the chat profile (the harness is no chat program, so automatic would pick formal);
+    # desktop active profile and prior learning must not change fixtures.
+    $profileText = (Get-Content "$profileRoot/Shanjie/profile.ini" -Raw) -replace '(?m)^keyboard=.*','keyboard=1' -replace '(?m)^ranking=.*','ranking=chat'
     Set-Content "$profileRoot/Shanjie/profile.ini" $profileText -Encoding utf8NoBOM
     $previousLocalAppData = $env:LOCALAPPDATA
     $previousHeadless = $env:SHANJIE_HEADLESS
@@ -64,5 +65,6 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
             & $harness "$cold/Shanjie.dll" --cold-start
             if ($LASTEXITCODE) { throw 'Model-free TSF activation/shortcut check failed.' }
         } finally { $env:LOCALAPPDATA = $previousLocalAppData; $env:SHANJIE_HEADLESS = $previousHeadless; $env:SHANJIE_TEST_PROFILE = $previousTestProfile }
+        & "$PSScriptRoot/verify-regressions.ps1" -Architecture $Architecture
     }
 } finally { Pop-Location }

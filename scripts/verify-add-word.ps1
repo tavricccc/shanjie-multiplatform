@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[ValidateSet(0,1,2)][int[]]$Themes=@(0),[string]$ResultRoot,[string]$ModelId='model-v6-classes-v5',[string]$ModelFixture)
+param([ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[ValidateSet(0,1,2)][int[]]$Themes=@(0),[string]$ResultRoot,[string]$ModelId='builtin',[string]$ModelFixture)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $result=if($ResultRoot){[IO.Path]::GetFullPath($ResultRoot)}else{Join-Path $root ('build/word-popup-'+[guid]::NewGuid().ToString('N'))}
@@ -9,7 +9,7 @@ foreach($arch in $Architectures) {foreach($theme in $Themes){
     if(Test-Path -LiteralPath $out){throw 'Use a fresh result directory to isolate popup dictionaries.'}
     New-Item -ItemType Directory "$out/profile/Shanjie" -Force | Out-Null
     $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^theme=.*',("theme="+$theme)
-    if($ModelId -ne 'model-v6-classes-v5'){
+    if($ModelId -ne 'builtin'){
         $receipt=Get-Content -LiteralPath "$ModelFixture/model.json" -Raw|ConvertFrom-Json
         if($receipt.id -ne $ModelId -or $ModelId -notmatch '^[a-z0-9-]{1,80}$'){throw 'A matching validated public model fixture is required.'}
         New-Item -ItemType Directory "$out/profile/Shanjie/Models" -Force|Out-Null
@@ -22,11 +22,11 @@ foreach($arch in $Architectures) {foreach($theme in $Themes){
 @echo off
 call "$vs/VC/Auxiliary/Build/vcvarsall.bat" $arch >nul
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/features_090.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/add_word_popup.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@
     Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
     & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log"
-    if($LASTEXITCODE){throw "0.9.0 TSF harness compile failed: $arch"}
+    if($LASTEXITCODE){throw "Add-word TSF harness compile failed: $arch"}
     $previous=$env:LOCALAPPDATA; $previousTest=$env:SHANJIE_TEST_PROFILE; $previousHeadless=$env:SHANJIE_HEADLESS;$previousTheme=$env:SHANJIE_TEST_POPUP_THEME;$previousModel=$env:SHANJIE_TEST_POPUP_MODEL
     try {
         $env:SHANJIE_TEST_POPUP_THEME="$theme"
@@ -37,7 +37,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         $worker=Start-Process -FilePath "$root/dist/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -RedirectStandardError "$out/core-error.log" -RedirectStandardOutput "$out/core-output.log" -PassThru
         Start-Sleep -Milliseconds 500
         & $exe "$root/dist/$arch/Shanjie.dll" $out *> "$out/result.log"
-        if($LASTEXITCODE){throw "0.9.0 TSF regression failed: $arch, exit $LASTEXITCODE"}
+        if($LASTEXITCODE){throw "Add-word TSF regression failed: $arch, exit $LASTEXITCODE"}
     } finally {
         $stop=Start-Process -FilePath "$root/dist/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
         $stop.WaitForExit(5000) | Out-Null

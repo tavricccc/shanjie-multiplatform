@@ -1,2 +1,0 @@
-## dev302  lm-chat+ctx+kn:cbefbced:θ1:β1  {'n': 302, 'top1': 246, 'oracle@64': 300, 'top1_sha256': 'd8ac58795e5649a557bcd62e7639cee2a9bbdbbe13860f13794ff95092ce5be8'}
-## dev302  lm-formal+ctx+kn:cbefbced:θ1:β1  {'n': 302, 'top1': 249, 'oracle@64': 300, 'top1_sha256': '3cd198d63b2efa6696ecf7fae1d3f6a1fb063f3c1b7b6cc32c86606685eb3292'}

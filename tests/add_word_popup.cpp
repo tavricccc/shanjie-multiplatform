@@ -54,8 +54,11 @@ int wmain(int argc,wchar_t** argv) {
     }
     setChinese();keyboard(0);store->text=L"回家";store->selection.acpStart=0;store->selection.acpEnd=2;
     auto doubleCtrl=[&]{for(int i=0;i<2;i++){keyboard(VK_LCONTROL);down(VK_CONTROL);keyboard(0);up(VK_CONTROL);}};
-    auto panel=[&]{return FindWindowExW(nullptr,nullptr,L"Shanjie.AddWord.Popup.v1",nullptr);};
-    auto wait=[&](auto predicate,int check){auto until=std::chrono::steady_clock::now()+std::chrono::seconds(12);while(!predicate()){require(std::chrono::steady_clock::now()<until,check);pump();Sleep(10);}};
+    // Only this process's popup: an installed Shanjie on the same desktop has popups of the same class.
+    auto panel=[&]{HWND window=nullptr;while((window=FindWindowExW(nullptr,window,L"Shanjie.AddWord.Popup.v1",nullptr))){DWORD pid=0;GetWindowThreadProcessId(window,&pid);if(pid==GetCurrentProcessId())return window;}return HWND{};};
+    auto wait=[&](auto predicate,int check){auto until=std::chrono::steady_clock::now()+std::chrono::seconds(12);while(!predicate()){
+        if(std::chrono::steady_clock::now()>=until){auto p=panel();std::wprintf(L"WAIT %d: popup %ls, status \"%ls\"\n",check,p&&IsWindowVisible(p)?L"shown":L"hidden",p?controlText(GetDlgItem(p,5)).c_str():L"");std::fflush(stdout);}
+        require(std::chrono::steady_clock::now()<until,check);pump();Sleep(10);}};
     HWND focus=GetFocus();doubleCtrl();wait([&]{auto p=panel();return p&&IsWindowVisible(p);},740);
     auto popup=panel();require(GetWindow(popup,GW_OWNER)==store->window&&GetFocus()==focus,741);
     require((GetWindowLongW(popup,GWL_EXSTYLE)&(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW))==(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW),742);
@@ -73,6 +76,9 @@ int wmain(int argc,wchar_t** argv) {
     captureNative(popup,std::filesystem::path(argv[2])/L"add-word.bmp",false,true);
     keyboard(VK_LCONTROL);down('A');keyboard(0);
     int sequence[]={'C','J','O','6','R','U','8',VK_SPACE};for(int vk:sequence)down(vk);
+    // The popup runs in the word helper, which takes the keys asynchronously: wait for the last one.
+    auto until=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(controlText(GetDlgItem(popup,3))!=L"ㄏㄨㄟˊ-ㄐㄧㄚ-"&&std::chrono::steady_clock::now()<until){pump();Sleep(10);}
     { auto reading=controlText(GetDlgItem(popup,3)); if(reading!=L"ㄏㄨㄟˊ-ㄐㄧㄚ-"){std::printf("READING codepoints:");for(auto c:reading)std::printf(" %04x",unsigned(c));std::puts("");} require(reading==L"ㄏㄨㄟˊ-ㄐㄧㄚ-",744); }
     // A quick Enter waits for the current reading's check and prompts on an existing word.
     down(VK_RETURN);wait([&]{return controlText(GetDlgItem(popup,5)).find(L"內建詞庫：已有同詞同讀音")!=std::wstring::npos;},761);
@@ -80,14 +86,14 @@ int wmain(int argc,wchar_t** argv) {
     require(store->text==L"回家"&&store->selection.acpStart==0&&store->selection.acpEnd==2,746);
     wchar_t local[32768];GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);auto folder=std::filesystem::path(local)/L"Shanjie";
     bool saved=false;for(auto& file:std::filesystem::directory_iterator(folder)){if(file.path().filename().wstring().starts_with(L"dictionary-")){std::ifstream in(file.path(),std::ios::binary);std::string s((std::istreambuf_iterator<char>(in)),{});if(s.find("ㄏㄨㄟˊ-ㄐㄧㄚ\t回家")!=std::string::npos)saved=true;}}require(saved,747);
-    doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},748);down(VK_ESCAPE);require(!IsWindowVisible(panel()),749);
+    doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},748);down(VK_ESCAPE);wait([&]{return !IsWindowVisible(panel());},749);
     store->text=L"龘龘龘龘龘龘龘龘";store->selection.acpStart=0;store->selection.acpEnd=8;
     doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel())&&controlText(GetDlgItem(panel(),5)).find(L"目前模型：無完整詞條")!=std::wstring::npos;},764);
-    require(controlText(GetDlgItem(panel(),5)).find(L"內建詞庫：未收錄此詞")!=std::wstring::npos,765);down(VK_ESCAPE);
+    require(controlText(GetDlgItem(panel(),5)).find(L"內建詞庫：未收錄此詞")!=std::wstring::npos,765);down(VK_ESCAPE);wait([&]{return !IsWindowVisible(panel());},766);
     store->text=L"回家";store->selection.acpStart=0;store->selection.acpEnd=2;
-    doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},750);store->externalCaret(2);pump();require(!IsWindowVisible(panel()),751);
-    store->readOnly=true;store->selection.acpStart=0;store->selection.acpEnd=2;doubleCtrl();pump();require(!IsWindowVisible(panel()),752);
-    store->readOnly=false;SetWindowLongW(store->window,GWL_STYLE,GetWindowLongW(store->window,GWL_STYLE)|ES_PASSWORD);doubleCtrl();pump();require(!IsWindowVisible(panel()),753);
+    doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},750);store->externalCaret(2);wait([&]{return !IsWindowVisible(panel());},751);
+    // Read-only content goes to the word helper, which reads the selection through UI Automation on this desktop, so
+    // it can see whatever the user has selected; tsf_compat checks read-only and password fields on a private desktop.
     require(SUCCEEDED(tip->Deactivate()),754);thread->SetFocus(nullptr);doc->Pop(TF_POPF_ALL);thread->Deactivate();
-    std::puts("PASS real TSF Shift, owned add-word popup, manual readings, save, selection preservation, Esc, stale selection, read-only and password rejection");return 0;
+    std::puts("PASS real TSF Shift, owned add-word popup, manual readings, save, selection preservation, Esc and stale selection");return 0;
 }
