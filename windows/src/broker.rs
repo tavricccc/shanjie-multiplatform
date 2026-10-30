@@ -369,10 +369,13 @@ pub(crate) fn remote_profile() -> Option<String> {
     pipe.send(&Request::Profile, deadline).ok()?;
     pipe.receive::<Reply>(deadline).ok()?.profile
 }
+/// The add-word popup waits for these off the input thread; a core that is still starting loads the whole model set
+/// first (about 2 s cold), so they get more time than a key.
+const WORD_DEADLINE: Duration = Duration::from_secs(8);
 pub(crate) fn word_request(data: &Path, word: &str, reading: Option<&str>) -> std::result::Result<String,String> {
     let request = Request::Word { word: word.into(), reading: reading.map(str::to_owned) };
     let run = || -> io::Result<Reply> {
-        let deadline = Instant::now() + Duration::from_secs(3);
+        let deadline = Instant::now() + WORD_DEADLINE;
         let pipe = connect(data, true, deadline)?;
         pipe.send(&request, deadline)?; pipe.receive(deadline)
     };
@@ -381,7 +384,7 @@ pub(crate) fn word_request(data: &Path, word: &str, reading: Option<&str>) -> st
 }
 pub(crate) fn word_inspection(data:&Path,word:&str,reading:Option<&str>)->std::result::Result<crate::word_store::Inspection,String> {
     let run=||->io::Result<Reply>{
-        let deadline=Instant::now()+Duration::from_secs(3);let pipe=connect(data,true,deadline)?;
+        let deadline=Instant::now()+WORD_DEADLINE;let pipe=connect(data,true,deadline)?;
         pipe.send(&Request::InspectWord{word:word.into(),reading:reading.map(str::to_owned)},deadline)?;pipe.receive(deadline)
     };
     let text=run().map_err(|e|format!("無法完成詞條比對，請稍後重試（{e}）。"))?
