@@ -7,7 +7,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int CandidateLayout { get; set; }
-    [ObservableProperty] public partial int Ranking { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(RankingByApp))] public partial int Ranking { get; set; }
+    public bool RankingByApp => Ranking == 0;
+    /// `[engine] chat_apps`, one executable name per line.
+    [ObservableProperty] public partial string ChatApps { get; set; } = "";
     public int Model => 5;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int ModelVariant { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
@@ -32,8 +35,23 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool Learning { get; set; }
     [ObservableProperty] public partial bool Associations { get; set; }
     [ObservableProperty] public partial bool Prediction { get; set; }
-    [ObservableProperty] public partial bool Demote { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(RerankLevelEnabled))] public partial bool Demote { get; set; }
     [ObservableProperty] public partial bool AcgPack { get; set; }
+    [ObservableProperty] public partial bool ItPack { get; set; }
+    /// Upstream makes no rerank job while 避免敏感詞 is off, so both rerank choices grey with it.
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(RerankLevelEnabled))] public partial bool Rerank { get; set; }
+    [ObservableProperty] public partial int RerankLevel { get; set; } = 1;
+    public bool RerankLevelEnabled => Demote && Rerank;
+    [ObservableProperty] public partial bool FuzzyEnEng { get; set; }
+    [ObservableProperty] public partial bool FuzzyZhZ { get; set; }
+    [ObservableProperty] public partial bool FuzzyChC { get; set; }
+    [ObservableProperty] public partial bool FuzzyShS { get; set; }
+    [ObservableProperty] public partial bool FuzzyAdjacent { get; set; }
+    /// Adjacent keys only exist for the standard layout (upstream fuzzy-input section 2.2).
+    public bool SupportsFuzzyAdjacent => Keyboard is 0 or 1;
+    [ObservableProperty] public partial bool EnglishKeyOrder { get; set; }
+    [ObservableProperty] public partial bool PunctuationKeepsReading { get; set; }
+    [ObservableProperty] public partial bool CjkSpacing { get; set; }
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial bool MixedTolerance { get; set; }
@@ -47,7 +65,7 @@ public partial class SettingsViewModel : ObservableObject
     public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
     public bool UsesEnglishList => SupportsUpstreamEnglish && MixedMode >= 2;
     partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesEnglishList));
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesEnglishList))] public partial int Keyboard { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesEnglishList)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;

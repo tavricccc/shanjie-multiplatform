@@ -3,6 +3,12 @@ namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel
 {
     private ProfileDocument profile = new();
+    /// `[engine] rerank_level`, in the order of the strength choices (shared profile RERANK_LEVELS).
+    private static readonly string[] RerankLevels = ["conservative", "standard", "aggressive"];
+    /// `[engine] ranking`, in the order of the 詞句偏好 choices.
+    private static readonly string[] Rankings = ["auto", "chat", "formal"];
+    /// The shared profile's CHAT_APPS, the list used while `[engine] chat_apps` is absent.
+    private const string DefaultChatApps = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
     private bool loading;
     private string dictionaryBaseline = "";
     public SettingsViewModel()
@@ -34,11 +40,17 @@ public partial class SettingsViewModel
             Trigger = Array.IndexOf(new[] { "down", "space", "both" }, profile.Read("candidates", "open", "down"));
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
             CandidateLayout = profile.Read("candidates", "layout", "horizontal") == "vertical" ? 1 : 0;
-            Ranking = profile.Read("engine", "ranking", "chat") == "chat" ? 0 : 1;
+            Ranking = Math.Max(0, Array.IndexOf(Rankings, profile.Read("engine", "ranking", "auto")));
+            ChatApps = string.Join("\r", profile.Read("engine", "chat_apps", DefaultChatApps).Split([';', ',', ' ', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
             ModelId=profile.Read("engine","model_id",ModelCatalog.Builtin);
             ModelRevision=profile.Read("engine","model_revision","");
             ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true); AcgPack = profile.Flag("engine", "acg_pack", true);
+            ItPack = profile.Flag("engine", "it_pack", true); Rerank = profile.Flag("engine", "rerank", true);
+            RerankLevel = Math.Max(0, Array.IndexOf(RerankLevels, profile.Read("engine", "rerank_level", "standard")));
+            FuzzyEnEng = profile.Flag("engine", "fuzzy_en_eng", false); FuzzyZhZ = profile.Flag("engine", "fuzzy_zh_z", false);
+            FuzzyChC = profile.Flag("engine", "fuzzy_ch_c", false); FuzzyShS = profile.Flag("engine", "fuzzy_sh_s", false);
+            FuzzyAdjacent = profile.Flag("engine", "fuzzy_adjacent", false);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
             CtrlPunctuation = profile.Flag("shortcuts", "ctrl_punctuation", Interaction == 0);
@@ -60,6 +72,8 @@ public partial class SettingsViewModel
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
             AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
             MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishInline = profile.Flag("input", "english_inline", true);
+            EnglishKeyOrder = profile.Flag("input", "english_key_order", false); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
+            PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -123,9 +137,13 @@ public partial class SettingsViewModel
     private void WriteDocument()
     {
         profile.Set("profile", "schema", 8); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
-        profile.Set("engine", "ranking", Ranking == 0 ? "chat" : "formal");
+        profile.Set("engine", "ranking", Rankings[Ranking]);
+        var apps = string.Join(";", ChatApps.Split([';', ',', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).Distinct());
+        if (apps == DefaultChatApps) profile.Remove("engine", "chat_apps"); else profile.Set("engine", "chat_apps", apps);
         foreach (var (section, key, value) in new (string, string, object)[] {
-            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack),
+            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","it_pack",ItPack),
+            ("engine","rerank",Rerank), ("engine","fuzzy_en_eng",FuzzyEnEng), ("engine","fuzzy_zh_z",FuzzyZhZ),
+            ("engine","fuzzy_ch_c",FuzzyChC), ("engine","fuzzy_sh_s",FuzzyShS), ("engine","fuzzy_adjacent",FuzzyAdjacent),
             ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
@@ -133,7 +151,8 @@ public partial class SettingsViewModel
             ("input","mixed_tolerance",MixedTolerance),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
-            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_inline",EnglishInline),
+            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_inline",EnglishInline), ("input","english_key_order",EnglishKeyOrder), ("input","cjk_spacing",CjkSpacing),
+            ("input","punctuation_keeps_reading",PunctuationKeepsReading),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
@@ -146,6 +165,7 @@ public partial class SettingsViewModel
         }) profile.Set(section, key, value);
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
+        profile.Set("engine", "rerank_level", RerankLevels[RerankLevel]);
         profile.Set("candidates", "layout", CandidateLayout == 1 ? "vertical" : "horizontal");
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
@@ -153,7 +173,7 @@ public partial class SettingsViewModel
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {
-        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 3 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 3 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || RerankLevel is < 0 or > 2 || Ranking is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
         if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
             throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");

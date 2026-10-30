@@ -25,14 +25,17 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="操作預設" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                         <ComboBox Header="載入操作預設" x:Name="Preset" HorizontalAlignment="Stretch" SelectionChanged="LoadPreset"/>
                         <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="匯入操作預設…" Click="ImportPreset"/><Button Content="匯出目前操作…" Click="ExportPreset"/></StackPanel>
-                        <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。詞句偏好、詞庫、學習、鍵盤配置與外觀會保留；匯出的檔案也不包含這些內容，可以放心分享。"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="預設只改按鍵、選字與預測，按儲存後才套用。詞句偏好、模型、詞包、語意校正、模糊輸入、自動空格、詞庫、學習、鍵盤配置與外觀會保留；匯出的檔案也不包含這些內容，可以放心分享。"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="輸入" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox x:Name="KeyboardSelector" Header="鍵盤配置" SelectedIndex="{x:Bind Vm.Keyboard, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨已安裝的 Windows 配置"/><ComboBoxItem x:Name="StandardKeyboardOption" Content="標準注音" IsEnabled="{x:Bind Vm.StandardInstalled, Mode=OneWay}"/><ComboBoxItem x:Name="EtenKeyboardOption" Content="倚天注音" IsEnabled="{x:Bind Vm.EtenInstalled, Mode=OneWay}"/><ComboBoxItem Content="漢語拼音"/><ComboBoxItem Content="臺灣拼音（通用拼音）"/></ComboBox>
                         <TextBlock Text="{x:Bind Vm.InstalledKeyboardHelp, Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}"/>
                         <controls:SettingToggle Label="預設輸入模式" OnText="中文" OffText="英文" IsOn="{x:Bind Vm.InitialChinese, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="預設字元寬度" OnText="全形" OffText="半形" IsOn="{x:Bind Vm.InitialFullWidth, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="語言模型" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
-                        <ComboBox Header="詞句偏好" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="聊天"/><ComboBoxItem Content="正式"/></ComboBox>
+                        <ComboBox Header="聊天／書面" SelectedIndex="{x:Bind Vm.Ranking, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="依 App 自動"/><ComboBoxItem Content="一律聊天"/><ComboBoxItem Content="一律書面"/></ComboBox>
+                        <TextBlock Style="{StaticResource HelpText}" Text="依 App 自動：下面列出的聊天程式（Discord、LINE 等）用聊天設定，其他程式用書面設定。"/>
+                        <TextBox Header="用聊天設定的程式" IsEnabled="{x:Bind Vm.RankingByApp, Mode=OneWay}" AcceptsReturn="True" MinHeight="80" MaxHeight="160" TextWrapping="Wrap" Text="{x:Bind Vm.ChatApps, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="每行一個執行檔名稱，例如 discord.exe；可在工作管理員的「詳細資料」查到。瀏覽器裡的網頁聊天無法分辨，跟著瀏覽器用書面設定。"/>
                         <ComboBox x:Name="ModelSelector" Header="模型配置" ItemsSource="{x:Bind Vm.AvailableModels}" DisplayMemberPath="Name" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged" HorizontalAlignment="Stretch"/>
                         <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="取得其他模型…" Click="OnlineModels"/><Button Content="開啟模型資料夾" Click="OpenModelsFolder"/><Button Content="重新掃描" Click="RescanModels"/></StackPanel>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource HelpText}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
@@ -49,7 +52,9 @@
                         <ComboBox x:Name="MixedModeSelector" Header="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="注音順序自動判斷（Windows 版）"/><ComboBoxItem Content="英文詞表判斷（上游，僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/><ComboBoxItem Content="兩者並用（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="注音順序：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文。英文詞表：打出的字母是英文字就當英文，按空白開出原字／首字大寫／全大寫選單，英文留在組字區可接著打中文。兩者並用時，注音順序先判斷，排得成注音但在詞表內的字交給詞表。上游英文模式下 Shift＋字母可開始英文組字段；上游英文詞表僅支援標準注音。倚天可使用 Windows 注音順序判斷；跟隨配置時依實際鍵盤生效。使用英文詞表（含兩者並用）時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。"/>
                         <controls:SettingToggle x:Name="EnglishInlineToggle" Label="打字時直接顯示英文字母" Description="只對英文詞表判斷有效：打到至少三個字母且是英文字的開頭時，組字區改顯示英文，不顯示注音。關閉時按空白才跳出英文。" IsEnabled="{x:Bind Vm.UsesEnglishList, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishInline, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="依按鍵順序判斷英文" Description="只對英文詞表判斷有效：ok、ls、cup 這類短詞不用按 Shift。開了之後，用重打同一個位置來改錯的注音，比較容易被當成英文。" IsEnabled="{x:Bind Vm.UsesEnglishList, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishKeyOrder, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="混打相鄰重複鍵容錯" Description="只修正 Windows 注音判斷的相鄰重複鍵；上游英文段保持原樣。預設關閉，原始按鍵可由候選選回。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedTolerance, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="中英文之間自動加空格" Description="在漢字和半形英文、數字之間自動加一個空格（俗稱「盤古之白」）。只改善解送出的文字，不受中英混打方式影響；開頭會參考游標前一個字。" IsOn="{x:Bind Vm.CjkSpacing, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                     </StackPanel>
                     <StackPanel x:Name="Keys" Spacing="12" Visibility="Collapsed">
@@ -88,6 +93,7 @@
                     <StackPanel x:Name="Composition" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="組字與提交" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="標點保留未完成的注音" Description="關閉時與上游相同：讀音還沒打完就按標點，未完成的注音會丟掉，標點直接進組字。開啟時注音留著，標點排在後面，補完聲調才一起轉換。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.PunctuationKeepsReading, Mode=TwoWay}"/>
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="Esc" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox Header="未開候選時的 Esc" SelectedIndex="{x:Bind Vm.Escape, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="先清未完成的讀音，再清整句"/><ComboBoxItem Content="一次清除全部未提交組字"/><ComboBoxItem Content="保留組字"/></ComboBox>
                         <TextBlock Style="{StaticResource HelpText}" Text="候選或已進入的預測列仍先關閉／退出，不會因這個選項立即刪除整句。"/>
@@ -132,7 +138,18 @@
                         <controls:SettingToggle Label="選字後的聯想詞" Description="數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取。Windows 預設關閉。" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="使用游標前文改善選字" Description="只使用游標前的少量文字作為本機選字與學習的前文，不傳送到網路。" IsOn="{x:Bind Vm.UseContext, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="避免敏感詞排在第一名" Description="套用上游的特定詞降權表；詞仍可選取，並非刪除詞庫。" IsOn="{x:Bind Vm.Demote, Mode=TwoWay}"/>
-                        <controls:SettingToggle Label="動漫與遊戲詞包" Description="約四萬五千個作品名與角色名，來自中文維基百科（CC BY-SA 4.0）。關閉後選字結果與沒有詞包時相同；變更會重新載入核心。" IsOn="{x:Bind Vm.AcgPack, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="語意校正" Description="組字時用小型語意模型再檢查整句，把不通順的選字換成更合理的寫法。需要開啟上一項；變更會重新載入核心。" IsEnabled="{x:Bind Vm.Demote, Mode=OneWay}" IsOn="{x:Bind Vm.Rerank, Mode=TwoWay}"/>
+                        <ComboBox Header="語意校正強度" IsEnabled="{x:Bind Vm.RerankLevelEnabled, Mode=OneWay}" SelectedIndex="{x:Bind Vm.RerankLevel, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="保守"/><ComboBoxItem Content="標準"/><ComboBoxItem Content="積極"/></ComboBox>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="詞包" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <controls:SettingToggle Label="動漫與遊戲詞" Description="約四萬五千個作品名與角色名，來自中文維基百科（CC BY-SA 4.0）。關閉後選字結果與沒有詞包時相同；變更會重新載入核心。" IsOn="{x:Bind Vm.AcgPack, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="資訊與 AI 詞" Description="約一千個程式、軟體與 AI 相關的詞，與上游相同；變更會重新載入核心。" IsOn="{x:Bind Vm.ItPack, Mode=TwoWay}"/>
+                        <TextBlock FontFamily="Microsoft JhengHei UI" Text="模糊輸入" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。預設全部關閉；變更會重新載入核心。"/>
+                        <controls:SettingToggle Label="ㄣ／ㄥ" IsOn="{x:Bind Vm.FuzzyEnEng, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="ㄓ／ㄗ" IsOn="{x:Bind Vm.FuzzyZhZ, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="ㄔ／ㄘ" IsOn="{x:Bind Vm.FuzzyChC, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="ㄕ／ㄙ" IsOn="{x:Bind Vm.FuzzyShS, Mode=TwoWay}"/>
+                        <controls:SettingToggle Label="鄰鍵打錯" Description="打出詞庫沒有的讀音時，改用鍵盤上左右相鄰的鍵來猜；只適用標準注音鍵盤。" IsEnabled="{x:Bind Vm.SupportsFuzzyAdjacent, Mode=OneWay}" IsOn="{x:Bind Vm.FuzzyAdjacent, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                         <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
                         <Button Content="清除已儲存的選字學習" Click="ClearLearning" HorizontalAlignment="Left"/>
