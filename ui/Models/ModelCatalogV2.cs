@@ -68,8 +68,7 @@ public static partial class ModelCatalog
             bool supported=Supported(m);
             bool source=m.Assets.All(a=>releases.Any(r=>r.TagName==a.Release&&!r.Draft&&r.Assets.Any(x=>x.Name==a.Filename&&x.Size==a.Size&&x.Digest=="sha256:"+a.Sha256&&x.BrowserDownloadUrl==$"https://github.com/Nanako0129/shanjie/releases/download/{a.Release}/{a.Filename}")));
             string state=!supported?"需要更新核心／格式支援":installed.Contains(m.Id)?"已下載":source?"可下載":"來源附件暫時無法核對";
-            if(m.Advisories.Count>0)state+=" · "+string.Join("、",m.Advisories.Select(a=>a.Title));
-            rows.Add(new(m.Name,state,Spec(m),supported&&source));
+            rows.Add(new(m.Name,state,Spec(m),supported&&source,string.Join("、",m.Advisories.Select(a=>a.Title))));
         }
         return new(rows,status);
     }

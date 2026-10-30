@@ -10,7 +10,7 @@ public sealed record ModelChoice(string Id, string Name, string Revision="",Mode
 public sealed record ModelSpec(
     string Id, string Name, string ModelRelease, string ClassesRelease,
     string ModelSha256, string ClassesSha256, long ModelSize, long ClassesSize,ModelEntry? Catalog=null);
-public sealed record CatalogRow(string Name, string State, ModelSpec? Spec, bool Available);
+public sealed record CatalogRow(string Name, string State, ModelSpec? Spec, bool Available, string Summary="");
 public sealed record CatalogResult(List<CatalogRow> Rows, string Status);
 internal sealed record Asset(string Name, long Size, string? Digest, string BrowserDownloadUrl);
 internal sealed record Release(string TagName, bool Draft, bool Prerelease, List<Asset> Assets);

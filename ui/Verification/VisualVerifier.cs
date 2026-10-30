@@ -47,6 +47,16 @@ internal static class VisualVerifier
         if (!File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved)) throw new InvalidDataException("Rescans saved the profile");
         settings.Vm.RefreshModels(installed.Where(m => m.Id != Models.ModelCatalog.Builtin)); settings.Vm.Load();
     }
+    private static void VerifyCatalogText()
+    {
+        string longName = string.Concat(Enumerable.Repeat("SJ-LM-7＋SJ-WC-6＋語意重排＋常談 很長的配套名稱 ", 4));
+        var item = MainWindow.CatalogItem(new(longName, "可下載", null, true, string.Join("、", Enumerable.Repeat("輸入法實測退步：較長的評測備註標題", 4))));
+        foreach (double width in new[] { 240d, 520d })
+        {
+            item.Measure(new Windows.Foundation.Size(width, double.PositiveInfinity));
+            if (item.DesiredSize.Width > width + 0.5 || item.DesiredSize.Height < 80) throw new InvalidDataException($"Catalog row does not wrap at {width}: {item.DesiredSize}");
+        }
+    }
     public static async Task Run(MainWindow settings, string output)
     {
         // Keep verification away from the user's windows and never activate the test surfaces.
@@ -75,7 +85,7 @@ internal static class VisualVerifier
             settings.Vm.Preset(true);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
-        await VerifyModelRescans(settings);
+        await VerifyModelRescans(settings); VerifyCatalogText();
         // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");

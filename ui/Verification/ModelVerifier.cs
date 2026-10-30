@@ -27,7 +27,7 @@ internal static class ModelVerifier
             settings.Vm.DictionaryText="ㄇㄠ 貓";settings.Vm.HasChanges=true;string draft=settings.Vm.DictionaryText;
             byte[]? before=File.Exists(ProfileStore.Path)?await File.ReadAllBytesAsync(ProfileStore.Path):null;
             var online=await ModelCatalog.Online(CancellationToken.None);
-            Check(online.Rows.Any(r=>r.Spec?.Id==selected.Id&&r.Available&&r.State.Contains("退步")),"regression advisory remains downloadable in v2 UI");
+            Check(online.Rows.Any(r=>r.Spec?.Id==selected.Id&&r.Available&&r.Summary.Contains("退步")),"regression advisory remains downloadable in v2 UI");
             var main=selected.Assets.Single(a=>a.Role=="bigram");var classes=selected.Assets.Single(a=>a.Role=="classes");
             var spec=new ModelSpec(selected.Id,selected.Name,main.Release,classes.Release,main.Sha256,classes.Sha256,main.Size,classes.Size,selected);
             var choice=await ModelCatalog.Download(spec,new ProgressLog(_=>{}),CancellationToken.None);

@@ -86,6 +86,16 @@ public sealed partial class MainWindow
         try{Directory.CreateDirectory(ModelCatalog.Folder);Process.Start(new ProcessStartInfo(ModelCatalog.Folder){UseShellExecute=true});}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception){Vm.Status="無法開啟模型資料夾："+error.Message;ShowLoadFeedback();}
     }
+    /// Name, state and advisory titles on their own wrapped lines, so long entries stay readable in a narrow dialog.
+    internal static StackPanel CatalogItem(CatalogRow row)
+    {
+        var item=new StackPanel{Padding=new Thickness(0,6,0,6),Spacing=2};
+        item.Children.Add(new TextBlock{Text=row.Name,TextWrapping=TextWrapping.Wrap,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold});
+        item.Children.Add(new TextBlock{Text=row.State,TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"]});
+        if(row.Summary.Length>0)item.Children.Add(new TextBlock{Text=row.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"]});
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item,string.Join("，",new[]{row.Name,row.State,row.Summary}.Where(s=>s.Length>0)));
+        return item;
+    }
     private async void OnlineModels(object sender,RoutedEventArgs args)
     {
         if(modelOperation is not null)return;
@@ -94,7 +104,7 @@ public sealed partial class MainWindow
         var progress=new ProgressBar {IsIndeterminate=true};
         var choices=new ListView {MaxHeight=260,SelectionMode=ListViewSelectionMode.Single};
         var notes=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxWidth=520};
-        var panel=new StackPanel {Spacing=12,MinWidth=420};panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
+        var panel=new StackPanel {Spacing=12,MaxWidth=520};panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
         panel.Children.Add(new ScrollViewer{Content=notes,MaxHeight=240});
         panel.Children.Add(new TextBlock {Text="只列相容配套供下載。完成後選入設定草稿，按主視窗「儲存」才套用；個人詞庫與學習資料保留。",TextWrapping=TextWrapping.Wrap});
         var dialog=new ContentDialog {XamlRoot=Root.XamlRoot,Title="取得其他模型",Content=panel,PrimaryButtonText="下載並選取",SecondaryButtonText="取消下載",CloseButtonText="關閉",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
@@ -126,7 +136,7 @@ public sealed partial class MainWindow
         try
         {
             var result=await ModelCatalog.Online(cancel.Token);rows=result.Rows;
-            foreach(var row in rows)choices.Items.Add(row.Name+" — "+row.State);
+            foreach(var row in rows)choices.Items.Add(CatalogItem(row));
             info.Text=result.Status;progress.IsIndeterminate=false;
         }
         catch(OperationCanceledException){}
