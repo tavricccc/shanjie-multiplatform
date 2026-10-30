@@ -1,40 +1,48 @@
 #Requires -Version 7
+# The built-in model bundle: upstream's whole released set, the main model mapped to .winmap.
+param([string]$Output = 'dist/data')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
-New-Item -ItemType Directory -Path "$root/build/model","$root/dist/data" -Force | Out-Null
-function Get-VerifiedAsset($asset,[string]$name) {
-    $source = Join-Path $root "build/model/$($asset.source)"
+if ($manifest.format -ne 2) { throw 'MODEL-SOURCES.json must be format 2.' }
+$cache = Join-Path $root 'build/model'
+New-Item -ItemType Directory -Path $cache -Force | Out-Null
+$bundle = $manifest.builtin
+# The built-in set must be exactly the one the pinned upstream ships (its data/<file>.sha256).
+foreach ($asset in $bundle.assets) {
+    $record = Join-Path $root "upstream/shanjie/data/$($asset.filename).sha256"
+    if (!(Test-Path -LiteralPath $record)) { throw "Upstream does not ship $($asset.filename); review MODEL-SOURCES.json." }
+    if (((Get-Content -LiteralPath $record -Raw) -split '\s+')[0] -ne $asset.sha256) { throw "$($asset.filename) differs from the pinned upstream; update MODEL-SOURCES.json." }
+}
+function Get-VerifiedAsset($asset) {
+    # Releases reuse file names (every main model is bigram.sjlm), so the cache key carries the release.
+    $source = Join-Path $cache "$($asset.release)-$($asset.filename)"
     if (!(Test-Path -LiteralPath $source) -or (Get-FileHash -LiteralPath $source).Hash.ToLowerInvariant() -ne $asset.sha256) {
-        & "$PSScriptRoot/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$($asset.release)/$name" -Destination $source -Size $asset.size -Sha256 $asset.sha256
+        & "$PSScriptRoot/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$($asset.release)/$($asset.filename)" -Destination $source -Size $asset.size -Sha256 $asset.sha256
     }
     return $source
 }
-foreach ($entry in $manifest.models) {
-    $source = Get-VerifiedAsset $entry 'bigram.sjlm'
-    $mapped = Join-Path $root "dist/data/$($entry.mapped)"
-    New-Item -ItemType Directory -Path (Split-Path $mapped -Parent) -Force | Out-Null
-    $classes = '-'
-    if ($entry.classes) {
-        $classes = Get-VerifiedAsset $entry.classes 'classes.sjc'
-        Copy-Item -LiteralPath $classes -Destination (Join-Path (Split-Path $mapped -Parent) 'classes.sjc') -Force
-    }
-    cargo run --release --manifest-path "$root/build/core/Cargo.toml" --bin map-model -- $source $mapped $classes
-    if ($LASTEXITCODE) { throw "Mapped model equivalence verification failed: $($entry.release)" }
+$models = Join-Path $root "$Output/models"
+$folder = Join-Path $root "$Output/$($bundle.folder)"
+if (Test-Path -LiteralPath $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
+New-Item -ItemType Directory -Path $folder -Force | Out-Null
+$sources = @{}
+foreach ($asset in $bundle.assets) { $sources[$asset.role] = Get-VerifiedAsset $asset }
+$main = @($bundle.assets | Where-Object role -eq 'bigram')
+if ($main.Count -ne 1) { throw 'The built-in bundle needs exactly one main model.' }
+$map = Join-Path $folder $main[0].mapped
+$classes = '-'
+if ($sources.classes) { $classes = Join-Path $folder 'classes.sjc'; Copy-Item -LiteralPath $sources.classes -Destination $classes -Force }
+# Map with only the class table beside it, then add the side files and load the whole set once.
+cargo run --release --quiet --manifest-path "$root/build/core/Cargo.toml" --bin map-model -- $sources.bigram $map $classes
+if ($LASTEXITCODE) { throw 'Mapped model equivalence verification failed.' }
+foreach ($asset in $bundle.assets | Where-Object { $_.role -notin @('bigram','classes') }) {
+    Copy-Item -LiteralPath $sources[$asset.role] -Destination (Join-Path $folder $asset.filename) -Force
 }
-# Remove retired model directories from build output as well as legacy root files.
-$allowedFolders = @($manifest.models | ForEach-Object { Split-Path (Split-Path $_.mapped -Parent) -Leaf })
-foreach ($retired in @(Get-ChildItem -LiteralPath "$root/dist/data/models" -Directory | Where-Object Name -NotIn $allowedFolders)) {
-    $resolved = [IO.Path]::GetFullPath($retired.FullName)
-    if (!$resolved.StartsWith([IO.Path]::GetFullPath("$root/dist/data/models") + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected model path.' }
-    Remove-Item -LiteralPath $resolved -Recurse -Force
+cargo run --release --quiet --manifest-path "$root/build/core/Cargo.toml" --bin map-model -- --check $map
+if ($LASTEXITCODE) { throw 'The built-in side files do not pair with the model.' }
+# Only the built-in folder belongs in the package; earlier layouts are removed from the output.
+foreach ($retired in @(Get-ChildItem -LiteralPath $models -Directory | Where-Object { $_.FullName -ne (Get-Item $folder).FullName })) {
+    Remove-Item -LiteralPath $retired.FullName -Recurse -Force
 }
-foreach ($legacy in @('bigram.winmap','bigram-v2.winmap')) {
-    $path = Join-Path $root "dist/data/$legacy"
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
-}
-foreach ($retired in @('bigram.sjlm','bigram-v2.sjlm','bigram-v3.sjlm','bigram-v4.sjlm','bigram-v5.sjlm','classes-v1.sjc','classes-v2.sjc','classes-v3.sjc','classes-v4.sjc')) {
-    $path = [IO.Path]::GetFullPath((Join-Path $root "build/model/$retired"))
-    if (!$path.StartsWith([IO.Path]::GetFullPath("$root/build/model") + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected model cache path.' }
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
-}
+Write-Output "prepared $($bundle.folder)"

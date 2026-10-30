@@ -108,7 +108,7 @@ pub fn checked(folder: &Path) -> Result<Installed> {
     if fs::metadata(&metadata)?.len()>262144{return Err("模型資訊過大。".into());}
     let receipt:Installed=serde_json::from_slice(&fs::read(&metadata)?)?;
     if receipt.spec.catalog.is_some(){return checked_bundle(folder,receipt);}
-    if ["kn.sjkn", "trigram.sjt3", "tinylm.sjtl"]
+    if ["kn.sjkn", "trigram.sjt3", "trigram-chat.sjt3", "tinylm.sjtl", "colloquial.sjlm"]
         .iter()
         .any(|name| folder.join(name).exists())
     {
@@ -178,9 +178,13 @@ pub fn scan(root: &Path) -> Vec<Installed> {
     out.sort_by(|a, b| a.spec.id.cmp(&b.spec.id));
     out
 }
+/// The package's own bundle (scripts/prepare-models.ps1).
+pub fn builtin(data: &Path) -> PathBuf {
+    data.join("models/builtin/bigram.winmap")
+}
 pub fn resolve(root: &Path, data: &Path, id: &str) -> PathBuf {
     if id == BUILTIN || id.is_empty() {
-        return data.join("models/model-v6/bigram.winmap");
+        return builtin(data);
     }
     if valid_id(id) {
         let folder = root.join(id);
@@ -189,7 +193,7 @@ pub fn resolve(root: &Path, data: &Path, id: &str) -> PathBuf {
         }
     }
     // Keep the selected id in settings; an unavailable external package must not disable typing.
-    data.join("models/model-v6/bigram.winmap")
+    builtin(data)
 }
 pub fn prepare(root: &Path, staging: &str) -> Result<Installed> {
     if !valid_id(staging) {
@@ -273,7 +277,7 @@ fn checked_bundle(folder:&Path,item:Installed)->Result<Installed>{
 }
 fn check_bundle_assets(folder:&Path,m:&crate::catalog::Model,main:bool)->Result<()> {
     let declared:std::collections::BTreeSet<_>=m.assets.iter().map(|a|a.filename.as_str()).collect();
-    for name in ["kn.sjkn","trigram.sjt3","tinylm.sjtl","classes.sjc","colloquial.sjlm"]{
+    for name in ["kn.sjkn","trigram.sjt3","trigram-chat.sjt3","tinylm.sjtl","classes.sjc","colloquial.sjlm","colloquial-attribution.tsv"]{
         if folder.join(name).exists()&&!declared.contains(name){return Err("發現未列入配套的附加檔。".into());}
     }
     for a in &m.assets {
@@ -337,14 +341,14 @@ mod tests {
         for bad in ["", "../x", "C:\\x", "a/b", ".staging", "A", "a_b"] {
             assert!(!valid_id(bad));
         }
-        assert!(valid_id("model-v6-classes-v4"));
+        assert!(valid_id("model-v6-classes-v4") && valid_id(BUILTIN));
     }
     #[test]
     fn missing_selection_falls_back_without_writes() {
         let data = Path::new("test-data");
         assert_eq!(
             resolve(Path::new("test-models"), data, "../escape"),
-            data.join("models/model-v6/bigram.winmap")
+            builtin(data)
         );
     }
 }

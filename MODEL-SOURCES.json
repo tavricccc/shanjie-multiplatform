@@ -1,19 +1,18 @@
 {
+  "format": 2,
   "repository": "https://github.com/Nanako0129/shanjie",
-  "models": [
-    {
-      "id": 6,
-      "release": "model-v6",
-      "source": "bigram-v6.sjlm",
-      "mapped": "models/model-v6/bigram.winmap",
-      "sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
-      "classes": {
-        "release": "classes-v5",
-        "source": "classes-v5.sjc",
-        "sha256": "9e36fa1be4518adb34bcddc2c79761006b0b06c539aa64a4564ba00397cf0262",
-        "size": 5656826
-      },
-      "size": 83445569
-    }
-  ]
+  "builtin": {
+    "id": "builtin",
+    "folder": "models/builtin",
+    "assets": [
+      { "role": "bigram", "name": "通語 SJ-LM-7-9.7M", "release": "sj-lm-7-9.7m", "filename": "bigram.sjlm", "mapped": "bigram.winmap", "size": 88467490, "sha256": "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a" },
+      { "role": "classes", "name": "辨類 SJ-WC-6-512C", "release": "sj-wc-6-512c", "filename": "classes.sjc", "size": 6091126, "sha256": "4c1071f2d6fb609c47724ddb1aace69f9b458c2cc69026ea9fe4d4b749a8ff43" },
+      { "role": "smoothing", "name": "承接 SJ-KN-2-397K", "release": "sj-kn-2-397k", "filename": "kn.sjkn", "size": 1587772, "sha256": "880ee87c6cbedf4097a8f73540de335a5bfe6abb48413513a83e7f75254e985a" },
+      { "role": "trigram", "name": "連文 SJ-CX-2-7.7M", "release": "sj-cx-2-7.7m", "filename": "trigram.sjt3", "size": 133297536, "sha256": "34305a2d749dcd7f8528250e03f24a8cb7f1042a940669a415374cdfbbc8d8eb" },
+      { "role": "trigram-chat", "name": "連文 SJ-CX-2-950K", "release": "sj-cx-2-950k", "filename": "trigram-chat.sjt3", "size": 15114784, "sha256": "24ee8645817060508f12ec2731995244df00b913b305161f46e46527ea122275" },
+      { "role": "semantic", "name": "會意 SJ-SR-7-15M", "release": "sj-sr-7-15m", "filename": "tinylm.sjtl", "size": 14886880, "sha256": "f7d0ac6377bfe973cf4239a949d7a763f1acb0095e50bc6c1323bd3ed09d3478" },
+      { "role": "colloquial", "name": "常談 SJ-CL-2-69K", "release": "sj-cl-2-69k", "filename": "colloquial.sjlm", "size": 4713933, "sha256": "81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4" },
+      { "role": "attribution", "release": "sj-cl-2-69k", "filename": "colloquial-attribution.tsv", "size": 2000233, "sha256": "eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22" }
+    ]
+  }
 }

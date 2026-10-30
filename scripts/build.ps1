@@ -66,16 +66,9 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
         # Build-time only: appends the package to the setup stub for the single-file installer.
         Copy-Item "$root/windows/target/$target/release/shanjie-pack.exe" "$root/dist/setup" -Force
     }
-    New-Item -ItemType Directory -Path "$root/dist/data","$root/dist/LICENSES" -Force | Out-Null
-    Copy-Item "$root/upstream/shanjie/data/lexicon/*" "$root/dist/data" -Force
-    Copy-Item "$root/data/pinyin-map.tsv" "$root/dist/data" -Force
-    # The ACG word pack and its provenance files, the same three upstream ships.
-    New-Item -ItemType Directory -Path "$root/dist/data/packs" -Force | Out-Null
-    Copy-Item "$root/upstream/shanjie/data/packs/acg-add.tsv","$root/upstream/shanjie/data/packs/acg-sources.tsv","$root/upstream/shanjie/data/packs/acg.json" "$root/dist/data/packs" -Force
-    # Generated and hash-verified against upstream's recorded output (LF only, as its strict reader requires).
-    & "$PSScriptRoot/prepare-english.ps1" | Out-Null
-    Copy-Item "$root/build/english-words.txt" "$root/dist/data" -Force
-    Copy-Item "$root/upstream/shanjie/LICENSE","$root/upstream/shanjie/LICENSES/*","$root/LICENSES/windows-models.md" "$root/dist/LICENSES" -Force
-    Copy-Item "$root/data/README.md" "$root/dist/LICENSES/pinyin-data.md" -Force
-    Copy-Item "$root/LICENSES/mode-icons.md" "$root/dist/LICENSES" -Force
+    # The data is the same for both architectures; the x64 pass (first in an 'all' build) prepares it.
+    if ($Architecture -eq 'x64' -or !(Test-Path "$root/dist/data/models/builtin/bigram.winmap")) {
+        & "$PSScriptRoot/prepare-models.ps1"
+        & "$PSScriptRoot/prepare-data.ps1" -Licenses 'dist/LICENSES'
+    }
 } finally { Remove-Item Env:SHANJIE_ICON_RESOURCE,Env:SHANJIE_SETUP_RESOURCE -ErrorAction SilentlyContinue; Pop-Location }

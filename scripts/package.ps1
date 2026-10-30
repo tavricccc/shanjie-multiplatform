@@ -13,14 +13,12 @@ try {
     if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
     Preserve-Output $output
     New-Item -ItemType Directory -Path $output -Force | Out-Null
-    if (!$UseExistingBuild) { & "$PSScriptRoot/prepare-models.ps1" }
     & "$PSScriptRoot/prepare-licenses.ps1"
     foreach ($arch in @('x64','x86')) {
         New-Item -ItemType Directory -Path "$output/$arch" -Force | Out-Null
         Copy-Item "$root/dist/$arch/Shanjie.dll" "$output/$arch" -Force
     }
     Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
-    Copy-Item "$root/LICENSES/windows-models.md" "$output/LICENSES" -Force
     Copy-Item "$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
     # Command-line alternatives to the setup window stay out of the package root.
     New-Item -ItemType Directory -Path "$output/scripts" -Force | Out-Null
