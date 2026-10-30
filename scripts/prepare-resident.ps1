@@ -4,10 +4,10 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $engine = Join-Path $CorePath 'src/engine.rs'
 $content = Get-Content $engine -Raw
-foreach ($contract in @('pub fn new_with_personal(', 'pub fn load_lm(', 'pub fn load_tinylm(')) {
+foreach ($contract in @('pub fn new_with_personal(', 'pub fn load_lm(', 'pub fn load_tinylm(', 'pub fn load_colloquial(')) {
     if ([regex]::Matches($content,[regex]::Escape($contract)).Count -ne 1) { throw "Resident contract changed: $contract" }
 }
-$content = $content.Replace('pub fn new_with_personal(', 'fn new_with_personal_uncached(').Replace('pub fn load_lm(', 'fn load_lm_uncached(').Replace('pub fn load_tinylm(', 'fn load_tinylm_uncached(')
+$content = $content.Replace('pub fn new_with_personal(', 'fn new_with_personal_uncached(').Replace('pub fn load_lm(', 'fn load_lm_uncached(').Replace('pub fn load_tinylm(', 'fn load_tinylm_uncached(').Replace('pub fn load_colloquial(', 'fn load_colloquial_uncached(')
 $content += "`n" + (Get-Content "$root/platform/resident_windows.rs" -Raw)
 Set-Content $engine $content -Encoding utf8NoBOM
 Add-Content (Join-Path $CorePath 'src/ffi.rs') @'

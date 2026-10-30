@@ -4,7 +4,7 @@ use std::sync::{Mutex, OnceLock};
 static WINDOWS_LEX_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 type LexCache = Vec<(
-    Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>,
+    (u32, Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>),
     Arc<Lexicon>,
     // Pack rows are part of the capped lexicon later built from this lexicon, so they travel with it.
     Option<String>,
@@ -35,10 +35,10 @@ fn resource_stamp(
         paths.push(digits);
     }
     // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
-    if packs & PACK_ACG != 0 {
-        let acg = data.join("packs").join("acg-add.tsv");
-        if acg.is_file() {
-            paths.push(acg);
+    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_IT, "it-add.tsv")] {
+        let pack = data.join("packs").join(name);
+        if packs & flag != 0 && pack.is_file() {
+            paths.push(pack);
         }
     }
     paths
@@ -60,7 +60,8 @@ impl Engine {
             return Err(EngineError::LoadFailed);
         }
         static CACHE: OnceLock<Mutex<LexCache>> = OnceLock::new();
-        let stamp = resource_stamp(data, personal, packs)?;
+        // The pack set is part of the key: a selected pack whose file is missing leaves the stamp as without it.
+        let stamp = (packs, resource_stamp(data, personal, packs)?);
         let mut cache = CACHE
             .get_or_init(Default::default)
             .lock()
@@ -98,7 +99,7 @@ impl Engine {
         let folder = path.parent().ok_or(EngineError::LoadFailed)?;
         let mut paths = vec![path.to_owned()];
         if folder.join("classes.sjc").exists(){paths.push(folder.join("classes.sjc"));}
-        for side in ["kn.sjkn", "trigram.sjt3"].map(|name| folder.join(name)) {
+        for side in ["kn.sjkn", "trigram.sjt3", "trigram-chat.sjt3"].map(|name| folder.join(name)) {
             if side.exists() {
                 paths.push(side);
             }
@@ -118,14 +119,14 @@ impl Engine {
             .iter()
             .position(|(key, lex, _)| key == &stamp && Arc::ptr_eq(lex, &self.lex))
         {
+            // What upstream's load_lm does after building the state; the prediction index was built with it.
             let entry = cache.remove(index);
             self.invalidate();
-            self.tinylm=None;
-            self.digit_cache=None;
-            if self.predict_on {
-                entry.2.capped.predict_index(&entry.2.lm);
-            }
             self.lm = Some(entry.2.clone());
+            self.set_tinylm(None);
+            self.digit_cache = None;
+            self.en_words = None;
+            self.en_cache();
             self.digit_env();
             cache.push(entry);
             return Ok(());
@@ -148,11 +149,29 @@ impl Engine{
         let meta=std::fs::metadata(path).map_err(|_|EngineError::LoadFailed)?;
         let mut cache=CACHE.get_or_init(Default::default).lock().map_err(|_|EngineError::LoadFailed)?;
         if let Some(entry)=cache.iter().find(|e|e.0==path&&e.1==meta.len()&&e.2==meta.modified().ok()&&e.3==sha&&e.4==kn){
-            let tiny=entry.5.clone();self.invalidate();self.tinylm=Some(tiny);return Ok(());
+            let tiny=entry.5.clone();self.invalidate();self.set_tinylm(Some(tiny));return Ok(());
         }
         self.load_tinylm_uncached(path)?;
         if cache.len()>=4{cache.remove(0);}
         cache.push((path.to_owned(),meta.len(),meta.modified().ok(),sha,kn,self.tinylm.as_ref().unwrap().clone()));Ok(())
+    }
+    /// 常談 reads the lexicon's word sets and this engine's pack rows on every load; engines built from the same
+    /// data share one table.
+    pub fn load_colloquial(&mut self,path:&Path)->Result<(),EngineError>{
+        use std::hash::{Hash,Hasher};
+        type CachedColloquial=(std::path::PathBuf,u64,Option<std::time::SystemTime>,std::path::PathBuf,u64,Arc<Colloquial>);
+        static CACHE:OnceLock<Mutex<Vec<CachedColloquial>>>=OnceLock::new();
+        let dir=self.data_dir.clone().ok_or(EngineError::LoadFailed)?;
+        let meta=std::fs::metadata(path).map_err(|_|EngineError::LoadFailed)?;
+        let mut hasher=std::collections::hash_map::DefaultHasher::new();self.pack_text.hash(&mut hasher);let packs=hasher.finish();
+        let key=|e:&CachedColloquial|e.0==path&&e.1==meta.len()&&e.2==meta.modified().ok()&&e.3==dir&&e.4==packs;
+        let mut cache=CACHE.get_or_init(Default::default).lock().map_err(|_|EngineError::LoadFailed)?;
+        if let Some(entry)=cache.iter().find(|e|key(e)){
+            let table=entry.5.clone();self.invalidate();self.colloquial=Some(table);return Ok(());
+        }
+        self.load_colloquial_uncached(path)?;
+        if cache.len()>=4{cache.remove(0);}
+        cache.push((path.to_owned(),meta.len(),meta.modified().ok(),dir,packs,self.colloquial.as_ref().unwrap().clone()));Ok(())
     }
 }
 
