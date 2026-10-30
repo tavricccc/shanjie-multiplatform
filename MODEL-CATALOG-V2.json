@@ -1,62 +1,62 @@
 {
   "example_only": false,
   "format": 2,
-  "generated_at": "2026-10-30T07:40:05.824066+00:00",
+  "generated_at": "2026-10-30T12:57:10.568822+00:00",
   "models": [
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：16/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：16/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：16/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：16/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 16,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:54.314056+00:00",
+              "measured_at": "2026-10-30T12:48:45.986548+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:54.314056+00:00",
+              "measured_at": "2026-10-30T12:48:45.986548+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 16,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:38.513094+00:00",
+              "measured_at": "2026-10-30T12:53:25.039728+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:38.513094+00:00",
+              "measured_at": "2026-10-30T12:53:25.039728+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -71,7 +71,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "3bea15123f480e19a5959295d86acb8043040acd779f188d199d51760c6e8729",
+      "advisory_revision": "134e072e1eaf0475b36f71170ef56d959b560900e143300ac039540e5e4d5268",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -86,157 +86,24 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:54.314056+00:00",
+          "checked_at": "2026-10-30T12:48:45.986548+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/f84d71ba843433a72b757aebf1e7c119f9403e56424b0f477c3850051a2525f5.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/dec64a4d395b2031e707a0aef15ae84a2e348c36e530d560b0e78a5a7074287c.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:38.513094+00:00",
+          "checked_at": "2026-10-30T12:53:25.039728+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/b253c25ce38fec53bd50dc8e509e172ff71ca5c5640938db942d29a03beb23b9.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/7d5a37032ba69acccfe53e2c47d6328ea5eb0582bd1d1c02b569793600185c0b.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
       ],
       "id": "bundle-00bb02ec581b2fce59fb1fbb0a00dc49e5d5d0bf8e2f3be5b164ed044d4ecc0c",
       "name": "model-v2（獨立無詞類模型）",
-      "required_capabilities": [
-        "lm.classless",
-        "lm.sjlm1",
-        "map.sjwm2"
-      ]
-    },
-    {
-      "advisories": [
-        {
-          "body": "top1-chat-windows-x64：16/20，基準 16/20；top1-formal-windows-x64：16/20，基準 18/20；top1-chat-windows-x86：16/20，基準 16/20；top1-formal-windows-x86：16/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
-          "code": "quality-regression",
-          "measurements": [
-            {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
-              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
-              "dataset_id": "windows-public20-v1",
-              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:22.355741+00:00",
-              "metric": "top1-chat-windows-x64",
-              "sample_count": 20,
-              "unit": "sentences"
-            },
-            {
-              "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
-              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
-              "dataset_id": "windows-public20-v1",
-              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:22.355741+00:00",
-              "metric": "top1-formal-windows-x64",
-              "sample_count": 20,
-              "unit": "sentences"
-            },
-            {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
-              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
-              "dataset_id": "windows-public20-v1",
-              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:01.269533+00:00",
-              "metric": "top1-chat-windows-x86",
-              "sample_count": 20,
-              "unit": "sentences"
-            },
-            {
-              "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
-              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
-              "dataset_id": "windows-public20-v1",
-              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:01.269533+00:00",
-              "metric": "top1-formal-windows-x86",
-              "sample_count": 20,
-              "unit": "sentences"
-            }
-          ],
-          "title": "部分評測低於基準"
-        },
-        {
-          "body": "未提供同場速度與記憶體測量；不以缺少效能資料限制選用。",
-          "code": "performance-unmeasured",
-          "measurements": [],
-          "title": "效能尚未比較"
-        },
-        {
-          "body": "這個配套單獨使用口語語料模型，取代一般主模型；不是把它暗中混合進原模型。詞彙覆蓋與排序可能不同。",
-          "code": "standalone-colloquial",
-          "measurements": [],
-          "title": "獨立口語模型"
-        }
-      ],
-      "advisory_revision": "87d46d3bd366055ede6c12f6053f3c7c5b90b1313f01a0d32ef36e133608015b",
-      "assets": [
-        {
-          "filename": "colloquial-attribution.tsv",
-          "format_magic": "TEXT0001",
-          "release": "sj-cl-1-68k",
-          "repository": "Nanako0129/shanjie",
-          "requires_assets": [],
-          "role": "attribution",
-          "sha256": "eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22",
-          "size": 2000233
-        },
-        {
-          "filename": "colloquial.sjlm",
-          "format_magic": "SJLM0001",
-          "release": "sj-cl-1-68k",
-          "repository": "Nanako0129/shanjie",
-          "requires_assets": [],
-          "role": "bigram",
-          "sha256": "2984eeb525a06b12c244b3c04b84641c9a67492486132ebf404198372b684c33",
-          "size": 4680680
-        },
-        {
-          "filename": "sj-cl-1-68k.NOTICE.txt",
-          "format_magic": "TEXT0001",
-          "release": "sj-cl-1-68k",
-          "repository": "Nanako0129/shanjie",
-          "requires_assets": [],
-          "role": "license",
-          "sha256": "3fcf1d38330f99952bf0ee45ac21272375c1482ef1aa7ad1d92281c4308d7a65",
-          "size": 2813
-        }
-      ],
-      "compatibility": [
-        {
-          "checked_at": "2026-10-30T07:21:22.355741+00:00",
-          "profile_id": "windows-bundle-v1",
-          "report": "reports/ec31d56ec9505fdc48bc18fe490dc38a34ddde30a20640e2e7c824b982f4f9a8.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
-          "state": "usable",
-          "target": "windows-x64"
-        },
-        {
-          "checked_at": "2026-10-30T07:30:01.269533+00:00",
-          "profile_id": "windows-bundle-v1",
-          "report": "reports/a3656af25ed3b55521edcfc419cd43b782da55db2f47a61e71a65449c191b2ea.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
-          "state": "usable",
-          "target": "windows-x86"
-        }
-      ],
-      "id": "bundle-02e7ba1ccaab9a4daedc9eaebc4dbef7a322b7577801b2ea90c53c4530b27ccf",
-      "name": "sj-cl-1-68k（獨立無詞類模型）",
       "required_capabilities": [
         "lm.classless",
         "lm.sjlm1",
@@ -674,57 +541,57 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：17/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:52.350404+00:00",
+              "measured_at": "2026-10-30T12:48:43.310923+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:52.350404+00:00",
+              "measured_at": "2026-10-30T12:48:43.310923+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:36.236388+00:00",
+              "measured_at": "2026-10-30T12:53:21.587170+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:36.236388+00:00",
+              "measured_at": "2026-10-30T12:53:21.587170+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -739,7 +606,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "df70f4109959687eebace51abd2a3e70cf920cc1143d1537a96ee9e08bbbb505",
+      "advisory_revision": "f97c2a500f58acb6ec63ab019097102906b268a3d59a20796fa90cf292ebf502",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -766,18 +633,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:52.350404+00:00",
+          "checked_at": "2026-10-30T12:48:43.310923+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/3c794568ff65801f39e8014eccc5d3a98cd4f49c4476ff8375bc54f030cf8262.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/2c87633235387bf1b80fac36e1033a9fad68845417660c2e1232c58d04ddfcaa.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:36.236388+00:00",
+          "checked_at": "2026-10-30T12:53:21.587170+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/e3d1e2fb83479128fbdf58117d6807bad6020a8f3ff176e1f6846fcd4c4394bd.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/8dc395fdfe86481d297a4f52a729b8ee02c6215e961ce30855b05c926ed113d5.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -931,63 +798,63 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：16/20，基準 16/20；top1-formal-windows-x64：18/20，基準 18/20；top1-chat-windows-x86：16/20，基準 16/20；top1-formal-windows-x86：18/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
-          "code": "evaluation",
+          "body": "top1-chat-windows-x64：16/20，基準 17/20；top1-formal-windows-x64：18/20，基準 18/20；top1-chat-windows-x86：16/20，基準 17/20；top1-formal-windows-x86：18/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 16,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:24.532751+00:00",
+              "measured_at": "2026-10-30T12:48:23.945735+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 18,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:24.532751+00:00",
+              "measured_at": "2026-10-30T12:48:23.945735+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 16,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:03.793596+00:00",
+              "measured_at": "2026-10-30T12:52:55.264252+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 18,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:03.793596+00:00",
+              "measured_at": "2026-10-30T12:52:55.264252+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             }
           ],
-          "title": "公開評測資料"
+          "title": "部分評測低於基準"
         },
         {
           "body": "未提供同場速度與記憶體測量；不以缺少效能資料限制選用。",
@@ -996,7 +863,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "1e96751fd98e99c3aafe86971bd5c4c47d44223a2cae119d43ebf1bc001dd3a9",
+      "advisory_revision": "afeaf1118d3895fdccb619104d41a78f24435d5fa8af68c4107b6d32d8b1d12e",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -1023,18 +890,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:24.532751+00:00",
+          "checked_at": "2026-10-30T12:48:23.945735+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/7705332228e09216b67f87fcd328f5d1aba57be59cac53e92d0544e60328bee9.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/4f63a2b5b095fa9f1cb9dc2b8761f581ef9d53cf4aec84b7db2620e0ccd2e71f.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:03.793596+00:00",
+          "checked_at": "2026-10-30T12:52:55.264252+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/38d20b4bafbba60cef47de1112dad238c53c7ed2ad78820daaa38c701e8a6aa1.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/9f1db688813951d95524ec97a61ba812ae6105a3a7094aa28fc44a824fbbd1de.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1314,57 +1181,57 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：15/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：15/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：15/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：15/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 15,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:13.141456+00:00",
+              "measured_at": "2026-10-30T12:48:16.202559+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:13.141456+00:00",
+              "measured_at": "2026-10-30T12:48:16.202559+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 15,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:29:50.478169+00:00",
+              "measured_at": "2026-10-30T12:52:45.611641+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:29:50.478169+00:00",
+              "measured_at": "2026-10-30T12:52:45.611641+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -1379,7 +1246,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "f16cd81b1a87fc4dae7e81e9a2e66fe40079c7bdcaf06a606a4620d2e3f935d0",
+      "advisory_revision": "1a3261c8ac784d44bd95dbc5ba2fb0e088a26b553e7fff76ab8619d7f7205ba5",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -1406,18 +1273,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:13.141456+00:00",
+          "checked_at": "2026-10-30T12:48:16.202559+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/f571bd8258f6046e89b748bc8544fe183c62740800b3d00ce6fe11a6b201dea7.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/5879346ccd87fa04f67c7049859a0bc39955f2f4eb54ebd6883df4f62a53015b.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:29:50.478169+00:00",
+          "checked_at": "2026-10-30T12:52:45.611641+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/bb692f799bba78636512e3242b9747804bcee11a80c92b13644f51b5fa0703a8.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/f8b1ce71ba56fe52b58a7804bd286f92b3a80681a60c47571217b9f5d06470d0.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1433,57 +1300,265 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：16/20，基準 16/20；top1-formal-windows-x64：16/20，基準 18/20；top1-chat-windows-x86：16/20，基準 16/20；top1-formal-windows-x86：16/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
-          "code": "quality-regression",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：18/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：18/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "code": "evaluation",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:21.624144+00:00",
+              "measured_at": "2026-10-30T12:48:21.084217+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 18,
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:21.624144+00:00",
+              "measured_at": "2026-10-30T12:48:21.084217+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:00.353670+00:00",
+              "measured_at": "2026-10-30T12:52:51.373016+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 18,
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:00.353670+00:00",
+              "measured_at": "2026-10-30T12:52:51.373016+00:00",
+              "metric": "top1-formal-windows-x86",
+              "sample_count": 20,
+              "unit": "sentences"
+            }
+          ],
+          "title": "公開評測資料"
+        },
+        {
+          "body": "未提供同場速度與記憶體測量；不以缺少效能資料限制選用。",
+          "code": "performance-unmeasured",
+          "measurements": [],
+          "title": "效能尚未比較"
+        },
+        {
+          "body": "語意模型會增加記憶體與每個音節的計算量，強度依設定；效能未作跨機器比較。",
+          "code": "semantic-cost",
+          "measurements": [],
+          "title": "包含語意校正"
+        }
+      ],
+      "advisory_revision": "d2ae77e621e65a1ad18c986df20bfbb8bf6eb97144cb60d480f04df4b661ff45",
+      "assets": [
+        {
+          "filename": "colloquial-attribution.tsv",
+          "format_magic": "TEXT0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "attribution",
+          "sha256": "eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22",
+          "size": 2000233
+        },
+        {
+          "filename": "bigram.sjlm",
+          "format_magic": "SJLM0001",
+          "release": "sj-lm-7-9.7m",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "bigram",
+          "sha256": "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a",
+          "size": 88467490
+        },
+        {
+          "filename": "classes.sjc",
+          "format_magic": "SJCL0001",
+          "release": "sj-wc-6-512c",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a"
+          ],
+          "role": "classes",
+          "sha256": "4c1071f2d6fb609c47724ddb1aace69f9b458c2cc69026ea9fe4d4b749a8ff43",
+          "size": 6091126
+        },
+        {
+          "filename": "colloquial.sjlm",
+          "format_magic": "SJLM0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "colloquial",
+          "sha256": "81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4",
+          "size": 4713933
+        },
+        {
+          "filename": "sj-cl-2-69k.NOTICE.txt",
+          "format_magic": "TEXT0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "license",
+          "sha256": "a3263ef3682f6bad26bc0728ebe2165981275f74fc1f80d5abb1c617c2a931a9",
+          "size": 2830
+        },
+        {
+          "filename": "tinylm.sjtl",
+          "format_magic": "SJTL0004",
+          "release": "sj-sr-7-15m",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "880ee87c6cbedf4097a8f73540de335a5bfe6abb48413513a83e7f75254e985a",
+            "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a"
+          ],
+          "role": "semantic",
+          "sha256": "f7d0ac6377bfe973cf4239a949d7a763f1acb0095e50bc6c1323bd3ed09d3478",
+          "size": 14886880
+        },
+        {
+          "filename": "kn.sjkn",
+          "format_magic": "SJKN0002",
+          "release": "sj-kn-2-397k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a"
+          ],
+          "role": "smoothing",
+          "sha256": "880ee87c6cbedf4097a8f73540de335a5bfe6abb48413513a83e7f75254e985a",
+          "size": 1587772
+        },
+        {
+          "filename": "trigram.sjt3",
+          "format_magic": "SJT30001",
+          "release": "sj-cx-2-7.7m",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a"
+          ],
+          "role": "trigram",
+          "sha256": "34305a2d749dcd7f8528250e03f24a8cb7f1042a940669a415374cdfbbc8d8eb",
+          "size": 133297536
+        },
+        {
+          "filename": "trigram-chat.sjt3",
+          "format_magic": "SJT30001",
+          "release": "sj-cx-2-950k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a"
+          ],
+          "role": "trigram-chat",
+          "sha256": "24ee8645817060508f12ec2731995244df00b913b305161f46e46527ea122275",
+          "size": 15114784
+        }
+      ],
+      "compatibility": [
+        {
+          "checked_at": "2026-10-30T12:48:21.084217+00:00",
+          "profile_id": "windows-bundle-v1",
+          "report": "reports/4a51b7a9d00536fcca803b209a5eea8a037aa9cc8d6f1aa76c9b2cab50ec8c39.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
+          "state": "usable",
+          "target": "windows-x64"
+        },
+        {
+          "checked_at": "2026-10-30T12:52:51.373016+00:00",
+          "profile_id": "windows-bundle-v1",
+          "report": "reports/9614d816aeba2d7b54b82a16266d989743a460fda0eac8ac81ee553740237ed8.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
+          "state": "usable",
+          "target": "windows-x86"
+        }
+      ],
+      "id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+      "name": "sj-lm-7-9.7m ＋ sj-wc-6-512c ＋ sj-kn-2-397k ＋ sj-cx-2-950k ＋ sj-cx-2-7.7m ＋ sj-sr-7-15m ＋ sj-cl-2-69k",
+      "required_capabilities": [
+        "classes.sjcl1",
+        "colloquial.sjlm1",
+        "kn.sjkn2",
+        "lm.sjlm1",
+        "map.sjwm2",
+        "semantic.sjtl4",
+        "trigram.sjt30001"
+      ]
+    },
+    {
+      "advisories": [
+        {
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "code": "quality-regression",
+          "measurements": [
+            {
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:48:31.028379+00:00",
+              "metric": "top1-chat-windows-x64",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 18,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:48:31.028379+00:00",
+              "metric": "top1-formal-windows-x64",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:53:04.858431+00:00",
+              "metric": "top1-chat-windows-x86",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 18,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:53:04.858431+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -1498,13 +1573,19 @@
           "title": "效能尚未比較"
         },
         {
-          "body": "這個配套單獨使用口語語料模型，取代一般主模型；不是把它暗中混合進原模型。詞彙覆蓋與排序可能不同。",
-          "code": "standalone-colloquial",
+          "body": "語意模型會增加記憶體與每個音節的計算量，強度依設定；效能未作跨機器比較。",
+          "code": "semantic-cost",
           "measurements": [],
-          "title": "獨立口語模型"
+          "title": "包含語意校正"
+        },
+        {
+          "body": "這個配套只有書面設定的三元模型（連文），另一種設定只用二元模型。",
+          "code": "trigram-profile",
+          "measurements": [],
+          "title": "只有一種設定用三元模型"
         }
       ],
-      "advisory_revision": "87d46d3bd366055ede6c12f6053f3c7c5b90b1313f01a0d32ef36e133608015b",
+      "advisory_revision": "8ce1544e493fb1f9675983cad7a81dee07221db6eb6485762cb4a01da29b8252",
       "assets": [
         {
           "filename": "colloquial-attribution.tsv",
@@ -1517,12 +1598,34 @@
           "size": 2000233
         },
         {
+          "filename": "bigram.sjlm",
+          "format_magic": "SJLM0001",
+          "release": "model-v6",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "bigram",
+          "sha256": "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42",
+          "size": 83445569
+        },
+        {
+          "filename": "classes.sjc",
+          "format_magic": "SJCL0001",
+          "release": "classes-v5",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42"
+          ],
+          "role": "classes",
+          "sha256": "9e36fa1be4518adb34bcddc2c79761006b0b06c539aa64a4564ba00397cf0262",
+          "size": 5656826
+        },
+        {
           "filename": "colloquial.sjlm",
           "format_magic": "SJLM0001",
           "release": "sj-cl-2-69k",
           "repository": "Nanako0129/shanjie",
           "requires_assets": [],
-          "role": "bigram",
+          "role": "colloquial",
           "sha256": "81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4",
           "size": 4713933
         },
@@ -1535,88 +1638,298 @@
           "role": "license",
           "sha256": "a3263ef3682f6bad26bc0728ebe2165981275f74fc1f80d5abb1c617c2a931a9",
           "size": 2830
+        },
+        {
+          "filename": "tinylm.sjtl",
+          "format_magic": "SJTL0004",
+          "release": "sj-sr-6-14m",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e",
+            "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42"
+          ],
+          "role": "semantic",
+          "sha256": "e7c179d85405ec42a40bb22adb58a7485c58f77aed89dfc2ca76a0d89568ed5e",
+          "size": 14638352
+        },
+        {
+          "filename": "kn.sjkn",
+          "format_magic": "SJKN0002",
+          "release": "kn-v1",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42"
+          ],
+          "role": "smoothing",
+          "sha256": "cbefbced072f7e9d40dbfc3d2fad27c29f82e44bf801800dfb17b4eec962597e",
+          "size": 1414052
+        },
+        {
+          "filename": "trigram.sjt3",
+          "format_magic": "SJT30001",
+          "release": "sj-cx-1-7.7m",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "fc2bddd1f0c2029deb7e7568f64868c11f535b3d5c5c7c97c3d0599c8b2cde42"
+          ],
+          "role": "trigram",
+          "sha256": "fdd3b05d8c18cf85da434443d4fabbbfebf31e8c97a04e00e4a339bbe19eec84",
+          "size": 143643936
         }
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:21.624144+00:00",
+          "checked_at": "2026-10-30T12:48:31.028379+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/27d27a3364190ccdb18573d412ab6790bd528fcf64eee45a270f8a7b3d0fa340.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/4e65188fdb59c7ad8c26e0fa08ddde6bb2dffce36d993d460f6e1c495735a3e2.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:00.353670+00:00",
+          "checked_at": "2026-10-30T12:53:04.858431+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/20e9f4da14aa69389d55fec65cc83fa9fa505cdda0fc61c38f83c53d1a8129fd.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/d3e3ada91d63b2f7f8c72baafe0d732c9fbdcca6b0120b20b194c56f910dca5d.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
       ],
-      "id": "bundle-6fc5b45f2fbbb4400ab4cda3e47820b7f7f45cfcd4f7055d6392a809a664287b",
-      "name": "sj-cl-2-69k（獨立無詞類模型）",
+      "id": "bundle-7aa95fb375ed8d0f1fe33c4ef8c27d51a407f6072995e7c3d7074029095019ed",
+      "name": "model-v6 ＋ classes-v5 ＋ sj-cx-1-7.7m ＋ kn-v1 ＋ sj-sr-6-14m ＋ sj-cl-2-69k",
       "required_capabilities": [
-        "lm.classless",
+        "classes.sjcl1",
+        "colloquial.sjlm1",
+        "kn.sjkn2",
         "lm.sjlm1",
-        "map.sjwm2"
+        "map.sjwm2",
+        "semantic.sjtl4",
+        "trigram.sjt30001"
       ]
     },
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：16/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：16/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:56.258966+00:00",
+              "measured_at": "2026-10-30T12:48:37.539766+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:56.258966+00:00",
+              "measured_at": "2026-10-30T12:48:37.539766+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
-              "candidate": 16,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:40.758217+00:00",
+              "measured_at": "2026-10-30T12:53:14.106779+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:40.758217+00:00",
+              "measured_at": "2026-10-30T12:53:14.106779+00:00",
+              "metric": "top1-formal-windows-x86",
+              "sample_count": 20,
+              "unit": "sentences"
+            }
+          ],
+          "title": "部分評測低於基準"
+        },
+        {
+          "body": "未提供同場速度與記憶體測量；不以缺少效能資料限制選用。",
+          "code": "performance-unmeasured",
+          "measurements": [],
+          "title": "效能尚未比較"
+        },
+        {
+          "body": "語意模型會增加記憶體與每個音節的計算量，強度依設定；效能未作跨機器比較。",
+          "code": "semantic-cost",
+          "measurements": [],
+          "title": "包含語意校正"
+        }
+      ],
+      "advisory_revision": "756d173e34f7ecd7f753633d63c792c9c1799990bbaf2ebaeec94abbae5462c4",
+      "assets": [
+        {
+          "filename": "colloquial-attribution.tsv",
+          "format_magic": "TEXT0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "attribution",
+          "sha256": "eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22",
+          "size": 2000233
+        },
+        {
+          "filename": "bigram.sjlm",
+          "format_magic": "SJLM0001",
+          "release": "model-v5",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "bigram",
+          "sha256": "f81a021e5dea08dc48dbca1db0d0f63517bb6f0f3e1b20fdac631542d13f45af",
+          "size": 82535147
+        },
+        {
+          "filename": "classes.sjc",
+          "format_magic": "SJCL0001",
+          "release": "classes-v3",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "f81a021e5dea08dc48dbca1db0d0f63517bb6f0f3e1b20fdac631542d13f45af"
+          ],
+          "role": "classes",
+          "sha256": "75a5efb3d050a9b0d21bca707ff6b1fd71945a8e059b869aa856618290e55827",
+          "size": 5575836
+        },
+        {
+          "filename": "colloquial.sjlm",
+          "format_magic": "SJLM0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "colloquial",
+          "sha256": "81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4",
+          "size": 4713933
+        },
+        {
+          "filename": "sj-cl-2-69k.NOTICE.txt",
+          "format_magic": "TEXT0001",
+          "release": "sj-cl-2-69k",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [],
+          "role": "license",
+          "sha256": "a3263ef3682f6bad26bc0728ebe2165981275f74fc1f80d5abb1c617c2a931a9",
+          "size": 2830
+        },
+        {
+          "filename": "tinylm.sjtl",
+          "format_magic": "SJTL0003",
+          "release": "tinylm-v4",
+          "repository": "Nanako0129/shanjie",
+          "requires_assets": [
+            "f81a021e5dea08dc48dbca1db0d0f63517bb6f0f3e1b20fdac631542d13f45af"
+          ],
+          "role": "semantic",
+          "sha256": "7b39c7529071d97fa911380ce96aad93f9f89b69ef554e383eacacca425c0865",
+          "size": 14638320
+        }
+      ],
+      "compatibility": [
+        {
+          "checked_at": "2026-10-30T12:48:37.539766+00:00",
+          "profile_id": "windows-bundle-v1",
+          "report": "reports/72e12faee0b679a337ed4fd2b1b538cf1c28ec4b980a40a08254275268ab9f12.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
+          "state": "usable",
+          "target": "windows-x64"
+        },
+        {
+          "checked_at": "2026-10-30T12:53:14.106779+00:00",
+          "profile_id": "windows-bundle-v1",
+          "report": "reports/7a646de1a89c40d7477cf675903a7850eeefff2ff5cc6075a25dcfbb827ec95d.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
+          "state": "usable",
+          "target": "windows-x86"
+        }
+      ],
+      "id": "bundle-8538681acdb0fc2980895a6ea4cc9b2523a679f11102646985aec8d63d9e4dfd",
+      "name": "model-v5 ＋ classes-v3 ＋ tinylm-v4 ＋ sj-cl-2-69k",
+      "required_capabilities": [
+        "classes.sjcl1",
+        "colloquial.sjlm1",
+        "lm.sjlm1",
+        "map.sjwm2",
+        "semantic.sjtl3"
+      ]
+    },
+    {
+      "advisories": [
+        {
+          "body": "top1-chat-windows-x64：16/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：16/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "code": "quality-regression",
+          "measurements": [
+            {
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 16,
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:48:48.688132+00:00",
+              "metric": "top1-chat-windows-x64",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 18,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:48:48.688132+00:00",
+              "metric": "top1-formal-windows-x64",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 16,
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:53:28.439623+00:00",
+              "metric": "top1-chat-windows-x86",
+              "sample_count": 20,
+              "unit": "sentences"
+            },
+            {
+              "baseline": 18,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
+              "candidate": 17,
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
+              "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
+              "dataset_id": "windows-public20-v1",
+              "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
+              "measured_at": "2026-10-30T12:53:28.439623+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -1637,7 +1950,7 @@
           "title": "預覽模型"
         }
       ],
-      "advisory_revision": "79211175cba9ae8b6d77ccc29153e478506d9aa17c1efd699b9ebe5261363cf0",
+      "advisory_revision": "c01e2f817cdff005403594b63e20473b80d3a843511e24cedf0bff36e421d58e",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -1652,18 +1965,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:56.258966+00:00",
+          "checked_at": "2026-10-30T12:48:48.688132+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/6fe4b721fdf02ce1eff946ca01d8796fec7f93283ecf62ffacd09aa9c93dc8c4.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/cec602034a797251d83269f13e2d8b9b471922840fc7e5de8f7ef663be7c60a2.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:40.758217+00:00",
+          "checked_at": "2026-10-30T12:53:28.439623+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/0c04b85cc25820f0142dcc62b4cc4602bd35d8b03b2bcdf552d2e78b01fabf76.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/2762e58f191286226822e259861480b86e8e97945699e45319dd27cf00e9041a.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1969,57 +2282,57 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：17/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:38.636619+00:00",
+              "measured_at": "2026-10-30T12:48:33.894192+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:38.636619+00:00",
+              "measured_at": "2026-10-30T12:48:33.894192+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:20.232847+00:00",
+              "measured_at": "2026-10-30T12:53:09.019528+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:20.232847+00:00",
+              "measured_at": "2026-10-30T12:53:09.019528+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -2034,7 +2347,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "df70f4109959687eebace51abd2a3e70cf920cc1143d1537a96ee9e08bbbb505",
+      "advisory_revision": "f97c2a500f58acb6ec63ab019097102906b268a3d59a20796fa90cf292ebf502",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -2061,18 +2374,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:38.636619+00:00",
+          "checked_at": "2026-10-30T12:48:33.894192+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/13ca7d6fd99417eca7dc78215064873297355af9bf2674d21e3a6a0c8f3d2cce.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/ae7cb285ab73c6688faeb419766da9988baf3a3db9a7344251f6163a3ecb8c16.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:20.232847+00:00",
+          "checked_at": "2026-10-30T12:53:09.019528+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/027435d6b7dcddb6101be04598c836b3c6a9b50be7bbb81fa429cdd25d1f83d5.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/49370a02f96a7d3857123e314df0c3310f97976cbb3b4fac46810a3ed0cdd91a.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2088,57 +2401,57 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：17/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:26.696006+00:00",
+              "measured_at": "2026-10-30T12:48:26.813514+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:26.696006+00:00",
+              "measured_at": "2026-10-30T12:48:26.813514+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:06.306449+00:00",
+              "measured_at": "2026-10-30T12:52:59.037896+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:06.306449+00:00",
+              "measured_at": "2026-10-30T12:52:59.037896+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -2153,7 +2466,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "df70f4109959687eebace51abd2a3e70cf920cc1143d1537a96ee9e08bbbb505",
+      "advisory_revision": "f97c2a500f58acb6ec63ab019097102906b268a3d59a20796fa90cf292ebf502",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -2180,18 +2493,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:26.696006+00:00",
+          "checked_at": "2026-10-30T12:48:26.813514+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/c42d0295e207bae55dac8e61b21ad42844fffee1c3ffef08154fadaed7eb8b33.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/ee2115438e245d236f0687350d932685ed9feb5c398e7f6b7e02ff00e5fa7460.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:06.306449+00:00",
+          "checked_at": "2026-10-30T12:52:59.037896+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/25fb0ed1e3b74b8552e9929c867d3593f855998577127d21a57b7ffe856957a6.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/4e7bdc95b71f4553329031044d2116fc5c97ea5b582e2c6da816edd8546edded.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2635,57 +2948,57 @@
     {
       "advisories": [
         {
-          "body": "top1-chat-windows-x64：17/20，基準 16/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 16/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
+          "body": "top1-chat-windows-x64：17/20，基準 17/20；top1-formal-windows-x64：17/20，基準 18/20；top1-chat-windows-x86：17/20，基準 17/20；top1-formal-windows-x86：17/20，基準 18/20。此比較只代表固定測試集，您仍可選用。",
           "code": "quality-regression",
           "measurements": [
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "16a3fdf8e71edb3c709b1b0fbc74be6a237f52c12be9f63af92bfedb2c5f028f",
+              "configuration_sha256": "25a339b04dc281a40bb2fdcafe9a60125afaa20704142c76b8a8e20ef13c1e0f",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:50.242664+00:00",
+              "measured_at": "2026-10-30T12:48:40.454244+00:00",
               "metric": "top1-chat-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "4e890124fe118ddfc154f993e47f52081f7b1a28a820a4fd587d91dd2698e194",
+              "configuration_sha256": "7f563f49670f03ee8eb9fac49fa3794e815997b09e294a7cd45ae9d226162a6e",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x64",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:21:50.242664+00:00",
+              "measured_at": "2026-10-30T12:48:40.454244+00:00",
               "metric": "top1-formal-windows-x64",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
-              "baseline": 16,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline": 17,
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "872fb994a36a310b3ae49200aa595653dac203267e48887361dc5260846d4743",
+              "configuration_sha256": "9a5efe47a8870a8c157502753ba6907d072b898008fc693197b284cc374967ea",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:33.817591+00:00",
+              "measured_at": "2026-10-30T12:53:17.868818+00:00",
               "metric": "top1-chat-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
             },
             {
               "baseline": 18,
-              "baseline_model_id": "bundle-230a2f3d54e14aeb0ba194d2e42323b6b7a74eb5fc992a8b76e27577de36abe0",
+              "baseline_model_id": "bundle-73cd3a986c5acdfd1d8d9031974b8014d6bb4a0e95646f0e4d6feffa4c8e0cb0",
               "candidate": 17,
-              "configuration_sha256": "797747a136b23468d50e41d70c05256d0549a8642054073d04461298a110ecc8",
+              "configuration_sha256": "b76a8ccfb09db0042ab1489b8a545a03a2f1008a4b5431c29f3c5c502fcdd148",
               "context": "Same Windows native core, public20, supplied left context, no learning; windows-x86",
               "dataset_id": "windows-public20-v1",
               "dataset_sha256": "4046be89090839045cd31061ea7880f3ac02b6e02c23b7d87d5b17777cfdf523",
-              "measured_at": "2026-10-30T07:30:33.817591+00:00",
+              "measured_at": "2026-10-30T12:53:17.868818+00:00",
               "metric": "top1-formal-windows-x86",
               "sample_count": 20,
               "unit": "sentences"
@@ -2700,7 +3013,7 @@
           "title": "效能尚未比較"
         }
       ],
-      "advisory_revision": "df70f4109959687eebace51abd2a3e70cf920cc1143d1537a96ee9e08bbbb505",
+      "advisory_revision": "f97c2a500f58acb6ec63ab019097102906b268a3d59a20796fa90cf292ebf502",
       "assets": [
         {
           "filename": "bigram.sjlm",
@@ -2727,18 +3040,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-10-30T07:21:50.242664+00:00",
+          "checked_at": "2026-10-30T12:48:40.454244+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/571cdf377c4f2f2ac3882f36d797a296e0a09c0cd6b1bee5f64f00bf082a15c1.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/23eacece6e08d806fa665849a75b4701381b154d366dc731c041c33a08af58ff.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-10-30T07:30:33.817591+00:00",
+          "checked_at": "2026-10-30T12:53:17.868818+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/e1b687d31cf5a63329d181df0b4a12bec6e3284e30e93c9a96729b51a771453f.json",
-          "source_commit": "fb634b2dd5f8982283a8fefee759a2c6b3cd7691",
+          "report": "reports/850702ea8a45d416b7a2d655d4dfa8e2de93cb49b27a7bd09e4c3d7a56387a71.json",
+          "source_commit": "2b4049d8f4db0660bcc56154e3b486b6c6a7e3be",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2752,5 +3065,5 @@
       ]
     }
   ],
-  "revision": "ebfeaf62ac2cf56f1bbfb5de0d6fb13d61b70d93622732cd9a9b127e9e4af20f"
+  "revision": "b27861bc3de940a64d357f0884f19628c7ba503eeab23d8efb72be6ae898c664"
 }
