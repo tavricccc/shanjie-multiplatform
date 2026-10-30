@@ -89,7 +89,13 @@ fn run() -> Result<()> {
     }
     // Validate the initiating account before touching its model folder, including
     // when install.cmd was launched directly with an elevated token.
-    if args.iter().any(|a|a=="install") {shanjie_windows::model_store::migrate_before_install()?;}
+    if args.iter().any(|a|a=="install") {
+        shanjie_windows::model_store::migrate_before_install()?;
+        // Only tidies the file; the core migrates on every read, so a failure here must not stop the install.
+        let profile=shanjie_windows::profile::path();
+        if let Err(error)=shanjie_windows::profile::upgrade_file(&profile) {eprintln!("設定檔未改寫成新格式：{error}");}
+        if let Err(error)=shanjie_windows::model_store::retire_unsupported(&profile) {eprintln!("未能檢查所選模型：{error}");}
+    }
     let explicit = if let Some(at) = args.iter().position(|value| value == "--keyboard") {
         Some(match args.get(at + 1).map(String::as_str) {
             Some("standard") => 1,

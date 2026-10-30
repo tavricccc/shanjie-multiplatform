@@ -140,6 +140,26 @@ pub fn save(path: &Path, text: &str) -> Result<()> {
     write_profile(path, text)?;
     if path == self::path() { notify(CHANGED_MESSAGE) } else { Ok(()) }
 }
+/// Installing a new version writes an older profile in the current schema, with the usual backup, so the
+/// file names what the core already uses. Nothing is broadcast: the new DLLs read it as they load.
+pub fn upgrade_file(path: &Path) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let _guard = crate::word_store::lock(path)?;
+    let original = fs::read_to_string(path)?;
+    if Document::parse(&original)?.number("profile", "schema", 1) >= SCHEMA {
+        return Ok(());
+    }
+    write_profile(path, &original)
+}
+/// Changes only the chosen model, keeping every other saved value.
+pub fn set_model(path: &Path, id: &str) -> Result<()> {
+    let _guard = crate::word_store::lock(path)?;
+    let mut doc = load(path)?;
+    doc.set("engine", "model_id", id);
+    write_profile(path, &doc.content())
+}
 pub fn restart() -> Result<()> {
     notify(RESTART_MESSAGE)
 }
@@ -240,6 +260,23 @@ mod tests {
         fs::write(&path, "[profile]\nschema=5\n").unwrap();
         write_profile(&path, &draft.content()).unwrap();
         assert_eq!(fs::read_to_string(&backup).unwrap(), legacy);
+    }
+    #[test]
+    fn install_upgrade_writes_the_current_schema_once() {
+        let path = fixture("install-upgrade");
+        let legacy = "[profile]\nschema=7\ninteraction=windows\n[engine]\nmodel_id=model-v6-classes-v5\n[appearance]\nfont_size=24\n";
+        fs::write(&path, legacy).unwrap();
+        upgrade_file(&path).unwrap();
+        let doc = Document::parse(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(doc.number("profile", "schema", 0), SCHEMA);
+        assert_eq!(doc.model_id(), shanjie_shell::profile::BUILTIN);
+        assert_eq!(doc.number("appearance", "font_size", 0), 24);
+        assert_eq!(fs::read_to_string(path.with_extension("ini.schema7.bak")).unwrap(), legacy);
+        let current = fs::read_to_string(&path).unwrap();
+        upgrade_file(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), current);
+        upgrade_file(&path.with_file_name("missing.ini")).unwrap();
+        assert!(!path.with_file_name("missing.ini").exists());
     }
     #[test]
     fn future_schema_is_not_downgraded_or_overwritten() {

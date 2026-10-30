@@ -59,6 +59,45 @@ pub fn migrate_legacy(data: &Path) -> Result<()> {
     fs::rename(stage, root().join(id))?;
     Ok(())
 }
+/// After an update, a chosen package this version no longer validates is replaced by the built-in set,
+/// and `model-retired.txt` beside the profile names it for the settings to show once. A package that
+/// still validates stays chosen; the settings point out the new built-in set instead.
+pub fn retire_unsupported(profile: &Path) -> Result<()> {
+    retire_unless(profile, |id| scan().iter().any(|m| m.spec.id == id))
+}
+fn retire_unless(profile: &Path, usable: impl Fn(&str) -> bool) -> Result<()> {
+    if !profile.exists() {
+        return Ok(());
+    }
+    let id = crate::profile::load(profile)?.model_id();
+    if id == BUILTIN || usable(&id) {
+        return Ok(());
+    }
+    crate::profile::set_model(profile, BUILTIN)?;
+    fs::write(profile.with_file_name("model-retired.txt"), id)?;
+    Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn only_a_package_this_version_cannot_read_is_replaced() {
+        let root = std::env::temp_dir().join(format!("shanjie-retire-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let profile = root.join("profile.ini");
+        let saved = "[profile]\nschema=8\n[engine]\nmodel_id=model-v5-classes-v3\n[appearance]\nfont_size=24\n";
+        fs::write(&profile, saved).unwrap();
+        retire_unless(&profile, |_| true).unwrap();
+        assert_eq!(fs::read_to_string(&profile).unwrap(), saved);
+        assert!(!root.join("model-retired.txt").exists());
+        retire_unless(&profile, |_| false).unwrap();
+        let doc = crate::profile::load(&profile).unwrap();
+        assert_eq!(doc.model_id(), BUILTIN);
+        assert_eq!(doc.number("appearance", "font_size", 0), 24);
+        assert_eq!(fs::read_to_string(root.join("model-retired.txt")).unwrap(), "model-v5-classes-v3");
+        fs::remove_dir_all(root).unwrap();
+    }
+}
 pub fn migrate_before_install() -> Result<()> {
     let prefs = crate::profile::load(&crate::profile::path())?;
     if prefs.model_id() == "model-v6-classes-v4" {
