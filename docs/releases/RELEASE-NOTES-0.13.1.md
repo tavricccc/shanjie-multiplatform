@@ -27,4 +27,4 @@
 2. 記事本、Win+R、AyuGram、Codex 的雙 Ctrl 加詞：尺寸、層級、讀音鍵、滑鼠取消、Esc、重開及來源失焦。
 3. 有多螢幕時跨 DPI 移動與畫面邊緣；重新登入後預載與個人詞庫／學習沿用。
 
-Excel 儲存格反白取詞依既定範圍不處理。建置與隔離測試證據、實機驗收界線見 [驗證紀錄](VERIFICATION-0.13.1.md)。
+Excel 儲存格反白取詞依既定範圍不處理。建置與隔離測試證據、實機驗收界線見 [驗證紀錄](https://github.com/tavricccc/shanjie-multiplatform/blob/867f147/docs/releases/VERIFICATION-0.13.1.md)。

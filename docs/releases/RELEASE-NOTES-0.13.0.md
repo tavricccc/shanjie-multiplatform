@@ -15,7 +15,7 @@
 
 - 安裝包繼續只內建 model-v6＋classes-v5；其他配套由使用者自行選擇下載。這次沒有把個人詞庫或學習資料放進內建資料、模型或發行包，更新繼續沿用原個人資料。
 - 0.12.2 繼續使用原有 format:1 清單；需要新能力及備註介面的配套由 0.13.0 的 format:2 端點提供，避免舊程式忽略新配套或備註。
-- 已進行兩架構編譯、隔離輸入回歸、模型原生探測、故障測試及自建唯讀／密碼／取消視窗測試。完整證據與實機待驗範圍見 [驗證紀錄](https://github.com/tavricccc/shanjie-multiplatform/blob/main/docs/releases/VERIFICATION-0.13.0.md)。
+- 已進行兩架構編譯、隔離輸入回歸、模型原生探測、故障測試及自建唯讀／密碼／取消視窗測試。完整證據與實機待驗範圍見 [驗證紀錄](https://github.com/tavricccc/shanjie-multiplatform/blob/867f147/docs/releases/VERIFICATION-0.13.0.md)。
 - **尚未在使用者電腦安裝本版，也尚未驗收 Codex 回覆區、一般瀏覽器、Win+R 等真正宿主的新版取詞、登入後單例及多螢幕 DPI。** 支援選取介面是取詞前提，不能保證所有唯讀畫面均可使用。
 - 本次為 Windows pre-release；Linux 程式未加入本版 Windows 輔助程式與設定介面功能。
 
