@@ -2,7 +2,7 @@
 
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 與 Linux 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，並加了一些我們想要的功能，例如微軟注音鍵位、中英混打、雙 Ctrl 加詞、線上模型管理。
 
-- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.13.1**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
+- **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前為測試版 **0.14.0**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
 - **Linux**：Fedora GNOME 上的 IBus 輸入法，最後測試版 **0.12.1**，已停止維護。
 - **上游**：使用善解 v0.6.0 的核心、詞庫與整組模型。
 
