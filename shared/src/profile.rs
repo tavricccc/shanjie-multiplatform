@@ -1,15 +1,50 @@
 use std::collections::BTreeMap;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const SCHEMA: u32 = 7;
+pub const SCHEMA: u32 = 8;
 
-pub const BUILTIN: &str = "model-v6-classes-v5";
+/// The model bundle the package ships: always upstream's current released set, whatever it is called.
+pub const BUILTIN: &str = "builtin";
+/// What the built-in bundle was called before schema 8, when its id named the model.
+const OLD_BUILTIN: &str = "model-v6-classes-v5";
+/// `[engine] rerank_level`, in the order of the core's level codes.
+pub const RERANK_LEVELS: [&str; 3] = ["conservative", "standard", "aggressive"];
+/// `[engine] fuzzy_*`, in the order of shanjie_engine_set_fuzzy's bits.
+pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"];
+/// Settings that change how the core is built: a change to any of them opens a new engine.
+pub const REBUILD: [(&str, &str); 23] = [
+    ("input", "keyboard"),
+    ("engine", "ranking"),
+    ("engine", "model_id"),
+    ("engine", "model_revision"),
+    ("engine", "acg_pack"),
+    ("engine", "it_pack"),
+    ("engine", "rerank"),
+    ("engine", "rerank_level"),
+    ("engine", FUZZY_KEYS[0]),
+    ("engine", FUZZY_KEYS[1]),
+    ("engine", FUZZY_KEYS[2]),
+    ("engine", FUZZY_KEYS[3]),
+    ("engine", FUZZY_KEYS[4]),
+    ("input", "english_key_order"),
+    ("candidates", "anchor"),
+    ("input", "learning"),
+    ("candidates", "big5"),
+    ("input", "dictionary"),
+    ("input", "context"),
+    ("input", "mixed_input"),
+    ("input", "upstream_english"),
+    ("input", "english_inline"),
+    ("input", "space_inputs_zhuyin"),
+];
 
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
-    pub fn model_id(&self)->String {self.get("engine","model_id",if self.class_table()==4 {"model-v6-classes-v4"}else{BUILTIN}).to_owned()}
-    pub fn class_table(&self) -> u32 { if self.number("engine","class_table",5)==4 {4} else {5} }
+    pub fn model_id(&self) -> String { self.get("engine", "model_id", BUILTIN).to_owned() }
+    pub fn fuzzy(&self) -> u32 {
+        FUZZY_KEYS.iter().enumerate().fold(0, |flags, (bit, key)| flags | (self.flag("engine", key, false) as u32) << bit)
+    }
     pub fn parse(text: &str) -> Result<Self> {
         let mut out = Self::default();
         let mut section = String::new();
@@ -144,7 +179,18 @@ impl Document {
         }
         // Missing values in older profiles preserve their pre-update behavior.
         if schema<7 && self.get("candidates","enter_to_cursor","").is_empty(){self.set("candidates","enter_to_cursor",0);}
-        if self.get("engine","model_id","").is_empty(){let id=self.model_id();self.set("engine","model_id",id);}
+        if schema < 8 {
+            // The class table switch chose between two built-in pairs; the old v4 pair lives on as a user package.
+            let id = match self.get("engine", "model_id", "") {
+                "" if self.get("engine", "class_table", "") == "4" => "model-v6-classes-v4",
+                "" | OLD_BUILTIN => BUILTIN,
+                id => id,
+            }
+            .to_owned();
+            self.set("engine", "model_id", id);
+            self.remove("engine", "class_table");
+            self.remove("engine", "model");
+        }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
         } else {
@@ -157,7 +203,6 @@ impl Document {
             }
         }
         self.set("profile", "schema", SCHEMA);
-        self.set("engine", "model", 5);
         if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
             self.set("candidates", "layout", "horizontal");
         }
@@ -247,7 +292,7 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "demote", "acg_pack", "class_table", "model_id", "model_revision"]),
+    ("engine", &["ranking", "demote", "acg_pack", "it_pack", "model_id", "model_revision"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width"],
@@ -255,15 +300,17 @@ const PERSONAL: [(&str, &[&str]); 4] = [
     ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator"]),
 ];
-const CHOICES: [(&str, &str, &[&str]); 6] = [
+const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("profile", "interaction", &["windows", "shanjie"]),
     ("engine", "ranking", &["chat", "formal"]),
+    ("engine", "rerank_level", &RERANK_LEVELS),
     ("input", "escape", &["staged", "clear", "ignore"]),
     ("candidates", "layout", &["horizontal", "vertical"]),
     ("candidates", "anchor", &["right", "left"]),
     ("candidates", "open", &["down", "space", "both"]),
 ];
-fn merge_preset(previous: &Document, mut preset: Document) -> String {
+/// A preset over the current profile: the personal keys stay the user's.
+pub fn merge_preset(previous: &Document, mut preset: Document) -> String {
     for (section, keys) in PERSONAL {
         for key in keys {
             match previous.0.get(section).and_then(|s| s.get(*key)) {
@@ -342,6 +389,11 @@ mod tests {
     fn model_selection_and_enter_migration_preserve_explicit_choices() {
         let mut old=super::Document::parse("[profile]\nschema=6\ninteraction=windows\n[engine]\nclass_table=4\n").unwrap();
         old.migrate();assert!(!old.flag("candidates","enter_to_cursor",true));assert_eq!(old.model_id(),"model-v6-classes-v4");
+        assert!(!old.0["engine"].contains_key("class_table"));
+        for builtin in ["", "model_id=model-v6-classes-v5\n"] {
+            let mut doc=super::Document::parse(&format!("[profile]\nschema=7\n[engine]\n{builtin}")).unwrap();
+            doc.migrate();assert_eq!(doc.model_id(),super::BUILTIN,"the old built-in follows the package");
+        }
         old.set("candidates","enter_to_cursor",1);old.set("engine","model_id","model-v5-classes-v3");old.migrate();
         assert!(old.flag("candidates","enter_to_cursor",false));
         let preset=super::preset(&old.content(),true).unwrap();
@@ -442,7 +494,7 @@ mod tests {
         doc.set("input", "smart_zhuyin", 1);
         doc.migrate();
         assert!(!doc.0["input"].contains_key("smart_zhuyin"));
-        assert_eq!(doc.number("engine", "model", 0), 5);
+        assert!(!doc.0["engine"].contains_key("model"));
         assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
         assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");
         assert!(doc.flag("input", "learning", false));
