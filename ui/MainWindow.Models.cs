@@ -52,12 +52,25 @@ public sealed partial class MainWindow
             modelIssues=string.Join("\n",inventory.Issues);if(modelIssues.Length>0){Vm.Status="未列入模型：\n"+modelIssues;ShowLoadFeedback();}
         }
     }
+    /// Every time the settings open: an older package still chosen points to the new built-in set; once after
+    /// an update: the package it could no longer read was replaced (model-retired.txt, written by the installer).
+    internal void ShowModelNotice()
+    {
+        string note=Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!,"model-retired.txt"),notice="";
+        try{if(File.Exists(note)){notice=$"這版不再支援先前選用的模型「{File.ReadAllText(note).Trim()}」，已改用內建的{ModelCatalog.BuiltinName}。";File.Delete(note);}}
+        catch(Exception error)when(error is IOException or UnauthorizedAccessException){}
+        var chosen=Vm.AvailableModels.FirstOrDefault(m=>m.Id==Vm.ModelId);
+        if(notice.Length==0&&chosen is not null&&chosen.Id!=ModelCatalog.Builtin)
+            notice=$"目前使用「{chosen.Name}」。內建模型已是{ModelCatalog.BuiltinName}；要改用，在「模型配置」選內建後儲存。";
+        if(notice.Length==0)return;
+        Vm.Status=string.IsNullOrWhiteSpace(Vm.Status)?notice:Vm.Status+"\n"+notice;ShowLoadFeedback();
+    }
     private async void InitializeModels(object sender,RoutedEventArgs args)
     {
         Root.Loaded-=InitializeModels;
         try
         {
-            await RefreshModels();Directory.CreateDirectory(ModelCatalog.Folder);
+            await RefreshModels();ShowModelNotice();Directory.CreateDirectory(ModelCatalog.Folder);
             modelWatcher=new(ModelCatalog.Folder,"*"){IncludeSubdirectories=true,EnableRaisingEvents=true};
             modelWatcher.Changed+=ModelsChanged;modelWatcher.Created+=ModelsChanged;modelWatcher.Deleted+=ModelsChanged;
             modelWatcher.Renamed+=ModelsChanged;

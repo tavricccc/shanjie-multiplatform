@@ -45,6 +45,11 @@ internal static class VisualVerifier
         if (settings.Vm.ModelId != b.Id || !settings.Vm.ModelHelp.Contains("不存在")) throw new InvalidDataException("Missing model lost the draft or its fallback notice");
         settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Model listed again");
         if (!File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved)) throw new InvalidDataException("Rescans saved the profile");
+        settings.Vm.Status = ""; settings.ShowModelNotice();
+        if (!settings.Vm.Status.Contains("目前使用「" + b.Name)) throw new InvalidDataException("An older chosen model did not point to the built-in set");
+        string note = Path.Combine(Path.GetDirectoryName(Models.ProfileStore.Path)!, "model-retired.txt");
+        File.WriteAllText(note, "model-v5-classes-v3"); settings.Vm.Status = ""; settings.ShowModelNotice();
+        if (!settings.Vm.Status.Contains("不再支援先前選用的模型「model-v5-classes-v3」") || File.Exists(note)) throw new InvalidDataException("Retired model notice was not shown once");
         settings.Vm.RefreshModels(installed.Where(m => m.Id != Models.ModelCatalog.Builtin)); settings.Vm.Load();
     }
     private static void VerifyCatalogText()
