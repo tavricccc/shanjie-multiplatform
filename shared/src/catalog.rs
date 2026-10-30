@@ -6,7 +6,9 @@ use std::collections::{BTreeSet,BTreeMap};
 pub type Result<T> = std::result::Result<T,Box<dyn std::error::Error>>;
 pub const PROFILE:&str="windows-bundle-v1";
 pub const CAPABILITIES:&[&str]=&["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2",
-    "kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4"];
+    "kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","colloquial.sjlm1"];
+/// Roles bound to the main model's hash (their headers carry it), so they must declare it.
+const PAIRED:&[&str]=&["classes","smoothing","trigram","trigram-chat","semantic"];
 #[derive(Clone,Debug,Serialize,Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
@@ -56,10 +58,13 @@ pub fn safe_name(s:&str,max:usize)->bool {
 fn fail<T>(s:&str)->Result<T>{Err(s.into())}
 pub fn asset_capability(a:&Asset)->Result<Option<&'static str>> {
     let cap=match (a.role.as_str(),a.format_magic.as_str(),a.filename.as_str()) {
-        ("bigram","SJLM0001","bigram.sjlm"|"colloquial.sjlm")=>Some("lm.sjlm1"),
+        ("bigram","SJLM0001","bigram.sjlm")=>Some("lm.sjlm1"),
         ("classes","SJCL0001","classes.sjc")=>Some("classes.sjcl1"),
         ("smoothing","SJKN0002","kn.sjkn")=>Some("kn.sjkn2"),
-        ("trigram","SJT30001","trigram.sjt3")=>Some("trigram.sjt30001"),
+        // The formal profile's table and the chat profile's (upstream lm.rs tri_file).
+        ("trigram","SJT30001","trigram.sjt3")|("trigram-chat","SJT30001","trigram-chat.sjt3")=>Some("trigram.sjt30001"),
+        // 常談: a word-pair table the rerank reads beside the small model, not a main model.
+        ("colloquial","SJLM0001","colloquial.sjlm")=>Some("colloquial.sjlm1"),
         ("semantic","SJTL0001","tinylm.sjtl")=>Some("semantic.sjtl1"),
         ("semantic","SJTL0002","tinylm.sjtl")=>Some("semantic.sjtl2"),
         ("semantic","SJTL0003","tinylm.sjtl")=>Some("semantic.sjtl3"),
@@ -85,7 +90,8 @@ pub fn validate(m:&Model)->Result<()> {
     if !roles.contains("bigram"){return fail("缺少主模型。");}
     let main=m.assets.iter().find(|a|a.role=="bigram").unwrap();
     for a in &m.assets {
-        if ["classes","smoothing","trigram","semantic"].contains(&a.role.as_str())&&!a.requires_assets.contains(&main.sha256){return fail("附加模型未聲明主模型依賴。");}
+        if PAIRED.contains(&a.role.as_str())&&!a.requires_assets.contains(&main.sha256){return fail("附加模型未聲明主模型依賴。");}
+        if a.role=="colloquial"&&!roles.contains("semantic"){return fail("口語詞頻表只用於語意校正，需與語意模型同組。");}
         if a.role=="semantic" {
             if let Some(kn)=m.assets.iter().find(|a|a.role=="smoothing"){
                 if !a.requires_assets.contains(&kn.sha256){return fail("語意模型未聲明平滑模型依賴。");}
