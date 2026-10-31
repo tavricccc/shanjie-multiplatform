@@ -1,0 +1,26 @@
+{
+  "asset_hashes": [
+    "e3fb60561ea0c9a1908e8c4fc2cd8c28c36ffacd015ba45c17223a046148eb5a",
+    "4c1071f2d6fb609c47724ddb1aace69f9b458c2cc69026ea9fe4d4b749a8ff43"
+  ],
+  "checked_at": "2026-10-31T07:09:16.068807+00:00",
+  "evaluation": {
+    "chat": 15,
+    "formal": 17,
+    "sample_count": 20,
+    "state": "evaluated"
+  },
+  "id": "bundle-6d3ca263df05919f9ad00af75425bfa2adc228c734eea456c3524376609852d9",
+  "profile_id": "windows-bundle-v1",
+  "source_commit": "45472f0b3c5adc2c10ee032b9526e4da99992f75",
+  "state": "usable",
+  "target": "windows-x64",
+  "technical": {
+    "background_reranks_applied": 0,
+    "mapped_equivalent": true,
+    "native_input_and_commit": true,
+    "semantic_jobs_run": 0,
+    "source_and_side_pairs_checked": true,
+    "usable": true
+  }
+}
