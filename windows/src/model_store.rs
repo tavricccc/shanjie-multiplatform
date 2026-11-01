@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     #[test]
     fn only_a_package_this_version_cannot_read_is_replaced() {
-        let root = std::env::temp_dir().join(format!("shanjie-retire-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("shanjie-model-retire-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let profile = root.join("profile.ini");
         let saved = "[profile]\nschema=8\n[engine]\nmodel_id=model-v5-classes-v3\n[appearance]\nfont_size=24\n";
