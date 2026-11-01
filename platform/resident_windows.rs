@@ -35,7 +35,7 @@ fn resource_stamp(
         paths.push(digits);
     }
     // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
-    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_IT, "it-add.tsv")] {
+    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_QUOTES, "quotes-add.tsv"), (PACK_IT, "it-add.tsv")] {
         let pack = data.join("packs").join(name);
         if packs & flag != 0 && pack.is_file() {
             paths.push(pack);

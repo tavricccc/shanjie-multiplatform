@@ -13,9 +13,7 @@ mod windows_smart_tests {
     #[test]
     fn upstream_english_preserves_windows_caps_and_shift_display() {
         let mut e=engine();e.set_mixed_input(false);
-        let folder=std::env::temp_dir().join(format!("shanjie-caps-{}",std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();let path=folder.join("english.txt");
-        std::fs::write(&path,"hello\nrust\n").unwrap();e.load_english(&path).unwrap();e.set_upstream_english(true,true).unwrap();
+        e.set_upstream_english(true,true,true,true).unwrap();
         for ch in "rust".chars(){e.key_with_latin(Key::ch(ch,0),Some(ch.to_ascii_uppercase())).unwrap();}
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"RUST");
         let out=e.key_with_latin(Key::ch('r',MOD_SHIFT),Some('r')).unwrap();
@@ -24,28 +22,25 @@ mod windows_smart_tests {
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"rU");
         for ch in "su".chars(){e.key_with_latin(Key::ch(ch,0),Some(ch.to_ascii_uppercase())).unwrap();}
         e.key(Key::ch('3',0)).unwrap();assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"你");
-        e.layout=Layout::Eten;e.set_mixed_input(true);e.set_upstream_english(true,true).unwrap();
+        e.layout=Layout::Eten;e.set_mixed_input(true);e.set_upstream_english(true,true,true,true).unwrap();
         assert!(!e.english&&e.mixed_input,"unsupported upstream English never disables Eten Windows mixed input");
     }
     #[test]
     fn symbols_kept_behind_a_reading_stay_before_an_english_run() {
         let mut e=engine();e.set_mixed_input(false);
-        let folder=std::env::temp_dir().join(format!("shanjie-run-order-{}",std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();let path=folder.join("english.txt");
-        std::fs::write(&path,"hello\n").unwrap();e.load_english(&path).unwrap();e.set_upstream_english(true,true).unwrap();
+        e.set_upstream_english(true,true,true,true).unwrap();
         e.set_windows_input_options(1 << 22);
         e.key(Key::ch('s',0)).unwrap();
         assert_eq!(e.key(Key::ch('\\',MOD_CONTROL)).unwrap().preedit,"ㄋ、","the kept unfinished reading");
         assert_eq!(e.key(Key::ch('a',MOD_SHIFT)).unwrap().preedit,"、A");
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"、A");
-        std::fs::remove_dir_all(&folder).ok();
     }
     #[test]
     fn incomplete_reading_keeps_unconvertible_tone_digits() {
         let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄐㄧˇ 己 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
         for english in [false,true] {
             let mut e=Engine::with_lexicon(lex.clone(),Layout::Standard);
-            e.set_mixed_input(true);e.set_upstream_english(english,true).unwrap();
+            e.set_mixed_input(true);e.set_upstream_english(english,true,true,true).unwrap();
             for digits in ["13","14","16","17","13467","1234567890",
                 "r3","r4","r6","r7","r3467","q3","w3","e3","s3","d3","f3","a3","z3","x3","c3","v3","r3a"] {
                 assert_eq!(type_keys(&mut e,digits).preedit,digits,"english={english}");
@@ -143,21 +138,14 @@ mod windows_smart_tests {
     #[test]
     fn upstream_english_runs_beside_the_windows_policy() {
         let mut e = engine();
-        let dir = std::env::temp_dir().join("shanjie-upstream-english-test");
-        std::fs::create_dir_all(&dir).unwrap();
-        let list = dir.join("english.txt");
-        std::fs::write(&list, "rust
-hello
-").unwrap();
-        e.load_english(&list).unwrap();
-        e.set_upstream_english(true, true).unwrap();
+        e.set_upstream_english(true, true, true, true).unwrap();
         assert!(e.mixed_input && e.english, "both stay on");
         // Shift+letter starts upstream's English run; the Windows raw state stays out of it.
         let out = e.key(Key::ch('r', MOD_SHIFT)).unwrap();
         assert_eq!(out.english_run_utf16_len, 1);
         assert!(e.mixed_raw.is_empty());
-        // While the run is open upstream owns punctuation: it ends the run into a token.
-        let out = e.key(Key::ch(',', 0)).unwrap();
+        // While the run is open upstream owns punctuation: a non-Zhuyin mark ends the run into a token.
+        let out = e.key(Key::ch('[', 0)).unwrap();
         assert_eq!(out.english_run_utf16_len, 0);
         e.reset(ResetMode::Discard);
         // Idle again, the Windows policy maps the symbol as before.
@@ -167,7 +155,7 @@ hello
         assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
         e.reset(ResetMode::Discard);
         // Switching upstream off leaves only the Windows policy.
-        e.set_upstream_english(false, true).unwrap();
+        e.set_upstream_english(false, true, true, true).unwrap();
         assert!(!e.english && e.mixed_input);
         assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
     }
@@ -241,19 +229,19 @@ impl Engine {
         }
         if choices.len() == 1 { choices.into_iter().next() } else { None }
     }
-    /// Upstream English (zhen-mixed/zhen-inline) runs beside the Windows mixed policy. `on` needs
-    /// `load_english` for the word list; `inline` shows the typed letters instead of Zhuyin.
-    pub fn set_upstream_english(&mut self, on: bool, inline: bool) -> Result<(), EngineError> {
+    /// Upstream English (zhen-revert/zhen-reapply) runs beside the Windows mixed policy: the three
+    /// revert triggers and the reversal guard are upstream's switches.
+    pub fn set_upstream_english(&mut self, on: bool, overwrite: bool, key_order: bool, guard: bool) -> Result<(), EngineError> {
         // Upstream's English composer supports Standard; Eten keeps Windows mixed input.
         let on=on && self.layout==Layout::Standard;
         self.set_english(on)?;
-        self.set_english_inline(inline)?;
+        self.set_english_overwrite(overwrite)?;
+        self.set_english_key_order(key_order)?;
+        self.set_english_reversal_guard(guard)?;
         Ok(())
     }
     fn upstream_english_busy(&self) -> bool {
-        !self.run.is_empty()
-            || self.cands.as_ref().is_some_and(|c| c.english)
-            || self.english_inline_shown()
+        !self.run.is_empty() || self.cands.as_ref().is_some_and(|c| c.short.is_some() || c.zh.is_some())
     }
     pub fn is_mixed_hint(&self) -> bool {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()

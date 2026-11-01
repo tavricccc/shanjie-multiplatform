@@ -11,10 +11,9 @@ function Replace-SmartContract([string]$old,[string]$new) {
 Replace-SmartContract '    abbr: bool,' "    abbr: bool,`n    mixed_input: bool,`n    mixed_raw: String,`n    mixed_latin: bool,`n    mixed_display_char: Option<char>,"
 Replace-SmartContract '            abbr: false,' "            abbr: false,`n            mixed_input: false,`n            mixed_raw: String::new(),`n            mixed_latin: false,`n            mixed_display_char: None,"
 Replace-SmartContract '    pub fn key(&mut self, k: Key) -> Result<Output, EngineError> {' '    fn key_original(&mut self, k: Key) -> Result<Output, EngineError> {'
-Replace-SmartContract '        self.shadow.push(ch);' '        self.shadow.push(self.mixed_display_char.unwrap_or(ch));'
-Replace-SmartContract '        words.binary_search_by(|x| (**x).cmp(w)).is_ok()' '        let lower=w.to_ascii_lowercase(); words.binary_search_by(|x| (**x).cmp(lower.as_str())).is_ok()'
-Replace-SmartContract '        let i = words.partition_point(|w| **w < *prefix);' '        let lower=prefix.to_ascii_lowercase(); let prefix=lower.as_str(); let i = words.partition_point(|w| **w < *prefix);'
-Replace-SmartContract 'self.shadow.iter().all(char::is_ascii_lowercase)' 'self.shadow.iter().all(char::is_ascii_alphabetic)'
+Replace-SmartContract '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, ch));' '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, self.mixed_display_char.unwrap_or(ch)));'
+Replace-SmartContract 'return self.revert_keys(Revert::Overwrite, k.ch, col, sym);' 'return self.revert_keys(Revert::Overwrite, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
+Replace-SmartContract 'return self.revert_keys(Revert::Order, k.ch, col, sym);' 'return self.revert_keys(Revert::Order, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
 Replace-SmartContract "        self.invalidate();`n        self.left.clear();" "        self.invalidate();`n        self.mixed_raw.clear();`n        self.mixed_latin = false;`n        self.left.clear();"
 Replace-SmartContract "        } else {`n            self.pending()`n        };" "        } else if self.mixed_input && !self.mixed_raw.is_empty() {`n            self.mixed_raw.clone()`n        } else {`n            self.pending()`n        };"
 Replace-SmartContract '        text.push_str(&unfinished);' '        text.push_str(&unfinished); text.push_str(&self.pending_literal);'
@@ -31,7 +30,7 @@ Replace-SmartContract '        self.syls.splice(start..end, reading);' "        
 Replace-SmartContract '    fn choose(&mut self, idx: usize) -> Result<(), EngineError> {' "    fn choose(&mut self, idx: usize) -> Result<(), EngineError> {`n        if self.choose_windows_literal(idx)? { return Ok(()); }"
 Replace-SmartContract '    fn forget_highlighted(&mut self) -> Result<(), EngineError> {' "    fn forget_highlighted(&mut self) -> Result<(), EngineError> {`n        if self.cands.as_ref().is_some_and(|c| c.literals.contains_key(&c.sel)) { return Ok(()); }"
 Replace-SmartContract '    list: Vec<(String, usize)>,' "    list: Vec<(String, usize)>,`n    literals: HashMap<usize,WindowsLiteralCandidate>,"
-Replace-SmartContract 'Cands { list, sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, alt: HashMap::new(), zh: None, rows: Vec::new(), dalt: None }' 'Cands { list, literals: HashMap::new(), sel: 0, expanded: false, top: 0, vertical, first: 0, english: false, alt: HashMap::new(), zh: None, rows: Vec::new(), dalt: None }'
+Replace-SmartContract 'Cands { list, sel: 0, expanded: false, top: 0, vertical, first: 0, short: None, alt: HashMap::new(), zh: None, rows: Vec::new(), dalt: None }' 'Cands { list, literals: HashMap::new(), sel: 0, expanded: false, top: 0, vertical, first: 0, short: None, alt: HashMap::new(), zh: None, rows: Vec::new(), dalt: None }'
 Set-Content $file $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-english.ps1" | Out-Null
 Copy-Item "$root/build/english-words.txt" "$CorePath/src/english-words.txt" -Force
