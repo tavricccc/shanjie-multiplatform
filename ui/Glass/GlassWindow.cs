@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Content;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Hosting;
@@ -47,6 +48,7 @@ internal sealed partial class GlassWindow : IDisposable
     internal GlassWindow(FrameworkElement content, string title, double width, double height, bool resizable)
     {
         this.content = content; this.resizable = resizable; minWidth = width; minHeight = height;
+        if (Font is { } font && content is Microsoft.UI.Xaml.Controls.Control control) control.FontFamily = font;
         proc = WindowProc;
         var module = GetModuleHandleW(null);
         var wc = new WndClass { Size = (uint)Marshal.SizeOf<WndClass>(), Proc = proc, Instance = module, Name = className, Icon = LoadIconW(module, 32512), Cursor = LoadCursorW(0, 32512) };
@@ -165,12 +167,53 @@ internal sealed partial class GlassWindow : IDisposable
 
     internal void Minimize(bool animate) { if (animate && revealed && Speed > 0) Minimize(); else ShowWindow(Handle, 6); }
 
-    /// <summary>Starts a window drag from a pointer press on the title area.</summary>
-    internal void BeginDrag()
+    /// <summary>Noto Sans when installed (looked up by <c>font.rs</c>), otherwise null for the system default.</summary>
+    internal static FontFamily? Font { get; } = LoadFont();
+    static FontFamily? LoadFont()
     {
-        ReleaseCapture();
-        SendMessageW(Handle, 0xA1, 2, 0); // WM_NCLBUTTONDOWN, HTCAPTION
+        try { return Marshal.PtrToStringUTF8(sj_ui_font()) is { Length: > 0 } name ? new FontFamily(name) : null; }
+        catch (Exception) { return null; }
     }
+
+    FrameworkElement[] captions = [];
+    RectInt32[] captionRects = [], passRects = [];
+    /// <summary>Areas that move the window when dragged, handled by the system like a title bar so the window follows
+    /// the pointer without the XAML thread in the loop; buttons inside them stay clickable.</summary>
+    internal void SetCaption(params FrameworkElement[] areas)
+    {
+        captions = areas;
+        foreach (var area in areas) area.SizeChanged += (_, _) => UpdateCaption();
+        content.Loaded += (_, _) => UpdateCaption();
+    }
+
+    void UpdateCaption()
+    {
+        if (disposed || content.XamlRoot is null) return;
+        double scale = content.XamlRoot.RasterizationScale;
+        RectInt32 Bounds(FrameworkElement e)
+        {
+            var p = e.TransformToVisual(null).TransformPoint(default);
+            return new((int)Math.Round(p.X * scale), (int)Math.Round(p.Y * scale), (int)Math.Round(e.ActualWidth * scale), (int)Math.Round(e.ActualHeight * scale));
+        }
+        static IEnumerable<FrameworkElement> Buttons(DependencyObject parent)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button) yield return button;
+                else foreach (var inner in Buttons(child)) yield return inner;
+            }
+        }
+        var shown = captions.Where(e => e.Visibility == Visibility.Visible && e.ActualWidth > 0).ToArray();
+        captionRects = [.. shown.Select(Bounds)];
+        passRects = [.. shown.SelectMany(Buttons).Where(b => b.Visibility == Visibility.Visible).Select(Bounds)];
+        var source = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+        source.SetRegionRects(NonClientRegionKind.Caption, captionRects);
+        source.SetRegionRects(NonClientRegionKind.Passthrough, passRects);
+    }
+
+    static bool Inside(RectInt32[] rects, int x, int y) => rects.Any(r => x >= r.X && x < r.X + r.Width && y >= r.Y && y < r.Y + r.Height);
+    bool Caption(int x, int y) => Inside(captionRects, x, y) && !Inside(passRects, x, y);
 
     void Cloak(bool on) { int v = on ? 1 : 0; DwmSetWindowAttribute(Handle, 13, ref v, 4); sj_glass_cloak(glass, on); }
 
@@ -190,14 +233,15 @@ internal sealed partial class GlassWindow : IDisposable
 
     nint HitTest(nint l)
     {
-        if (!resizable) return 1;
         int x = (short)(l & 0xffff), y = (short)((l >> 16) & 0xffff);
         GetWindowRect(Handle, out var r);
+        if (!resizable) return Caption(x - r.Left, y - r.Top) ? 2 : 1; // HTCAPTION
         int edge = (int)(EdgeDip * Dpi);
         bool left = x < r.Left + edge, right = x >= r.Right - edge, top = y < r.Top + edge, bottom = y >= r.Bottom - edge;
         if (top) return left ? 13 : right ? 14 : 12;
         if (bottom) return left ? 16 : right ? 17 : 15;
-        return left ? 10 : right ? 11 : 1;
+        if (left || right) return left ? 10 : 11;
+        return Caption(x - r.Left, y - r.Top) ? 2 : 1;
     }
 
     nint WindowProc(nint h, uint m, nint w, nint l)
@@ -227,6 +271,13 @@ internal sealed partial class GlassWindow : IDisposable
                 }
                 break;
             case 0x10: if (!closing && CanClose()) Close(); return 0; // WM_CLOSE
+            case 0x46 when shown && l != 0: // WM_WINDOWPOSCHANGING: a move takes the glass along in the same frame
+            {
+                var p = Marshal.PtrToStructure<WindowPos>(l);
+                if ((p.Flags & 0x3) == 0x1 && !IsIconic(Handle) && GetWindowRect(Handle, out var r)) // SWP_NOSIZE without SWP_NOMOVE
+                    sj_glass_place(glass, p.X, p.Y, r.Right - r.Left, r.Bottom - r.Top, Dpi, Handle);
+                break;
+            }
             case 0x47: if (!IsIconic(Handle)) Follow(); break; // WM_WINDOWPOSCHANGED
             case 0x05: // WM_SIZE
                 if (w == 1) { iconic = true; sj_glass_state(glass, 0, 0); }
@@ -259,6 +310,7 @@ internal sealed partial class GlassWindow : IDisposable
     struct WndClass { public uint Size, Style; public WndProc Proc; public int ClassExtra, WindowExtra; public nint Instance, Icon, Cursor, Background; public string? Menu; public string Name; public nint SmallIcon; }
     [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] struct WindowPos { public nint Window, After; public int X, Y, Width, Height; public uint Flags; }
     [StructLayout(LayoutKind.Sequential)] struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
     const string Rust = "shanjie_windows.dll";
     [DllImport(Rust)] static extern nint sj_glass_create(nint owner);
@@ -271,6 +323,7 @@ internal sealed partial class GlassWindow : IDisposable
     [DllImport(Rust)] static extern void sj_glass_cloak(nint glass, [MarshalAs(UnmanagedType.I1)] bool on);
     [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_solid();
     [DllImport(Rust)] static extern void sj_glass_free(nint glass);
+    [DllImport(Rust)] static extern nint sj_ui_font();
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern ushort RegisterClassExW(ref WndClass wc);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool UnregisterClassW(string name, nint instance);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern nint CreateWindowExW(uint ex, string cls, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint instance, nint param);
@@ -285,8 +338,6 @@ internal sealed partial class GlassWindow : IDisposable
     [DllImport("user32.dll")] static extern bool IsIconic(nint h);
     [DllImport("user32.dll")] static extern bool ShowWindow(nint h, int command);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(nint h);
-    [DllImport("user32.dll")] static extern bool ReleaseCapture();
-    [DllImport("user32.dll")] static extern nint SendMessageW(nint h, uint m, nint w, nint l);
     [DllImport("user32.dll")] static extern int SetWindowRgn(nint h, nint region, bool redraw);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out Point p);
     [DllImport("user32.dll")] static extern nint MonitorFromPoint(Point p, uint flags);

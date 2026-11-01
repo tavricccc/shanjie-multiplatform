@@ -4,7 +4,12 @@ public partial class App : Application
 {
     private object? window;
     private SettingsInstance? instance;
-    public App() => InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
+        // Pop-ups (drop-downs, tool tips) do not inherit the window's font; they read the theme font.
+        if (Glass.GlassWindow.Font is { } font) Resources["ContentControlThemeFontFamily"] = font;
+    }
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         var arguments = Environment.GetCommandLineArgs();

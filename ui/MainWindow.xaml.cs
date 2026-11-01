@@ -10,6 +10,7 @@ public sealed partial class MainWindow : UserControl
     {
         InitializeComponent(); Bindings.Initialize();
         Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
+        Host.SetCaption(AppTitleBar, Head);
         navHighlight = new Controls.SlidingHighlight(NavLayer, 12); ShowSection(0); ApplyTheme();
         ((FrameworkElement)Nav.Children[0]).SizeChanged += (_, _) => { if (!navPlaced) { navPlaced = true; navHighlight.MoveTo((FrameworkElement)Nav.Children[section], false); } };
         Vm.PropertyChanged += (_, e) => {
@@ -28,7 +29,6 @@ public sealed partial class MainWindow : UserControl
     internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
     internal void Activate() => Host.Activate();
     internal void Close() => Host.Close();
-    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, sender) || args.OriginalSource is TextBlock or Image) Host.BeginDrag(); }
     private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
     private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;

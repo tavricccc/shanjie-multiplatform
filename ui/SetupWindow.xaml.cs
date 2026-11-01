@@ -23,6 +23,7 @@ public sealed partial class SetupWindow : UserControl
         InitializeComponent();
         string title = uninstall ? "解除安裝善解" : "安裝善解";
         Host = new Glass.GlassWindow(this, title, 520, 600, resizable: false); TitleText.Text = title;
+        Host.SetCaption(AppTitleBar);
         Steps.ItemsSource = steps;
         foreach (var (stage, label) in uninstall ? SetupStages.Uninstall : SetupStages.Install) steps.Add(new(stage, label));
         // Closing mid-install would hide the outcome; the manager itself still finishes or rolls back.
@@ -37,7 +38,6 @@ public sealed partial class SetupWindow : UserControl
     internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
     internal void Activate() => Host.Activate();
     internal void Close() => Host.Close();
-    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, AppTitleBar) || ReferenceEquals(args.OriginalSource, TitleText)) Host.BeginDrag(); }
     private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
     private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     internal FrameworkElement CaptureElement => Root;

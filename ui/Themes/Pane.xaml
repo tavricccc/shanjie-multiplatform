@@ -2,7 +2,7 @@
 <!--
   Pane's design tokens and control styles for Shanjie's glass windows: text, stroke and fill colors per theme,
   radii (panel 20, item 12, control 10), control heights (24 / 28 / 32 / 40) and the accent (霧藍).
-  The font is the system default.
+  The font is Noto Sans when installed, otherwise the system default (GlassWindow.Font).
 -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ResourceDictionary.ThemeDictionaries>

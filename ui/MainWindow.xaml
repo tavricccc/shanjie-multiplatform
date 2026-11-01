@@ -6,7 +6,7 @@
         <Border BorderBrush="{ThemeResource PaneStrokeBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,16">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <StackPanel x:Name="AppTitleBar" Orientation="Horizontal" Spacing="10" Padding="8,0,8,16" Background="Transparent" PointerPressed="DragWindow">
+                <StackPanel x:Name="AppTitleBar" Orientation="Horizontal" Spacing="10" Padding="8,0,8,16" Background="Transparent">
                     <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="26" Height="26"/>
                     <TextBlock x:Name="TitleText" Text="善解設定" VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource PaneText1Brush}"/>
                 </StackPanel>
@@ -29,7 +29,7 @@
         </Border>
         <Grid Grid.Column="1">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <Grid x:Name="Head" Padding="24,20,14,12" Background="Transparent" PointerPressed="DragWindow">
+            <Grid x:Name="Head" Padding="24,20,14,12" Background="Transparent">
                 <TextBlock x:Name="SectionTitle" Text="一般" Margin="0,0,72,0" Style="{StaticResource PaneSectionTitle}"/>
                 <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0">
                     <Button Style="{StaticResource PaneIconButton}" Click="MinimizeWindow" ToolTipService.ToolTip="最小化" AutomationProperties.Name="最小化"><controls:Icon Glyph="minus" Width="16" Height="16"/></Button>
