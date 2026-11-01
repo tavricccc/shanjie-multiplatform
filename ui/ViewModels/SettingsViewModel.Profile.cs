@@ -63,7 +63,7 @@ public partial class SettingsViewModel
             BackquoteSymbols = profile.Flag("shortcuts", "backquote_symbols", Interaction == 0); CodeInput = profile.Flag("shortcuts", "code_input", Interaction == 0);
             SymbolKeyboard = profile.Flag("shortcuts", "symbol_keyboard", Interaction == 0); CtrlBackslash = profile.Flag("shortcuts", "ctrl_backslash", Interaction == 1);
             ForgetCandidate = profile.Flag("shortcuts", "forget_candidate", false);
-            Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true);
+            Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true); GlassTint = Math.Clamp(profile.Number("appearance", "glass_tint", 100), 0, 100);
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
             MixedTolerance = profile.Flag("input", "mixed_tolerance", false);
@@ -161,7 +161,7 @@ public partial class SettingsViewModel
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
-            ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator)
+            ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator), ("appearance","glass_tint",(int)GlassTint)
         }) profile.Set(section, key, value);
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);

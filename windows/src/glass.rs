@@ -64,6 +64,13 @@ pub fn solid() -> bool {
         || std::env::var("SHANJIE_FORCE_SOLID").as_deref() == Ok("1")
 }
 
+/// The user's tint strength from the profile (`appearance.glass_tint`, percent), 0 to 1.
+pub fn saved_tint() -> f32 {
+    crate::profile::load(&crate::profile::path())
+        .map(|p| p.number("appearance", "glass_tint", 100).min(100) as f32 / 100.0)
+        .unwrap_or(1.0)
+}
+
 /// Whether apps use the dark theme.
 pub fn dark() -> bool {
     UISettings::new()
@@ -121,6 +128,7 @@ pub struct Glass {
     dpi: f32,
     dark: bool,
     solid: bool,
+    strength: f32,
     shown: bool,
 }
 
@@ -248,9 +256,10 @@ impl Glass {
             dpi: 1.0,
             dark: !dark(),
             solid: false,
+            strength: -1.0,
             shown: false,
         };
-        glass.set_theme(dark(), solid())?;
+        glass.set_theme(dark(), solid(), saved_tint())?;
         Ok(glass)
     }
 
@@ -270,23 +279,30 @@ impl Glass {
         brush.cast()
     }
 
-    /// Applies the theme and Windows' transparency setting. Does nothing when neither changed.
-    pub fn set_theme(&mut self, dark: bool, solid: bool) -> Result<()> {
-        if self.dark == dark && self.solid == solid && self.material.Brush().is_ok() {
+    /// Applies the theme, Windows' transparency setting and the tint strength (0 to 1, scaling the tint and
+    /// luminosity layers). Does nothing when none changed.
+    pub fn set_theme(&mut self, dark: bool, solid: bool, tint: f32) -> Result<()> {
+        let tint = tint.clamp(0.0, 1.0);
+        if self.dark == dark && self.solid == solid && self.strength == tint && self.material.Brush().is_ok() {
             return Ok(());
         }
+        let material = self.dark != dark || self.solid != solid || self.material.Brush().is_err();
         self.dark = dark;
         self.solid = solid;
+        self.strength = tint;
         let c = &self.compositor;
-        let brush: CompositionBrush = if solid {
-            c.CreateColorBrushWithColor(if dark { argb(1.0, 22, 22, 25) } else { argb(1.0, 249, 249, 250) })?.cast()?
-        } else {
-            self.saturated_backdrop()?
-        };
-        self.material.SetBrush(&brush)?;
+        if material {
+            let brush: CompositionBrush = if solid {
+                c.CreateColorBrushWithColor(if dark { argb(1.0, 22, 22, 25) } else { argb(1.0, 249, 249, 250) })?.cast()?
+            } else {
+                self.saturated_backdrop()?
+            };
+            self.material.SetBrush(&brush)?;
+        }
         let color = |v: &SpriteVisual, value: Color| -> Result<()> { v.Brush()?.cast::<CompositionColorBrush>()?.SetColor(value) };
-        color(&self.tint, if dark { argb(TINT_OPACITY, 28, 28, 32) } else { argb(TINT_OPACITY, 246, 246, 248) })?;
-        color(&self.luminosity, if dark { argb(LUMINOSITY_OPACITY, 10, 10, 12) } else { argb(LUMINOSITY_OPACITY, 255, 255, 255) })?;
+        let (t, l) = (TINT_OPACITY * tint, LUMINOSITY_OPACITY * tint);
+        color(&self.tint, if dark { argb(t, 28, 28, 32) } else { argb(t, 246, 246, 248) })?;
+        color(&self.luminosity, if dark { argb(l, 10, 10, 12) } else { argb(l, 255, 255, 255) })?;
         let layers = if solid { 0.0 } else { 1.0 };
         self.tint.SetOpacity(layers)?;
         self.luminosity.SetOpacity(layers)?;
@@ -453,8 +469,13 @@ pub extern "C" fn sj_glass_window(glass: *mut Glass) -> isize {
 }
 
 #[no_mangle]
-pub extern "C" fn sj_glass_theme(glass: *mut Glass, dark: bool, solid: bool) -> bool {
-    unsafe { glass.as_mut() }.is_some_and(|g| g.set_theme(dark, solid).is_ok())
+pub extern "C" fn sj_glass_theme(glass: *mut Glass, dark: bool, solid: bool, tint: f32) -> bool {
+    unsafe { glass.as_mut() }.is_some_and(|g| g.set_theme(dark, solid, tint).is_ok())
+}
+
+#[no_mangle]
+pub extern "C" fn sj_glass_saved_tint() -> f32 {
+    saved_tint()
 }
 
 #[no_mangle]

@@ -38,6 +38,9 @@ internal sealed partial class GlassWindow : IDisposable
     internal event EventHandler? Closed;
     /// <summary>Asked before a user close (title bar button, Alt+F4, taskbar); returning false keeps the window open.</summary>
     internal Func<bool> CanClose { get; set; } = () => true;
+    float tint = SavedTint();
+    /// <summary>Strength of the tint and luminosity layers, 0 to 1 (1 = Pane's).</summary>
+    internal float Tint { get => tint; set { tint = Math.Clamp(value, 0, 1); ApplyTheme(); } }
     float Speed => system.AnimationsEnabled ? 1 : 0;
     float Dpi => GetDpiForWindow(Handle) / 96f;
 
@@ -75,7 +78,7 @@ internal sealed partial class GlassWindow : IDisposable
         open.Add(this);
     }
 
-    void ApplyTheme() { if (!disposed) sj_glass_theme(glass, content.ActualTheme == ElementTheme.Dark, sj_glass_solid()); }
+    void ApplyTheme() { if (!disposed) sj_glass_theme(glass, content.ActualTheme == ElementTheme.Dark, sj_glass_solid(), tint); }
 
     void Center(double width, double height)
     {
@@ -259,7 +262,10 @@ internal sealed partial class GlassWindow : IDisposable
     [StructLayout(LayoutKind.Sequential)] struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
     const string Rust = "shanjie_windows.dll";
     [DllImport(Rust)] static extern nint sj_glass_create(nint owner);
-    [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_theme(nint glass, [MarshalAs(UnmanagedType.I1)] bool dark, [MarshalAs(UnmanagedType.I1)] bool solid);
+    [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_theme(nint glass, [MarshalAs(UnmanagedType.I1)] bool dark, [MarshalAs(UnmanagedType.I1)] bool solid, float tint);
+    [DllImport(Rust)] static extern float sj_glass_saved_tint();
+    /// <summary>The saved strength from the profile, so setup and settings open with what the user chose.</summary>
+    internal static float SavedTint() { try { return sj_glass_saved_tint(); } catch (Exception) { return 1; } }
     [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_place(nint glass, int x, int y, int width, int height, float dpi, nint above);
     [DllImport(Rust)] static extern uint sj_glass_state(nint glass, uint state, float speed);
     [DllImport(Rust)] static extern void sj_glass_cloak(nint glass, [MarshalAs(UnmanagedType.I1)] bool on);

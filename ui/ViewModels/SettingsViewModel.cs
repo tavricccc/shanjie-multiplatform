@@ -85,6 +85,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
     [ObservableProperty] public partial double FontSize { get; set; }
+    /// <summary>Strength of the glass's tint and luminosity layers, percent of Pane's (100); 0 leaves only the blur.</summary>
+    [ObservableProperty] public partial double GlassTint { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";

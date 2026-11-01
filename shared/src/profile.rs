@@ -322,7 +322,7 @@ const PERSONAL: [(&str, &[&str]); 4] = [
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
     ("candidates", &["big5"]),
-    ("appearance", &["theme", "font_size", "mode_indicator"]),
+    ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("profile", "interaction", &["windows", "shanjie"]),

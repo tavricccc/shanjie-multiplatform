@@ -13,6 +13,7 @@ public sealed partial class MainWindow : UserControl
         Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
         Vm.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
+            if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
