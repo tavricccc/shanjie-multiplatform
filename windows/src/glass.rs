@@ -64,11 +64,11 @@ pub fn solid() -> bool {
         || std::env::var("SHANJIE_FORCE_SOLID").as_deref() == Ok("1")
 }
 
-/// The user's tint strength from the profile (`appearance.glass_tint`, percent), 0 to 1.
+/// The user's glass density from the profile (`appearance.glass_tint`, percent): the tint layer's opacity, 0 to 1.
 pub fn saved_tint() -> f32 {
     crate::profile::load(&crate::profile::path())
-        .map(|p| p.number("appearance", "glass_tint", 100).min(100) as f32 / 100.0)
-        .unwrap_or(1.0)
+        .map(|p| p.number("appearance", "glass_tint", 42).min(100) as f32 / 100.0)
+        .unwrap_or(TINT_OPACITY)
 }
 
 /// Whether apps use the dark theme.
@@ -279,8 +279,8 @@ impl Glass {
         brush.cast()
     }
 
-    /// Applies the theme, Windows' transparency setting and the tint strength (0 to 1, scaling the tint and
-    /// luminosity layers). Does nothing when none changed.
+    /// Applies the theme, Windows' transparency setting and the glass density (the tint layer's opacity, 0 to 1,
+    /// Pane's 玻璃濃度). Does nothing when none changed.
     pub fn set_theme(&mut self, dark: bool, solid: bool, tint: f32) -> Result<()> {
         let tint = tint.clamp(0.0, 1.0);
         if self.dark == dark && self.solid == solid && self.strength == tint && self.material.Brush().is_ok() {
@@ -300,7 +300,7 @@ impl Glass {
             self.material.SetBrush(&brush)?;
         }
         let color = |v: &SpriteVisual, value: Color| -> Result<()> { v.Brush()?.cast::<CompositionColorBrush>()?.SetColor(value) };
-        let (t, l) = (TINT_OPACITY * tint, LUMINOSITY_OPACITY * tint);
+        let (t, l) = (tint, LUMINOSITY_OPACITY);
         color(&self.tint, if dark { argb(t, 28, 28, 32) } else { argb(t, 246, 246, 248) })?;
         color(&self.luminosity, if dark { argb(l, 10, 10, 12) } else { argb(l, 255, 255, 255) })?;
         let layers = if solid { 0.0 } else { 1.0 };

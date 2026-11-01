@@ -63,7 +63,7 @@ public partial class SettingsViewModel
             BackquoteSymbols = profile.Flag("shortcuts", "backquote_symbols", Interaction == 0); CodeInput = profile.Flag("shortcuts", "code_input", Interaction == 0);
             SymbolKeyboard = profile.Flag("shortcuts", "symbol_keyboard", Interaction == 0); CtrlBackslash = profile.Flag("shortcuts", "ctrl_backslash", Interaction == 1);
             ForgetCandidate = profile.Flag("shortcuts", "forget_candidate", false);
-            Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true); GlassTint = Math.Clamp(profile.Number("appearance", "glass_tint", 100), 0, 100);
+            Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true); GlassTint = Math.Clamp(profile.Number("appearance", "glass_tint", 42), 0, 100);
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
             MixedTolerance = profile.Flag("input", "mixed_tolerance", false);
