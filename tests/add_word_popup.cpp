@@ -71,7 +71,7 @@ int wmain(int argc,wchar_t** argv) {
     wchar_t themeText[4]{};GetEnvironmentVariableW(L"SHANJIE_TEST_POPUP_THEME",themeText,4);int theme=_wtoi(themeText);DWORD light=1,size=sizeof(light);
     if(theme==0)RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
     HIGHCONTRASTW contrast{sizeof(contrast)};SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(contrast),&contrast,0);
-    auto background=contrast.dwFlags&HCF_HIGHCONTRASTON?GetSysColor(COLOR_WINDOW):theme==2||(theme==0&&light==0)?RGB(32,32,32):RGB(255,255,255);
+    auto background=contrast.dwFlags&HCF_HIGHCONTRASTON?GetSysColor(COLOR_WINDOW):theme==2||(theme==0&&light==0)?RGB(0x1c,0x1c,0x20):RGB(0xf8,0xf8,0xfa);
     require(sampleBackground(popup)==background,759);require(sampleBackground(GetDlgItem(popup,10))==background,760);
     captureNative(popup,std::filesystem::path(argv[2])/L"add-word.bmp",false,true);
     keyboard(VK_LCONTROL);down('A');keyboard(0);
