@@ -135,6 +135,8 @@
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="主題與提示" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,12,0,0"/>
                         <ComboBox Header="介面與選字框主題" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBoxItem Content="跟隨 Windows"/><ComboBoxItem Content="淺色"/><ComboBoxItem Content="深色"/></ComboBox>
                         <controls:SettingToggle Label="切換中英時顯示游標旁提示" IsOn="{x:Bind Vm.ModeIndicator, Mode=TwoWay}"/>
+                        <Slider x:Name="GlassTintSlider" Header="毛玻璃淡色覆蓋強度" Minimum="0" Maximum="100" StepFrequency="5" TickFrequency="25" TickPlacement="Outside" Value="{x:Bind Vm.GlassTint, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
+                        <TextBlock Style="{StaticResource HelpText}" Text="套用到設定、安裝程式與選字框的玻璃。100% 與 Pane 相同；調低更透、背景更明顯，0% 只剩模糊。Windows 關閉透明效果時一律用不透明背景。"/>
                     </StackPanel>
                     <StackPanel x:Name="Dictionary" Spacing="12" Visibility="Collapsed">
                         <TextBlock FontFamily="Microsoft JhengHei UI" Text="預測、詞庫與學習" Style="{ThemeResource TitleTextBlockStyle}"/>
