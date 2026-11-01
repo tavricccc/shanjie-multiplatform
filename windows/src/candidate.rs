@@ -122,7 +122,21 @@ const GLIDE_MS: f32 = 170.0;
 /// A panel already on screen glides to its new size and place (longer candidates, a second row, the caret moving).
 const MORPH_MS: f32 = 180.0;
 const TIMER: usize = 7;
+/// The reading row's inset from the panel edge, in DIPs at the 16px base size.
+const READING_SIDE: f32 = 12.0;
+const READING_TOP: f32 = 4.0;
 
+/// From a one-line layout's top to the middle of its glyphs. A CJK font's line box leaves more room above the
+/// characters than below (Noto Sans TC: ascent 1.16 em, the ideographic box 0.88 em above the baseline and
+/// 0.12 em below), so centring the line box leaves the text visibly off; centre the ideographic box instead.
+fn middle(layout: &IDWriteTextLayout, size: f32) -> f32 {
+    let mut line = [DWRITE_LINE_METRICS::default()];
+    let mut count = 0;
+    match unsafe { layout.GetLineMetrics(Some(&mut line), &mut count) } {
+        Ok(()) if count > 0 => line[0].baseline - 0.38 * size,
+        _ => 0.62 * size,
+    }
+}
 /// Cubic Bézier easing (CSS `cubic-bezier`), `x` in 0..1.
 fn ease(curve: [f32; 4], x: f32) -> f32 {
     let [x1, y1, x2, y2] = curve;
@@ -154,8 +168,9 @@ struct Item {
     width: f32,
     natural: f32,
     tag: f32,
-    word_height: f32,
-    label_height: f32,
+    /// From the layout's top to the middle of its glyphs.
+    word_middle: f32,
+    label_middle: f32,
 }
 pub struct Host {
     pub window: HWND,
@@ -177,6 +192,7 @@ pub struct Host {
     reading_height: f32,
     /// The Zhuyin (or the character being chosen) inside the reading row: left and right edge.
     reading_mark: Option<(f32, f32)>,
+    reading_middle: f32,
     /// The panel's size in DIPs; the window is larger by the shadow margin.
     panel: (f32, f32),
     /// The panel opens above the caret, so the entrance scales from its bottom edge.
@@ -230,6 +246,7 @@ impl Host {
                 reading_width: 0.0,
                 reading_height: 0.0,
                 reading_mark: None,
+                reading_middle: 0.0,
                 panel: (0.0, 0.0),
                 above: false,
                 opened: None,
@@ -347,14 +364,16 @@ impl Host {
                     nm.widthIncludingTrailingWhitespace + 6.0 * ratio
                 };
                 self.row = self.row.max(wm.height + 2.0 * ratio);
+                let (word_middle, label_middle) =
+                    (middle(&word, self.size as f32), middle(&number, (self.size as f32 * 9.0 / 16.0).max(8.0)));
                 self.items.push(Item {
                     word,
                     label: number,
                     width: wm.widthIncludingTrailingWhitespace + tag_width + 11.0 * ratio,
                     natural: wm.widthIncludingTrailingWhitespace + tag_width + 11.0 * ratio,
                     tag: tag_width,
-                    word_height: wm.height,
-                    label_height: nm.height,
+                    word_middle,
+                    label_middle,
                 });
             }
             // The row shows the whole sentence with the character being chosen (or the Zhuyin being typed,
@@ -393,13 +412,16 @@ impl Host {
             self.reading_height = 0.0;
             self.reading_mark = None;
             if !reading.is_empty() {
+                // Alone (still typing, nothing to choose yet) the row is the whole panel and takes the
+                // candidates' size; above a candidate row it is smaller.
+                let reading_size = if self.items.is_empty() { self.size as f32 } else { (self.size as f32 * 0.8).max(9.0) };
                 let format = self.text_factory.CreateTextFormat(
                     &crate::font::family(),
                     None,
                     DWRITE_FONT_WEIGHT_NORMAL,
                     DWRITE_FONT_STYLE_NORMAL,
                     DWRITE_FONT_STRETCH_NORMAL,
-                    (self.size as f32 * 0.8).max(9.0),
+                    reading_size,
                     w!("zh-TW"),
                 )?;
                 format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
@@ -413,8 +435,9 @@ impl Host {
                 layout.GetMetrics(&mut m)?;
                 self.reading_width = m
                     .widthIncludingTrailingWhitespace
-                    .min((work_width - 28.0 * ratio).max(1.0));
-                self.reading_height = m.height + 6.0 * ratio;
+                    .min((work_width - 2.0 * READING_SIDE * ratio).max(1.0));
+                self.reading_height = m.height + 4.0 * ratio;
+                self.reading_middle = middle(&layout, reading_size);
                 layout.SetMaxWidth(self.reading_width.max(1.0))?;
                 layout.SetTrimming(
                     &DWRITE_TRIMMING {
@@ -452,11 +475,19 @@ impl Host {
                     &ellipsis,
                 )?;
             }
-            Ok(width.max(self.reading_width + 28.0 * ratio).min(work_width))
+            Ok(width.max(self.reading_width + 2.0 * READING_SIDE * ratio).min(work_width))
         }
     }
+    /// Where the candidate row starts: below the reading row and its divider when there is one.
     fn top(&self) -> f32 {
-        5.0 * self.size as f32 / 16.0 + self.reading_height
+        let ratio = self.size as f32 / 16.0;
+        if self.reading.is_none() {
+            5.0 * ratio
+        } else if self.items.is_empty() {
+            READING_TOP * ratio + self.reading_height
+        } else {
+            READING_TOP * ratio + self.reading_height + 3.0 * ratio
+        }
     }
     fn row_top(&self, index: usize) -> f32 {
         if self.vertical {
@@ -472,7 +503,9 @@ impl Host {
         } else {
             lines as f32 * self.row + lines.saturating_sub(1) as f32 * 2.0 * self.size as f32 / 16.0
         };
-        self.top() + rows + 5.0 * self.size as f32 / 16.0
+        // A reading row alone gets the same room below as above, so its text sits in the middle.
+        let bottom = if self.items.is_empty() { READING_TOP } else { 5.0 };
+        self.top() + rows + bottom * self.size as f32 / 16.0
     }
     fn fit_view(&mut self, selected: Option<usize>) -> f32 {
         let ratio = self.size as f32 / 16.0;
@@ -594,7 +627,7 @@ impl Host {
         let ratio = self.size as f32 / 16.0;
         let width = self
             .fit_view(None)
-            .max(self.reading_width + 28.0 * ratio)
+            .max(self.reading_width + 2.0 * READING_SIDE * ratio)
             .min(self.work_width);
         for item in &self.items {
             item.word
@@ -850,13 +883,13 @@ impl Host {
             D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
         );
         if let Some(reading) = &self.reading {
-            let (left, top) = (14.0 * ratio, 6.0 * ratio);
+            let (left, row) = (READING_SIDE * ratio, READING_TOP * ratio);
+            let top = row + self.reading_height / 2.0 - self.reading_middle;
             // The Zhuyin being typed (or the character being chosen) sits on a faint accent pill.
             if let Some((a, b)) = self.reading_mark.filter(|&(a, b)| b > a) {
                 self.brush.SetColor(&self.palette.mark);
-                let h = self.reading_height - 6.0 * ratio;
                 self.target.FillRoundedRectangle(
-                    &rounded(left + a - 3.0 * ratio, top, left + b + 3.0 * ratio, top + h, 6.0 * ratio),
+                    &rounded(left + a - 3.0 * ratio, row + ratio, left + b + 3.0 * ratio, row + self.reading_height - ratio, 6.0 * ratio),
                     &self.brush,
                 );
             }
@@ -906,7 +939,7 @@ impl Host {
             self.target.DrawTextLayout(
                 Vector2 {
                     X: x + 4.0 * ratio,
-                    Y: y + (self.row - item.label_height) / 2.0,
+                    Y: y + self.row / 2.0 - item.label_middle,
                 },
                 &item.label,
                 &self.brush,
@@ -920,7 +953,7 @@ impl Host {
             self.target.DrawTextLayout(
                 Vector2 {
                     X: x + 4.0 * ratio + item.tag,
-                    Y: y + (self.row - item.word_height) / 2.0,
+                    Y: y + self.row / 2.0 - item.word_middle,
                 },
                 &item.word,
                 &self.brush,
