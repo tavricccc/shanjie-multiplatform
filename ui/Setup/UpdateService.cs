@@ -11,15 +11,19 @@ namespace Shanjie_UI.Setup;
 /// Ready：已下載並核對，等使用者按「安裝更新」；Failed：這一步失敗（原因在 Error）。</summary>
 internal enum UpdateState { Idle, Checking, UpToDate, Available, Downloading, Ready, Failed }
 
-internal sealed record UpdateRelease(string Version, string Notes, DateTimeOffset PublishedAt, long SizeBytes, string PageUrl);
+internal sealed record UpdateRelease(string Version, string Notes, DateTimeOffset PublishedAt, long SizeBytes, string PageUrl, bool Prerelease)
+{
+    internal Uri Package { get; init; } = null!;
+    internal Uri Sums { get; init; } = null!;
+}
 
 /// <summary>
-/// 從正式 repo 的 GitHub Releases 取最新正式版（不含 pre-release），下載單檔安裝程式並核對 Release 附的 SHA-256，
+/// 從正式 repo 的 GitHub Releases 取比目前新的最新正式版與最新測試版（pre-release，只在比正式版新時列出），使用者選一個；下載單檔安裝程式並核對 Release 附的 SHA-256，
 /// 再以 <c>--auto-update</c> 啟動：安裝視窗自己裝完並開啟新版設定。做法沿用 Pane 的 UpdateService。
 /// </summary>
 internal sealed class UpdateService : IDisposable
 {
-    internal static readonly Uri ProductionSource = new("https://api.github.com/repos/tavricccc/shanjie-multiplatform/releases/latest");
+    internal static readonly Uri ProductionSource = new("https://api.github.com/repos/tavricccc/shanjie-multiplatform/releases?per_page=30");
     internal const string Package = "Shanjie-Windows-Setup.exe";
     readonly HttpClient http;
     readonly Uri source;
@@ -27,12 +31,14 @@ internal sealed class UpdateService : IDisposable
     readonly SemaphoreSlim gate = new(1);
     readonly CancellationTokenSource lifetime = new();
     DateTimeOffset retryAfter;
-    Uri? asset, sums;
     string? readyPath;
     bool disposed;
     internal string CurrentVersion { get; }
     internal UpdateState State { get; private set; }
+    /// <summary>使用者選定要下載的版本；預設是正式版，沒有才是測試版。</summary>
     internal UpdateRelease? Latest { get; private set; }
+    /// <summary>可選的新版：正式版在前，測試版在後；最多各一個。</summary>
+    internal IReadOnlyList<UpdateRelease> Choices { get; private set; } = [];
     internal double DownloadProgress { get; private set; }
     internal string? Error { get; private set; }
     /// <summary>任何狀態變化；可能在背景執行緒觸發，介面自己切回 UI 執行緒。</summary>
@@ -82,18 +88,14 @@ internal sealed class UpdateService : IDisposable
             Set(UpdateState.Checking);
             using var response = await GetAsync(source, cancel.Token).ConfigureAwait(false);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancel.Token).ConfigureAwait(false));
-            var root = json.RootElement;
-            Latest = null; readyPath = null; asset = sums = null;
-            string version = root.GetProperty("tag_name").GetString()!.TrimStart('v');
-            if (root.GetProperty("draft").GetBoolean() || root.GetProperty("prerelease").GetBoolean() ||
-                !Regex.IsMatch(version, @"^\d+\.\d+\.\d+$") || Compare(version, CurrentVersion) <= 0)
-            { Set(UpdateState.UpToDate); return; }
-            var files = root.GetProperty("assets").EnumerateArray().ToArray();
-            var package = files.Single(f => f.GetProperty("name").GetString() == Package);
-            asset = ValidateUrl(package.GetProperty("browser_download_url").GetString()!);
-            sums = ValidateUrl(files.Single(f => f.GetProperty("name").GetString() == Package + ".sha256").GetProperty("browser_download_url").GetString()!);
-            Latest = new(version, PlainNotes(root.GetProperty("body").GetString() ?? ""), root.GetProperty("published_at").GetDateTimeOffset(),
-                package.GetProperty("size").GetInt64(), ValidateUrl(root.GetProperty("html_url").GetString()!).AbsoluteUri);
+            Latest = null; readyPath = null; Choices = [];
+            var found = json.RootElement.EnumerateArray().Select(Parse).OfType<UpdateRelease>()
+                .Where(r => Compare(r.Version, CurrentVersion) > 0).ToList();
+            var stable = found.Where(r => !r.Prerelease).MaxBy(r => r.Version, Comparer<string>.Create(Compare));
+            var preview = found.Where(r => r.Prerelease && (stable is null || Compare(r.Version, stable.Version) > 0)).MaxBy(r => r.Version, Comparer<string>.Create(Compare));
+            Choices = new[] { stable, preview }.OfType<UpdateRelease>().ToArray();
+            if (Choices.Count == 0) { Set(UpdateState.UpToDate); return; }
+            Latest = Choices[0];
             Set(UpdateState.Available);
         }
         catch (OperationCanceledException) { Set(cancel.IsCancellationRequested ? UpdateState.Idle : UpdateState.Failed, cancel.IsCancellationRequested ? null : "連 GitHub 逾時，稍後再試"); }
@@ -101,11 +103,36 @@ internal sealed class UpdateService : IDisposable
         finally { gate.Release(); }
     }
 
+    /// <summary>改選另一個版本（還沒開始下載或下載失敗時）。</summary>
+    internal void Choose(UpdateRelease release)
+    {
+        if (!Choices.Contains(release) || State is UpdateState.Checking or UpdateState.Downloading) return;
+        Latest = release; readyPath = null; Set(UpdateState.Available);
+    }
+
+    /// <summary>一筆 Release；草稿、版本號不合格式或缺安裝檔與 .sha256 的略過。</summary>
+    UpdateRelease? Parse(JsonElement root)
+    {
+        if (root.GetProperty("draft").GetBoolean()) return null;
+        string version = root.GetProperty("tag_name").GetString()!.TrimStart('v');
+        if (!Regex.IsMatch(version, @"^\d+\.\d+\.\d+$")) return null;
+        var files = root.GetProperty("assets").EnumerateArray().ToArray();
+        var package = files.FirstOrDefault(f => f.GetProperty("name").GetString() == Package);
+        var sums = files.FirstOrDefault(f => f.GetProperty("name").GetString() == Package + ".sha256");
+        if (package.ValueKind == JsonValueKind.Undefined || sums.ValueKind == JsonValueKind.Undefined) return null;
+        return new(version, PlainNotes(root.GetProperty("body").GetString() ?? ""), root.GetProperty("published_at").GetDateTimeOffset(),
+            package.GetProperty("size").GetInt64(), ValidateUrl(root.GetProperty("html_url").GetString()!).AbsoluteUri, root.GetProperty("prerelease").GetBoolean())
+        {
+            Package = ValidateUrl(package.GetProperty("browser_download_url").GetString()!),
+            Sums = ValidateUrl(sums.GetProperty("browser_download_url").GetString()!),
+        };
+    }
+
     internal async Task DownloadAsync(CancellationToken cancellationToken)
     {
         if (disposed || !await gate.WaitAsync(0, cancellationToken).ConfigureAwait(false)) return;
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
-        try { if (Latest != null && asset != null && sums != null) await DownloadCore(cancel.Token).ConfigureAwait(false); }
+        try { if (Latest != null) await DownloadCore(cancel.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) { Set(cancel.IsCancellationRequested ? UpdateState.Available : UpdateState.Failed, cancel.IsCancellationRequested ? null : "下載逾時，稍後再試"); }
         catch (Exception e) when (Expected(e)) { Set(UpdateState.Failed, Message(e)); }
         finally { gate.Release(); }
@@ -118,13 +145,13 @@ internal sealed class UpdateService : IDisposable
         readyPath = null; DownloadProgress = 0; Set(UpdateState.Downloading);
         try
         {
-            using var checksum = await GetAsync(sums!, token).ConfigureAwait(false);
+            using var checksum = await GetAsync(Latest.Sums, token).ConfigureAwait(false);
             var match = Regex.Match((await checksum.Content.ReadAsStringAsync(token).ConfigureAwait(false)).Trim(), @"^([a-fA-F0-9]{64})\s+\*?(.+)$");
             if (!match.Success || match.Groups[2].Value.Trim() != Package) throw new InvalidDataException();
             string hash = match.Groups[1].Value;
             if (File.Exists(target) && await Valid(target, hash, token).ConfigureAwait(false)) { Ready(target); return; }
             File.Delete(target);
-            using var response = await GetAsync(asset!, token).ConfigureAwait(false);
+            using var response = await GetAsync(Latest.Package, token).ConfigureAwait(false);
             await using (var input = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false))
             await using (var output = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
             {
@@ -205,7 +232,7 @@ internal sealed class UpdateService : IDisposable
     {
         InvalidDataException => "下載的檔案不完整，已刪除，稍後再試",
         HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } => "GitHub 暫時限制了檢查次數，過一會兒再試",
-        HttpRequestException { StatusCode: HttpStatusCode.NotFound } => "還沒有正式版 Release",
+        HttpRequestException { StatusCode: HttpStatusCode.NotFound } => "找不到 Release",
         HttpRequestException => "連不上 GitHub，檢查網路後再試",
         UnauthorizedAccessException or IOException => "更新檔存不下來，看看磁碟空間夠不夠",
         _ => "看不懂 GitHub 回傳的更新資訊，稍後再試",
