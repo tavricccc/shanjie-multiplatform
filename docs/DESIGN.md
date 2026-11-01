@@ -101,7 +101,7 @@ components:
 
 ## Elevation & Depth
 
-設定與安裝視窗是 Pane 風格的毛玻璃（內容視窗＋Rust 玻璃視窗）。候選窗是單一 Win32 layered popup，以 Direct2D software DC render target 繪製，`UpdateLayeredWindow` 用 premultiplied alpha 合成；陰影與上緣亮邊畫在 bitmap 裡，沒有 blur 或背景視窗。
+設定與安裝視窗是毛玻璃風格（內容視窗＋Rust 玻璃視窗）。候選窗是單一 Win32 layered popup，以 Direct2D software DC render target 繪製，`UpdateLayeredWindow` 用 premultiplied alpha 合成；陰影與上緣亮邊畫在 bitmap 裡，沒有 blur 或背景視窗。
 
 **The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏與翻頁立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
 
