@@ -2,6 +2,12 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.15.1（Windows pre-release）
+
+詳見 [0.15.1 版本說明](docs/releases/RELEASE-NOTES-0.15.1.md)。
+
+- 檢查更新也列出較新的測試版（pre-release），正式版與測試版都有時可改選。
+
 ## 0.15.0（Windows pre-release）
 
 詳見 [0.15.0 版本說明](docs/releases/RELEASE-NOTES-0.15.0.md)。
