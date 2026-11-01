@@ -119,6 +119,8 @@ const BOTTOM: f32 = 22.0;
 /// every keystroke); moving the selection glides the highlight.
 const OPEN_SCALE: f32 = 0.96;
 const GLIDE_MS: f32 = 170.0;
+/// A panel already on screen glides to its new size and place (longer candidates, a second row, the caret moving).
+const MORPH_MS: f32 = 180.0;
 const TIMER: usize = 7;
 
 /// Cubic Bézier easing (CSS `cubic-bezier`), `x` in 0..1.
@@ -182,6 +184,10 @@ pub struct Host {
     opened: Option<Instant>,
     /// Where the highlight glides from (x, y, width in panel DIPs) and when it started.
     glide: Option<(Instant, (f32, f32, f32))>,
+    /// The panel's top-left on screen in physical pixels (where it rests).
+    origin: (i32, i32),
+    /// Where the panel glides from: its size in DIPs and its top-left, and when it started.
+    morph: Option<(Instant, (f32, f32), (i32, i32))>,
     start: usize,
     end: usize,
     work_width: f32,
@@ -228,6 +234,8 @@ impl Host {
                 above: false,
                 opened: None,
                 glide: None,
+                origin: (0, 0),
+                morph: None,
                 start: 0,
                 end: 0,
                 work_width: 0.0,
@@ -275,6 +283,7 @@ impl Host {
         self.sequence = self.sequence.wrapping_add(1);
         self.opened = None;
         self.glide = None;
+        self.morph = None;
         unsafe {
             let _ = KillTimer(Some(self.window), TIMER);
             let _ = ShowWindow(self.window, SW_HIDE);
@@ -545,17 +554,26 @@ impl Host {
     fn moving(&self) -> bool {
         progress(self.opened, NORMAL_MS as f32, SPRING).is_some()
             || progress(self.glide.map(|g| g.0), GLIDE_MS, GLIDE).is_some()
+            || progress(self.morph.map(|m| m.0), MORPH_MS, GLIDE).is_some()
+    }
+    /// The panel as drawn now: its size in DIPs and its top-left in physical pixels, gliding toward where it rests.
+    fn view(&self) -> ((f32, f32), (i32, i32)) {
+        let Some((start, size, origin)) = self.morph else { return (self.panel, self.origin) };
+        let Some(t) = progress(Some(start), MORPH_MS, GLIDE) else { return (self.panel, self.origin) };
+        let mix = |a: f32, b: f32| a + (b - a) * t;
+        let place = |a: i32, b: i32| mix(a as f32, b as f32).round() as i32;
+        ((mix(size.0, self.panel.0), mix(size.1, self.panel.1)), (place(origin.0, self.origin.0), place(origin.1, self.origin.1)))
     }
     unsafe fn animate(&self) {
         if self.moving() {
             SetTimer(Some(self.window), TIMER, 8, None);
         }
     }
-    /// The window rectangle (x, y, width, height) for a panel whose top-left is `x, y`, in physical pixels.
-    fn frame(&self, x: i32, y: i32) -> (i32, i32, i32, i32) {
+    /// The window rectangle (x, y, width, height) for a panel of `panel` DIPs whose top-left is `x, y`, in physical pixels.
+    fn frame(&self, panel: (f32, f32), x: i32, y: i32) -> (i32, i32, i32, i32) {
         let (side, top) = ((SIDE * self.scale).round() as i32, (TOP * self.scale).round() as i32);
-        let width = (self.panel.0 * self.scale).ceil() as i32 + 2 * side;
-        let height = ((self.panel.1 + TOP + BOTTOM) * self.scale).ceil() as i32;
+        let width = (panel.0 * self.scale).ceil() as i32 + 2 * side;
+        let height = ((panel.1 + TOP + BOTTOM) * self.scale).ceil() as i32;
         (x - side, y - top, width, height)
     }
     unsafe fn scroll(&mut self, next: bool) -> Result<()> {
@@ -605,7 +623,9 @@ impl Host {
                 (monitor.rcWork.right - pixels).max(monitor.rcWork.left),
             )
         };
-        let (x, y, w, h) = self.frame(x, top);
+        self.origin = (x, top);
+        self.morph = None;
+        let (x, y, w, h) = self.frame(self.panel, x, top);
         SetWindowPos(self.window, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)?;
         self.display()
     }
@@ -624,6 +644,8 @@ impl Host {
                 return Ok(());
             }
             let shown = self.shown();
+            // A panel on screen glides from where it is drawn now, even halfway through an earlier glide.
+            let (was, at) = self.view();
             // Moving the selection inside the same page glides the highlight from where it is drawn now.
             let same = shown && self.state.candidates == state.candidates && self.state.first == state.first && self.size == size;
             let from = if same && self.state.selected != state.selected { self.highlight() } else { None };
@@ -650,16 +672,26 @@ impl Host {
             let awareness =
                 SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             let result = (|| -> Result<()> {
-                SetWindowPos(
-                    self.window,
-                    None,
-                    caret.left,
-                    caret.bottom,
-                    0,
-                    0,
-                    SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER,
-                )?;
-                self.scale = GetDpiForWindow(self.window) as f32 / 96.0;
+                let scale = self.scale;
+                if shown {
+                    // Moving the visible window to the caret first would flash it there before the glide.
+                    let (mut dpi, mut unused) = (96u32, 96u32);
+                    let screen = MonitorFromRect(&caret, MONITOR_DEFAULTTONEAREST);
+                    if GetDpiForMonitor(screen, MDT_EFFECTIVE_DPI, &mut dpi, &mut unused).is_ok() {
+                        self.scale = dpi as f32 / 96.0;
+                    }
+                } else {
+                    SetWindowPos(
+                        self.window,
+                        None,
+                        caret.left,
+                        caret.bottom,
+                        0,
+                        0,
+                        SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER,
+                    )?;
+                    self.scale = GetDpiForWindow(self.window) as f32 / 96.0;
+                }
                 let measured = self.measure((monitor.rcWork.right - monitor.rcWork.left) as f32 / self.scale)?;
                 self.panel = (measured, self.height());
                 let width = (measured * self.scale).ceil() as i32;
@@ -680,13 +712,19 @@ impl Host {
                     y = -12000;
                 }
                 let motion = animated();
+                self.origin = (x, y);
                 if !shown {
                     self.opened = motion.then(Instant::now);
                     self.glide = None;
+                    self.morph = None;
                 } else {
                     self.glide = from.filter(|_| motion && self.start == page).map(|f| (Instant::now(), f));
+                    let moved = was != self.panel || at != self.origin;
+                    // A new monitor scale changes what the DIP sizes mean, so that jump is not animated.
+                    self.morph = (motion && moved && scale == self.scale).then(|| (Instant::now(), was, at));
                 }
-                let (x, y, w, h) = self.frame(x, y);
+                let (panel, (x, y)) = self.view();
+                let (x, y, w, h) = self.frame(panel, x, y);
                 SetWindowPos(
                     self.window,
                     Some(HWND_TOPMOST),
@@ -705,18 +743,13 @@ impl Host {
         }
     }
     unsafe fn display(&self) -> Result<()> {
-        let mut rect = RECT::default();
-        GetWindowRect(self.window, &mut rect)?;
-        let buffer = Buffer::new(rect.right - rect.left, rect.bottom - rect.top)?;
-        self.paint(buffer.dc)?;
-        let position = POINT {
-            x: rect.left,
-            y: rect.top,
-        };
-        let size = SIZE {
-            cx: rect.right - rect.left,
-            cy: rect.bottom - rect.top,
-        };
+        // The window follows the panel's glide: each frame sets its place and size with the new bitmap.
+        let (panel, (x, y)) = self.view();
+        let (x, y, w, h) = self.frame(panel, x, y);
+        let buffer = Buffer::new(w, h)?;
+        self.paint(buffer.dc, w, h, panel)?;
+        let position = POINT { x, y };
+        let size = SIZE { cx: w, cy: h };
         let fade = progress(self.opened, FAST_MS as f32, SMOOTH).unwrap_or(1.0);
         let blend = BLENDFUNCTION {
             BlendOp: AC_SRC_OVER as u8,
@@ -738,14 +771,15 @@ impl Host {
         let _ = ValidateRect(Some(self.window), None);
         Ok(())
     }
-    unsafe fn paint(&self, dc: HDC) -> Result<()> {
-        let mut bounds = RECT::default();
-        GetClientRect(self.window, &mut bounds)?;
+    /// Draws the panel at `panel` DIPs into a `w` x `h` bitmap; while it glides the content keeps its resting layout,
+    /// clipped to the panel.
+    unsafe fn paint(&self, dc: HDC, w: i32, h: i32, panel: (f32, f32)) -> Result<()> {
+        let bounds = RECT { left: 0, top: 0, right: w, bottom: h };
         self.target.BindDC(dc, &bounds)?;
         self.target.SetDpi(96.0 * self.scale, 96.0 * self.scale);
         self.target.BeginDraw();
         self.target.Clear(Some(&D2D1_COLOR_F::default()));
-        let (width, height) = self.panel;
+        let (width, height) = panel;
         // The entrance scales the panel from its edge next to the caret.
         let grow = progress(self.opened, NORMAL_MS as f32, SPRING).map_or(1.0, |t| OPEN_SCALE + (1.0 - OPEN_SCALE) * t);
         let (cx, cy) = (width / 2.0, if self.above { height } else { 0.0 });
@@ -811,6 +845,10 @@ impl Host {
             );
             self.target.PopAxisAlignedClip();
         }
+        self.target.PushAxisAlignedClip(
+            &D2D_RECT_F { left: 0.0, top: 0.0, right: width, bottom: height },
+            D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+        );
         if let Some(reading) = &self.reading {
             let (left, top) = (14.0 * ratio, 6.0 * ratio);
             // The Zhuyin being typed (or the character being chosen) sits on a faint accent pill.
@@ -925,6 +963,7 @@ impl Host {
                 );
             }
         }
+        self.target.PopAxisAlignedClip();
         self.target.SetTransform(&Matrix3x2::identity());
         self.target.EndDraw(None, None)
     }
@@ -960,7 +999,10 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
     }
     if !ptr.is_null() {
         if message == WM_PRINTCLIENT {
-            let _ = (*ptr).paint(HDC(wp.0 as _));
+            let host = &*ptr;
+            let mut rect = RECT::default();
+            let _ = GetClientRect(window, &mut rect);
+            let _ = host.paint(HDC(wp.0 as _), rect.right, rect.bottom, host.view().0);
             return LRESULT(0);
         }
         if message == WM_LBUTTONUP {
@@ -1001,6 +1043,7 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
             if !host.moving() {
                 host.opened = None;
                 host.glide = None;
+                host.morph = None;
                 let _ = KillTimer(Some(window), TIMER);
             }
             return LRESULT(0);
