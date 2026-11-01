@@ -33,13 +33,14 @@ public sealed partial class MainWindow
         if (updates is not { } u) return;
         var latest = u.Latest;
         static string Size(long bytes) => $"{bytes / 1024.0 / 1024:0.#} MB";
+        static string Name(UpdateRelease r) => r.Prerelease ? $"測試版 {r.Version}" : $"正式版 {r.Version}";
         UpdateRow.Description = u.State switch
         {
             UpdateState.Checking => $"目前 {u.CurrentVersion}，正在檢查…",
             UpdateState.UpToDate => $"目前 {u.CurrentVersion}，已是最新版",
-            UpdateState.Available when latest is not null => $"有新版 {latest.Version}（{Size(latest.SizeBytes)}，{latest.PublishedAt.LocalDateTime:M 月 d 日}發布）",
-            UpdateState.Downloading when latest is not null => $"正在下載 {latest.Version}：{u.DownloadProgress:P0}",
-            UpdateState.Ready when latest is not null => $"{latest.Version} 已下載並核對；安裝時會關閉設定，裝完自動開啟新版。個人詞庫、學習與設定都會保留",
+            UpdateState.Available when latest is not null => $"有新版 {Name(latest)}（{Size(latest.SizeBytes)}，{latest.PublishedAt.LocalDateTime:M 月 d 日}發布）",
+            UpdateState.Downloading when latest is not null => $"正在下載 {Name(latest)}：{u.DownloadProgress:P0}",
+            UpdateState.Ready when latest is not null => $"{Name(latest)} 已下載並核對；安裝時會關閉設定，裝完自動開啟新版。個人詞庫、學習與設定都會保留",
             UpdateState.Failed => $"目前 {u.CurrentVersion}。{u.Error}",
             _ => $"目前 {u.CurrentVersion}",
         };
@@ -54,6 +55,10 @@ public sealed partial class MainWindow
         };
         UpdateButton.Style = u.State is UpdateState.Available or UpdateState.Ready ? (Style)Application.Current.Resources["PaneAccentButton"] : null;
         UpdateButton.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
+        // 正式版與測試版都有時，另一個放在旁邊可以改選。
+        var other = u.Choices.FirstOrDefault(c => c != latest);
+        UpdateSwitch.Visibility = other is not null && u.State is UpdateState.Available or UpdateState.Ready or UpdateState.Failed ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSwitch.Content = other is null ? "" : $"改選{Name(other)}";
         UpdateDetails.Visibility = latest is not null ? Visibility.Visible : Visibility.Collapsed;
         UpdateNotes.Text = latest?.Notes ?? "";
         UpdateNotes.Visibility = latest is not null && latest.Notes.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -69,6 +74,11 @@ public sealed partial class MainWindow
             case UpdateState.Ready: if (u.Install()) Close(); break;
             default: RunUpdate(u.CheckAsync); break;
         }
+    }
+
+    private void SwitchUpdate(object sender, RoutedEventArgs args)
+    {
+        if (updates is { } u && u.Choices.FirstOrDefault(c => c != u.Latest) is { } other) u.Choose(other);
     }
 
     private void OpenRelease(object sender, RoutedEventArgs args)
