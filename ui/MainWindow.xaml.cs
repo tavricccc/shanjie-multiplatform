@@ -10,7 +10,8 @@ public sealed partial class MainWindow : UserControl
     {
         InitializeComponent(); Bindings.Initialize();
         Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
-        Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
+        navHighlight = new Controls.SlidingHighlight(NavLayer, 12); ShowSection(0); ApplyTheme();
+        ((FrameworkElement)Nav.Children[0]).SizeChanged += (_, _) => { if (!navPlaced) { navPlaced = true; navHighlight.MoveTo((FrameworkElement)Nav.Children[section], false); } };
         Vm.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
             if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
@@ -27,7 +28,7 @@ public sealed partial class MainWindow : UserControl
     internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
     internal void Activate() => Host.Activate();
     internal void Close() => Host.Close();
-    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, AppTitleBar) || ReferenceEquals(args.OriginalSource, TitleText)) Host.BeginDrag(); }
+    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, sender) || args.OriginalSource is TextBlock or Image) Host.BeginDrag(); }
     private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
     private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
@@ -43,7 +44,27 @@ public sealed partial class MainWindow : UserControl
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
     internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceInputsZhuyinToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal static class Pages { public const int General = 0, English = 1, Keys = 2, Punctuation = 3, Composition = 4, Candidates = 5, Appearance = 6, Dictionary = 7, About = 8, Count = 9; }
-    internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
+    private readonly Controls.SlidingHighlight navHighlight;
+    private bool navPlaced;
+    private int section;
+    internal void ShowSection(int index)
+    {
+        section = index;
+        var panels = new StackPanel[] { General, English, Keys, Punctuation, Composition, Candidates, Appearance, Dictionary, About };
+        for (int i = 0; i < panels.Length; i++) panels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        for (int i = 0; i < Nav.Children.Count; i++)
+        {
+            var row = (StackPanel)((Grid)Nav.Children[i]).Children[0];
+            var brush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[i == index ? "PaneText1Brush" : "PaneText2Brush"];
+            ((Controls.Icon)row.Children[0]).Foreground = brush;
+            var text = (TextBlock)row.Children[1]; text.Foreground = brush; text.FontWeight = i == index ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        }
+        SectionTitle.Text = AutomationName(Nav.Children[index]);
+        if (navPlaced) navHighlight.MoveTo((FrameworkElement)Nav.Children[index]);
+        ContentScroll.ChangeView(null, 0, null, true);
+    }
+    private static string AutomationName(UIElement element) => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(element);
+    private void NavTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs args) => ShowSection(Nav.Children.IndexOf((UIElement)sender));
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAdvancedKeys() { ShowSection(Pages.Punctuation); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowCandidateKeys() { ShowSection(Pages.Candidates); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
@@ -55,13 +76,6 @@ public sealed partial class MainWindow : UserControl
     internal InfoBarSeverity FeedbackForVerification => StatusBar.Severity;
     internal void SetInstalledForVerification(uint mask) { Vm.ApplyInstalledKeyboards(mask); ShowLoadFeedback(); }
     private void ShowLoadFeedback() { StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = !string.IsNullOrWhiteSpace(Vm.Status); }
-    private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        foreach (var (name, panel) in new (string, StackPanel)[] { ("general", General), ("english", English), ("keys", Keys), ("punctuation", Punctuation), ("composition", Composition), ("candidates", Candidates), ("appearance", Appearance), ("dictionary", Dictionary), ("about", About) })
-            panel.Visibility = tag == name ? Visibility.Visible : Visibility.Collapsed;
-        ContentScroll.ChangeView(null, 0, null, true);
-    }
     private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);
     private void ShiftAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, false);
     private void PlainAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, true);
