@@ -38,7 +38,6 @@ public sealed partial class MainWindow : UserControl
     internal string? ShownModelForVerification => (ModelSelector.SelectedItem as Models.ModelChoice)?.Id;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedModeForVerification(int mode) => MixedModeSelector.SelectedIndex = mode;
-    internal void SetEnglishInlineForVerification(bool value) => EnglishInlineToggle.SetToggleForVerification(value);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
     internal void SetSpaceInputsZhuyinForVerification(bool value) => SpaceInputsZhuyinToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);

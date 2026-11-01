@@ -46,7 +46,7 @@ public partial class SettingsViewModel
             ModelRevision=profile.Read("engine","model_revision","");
             ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true); AcgPack = profile.Flag("engine", "acg_pack", true);
-            ItPack = profile.Flag("engine", "it_pack", true); Rerank = profile.Flag("engine", "rerank", true);
+            QuotePack = profile.Flag("engine", "quote_pack", false); ItPack = profile.Flag("engine", "it_pack", true); Rerank = profile.Flag("engine", "rerank", true);
             RerankLevel = Math.Max(0, Array.IndexOf(RerankLevels, profile.Read("engine", "rerank_level", "standard")));
             FuzzyEnEng = profile.Flag("engine", "fuzzy_en_eng", false); FuzzyZhZ = profile.Flag("engine", "fuzzy_zh_z", false);
             FuzzyChC = profile.Flag("engine", "fuzzy_ch_c", false); FuzzyShS = profile.Flag("engine", "fuzzy_sh_s", false);
@@ -71,8 +71,8 @@ public partial class SettingsViewModel
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
             AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
-            MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishInline = profile.Flag("input", "english_inline", true);
-            EnglishKeyOrder = profile.Flag("input", "english_key_order", false); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
+            MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishOverwrite = profile.Flag("input", "english_overwrite", true); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
+            EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
             UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
@@ -141,7 +141,7 @@ public partial class SettingsViewModel
         var apps = string.Join(";", ChatApps.Split([';', ',', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).Distinct());
         if (apps == DefaultChatApps) profile.Remove("engine", "chat_apps"); else profile.Set("engine", "chat_apps", apps);
         foreach (var (section, key, value) in new (string, string, object)[] {
-            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","it_pack",ItPack),
+            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","quote_pack",QuotePack), ("engine","it_pack",ItPack),
             ("engine","rerank",Rerank), ("engine","fuzzy_en_eng",FuzzyEnEng), ("engine","fuzzy_zh_z",FuzzyZhZ),
             ("engine","fuzzy_ch_c",FuzzyChC), ("engine","fuzzy_sh_s",FuzzyShS), ("engine","fuzzy_adjacent",FuzzyAdjacent),
             ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),
@@ -151,7 +151,7 @@ public partial class SettingsViewModel
             ("input","mixed_tolerance",MixedTolerance),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
-            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_inline",EnglishInline), ("input","english_key_order",EnglishKeyOrder), ("input","cjk_spacing",CjkSpacing),
+            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_overwrite",EnglishOverwrite), ("input","english_key_order",EnglishKeyOrder), ("input","english_reversal_guard",EnglishReversalGuard), ("input","cjk_spacing",CjkSpacing),
             ("input","punctuation_keeps_reading",PunctuationKeepsReading),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),

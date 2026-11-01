@@ -37,6 +37,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool Prediction { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(RerankLevelEnabled))] public partial bool Demote { get; set; }
     [ObservableProperty] public partial bool AcgPack { get; set; }
+    [ObservableProperty] public partial bool QuotePack { get; set; }
     [ObservableProperty] public partial bool ItPack { get; set; }
     /// Upstream makes no rerank job while 避免敏感詞 is off, so both rerank choices grey with it.
     [ObservableProperty, NotifyPropertyChangedFor(nameof(RerankLevelEnabled))] public partial bool Rerank { get; set; }
@@ -60,12 +61,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int AddWordShortcut { get; set; }
     [ObservableProperty] public partial double AddWordInterval { get; set; } = 450;
     [ObservableProperty] public partial int MixedMode { get; set; }
-    [ObservableProperty] public partial bool EnglishInline { get; set; }
+    [ObservableProperty] public partial bool EnglishOverwrite { get; set; }
+    [ObservableProperty] public partial bool EnglishReversalGuard { get; set; }
     [ObservableProperty] public partial bool EnterToCursor { get; set; }
     public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
-    public bool UsesEnglishList => SupportsUpstreamEnglish && MixedMode >= 2;
-    partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesEnglishList));
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesEnglishList)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
+    public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode >= 2;
+    partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesUpstreamEnglish));
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
