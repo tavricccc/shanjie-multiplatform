@@ -24,6 +24,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The settings navigation shows the app logo. -->
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="../MODEL-CATALOG.json" LogicalName="Models.catalog.json" />
     <EmbeddedResource Include="../MODEL-SOURCES.json" LogicalName="Models.sources.json" />
     <EmbeddedResource Include="../profiles/windows.ini" LogicalName="Profiles.windows.ini" />
