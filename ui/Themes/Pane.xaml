@@ -159,9 +159,9 @@
     </Style>
     <Style TargetType="Button" BasedOn="{StaticResource PaneTextButton}"/>
 
-    <!-- Accent button for the one main action in a footer (settings 儲存), control height 32 -->
+    <!-- Accent button for the one main action in a footer (settings 儲存): same size as a text button, accent fill -->
     <Style x:Key="PaneAccentButton" TargetType="Button" BasedOn="{StaticResource PaneTextButton}">
-        <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="16,0,16,0"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -184,10 +184,10 @@
         </Setter>
     </Style>
 
-    <!-- Primary capsule for the installer's single main action: accent, 40 high, radius 20, white semibold text -->
+    <!-- Primary button for the installer's single main action: same size as a text button, accent fill, white semibold text -->
     <Style x:Key="PanePrimaryButton" TargetType="Button">
-        <Setter Property="Height" Value="40"/><Setter Property="Padding" Value="24,0,24,0"/><Setter Property="CornerRadius" Value="20"/>
-        <Setter Property="Background" Value="{StaticResource PaneAccentBrush}"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="{StaticResource PaneAccentBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="White"/><Setter Property="UseSystemFocusVisuals" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -196,7 +196,7 @@
                         <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"/>
                         <Border x:Name="Hover" Background="#1FFFFFFF" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
                         <Border x:Name="Press" Background="#1A000000" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-                        <Border x:Name="Ring" Margin="-3" BorderBrush="{TemplateBinding Background}" BorderThickness="2" CornerRadius="23" Opacity="0"/>
+                        <Border x:Name="Ring" Margin="-3" BorderBrush="{TemplateBinding Background}" BorderThickness="2" CornerRadius="13" Opacity="0"/>
                         <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"/>
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
