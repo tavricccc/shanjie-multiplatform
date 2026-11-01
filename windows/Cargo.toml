@@ -32,6 +32,8 @@ windows = { version = "0.62.2", features = [
   "Win32_Storage_FileSystem", "Win32_Storage_Compression", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_HiDpi", "Win32_Globalization", "Win32_UI_TextServices", "Win32_UI_Shell",
   "Win32_UI_Accessibility", "Win32_UI_Controls", "Win32_UI_Input",
+  "Foundation", "Foundation_Numerics", "Graphics_Effects", "System", "UI", "UI_Composition", "UI_Composition_Desktop", "UI_ViewManagement",
+  "Win32_System_WinRT", "Win32_System_WinRT_Composition", "Win32_System_WinRT_Graphics_Direct2D",
   "Win32_System_Variant", "Win32_System_Ole", "Win32_System_Diagnostics_ToolHelp", "Win32_System_RemoteDesktop", "Win32_Security_Authorization", "Win32_System_IO", "Win32_System_TaskScheduler",
 ] }
 
