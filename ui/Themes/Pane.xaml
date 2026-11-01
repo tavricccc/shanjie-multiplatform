@@ -89,6 +89,10 @@
     <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
         <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="MinWidth" Value="220"/><Setter Property="FontSize" Value="12"/>
     </Style>
+    <!-- Noto Sans TC's taller line box drops the label below the 20px circle with the stock 6px top padding -->
+    <Style TargetType="RadioButton" BasedOn="{StaticResource DefaultRadioButtonStyle}">
+        <Setter Property="Padding" Value="8,2,0,0"/>
+    </Style>
     <Style TargetType="NumberBox">
         <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="MinWidth" Value="140"/>
     </Style>
