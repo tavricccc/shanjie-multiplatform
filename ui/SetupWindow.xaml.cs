@@ -22,7 +22,7 @@ public sealed partial class SetupWindow : UserControl
         uninstalling = uninstall;
         InitializeComponent();
         string title = uninstall ? "解除安裝善解" : "安裝善解";
-        Host = new Glass.GlassWindow(this, title, 640, 600, resizable: false); TitleText.Text = title;
+        Host = new Glass.GlassWindow(this, title, 520, 600, resizable: false); TitleText.Text = title;
         Steps.ItemsSource = steps;
         foreach (var (stage, label) in uninstall ? SetupStages.Uninstall : SetupStages.Install) steps.Add(new(stage, label));
         // Closing mid-install would hide the outcome; the manager itself still finishes or rolls back.
@@ -153,15 +153,20 @@ public sealed partial class SetupWindow : UserControl
         // A stopped run leaves its current step unfinished; show where it ended.
         foreach (var step in steps.Where(s => s.State == StepState.Running))
             step.State = outcome.Outcome == SetupOutcome.Succeeded ? StepState.Succeeded : StepState.Failed;
-        (DoneTitle.Text, DoneBar.Severity, DoneBar.Title) = (outcome.Outcome, uninstalling) switch
+        (DoneTitle.Text, DoneSummary.Text) = (outcome.Outcome, uninstalling) switch
         {
-            (SetupOutcome.Succeeded, false) => ("安裝完成", InfoBarSeverity.Success, "善解已可使用"),
-            (SetupOutcome.Succeeded, true) => ("已解除安裝", InfoBarSeverity.Success, "善解已移除"),
-            (SetupOutcome.Cancelled, _) => ("已取消", InfoBarSeverity.Informational, "沒有進行任何變更"),
-            (_, false) => ("安裝未完成", InfoBarSeverity.Error, "安裝失敗"),
-            (_, true) => ("解除安裝未完成", InfoBarSeverity.Error, "解除安裝失敗"),
+            (SetupOutcome.Succeeded, false) => ("安裝完成", "善解已可使用"),
+            (SetupOutcome.Succeeded, true) => ("已解除安裝", "善解已移除"),
+            (SetupOutcome.Cancelled, _) => ("已取消", "沒有進行任何變更"),
+            (_, false) => ("安裝未完成", "安裝失敗"),
+            (_, true) => ("解除安裝未完成", "解除安裝失敗"),
         };
-        DoneBar.Message = outcome.Outcome == SetupOutcome.Succeeded && !uninstalling ? "請重新開啟正在使用輸入法的程式；登出再登入後，核心會在登入時自動啟動。" : "";
+        // Pane's done state: accent circle with a check; a failure shows the warning sign instead.
+        bool ok = outcome.Outcome != SetupOutcome.Failed;
+        DoneIcon.Glyph = ok ? "check" : "warn";
+        DoneCircle.Background = ok ? Controls.Motion.Accent : Controls.Motion.Resource("PaneFillControlBrush");
+        DoneIcon.Foreground = ok ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : Controls.Motion.Resource("PaneText1Brush");
+        DoneHint.Text = outcome.Outcome == SetupOutcome.Succeeded && !uninstalling ? "請重新開啟正在使用輸入法的程式；登出再登入後，核心會在登入時自動啟動。" : "";
         DoneText.Text = outcome.Message;
         Show(Page.Done);
     }
