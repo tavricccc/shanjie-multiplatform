@@ -2,7 +2,7 @@ using Microsoft.UI.Xaml;
 namespace Shanjie_UI;
 public partial class App : Application
 {
-    private Window? window;
+    private object? window;
     private SettingsInstance? instance;
     public App() => InitializeComponent();
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
@@ -31,7 +31,7 @@ public partial class App : Application
                 var main=new MainWindow(); window=main;
                 main.AppWindow.Move(new Windows.Graphics.PointInt32(-12000,-12000)); main.AppWindow.Show(false);
                 main.Vm.DictionaryText="ㄏㄨㄟˊ-ㄐㄧㄚ 回家"; main.Vm.HasChanges=true;
-                instance.Listen(window); File.WriteAllText(Path.Combine(output,"ready.txt"),Environment.ProcessId.ToString());
+                instance.Listen(main); File.WriteAllText(Path.Combine(output,"ready.txt"),Environment.ProcessId.ToString());
                 var until=DateTime.UtcNow.AddSeconds(35);
                 while(instance.ActivationCount<4 && DateTime.UtcNow<until) await Task.Delay(50);
                 if(instance.ActivationCount!=4 || main.Vm.DictionaryText!="ㄏㄨㄟˊ-ㄐㄧㄚ 回家" || !main.Vm.HasChanges)
@@ -90,7 +90,7 @@ public partial class App : Application
             try {
                 // Uninstalling moves this version folder, so continue from a temporary copy.
                 if (uninstall && !Setup.UninstallCopy.Running) { Setup.UninstallCopy.Relaunch(); Exit(); return; }
-                var setup = new SetupWindow(uninstall); window = setup; setup.Activate(); await setup.LoadStatus();
+                var setup = new SetupWindow(uninstall); window = setup; setup.Host.Show(); await setup.LoadStatus();
             }
             catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
         }
@@ -98,7 +98,7 @@ public partial class App : Application
             try {
                 instance = await SettingsInstance.Open();
                 if (instance is null) { Exit(); return; }
-                window = new MainWindow(); instance.Listen(window); window.Activate();
+                var main = new MainWindow(); window = main; instance.Listen(main); main.Host.Show();
             }
             catch (Exception error) { SettingsInstance.MessageBox(0,error.Message,"善解設定未能開啟",0x10); instance?.Dispose(); Exit(); }
         }

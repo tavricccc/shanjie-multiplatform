@@ -1,11 +1,15 @@
-<Window x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls" xmlns:models="using:Shanjie_UI.Models" Title="善解設定">
-    <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
-    <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+<UserControl x:Class="Shanjie_UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls" xmlns:models="using:Shanjie_UI.Models">
+    <Grid x:Name="Root" Background="Transparent">
         <Grid.Resources>
+            <!-- The glass behind the window is the background; NavigationView's own fills would cover it. -->
+            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
+            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent"/>
+            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent"/>
+            <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
             <Style x:Key="HelpText" TargetType="TextBlock"><Setter Property="FontFamily" Value="Microsoft JhengHei UI"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
         </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <TitleBar x:Name="AppTitleBar" Title="善解設定" />
+        <Grid x:Name="AppTitleBar" Height="48" Padding="20,0,8,0" Background="Transparent" PointerPressed="DragWindow"><TextBlock x:Name="TitleText" Text="善解設定" VerticalAlignment="Center" Style="{ThemeResource CaptionTextBlockStyle}"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="MinimizeWindow" ToolTipService.ToolTip="最小化" AutomationProperties.Name="最小化"/><Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;" Click="CloseWindow" ToolTipService.ToolTip="關閉" AutomationProperties.Name="關閉"/></StackPanel></Grid>
         <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Left" OpenPaneLength="208" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="Navigate">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="一般" Icon="Home" Tag="general"/>
@@ -172,10 +176,10 @@
             </ScrollViewer>
         </NavigationView>
         <InfoBar x:Name="StatusBar" Grid.Row="2" Margin="16,4,16,0" IsOpen="False" IsClosable="True" Severity="Success" Message="{x:Bind Vm.Status, Mode=OneWay}"/>
-        <Grid Grid.Row="3" Padding="16,8" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <Grid Grid.Row="3" Padding="16,8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="12"><Button Content="重新載入已儲存設定" Click="Reload"/><TextBlock Text="{x:Bind Vm.DraftHelp, Mode=OneWay}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"><Button Content="重新啟動輸入法" Click="Restart" ToolTipService.ToolTip="儲存設定、提交目前組字並重載善解核心"/><Button Content="取消" Click="Cancel"/><Button Content="儲存" Style="{ThemeResource AccentButtonStyle}" Click="Save"/></StackPanel>
         </Grid>
     </Grid>
-</Window>
+</UserControl>

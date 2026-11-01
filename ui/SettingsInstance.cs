@@ -84,10 +84,10 @@ internal sealed class SettingsInstance : IDisposable
         instance.Dispose();
         throw new IOException("既有設定視窗尚未回應，請稍後再試；尚未儲存的修改仍保留在原視窗。");
     }
-    public void Listen(Window window)
+    public void Listen(MainWindow window)
     {
         var queue = DispatcherQueue.GetForCurrentThread();
-        nint handle = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        nint handle = window.Handle;
         _ = Task.Run(async () =>
         {
             var accepted=new HashSet<Guid>(); var order=new Queue<Guid>();

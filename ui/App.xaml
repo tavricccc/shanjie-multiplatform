@@ -11,6 +11,12 @@
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
             <FontFamily x:Key="ContentControlThemeFontFamily">Microsoft JhengHei UI</FontFamily>
+            <!-- Minimize and close on the glass title bar; the frameless glass window has no system caption buttons. -->
+            <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Width" Value="40"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}"/><Setter Property="FontSize" Value="10"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

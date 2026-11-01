@@ -3,6 +3,7 @@ namespace Shanjie_UI.Interop;
 internal static class Native
 {
     [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(nint window);
+    [DllImport("user32.dll")] internal static extern nint SendMessageW(nint window, uint message, nint w, nint l);
     private const string Rust = "shanjie_windows.dll";
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_load_text();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_path();

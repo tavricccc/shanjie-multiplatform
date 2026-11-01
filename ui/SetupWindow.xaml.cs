@@ -7,7 +7,7 @@ using Windows.Graphics;
 namespace Shanjie_UI;
 
 /// <summary>Install (from the package) or uninstall (from the installed copy) front end for shanjie-manager.</summary>
-public sealed partial class SetupWindow : Window
+public sealed partial class SetupWindow : UserControl
 {
     internal enum Page { Welcome, Keyboard, Uninstall, Progress, Done }
     private readonly bool uninstalling;
@@ -20,19 +20,26 @@ public sealed partial class SetupWindow : Window
     public SetupWindow(bool uninstall)
     {
         uninstalling = uninstall;
-        InitializeComponent(); ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
+        InitializeComponent();
         string title = uninstall ? "解除安裝善解" : "安裝善解";
-        Title = title; AppTitleBar.Title = title;
-        double scale = Interop.Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(640 * scale), (int)(600 * scale)));
+        Host = new Glass.GlassWindow(this, title, 640, 600, resizable: false); TitleText.Text = title;
         Steps.ItemsSource = steps;
         foreach (var (stage, label) in uninstall ? SetupStages.Uninstall : SetupStages.Install) steps.Add(new(stage, label));
         // Closing mid-install would hide the outcome; the manager itself still finishes or rolls back.
-        AppWindow.Closing += (_, args) => args.Cancel = running;
+        Host.CanClose = () => !running;
         Closed += (_, _) => { if (uninstalling) UninstallCopy.RemoveAfterExit(); };
         Show(uninstall ? Page.Uninstall : Page.Welcome);
     }
 
+    internal Glass.GlassWindow Host { get; }
+    internal Microsoft.UI.Windowing.AppWindow AppWindow => Host.AppWindow;
+    internal nint Handle => Host.Handle;
+    internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
+    internal void Activate() => Host.Activate();
+    internal void Close() => Host.Close();
+    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, AppTitleBar) || ReferenceEquals(args.OriginalSource, TitleText)) Host.BeginDrag(); }
+    private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
+    private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     internal FrameworkElement CaptureElement => Root;
     internal void SetThemeForVerification(ElementTheme theme) => Root.RequestedTheme = theme;
     internal IReadOnlyList<SetupStep> StepsForVerification => steps;

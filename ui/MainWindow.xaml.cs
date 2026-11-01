@@ -3,14 +3,13 @@ using Microsoft.UI.Xaml.Controls;
 using Shanjie_UI.ViewModels;
 using Windows.Graphics;
 namespace Shanjie_UI;
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : UserControl
 {
     public SettingsViewModel Vm { get; } = new();
     public MainWindow()
     {
-        InitializeComponent(); Bindings.Initialize(); ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
-        double scale = Interop.Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(840 * scale), (int)(680 * scale)));
+        InitializeComponent(); Bindings.Initialize();
+        Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
         Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
         Vm.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
@@ -21,6 +20,15 @@ public sealed partial class MainWindow : Window
         Root.Loaded+=InitializeModels;
         Closed+=(_,_)=>{modelsClosed=true;modelScan?.Cancel();modelOperation?.Cancel();modelWatcher?.Dispose();};
     }
+    internal Glass.GlassWindow Host { get; }
+    internal Microsoft.UI.Windowing.AppWindow AppWindow => Host.AppWindow;
+    internal nint Handle => Host.Handle;
+    internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
+    internal void Activate() => Host.Activate();
+    internal void Close() => Host.Close();
+    private void DragWindow(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, AppTitleBar) || ReferenceEquals(args.OriginalSource, TitleText)) Host.BeginDrag(); }
+    private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
+    private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
@@ -87,7 +95,7 @@ public sealed partial class MainWindow : Window
     private async void ImportPreset(object sender, RoutedEventArgs args)
     {
         var picker = new Windows.Storage.Pickers.FileOpenPicker(); picker.FileTypeFilter.Add(".ini");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Handle);
         var file = await picker.PickSingleFileAsync(); if (file is null) return;
         string text;
         try { text = await File.ReadAllTextAsync(file.Path); }
@@ -99,7 +107,7 @@ public sealed partial class MainWindow : Window
     {
         var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedFileName = "我的善解操作" };
         picker.FileTypeChoices.Add("善解操作預設", [".ini"]);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Handle);
         var file = await picker.PickSaveFileAsync(); if (file is null) return;
         string? text = null;
         ShowResult(() => { text = Vm.ExportPreset(Path.GetFileNameWithoutExtension(file.Path)); Vm.Status = $"已匯出到 {file.Path}。檔案只包含按鍵與選字操作。"; }, InfoBarSeverity.Success);

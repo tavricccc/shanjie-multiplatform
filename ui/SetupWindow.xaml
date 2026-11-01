@@ -1,11 +1,10 @@
-<Window x:Class="Shanjie_UI.SetupWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:setup="using:Shanjie_UI.Setup" Title="善解輸入法">
-    <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
-    <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+<UserControl x:Class="Shanjie_UI.SetupWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:setup="using:Shanjie_UI.Setup">
+    <Grid x:Name="Root" Background="Transparent">
         <Grid.Resources>
             <Style x:Key="HelpText" TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
         </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <TitleBar x:Name="AppTitleBar" Title="善解輸入法" />
+        <Grid x:Name="AppTitleBar" Height="48" Padding="20,0,8,0" Background="Transparent" PointerPressed="DragWindow"><TextBlock x:Name="TitleText" Text="善解輸入法" VerticalAlignment="Center" Style="{ThemeResource CaptionTextBlockStyle}"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="MinimizeWindow" ToolTipService.ToolTip="最小化" AutomationProperties.Name="最小化"/><Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;" Click="CloseWindow" ToolTipService.ToolTip="關閉" AutomationProperties.Name="關閉"/></StackPanel></Grid>
         <ScrollViewer Grid.Row="1" Padding="32,16,32,24">
             <Grid>
                 <StackPanel x:Name="WelcomePage" Spacing="12">
@@ -57,7 +56,7 @@
                 </StackPanel>
             </Grid>
         </ScrollViewer>
-        <Grid Grid.Row="2" Padding="32,12" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <Grid Grid.Row="2" Padding="32,12">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
                 <Button x:Name="BackButton" Content="上一步" Click="Back" Visibility="Collapsed"/>
                 <Button x:Name="SecondaryButton" Content="取消" Click="Secondary"/>
@@ -65,4 +64,4 @@
             </StackPanel>
         </Grid>
     </Grid>
-</Window>
+</UserControl>
