@@ -51,6 +51,7 @@ public sealed partial class MainWindow : UserControl
         section = index;
         var panels = new StackPanel[] { General, English, Keys, Punctuation, Composition, Candidates, Appearance, Dictionary, About };
         for (int i = 0; i < panels.Length; i++) panels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        if (index == Pages.About) StartUpdateCheck();
         for (int i = 0; i < Nav.Children.Count; i++)
         {
             var row = (StackPanel)((Grid)Nav.Children[i]).Children[0];

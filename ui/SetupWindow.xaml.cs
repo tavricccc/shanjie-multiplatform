@@ -16,6 +16,7 @@ public sealed partial class SetupWindow : UserControl
     private SetupResult? result;
     private Page page;
     private bool running;
+    private bool updating;
 
     public SetupWindow(bool uninstall)
     {
@@ -112,10 +113,25 @@ public sealed partial class SetupWindow : UserControl
         }
     }
 
+    /// <summary>The settings app's updater started this run: install with the keyboard already in use and reopen the
+    /// settings when it succeeds; a failure stays on the done page like a manual install.</summary>
+    internal async Task InstallUpdate()
+    {
+        if (status is null) return;
+        updating = true;
+        uint keyboard = status.SuggestedKeyboard == 2 ? 2u : 1u;
+        await Execute(async () =>
+        {
+            await BundleExtraction.WaitReady(ShowExtraction);
+            return await SetupRunner.Install(keyboard, Apply);
+        });
+        if (result?.Outcome == SetupOutcome.Succeeded) OpenSettings();
+    }
+
     private async Task Execute(Func<Task<SetupResult>> operation)
     {
         running = true;
-        ProgressTitle.Text = uninstalling ? "正在解除安裝" : "正在安裝";
+        ProgressTitle.Text = uninstalling ? "正在解除安裝" : updating ? "正在更新" : "正在安裝";
         Show(Page.Progress);
         SetupResult outcome;
         try { outcome = await operation(); }

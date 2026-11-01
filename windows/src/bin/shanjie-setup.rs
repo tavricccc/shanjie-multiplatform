@@ -3,7 +3,8 @@
 //! window's own files to a temporary folder without showing anything and opens the window from
 //! there; the models and data come out only once the window asks for them (the user pressed
 //! install, see `GO`), reporting through `setup-extract.txt`. The folder is removed once the
-//! window closes.
+//! window closes. `--auto-update` (from the settings app's updater) makes the window install without asking
+//! and open the new settings when done.
 #![windows_subsystem = "windows"]
 use shanjie_windows::{setup_bundle, wide};
 use std::{
@@ -128,8 +129,12 @@ fn report(status: &Path, text: &str) -> std::io::Result<()> {
 }
 
 fn launch(root: &Path) -> std::io::Result<std::process::Child> {
-    std::process::Command::new(root.join("ui").join("Shanjie.UI.exe"))
-        .arg("--setup")
+    let mut window = std::process::Command::new(root.join("ui").join("Shanjie.UI.exe"));
+    window.arg("--setup");
+    if std::env::args().skip(1).any(|a| a == "--auto-update") {
+        window.arg("--auto-update");
+    }
+    window
         .current_dir(root)
         .spawn()
 }

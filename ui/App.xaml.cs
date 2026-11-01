@@ -87,13 +87,14 @@ public partial class App : Application
             // Several hidden test windows are still open; Application.Exit does not end the process here.
             Environment.Exit(code);
         }
-        else if (arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall")
+        else if ((arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall") || (arguments.Length == 3 && arguments[1] == "--setup" && arguments[2] == "--auto-update"))
         {
             bool uninstall = arguments[1] == "--uninstall";
             try {
                 // Uninstalling moves this version folder, so continue from a temporary copy.
                 if (uninstall && !Setup.UninstallCopy.Running) { Setup.UninstallCopy.Relaunch(); Exit(); return; }
                 var setup = new SetupWindow(uninstall); window = setup; setup.Host.Show(); await setup.LoadStatus();
+                if (arguments.Length == 3) await setup.InstallUpdate();
             }
             catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
         }
