@@ -207,9 +207,13 @@ internal sealed partial class GlassWindow : IDisposable
         var shown = captions.Where(e => e.Visibility == Visibility.Visible && e.ActualWidth > 0).ToArray();
         captionRects = [.. shown.Select(Bounds)];
         passRects = [.. shown.SelectMany(Buttons).Where(b => b.Visibility == Visibility.Visible).Select(Bounds)];
-        var source = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
-        source.SetRegionRects(NonClientRegionKind.Caption, captionRects);
-        source.SetRegionRects(NonClientRegionKind.Passthrough, passRects);
+        try
+        {
+            var source = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+            source.SetRegionRects(NonClientRegionKind.Caption, captionRects);
+            source.SetRegionRects(NonClientRegionKind.Passthrough, passRects);
+        }
+        catch (Exception) { } // without caption regions the window still drags from its own hit test
     }
 
     static bool Inside(RectInt32[] rects, int x, int y) => rects.Any(r => x >= r.X && x < r.X + r.Width && y >= r.Y && y < r.Y + r.Height);
