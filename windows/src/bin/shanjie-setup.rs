@@ -1,34 +1,29 @@
 //! 安裝善解.exe. Next to an extracted package it opens the WinUI setup window in ui\. As the
 //! single-file installer it carries the whole package (see setup_bundle): it extracts the
-//! window's own files to a temporary folder behind a short progress dialog, opens the window
-//! from there and keeps extracting the models and data while the window is open, reporting
-//! through `setup-extract.txt`. The folder is removed once the window closes.
+//! window's own files to a temporary folder without showing anything and opens the window from
+//! there; the models and data come out only once the window asks for them (the user pressed
+//! install, see `GO`), reporting through `setup-extract.txt`. The folder is removed once the
+//! window closes.
 #![windows_subsystem = "windows"]
 use shanjie_windows::{setup_bundle, wide};
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
 use windows::{
-    core::{w, HRESULT, PCWSTR},
+    core::{w, PCWSTR},
     Win32::{
-        Foundation::{GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, S_OK, WPARAM},
+        Foundation::{GetLastError, ERROR_ALREADY_EXISTS},
         System::Threading::CreateMutexW,
         UI::{
-            Controls::*,
             HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2},
-            WindowsAndMessaging::{
-                MessageBoxW, SendMessageW, IDCANCEL, MB_ICONERROR, MB_ICONINFORMATION, MB_OK,
-                MESSAGEBOX_STYLE,
-            },
+            WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MESSAGEBOX_STYLE},
         },
     },
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-static DONE: AtomicU64 = AtomicU64::new(0);
-static EARLY: AtomicU64 = AtomicU64::new(1);
 static FINISHED: AtomicBool = AtomicBool::new(false);
 /// Every file the setup window needs is written.
 static WINDOW_READY: AtomicBool = AtomicBool::new(false);
@@ -60,7 +55,6 @@ fn run() -> Result<()> {
     }
     let folder = scratch()?;
     let result = (|| -> Result<()> {
-        EARLY.store(bundle.early.max(1), Ordering::Relaxed);
         let worker = {
             let folder = folder.clone();
             std::thread::spawn(move || -> std::result::Result<bool, String> {
@@ -74,7 +68,6 @@ fn run() -> Result<()> {
                             &mut file,
                             &folder,
                             |done| {
-                                DONE.store(done, Ordering::Relaxed);
                                 let percent = done * 100 / total;
                                 if WINDOW_READY.load(Ordering::Relaxed) && percent != shown {
                                     shown = percent;
@@ -86,6 +79,11 @@ fn run() -> Result<()> {
                                 // The window reads this file to know the rest is still coming.
                                 if report(&status, &format!("running {} {total}", bundle.early)).is_ok() {
                                     WINDOW_READY.store(true, Ordering::Relaxed);
+                                }
+                                // The rest waits until the user starts installing, or stops when the window closes.
+                                let go = folder.join(GO);
+                                while !go.exists() && !CANCEL.load(Ordering::Relaxed) {
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
                                 }
                             },
                         )
@@ -100,10 +98,11 @@ fn run() -> Result<()> {
                 result
             })
         };
-        if show_progress().is_err() {
-            CANCEL.store(true, Ordering::Relaxed);
+        // No dialog while the window's files come out: the setup window simply appears a moment later.
+        while !WINDOW_READY.load(Ordering::Relaxed) && !FINISHED.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(30));
         }
-        if !WINDOW_READY.load(Ordering::Relaxed) || CANCEL.load(Ordering::Relaxed) {
+        if !WINDOW_READY.load(Ordering::Relaxed) {
             CANCEL.store(true, Ordering::Relaxed);
             worker.join().map_err(|_| "解壓縮安裝程式時發生錯誤。")??;
             return Ok(());
@@ -119,6 +118,8 @@ fn run() -> Result<()> {
 }
 
 const STATUS: &str = "setup-extract.txt";
+/// Written by the window when the user presses install: extract the rest of the package.
+const GO: &str = "setup-extract-go";
 /// `running <done> <total>`, `done` or `failed <message>`, replaced as a whole.
 fn report(status: &Path, text: &str) -> std::io::Result<()> {
     let temporary = status.with_extension("tmp");
@@ -151,46 +152,6 @@ fn remove(folder: &Path) {
         }
         std::thread::sleep(std::time::Duration::from_millis(250));
     }
-}
-
-fn show_progress() -> windows::core::Result<()> {
-    let config = TASKDIALOGCONFIG {
-        cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
-        dwFlags: TDF_SHOW_PROGRESS_BAR | TDF_CALLBACK_TIMER | TDF_ALLOW_DIALOG_CANCELLATION,
-        dwCommonButtons: TDCBF_CANCEL_BUTTON,
-        pszWindowTitle: w!("安裝善解"),
-        pszMainInstruction: w!("正在準備安裝程式"),
-        pszContent: w!("正在校驗安裝檔案並準備安裝視窗。"),
-        pfCallback: Some(progress),
-        ..Default::default()
-    };
-    unsafe { TaskDialogIndirect(&config, None, None, None) }
-}
-
-unsafe extern "system" fn progress(
-    hwnd: HWND,
-    notification: TASKDIALOG_NOTIFICATIONS,
-    _: WPARAM,
-    _: LPARAM,
-    _: isize,
-) -> HRESULT {
-    match notification {
-        TDN_TIMER => {
-            let percent = (DONE.load(Ordering::Relaxed) * 100 / EARLY.load(Ordering::Relaxed)).min(100);
-            unsafe {
-                SendMessageW(hwnd, TDM_SET_PROGRESS_BAR_POS.0 as u32, Some(WPARAM(percent as usize)), None);
-                if WINDOW_READY.load(Ordering::Relaxed) || FINISHED.load(Ordering::Relaxed) {
-                    SendMessageW(hwnd, TDM_CLICK_BUTTON.0 as u32, Some(WPARAM(IDCANCEL.0 as usize)), None);
-                }
-            }
-        }
-        // The timer's own click once the window can open is not a cancellation.
-        TDN_BUTTON_CLICKED if !WINDOW_READY.load(Ordering::Relaxed) && !FINISHED.load(Ordering::Relaxed) => {
-            CANCEL.store(true, Ordering::Relaxed)
-        }
-        _ => {}
-    }
-    S_OK
 }
 
 fn message(text: &str, icon: MESSAGEBOX_STYLE) {

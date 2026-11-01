@@ -1,8 +1,8 @@
 namespace Shanjie_UI.Setup;
 
 /// <summary>
-/// The single-file installer opens this window as soon as ui\ and tools\ are written and keeps
-/// extracting the models and data next to them, reporting in setup-extract.txt (replaced as a
+/// The single-file installer opens this window as soon as ui\ and tools\ are written and extracts
+/// the models and data next to them once asked (setup-extract-go), reporting in setup-extract.txt (replaced as a
 /// whole): "running &lt;done&gt; &lt;total&gt;", "done" or "failed &lt;message&gt;". No file means the
 /// package was already complete, as when run from the extracted zip.
 /// </summary>
@@ -10,9 +10,11 @@ internal static class BundleExtraction
 {
     private static string StatusFile => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "setup-extract.txt"));
 
-    /// <summary>Waits until the package is complete; reports progress from 0 to 100 meanwhile.</summary>
+    /// <summary>Starts extracting the rest of the package and waits until it is complete; reports progress from 0 to 100 meanwhile.</summary>
     internal static async Task WaitReady(Action<double> progress)
     {
+        // Ask the installer to extract the rest now that the user pressed install.
+        if (File.Exists(StatusFile)) { try { File.WriteAllText(Path.Combine(Path.GetDirectoryName(StatusFile)!, "setup-extract-go"), ""); } catch (IOException) { } }
         while (true)
         {
             string text;
