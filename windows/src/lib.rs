@@ -5,6 +5,8 @@ pub mod input_diagnostics;
 pub mod model_store;
 pub mod broker;
 pub mod candidate;
+pub mod font;
+pub mod glass;
 mod dictionary_store;
 mod word_store;
 mod word_popup;

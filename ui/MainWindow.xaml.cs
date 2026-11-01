@@ -3,17 +3,19 @@ using Microsoft.UI.Xaml.Controls;
 using Shanjie_UI.ViewModels;
 using Windows.Graphics;
 namespace Shanjie_UI;
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : UserControl
 {
     public SettingsViewModel Vm { get; } = new();
     public MainWindow()
     {
-        InitializeComponent(); Bindings.Initialize(); ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
-        double scale = Interop.Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(840 * scale), (int)(680 * scale)));
-        Navigation.SelectedItem = Navigation.MenuItems[0]; ApplyTheme();
+        InitializeComponent(); Bindings.Initialize();
+        Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
+        Host.SetCaption(AppTitleBar, Head);
+        navHighlight = new Controls.SlidingHighlight(NavLayer, 12); ShowSection(0); ApplyTheme();
+        ((FrameworkElement)Nav.Children[0]).SizeChanged += (_, _) => { if (!navPlaced) { navPlaced = true; navHighlight.MoveTo((FrameworkElement)Nav.Children[section], false); } };
         Vm.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
+            if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
@@ -21,6 +23,14 @@ public sealed partial class MainWindow : Window
         Root.Loaded+=InitializeModels;
         Closed+=(_,_)=>{modelsClosed=true;modelScan?.Cancel();modelOperation?.Cancel();modelWatcher?.Dispose();};
     }
+    internal Glass.GlassWindow Host { get; }
+    internal Microsoft.UI.Windowing.AppWindow AppWindow => Host.AppWindow;
+    internal nint Handle => Host.Handle;
+    internal event EventHandler? Closed { add => Host.Closed += value; remove => Host.Closed -= value; }
+    internal void Activate() => Host.Activate();
+    internal void Close() => Host.Close();
+    private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
+    private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
@@ -28,13 +38,33 @@ public sealed partial class MainWindow : Window
     internal string? ShownModelForVerification => (ModelSelector.SelectedItem as Models.ModelChoice)?.Id;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedModeForVerification(int mode) => MixedModeSelector.SelectedIndex = mode;
-    internal void SetEnglishInlineForVerification(bool value) => EnglishInlineToggle.SetToggleForVerification(value);
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
     internal void SetSpaceInputsZhuyinForVerification(bool value) => SpaceInputsZhuyinToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
     internal void ShowSpaceOptions() { ShowSection(Pages.Composition); Root.UpdateLayout(); SpaceInputsZhuyinToggle.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal static class Pages { public const int General = 0, English = 1, Keys = 2, Punctuation = 3, Composition = 4, Candidates = 5, Appearance = 6, Dictionary = 7, About = 8, Count = 9; }
-    internal void ShowSection(int index) { Navigation.SelectedItem = Navigation.MenuItems[index]; ContentScroll.ChangeView(null, 0, null, true); }
+    private readonly Controls.SlidingHighlight navHighlight;
+    private bool navPlaced;
+    private int section;
+    internal void ShowSection(int index)
+    {
+        section = index;
+        var panels = new StackPanel[] { General, English, Keys, Punctuation, Composition, Candidates, Appearance, Dictionary, About };
+        for (int i = 0; i < panels.Length; i++) panels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        if (index == Pages.About) StartUpdateCheck();
+        for (int i = 0; i < Nav.Children.Count; i++)
+        {
+            var row = (StackPanel)((Grid)Nav.Children[i]).Children[0];
+            var brush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[i == index ? "PaneText1Brush" : "PaneText2Brush"];
+            ((Controls.Icon)row.Children[0]).Foreground = brush;
+            var text = (TextBlock)row.Children[1]; text.Foreground = brush; text.FontWeight = i == index ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        }
+        SectionTitle.Text = AutomationName(Nav.Children[index]);
+        if (navPlaced) navHighlight.MoveTo((FrameworkElement)Nav.Children[index]);
+        ContentScroll.ChangeView(null, 0, null, true);
+    }
+    private static string AutomationName(UIElement element) => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(element);
+    private void NavTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs args) => ShowSection(Nav.Children.IndexOf((UIElement)sender));
     internal void ShowModelOptions() { ShowSection(0); Root.UpdateLayout(); ModelSelector.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowAdvancedKeys() { ShowSection(Pages.Punctuation); Root.UpdateLayout(); AdvancedKeys.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
     internal void ShowCandidateKeys() { ShowSection(Pages.Candidates); Root.UpdateLayout(); CandidateKeyOptions.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 }); }
@@ -46,13 +76,6 @@ public sealed partial class MainWindow : Window
     internal InfoBarSeverity FeedbackForVerification => StatusBar.Severity;
     internal void SetInstalledForVerification(uint mask) { Vm.ApplyInstalledKeyboards(mask); ShowLoadFeedback(); }
     private void ShowLoadFeedback() { StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = !string.IsNullOrWhiteSpace(Vm.Status); }
-    private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        foreach (var (name, panel) in new (string, StackPanel)[] { ("general", General), ("english", English), ("keys", Keys), ("punctuation", Punctuation), ("composition", Composition), ("candidates", Candidates), ("appearance", Appearance), ("dictionary", Dictionary), ("about", About) })
-            panel.Visibility = tag == name ? Visibility.Visible : Visibility.Collapsed;
-        ContentScroll.ChangeView(null, 0, null, true);
-    }
     private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);
     private void ShiftAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, false);
     private void PlainAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, true);
@@ -87,7 +110,7 @@ public sealed partial class MainWindow : Window
     private async void ImportPreset(object sender, RoutedEventArgs args)
     {
         var picker = new Windows.Storage.Pickers.FileOpenPicker(); picker.FileTypeFilter.Add(".ini");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Handle);
         var file = await picker.PickSingleFileAsync(); if (file is null) return;
         string text;
         try { text = await File.ReadAllTextAsync(file.Path); }
@@ -99,7 +122,7 @@ public sealed partial class MainWindow : Window
     {
         var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedFileName = "我的善解操作" };
         picker.FileTypeChoices.Add("善解操作預設", [".ini"]);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Handle);
         var file = await picker.PickSaveFileAsync(); if (file is null) return;
         string? text = null;
         ShowResult(() => { text = Vm.ExportPreset(Path.GetFileNameWithoutExtension(file.Path)); Vm.Status = $"已匯出到 {file.Path}。檔案只包含按鍵與選字操作。"; }, InfoBarSeverity.Success);

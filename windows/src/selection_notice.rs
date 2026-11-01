@@ -48,7 +48,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             let brush=CreateSolidBrush(color(p.background)); let mut rect=RECT::default(); let _=GetClientRect(window,&mut rect);
             FillRect(dc,&rect,brush); let _=DeleteObject(brush.into()); SetTextColor(dc,color(p.text)); SetBkMode(dc,TRANSPARENT);
             let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(window).max(96) as i32;
-            let font=CreateFontW(-16*dpi/96,0,0,0,400,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH.0 as u32,w!("Microsoft JhengHei UI"));
+            let font=CreateFontW(-16*dpi/96,0,0,0,400,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH.0 as u32,&crate::font::family());
             let old=SelectObject(dc,font.into()); rect.left+=12*dpi/96;rect.right-=12*dpi/96;
             let mut text=crate::wide("此欄位無法取得反白內容，請重新反白後再試。"); text.pop();
             DrawTextW(dc,&mut text,&mut rect,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);

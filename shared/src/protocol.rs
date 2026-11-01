@@ -55,11 +55,12 @@ pub struct Config {
     #[serde(default)]
     pub fuzzy: u32,
     #[serde(default)]
-    pub english_key_order: bool,
+    pub quotes: bool,
 }
 fn on() -> bool { true }
 fn standard() -> u32 { 1 }
 pub const PACK_ACG: u32 = 1;
+pub const PACK_QUOTES: u32 = 2;
 pub const PACK_IT: u32 = 4;
 impl Default for Config {
     /// The built-in model with upstream's defaults, Standard layout, chat profile.
@@ -78,13 +79,13 @@ impl Default for Config {
             rerank: true,
             rerank_level: standard(),
             fuzzy: 0,
-            english_key_order: false,
+            quotes: false,
         }
     }
 }
 impl Config {
     pub fn packs(&self) -> u32 {
-        (if self.acg { PACK_ACG } else { 0 }) | (if self.it { PACK_IT } else { 0 })
+        (if self.acg { PACK_ACG } else { 0 }) | (if self.quotes { PACK_QUOTES } else { 0 }) | (if self.it { PACK_IT } else { 0 })
     }
     /// The engine settings of a profile; the platform decides the layout from its keyboard choice.
     pub fn from_profile(p: &crate::profile::Document, layout: u32) -> Self {
@@ -102,7 +103,7 @@ impl Config {
             rerank: p.flag("engine", "rerank", true),
             rerank_level: crate::profile::RERANK_LEVELS.iter().position(|l| *l == p.get("engine", "rerank_level", "standard")).unwrap_or(1) as u32,
             fuzzy: p.fuzzy(),
-            english_key_order: p.flag("input", "english_key_order", false),
+            quotes: p.flag("engine", "quote_pack", false),
         }
     }
 }

@@ -162,8 +162,8 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         // Optional to the core (a missing file silently turns its feature off), so the package must
         // carry them, as upstream's check-app requires digits.tsv.
         "data/digits.tsv",
-        "data/english-words.txt",
         "data/packs/acg-add.tsv",
+        "data/packs/quotes-add.tsv",
         "data/packs/it-add.tsv",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
@@ -584,6 +584,25 @@ impl Leftover {
         }
         Ok(())
     }
+    /// A program that is still open keeps the retired Shanjie.dll and keeps calling into its own
+    /// version folder for the core and data; deleting those around it made such programs hang and
+    /// crash on the next key. So while any of its DLLs is in use the whole folder stays, and the
+    /// cleanup task removes it after the next sign-in or restart.
+    fn retire_version(&mut self, path: &Path) -> Result<()> {
+        let mut held = 0;
+        for arch in ["x64", "x86", "arm64"] {
+            let dll = path.join(arch).join("Shanjie.dll");
+            if dll.exists() && fs::remove_file(&dll).is_err() {
+                held += 1;
+            }
+        }
+        if held == 0 {
+            return self.remove(path);
+        }
+        self.files += held;
+        self.paths.push(path.to_owned());
+        Ok(())
+    }
 }
 /// After a fully validated update only the newest install remains: other versions, files
 /// earlier versions left in the install folder, and older recovery checkpoints all go.
@@ -592,7 +611,7 @@ fn retire_superseded(target: &Path, version: &str, current_backup: &Path) -> Res
     for entry in fs::read_dir(target.join("versions"))? {
         let entry = entry?;
         if entry.file_name() != version {
-            left.remove(&entry.path())?;
+            left.retire_version(&entry.path())?;
         }
     }
     for entry in fs::read_dir(target)? {
@@ -1048,6 +1067,26 @@ mod tests {
         assert!(version.join("Shanjie.dll").exists() && !version.join("ui").exists());
         drop(hold);
         fs::remove_dir_all(version.parent().unwrap().parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn a_retired_version_whose_dll_is_loaded_stays_whole() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = std::env::temp_dir().join(format!("shanjie-retire-whole-{}", std::process::id()));
+        let (held, free) = (root.join("held"), root.join("free"));
+        for version in [&held, &free] {
+            fs::create_dir_all(version.join("x64")).unwrap();
+            fs::create_dir_all(version.join("tools")).unwrap();
+            fs::write(version.join("x64/Shanjie.dll"), b"dll").unwrap();
+            fs::write(version.join("tools/shanjie-core.exe"), b"core").unwrap();
+        }
+        let hold = fs::OpenOptions::new().read(true).share_mode(1).open(held.join("x64/Shanjie.dll")).unwrap();
+        let mut left = Leftover::default();
+        left.retire_version(&held).unwrap();
+        left.retire_version(&free).unwrap();
+        assert_eq!((left.files, left.paths), (1, vec![held.clone()]));
+        assert!(held.join("tools/shanjie-core.exe").exists() && !free.exists());
+        drop(hold);
+        fs::remove_dir_all(&root).unwrap();
     }
     #[test]
     fn parked_uninstalls_are_removed_but_other_archived_items_stay() {

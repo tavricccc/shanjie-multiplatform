@@ -38,7 +38,9 @@ int wmain(int argc,wchar_t** argv) {
         // Vertical layout: nine rows, narrower than the pill, and a click on row three picks index 2.
         presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
         RECT tall{}; GetClientRect(presenter.window(),&tall);
-        assert(tall.bottom > client.bottom*5 && tall.right < client.right);
+        // The window carries a shadow margin around the panel (candidate.rs TOP and BOTTOM: 34 DIPs).
+        LONG margin = MulDiv(34,GetDpiForWindow(presenter.window()),96);
+        assert(tall.bottom-margin > (client.bottom-margin)*5 && tall.right < client.right);
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(tall.right/2,(LONG)(tall.bottom*(2.5/9.0))));
         while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
         assert(picks == 2 && pickedIndex == 2);

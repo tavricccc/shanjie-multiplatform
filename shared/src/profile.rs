@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 24] = [
+pub const REBUILD: [(&str, &str); 26] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -23,6 +23,7 @@ pub const REBUILD: [(&str, &str); 24] = [
     ("engine", "model_revision"),
     ("engine", "acg_pack"),
     ("engine", "it_pack"),
+    ("engine", "quote_pack"),
     ("engine", "rerank"),
     ("engine", "rerank_level"),
     ("engine", FUZZY_KEYS[0]),
@@ -38,7 +39,8 @@ pub const REBUILD: [(&str, &str); 24] = [
     ("input", "context"),
     ("input", "mixed_input"),
     ("input", "upstream_english"),
-    ("input", "english_inline"),
+    ("input", "english_overwrite"),
+    ("input", "english_reversal_guard"),
     ("input", "space_inputs_zhuyin"),
 ];
 
@@ -315,14 +317,14 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 4] = [
-    ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
+    ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
         "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
     ("candidates", &["big5"]),
-    ("appearance", &["theme", "font_size", "mode_indicator"]),
+    ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("profile", "interaction", &["windows", "shanjie"]),

@@ -68,12 +68,12 @@ impl Engine {
     /// (their indexes carry meaning); only the lexicon items behind a row are filtered.
     fn decorate_windows_candidates(&mut self) {
         let Some(mut cands) = self.cands.take() else { return };
-        let plain = !cands.english && cands.dalt.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
+        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
         let touching = self.cursor.saturating_sub(1);
         let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
         if !plain || digits {
             let kept = cands.rows.len();
-            if self.candidate_big5 && !cands.english && cands.dalt.is_none() {
+            if self.candidate_big5 && cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() {
                 let kept = kept.min(cands.list.len());
                 let keep: Vec<bool> = cands.list.iter().enumerate().map(|(i,(word,_))| i < kept || fits_big5(word)).collect();
                 retain_with_alt(&mut cands, &keep);
@@ -223,7 +223,7 @@ mod personal_lexicon_tests {
             assert!(off.associated_words("米卡").candidates.is_empty());
             assert!(off.pack_text.is_none());
         }
-        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 2).is_err());
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 8).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
     #[test]

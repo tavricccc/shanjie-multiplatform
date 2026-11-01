@@ -1000,9 +1000,11 @@ fn option_operations(p:&Document) -> [crate::broker::Op;4] {
     let keyboard=p.number("input","keyboard",0);
     let zhuyin=keyboard<3;
     let upstream=zhuyin && keyboard!=2 && p.flag("input","upstream_english",false);
-    let inline=p.flag("input","english_inline",true);
+    // Upstream defaults: overwrite, key order and the reversal guard all on.
+    let english=upstream as u32 | (p.flag("input","english_overwrite",true) as u32)<<1
+        | (p.flag("input","english_key_order",true) as u32)<<2 | (p.flag("input","english_reversal_guard",true) as u32)<<3;
     [crate::broker::Op::Options(p.input_options()),
-     crate::broker::Op::English(upstream as u32 | (inline as u32)<<1),
+     crate::broker::Op::English(english),
      crate::broker::Op::Mixed(zhuyin && p.flag("input","mixed_input",false)),
      crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false))]
 }

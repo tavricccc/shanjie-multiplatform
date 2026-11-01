@@ -153,7 +153,7 @@ impl Panel {
         let inspection_y=reading_y+reading_height+8;let status_y=inspection_y+68;let button_y=status_y+64;
         self.font = CreateFontW(-scale(16),0,0,0,400,0,0,0,DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH.0 as u32, w!("Microsoft JhengHei UI"));
+            DEFAULT_PITCH.0 as u32, &crate::font::family());
         self.paint.set(Paint{font:self.font,background:self.background,border:self.border,colors:self.colors});
         let window=self.window;
         let label = |class:PCWSTR, text:&str, id:usize, x,y,w,h,style| -> Result<HWND> {
@@ -192,7 +192,7 @@ impl Panel {
         SetWindowPos(self.window,Some(if self.standalone{HWND_TOPMOST}else{HWND_TOP}),x,y,width,height,SWP_NOACTIVATE)?;
         if self.dpi!=dpi {
             self.dpi=dpi;
-            let font=CreateFontW(-scale(16),0,0,0,400,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH.0 as u32,w!("Microsoft JhengHei UI"));
+            let font=CreateFontW(-scale(16),0,0,0,400,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH.0 as u32,&crate::font::family());
             if font.is_invalid(){return Err(Error::from_thread());}
             let old=self.font;self.font=font;
             self.paint.set(Paint{font,background:self.background,border:self.border,colors:self.colors});

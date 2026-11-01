@@ -2,11 +2,14 @@ using Microsoft.UI.Xaml;
 namespace Shanjie_UI;
 public partial class App : Application
 {
-    private Window? window;
+    private object? window;
     private SettingsInstance? instance;
     public App() => InitializeComponent();
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Pop-ups (drop-downs, tool tips) do not inherit the window's font; they read the theme font. Resources are
+        // only available once the app has launched.
+        if (Glass.GlassWindow.Font is { } font) Resources["ContentControlThemeFontFamily"] = font;
         var arguments = Environment.GetCommandLineArgs();
         if (arguments.Length == 4 && arguments[1] is "--verify-models" or "--verify-model-v2")
         {
@@ -31,7 +34,7 @@ public partial class App : Application
                 var main=new MainWindow(); window=main;
                 main.AppWindow.Move(new Windows.Graphics.PointInt32(-12000,-12000)); main.AppWindow.Show(false);
                 main.Vm.DictionaryText="ㄏㄨㄟˊ-ㄐㄧㄚ 回家"; main.Vm.HasChanges=true;
-                instance.Listen(window); File.WriteAllText(Path.Combine(output,"ready.txt"),Environment.ProcessId.ToString());
+                instance.Listen(main); File.WriteAllText(Path.Combine(output,"ready.txt"),Environment.ProcessId.ToString());
                 var until=DateTime.UtcNow.AddSeconds(35);
                 while(instance.ActivationCount<4 && DateTime.UtcNow<until) await Task.Delay(50);
                 if(instance.ActivationCount!=4 || main.Vm.DictionaryText!="ㄏㄨㄟˊ-ㄐㄧㄚ 回家" || !main.Vm.HasChanges)
@@ -84,13 +87,14 @@ public partial class App : Application
             // Several hidden test windows are still open; Application.Exit does not end the process here.
             Environment.Exit(code);
         }
-        else if (arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall")
+        else if ((arguments.Length == 2 && arguments[1] is "--setup" or "--uninstall") || (arguments.Length == 3 && arguments[1] == "--setup" && arguments[2] == "--auto-update"))
         {
             bool uninstall = arguments[1] == "--uninstall";
             try {
                 // Uninstalling moves this version folder, so continue from a temporary copy.
                 if (uninstall && !Setup.UninstallCopy.Running) { Setup.UninstallCopy.Relaunch(); Exit(); return; }
-                var setup = new SetupWindow(uninstall); window = setup; setup.Activate(); await setup.LoadStatus();
+                var setup = new SetupWindow(uninstall); window = setup; setup.Host.Show(); await setup.LoadStatus();
+                if (arguments.Length == 3) await setup.InstallUpdate();
             }
             catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
         }
@@ -98,7 +102,7 @@ public partial class App : Application
             try {
                 instance = await SettingsInstance.Open();
                 if (instance is null) { Exit(); return; }
-                window = new MainWindow(); instance.Listen(window); window.Activate();
+                var main = new MainWindow(); window = main; instance.Listen(main); main.Host.Show();
             }
             catch (Exception error) { SettingsInstance.MessageBox(0,error.Message,"善解設定未能開啟",0x10); instance?.Dispose(); Exit(); }
         }

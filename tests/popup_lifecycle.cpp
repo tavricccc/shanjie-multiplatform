@@ -122,7 +122,7 @@ int wmain(int argc,wchar_t**argv) {
                 }pump();Sleep(10);}};
             auto text=[&](HWND w){std::wstring value(GetWindowTextLengthW(w)+1,0);auto count=GetWindowTextW(w,value.data(),(int)value.size());value.resize(count);return value;};
             if(scenario==L"cancel-theme-dark"||scenario==L"cancel-theme-light") {
-                auto expectedColor=scenario==L"cancel-theme-dark"?RGB(32,32,32):RGB(255,255,255);
+                auto expectedColor=scenario==L"cancel-theme-dark"?RGB(0x1c,0x1c,0x20):RGB(0xf8,0xf8,0xfa);
                 require(background(popup)==expectedColor&&background(add)==expectedColor,1002);
             }
             if(scenario==L"cancel-escape")down(VK_ESCAPE);

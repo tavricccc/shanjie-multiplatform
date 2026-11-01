@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pane's design tokens and control styles for Shanjie's glass windows: text, stroke and fill colors per theme,
+  radii (panel 20, item 12, control 10), control heights (24 / 28 / 32 / 40) and the accent (霧藍).
+  The font is Noto Sans when installed, otherwise the system default (GlassWindow.Font).
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <Color x:Key="PaneText1Color">#EB141418</Color>
+            <Color x:Key="PaneText2Color">#9E141418</Color>
+            <Color x:Key="PaneText3Color">#6B141418</Color>
+            <Color x:Key="PaneStrokeColor">#14000000</Color>
+            <Color x:Key="PaneFillHoverColor">#0B000000</Color>
+            <Color x:Key="PaneFillSelectedColor">#9EFFFFFF</Color>
+            <Color x:Key="PaneFillControlColor">#80FFFFFF</Color>
+            <SolidColorBrush x:Key="PaneText1Brush" Color="{ThemeResource PaneText1Color}"/>
+            <SolidColorBrush x:Key="PaneText2Brush" Color="{ThemeResource PaneText2Color}"/>
+            <SolidColorBrush x:Key="PaneText3Brush" Color="{ThemeResource PaneText3Color}"/>
+            <SolidColorBrush x:Key="PaneStrokeBrush" Color="{ThemeResource PaneStrokeColor}"/>
+            <SolidColorBrush x:Key="PaneFillHoverBrush" Color="{ThemeResource PaneFillHoverColor}"/>
+            <SolidColorBrush x:Key="PaneFillSelectedBrush" Color="{ThemeResource PaneFillSelectedColor}"/>
+            <SolidColorBrush x:Key="PaneFillControlBrush" Color="{ThemeResource PaneFillControlColor}"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <Color x:Key="PaneText1Color">#F0FFFFFF</Color>
+            <Color x:Key="PaneText2Color">#A3FFFFFF</Color>
+            <Color x:Key="PaneText3Color">#66FFFFFF</Color>
+            <Color x:Key="PaneStrokeColor">#14FFFFFF</Color>
+            <Color x:Key="PaneFillHoverColor">#0FFFFFFF</Color>
+            <Color x:Key="PaneFillSelectedColor">#1FFFFFFF</Color>
+            <Color x:Key="PaneFillControlColor">#12FFFFFF</Color>
+            <SolidColorBrush x:Key="PaneText1Brush" Color="{ThemeResource PaneText1Color}"/>
+            <SolidColorBrush x:Key="PaneText2Brush" Color="{ThemeResource PaneText2Color}"/>
+            <SolidColorBrush x:Key="PaneText3Brush" Color="{ThemeResource PaneText3Color}"/>
+            <SolidColorBrush x:Key="PaneStrokeBrush" Color="{ThemeResource PaneStrokeColor}"/>
+            <SolidColorBrush x:Key="PaneFillHoverBrush" Color="{ThemeResource PaneFillHoverColor}"/>
+            <SolidColorBrush x:Key="PaneFillSelectedBrush" Color="{ThemeResource PaneFillSelectedColor}"/>
+            <SolidColorBrush x:Key="PaneFillControlBrush" Color="{ThemeResource PaneFillControlColor}"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <Color x:Key="PaneAccentColor">#FF5874C9</Color>
+    <SolidColorBrush x:Key="PaneAccentBrush" Color="{StaticResource PaneAccentColor}"/>
+    <Color x:Key="PaneDangerColor">#FFE5484D</Color>
+    <SolidColorBrush x:Key="PaneDangerBrush" Color="{StaticResource PaneDangerColor}"/>
+    <SolidColorBrush x:Key="PaneSuccessBrush" Color="#FF2F9E5B"/>
+    <SolidColorBrush x:Key="PaneWarningBrush" Color="#FFF5A524"/>
+    <CornerRadius x:Key="PaneRadiusItem">12</CornerRadius>
+    <CornerRadius x:Key="PaneRadiusControl">10</CornerRadius>
+
+    <!-- WinUI controls (text boxes, drop-downs, number boxes, check and radio buttons) in Pane's colors:
+         neutral control fill with a thin stroke, 10 px corners, the accent only for state and focus. -->
+    <StaticResource x:Key="TextControlBackground" ResourceKey="PaneFillControlBrush"/>
+    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PaneFillControlBrush"/>
+    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PaneFillSelectedBrush"/>
+    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="TextControlForeground" ResourceKey="PaneText1Brush"/>
+    <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PaneText1Brush"/>
+    <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PaneText1Brush"/>
+    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PaneText3Brush"/>
+    <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+    <StaticResource x:Key="ComboBoxBackground" ResourceKey="PaneFillControlBrush"/>
+    <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PaneFillSelectedBrush"/>
+    <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PaneFillSelectedBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxForeground" ResourceKey="PaneText1Brush"/>
+    <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PaneText2Brush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PaneFillControlBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseCheckedFill" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseCheckedStroke" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseFill" ResourceKey="PaneFillControlBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseStroke" ResourceKey="PaneStrokeBrush"/>
+    <StaticResource x:Key="ProgressBarForeground" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="PaneAccentBrush"/>
+    <StaticResource x:Key="ScrollBarThumbFill" ResourceKey="PaneText3Brush"/>
+    <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+        <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="FontSize" Value="12"/>
+    </Style>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+        <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="MinWidth" Value="220"/><Setter Property="FontSize" Value="12"/>
+    </Style>
+    <!-- Noto Sans TC's taller line box drops the label below the 20px circle with the stock 6px top padding -->
+    <Style TargetType="RadioButton" BasedOn="{StaticResource DefaultRadioButtonStyle}">
+        <Setter Property="Padding" Value="8,2,0,0"/>
+    </Style>
+    <Style TargetType="NumberBox">
+        <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="MinWidth" Value="140"/>
+    </Style>
+
+    <!-- Group title above a card; note text under it -->
+    <Style x:Key="PaneGroupTitle" TargetType="TextBlock">
+        <Setter Property="Margin" Value="2,20,0,8"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+    </Style>
+    <Style x:Key="PaneNote" TargetType="TextBlock">
+        <Setter Property="Margin" Value="2,6,2,0"/><Setter Property="FontSize" Value="11"/><Setter Property="LineHeight" Value="18"/>
+        <Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource PaneText3Brush}"/>
+    </Style>
+    <Style x:Key="PaneSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{ThemeResource PaneText1Brush}"/>
+    </Style>
+    <Style x:Key="PaneBody" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12"/><Setter Property="LineHeight" Value="19"/><Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+    </Style>
+
+    <!-- Icon button: transparent, neutral fill on hover -->
+    <Style x:Key="PaneIconButton" TargetType="Button">
+        <Setter Property="Width" Value="28"/><Setter Property="Height" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="{TemplateBinding CornerRadius}">
+                        <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource PaneFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource PaneText1Brush}"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource PaneFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource PaneText1Brush}"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Bg.Opacity" Value="0.4"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Text button: neutral fill and thin stroke, darker on hover; the implicit style for every Button -->
+    <Style x:Key="PaneTextButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{ThemeResource PaneText1Brush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root">
+                        <Border x:Name="Bg" Background="{ThemeResource PaneFillControlBrush}" BorderBrush="{ThemeResource PaneStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}"/>
+                        <Border x:Name="Hover" Background="{ThemeResource PaneFillHoverBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" Foreground="{TemplateBinding Foreground}"/>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Root.Opacity" Value="0.4"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource PaneTextButton}"/>
+
+    <!-- Accent button for the one main action in a footer (settings 儲存): same size as a text button, accent fill -->
+    <Style x:Key="PaneAccentButton" TargetType="Button" BasedOn="{StaticResource PaneTextButton}">
+        <Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root">
+                        <Border Background="{StaticResource PaneAccentBrush}" CornerRadius="{TemplateBinding CornerRadius}"/>
+                        <Border x:Name="Hover" Background="#1FFFFFFF" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <Border x:Name="Press" Background="#1A000000" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"/>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Press.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Root.Opacity" Value="0.45"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Primary button for the installer's single main action: same size as a text button, accent fill, white semibold text -->
+    <Style x:Key="PanePrimaryButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="{StaticResource PaneAccentBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="White"/><Setter Property="UseSystemFocusVisuals" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"/>
+                        <Border x:Name="Hover" Background="#1FFFFFFF" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <Border x:Name="Press" Background="#1A000000" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <Border x:Name="Ring" Margin="-3" BorderBrush="{TemplateBinding Background}" BorderThickness="2" CornerRadius="13" Opacity="0"/>
+                        <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"/>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Press.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Bg.Opacity" Value="0.45"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="FocusStates">
+                                <VisualState x:Name="Unfocused"/>
+                                <VisualState x:Name="PointerFocused"/>
+                                <VisualState x:Name="Focused"><VisualState.Setters><Setter Target="Ring.Opacity" Value="0.55"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

@@ -1,0 +1,12 @@
+english-words.txt is generated at build time from frequency_dictionary_en_82_765.txt of SymSpell
+(https://github.com/wolfgarbe/SymSpell, commit c239062ae02961df18ab7da1671d01b4388204e0): all of its words of 3 to 32 lowercase ASCII letters
+(words with an apostrophe, a digit or a capital letter dropped), sorted. SymSpell's list is the intersection of two sources (1 and 2), and the list
+itself is SymSpell's (3):
+
+1. Word frequencies: Google Books Ngram Viewer data, Creative Commons Attribution 3.0 Unported (CC BY 3.0),
+   https://creativecommons.org/licenses/by/3.0/ . The data was filtered as described above.
+2. Words: SCOWL (Spell Checker Oriented Word Lists), Copyright 2000-2026 by Kevin Atkinson. Its notice is
+   LICENSES/SCOWL.txt. SymSpell does not say which SCOWL version it used; the notice included is the current release's.
+3. The list itself: SymSpell, MIT License, Copyright (c) 2018 Wolf Garbe. Its text is LICENSES/SymSpell-MIT.txt.
+
+The program is Apache-2.0 (LICENSE). Details: data.md.

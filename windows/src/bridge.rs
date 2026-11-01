@@ -317,7 +317,7 @@ pub unsafe extern "C" fn sj_engine_action(
             e.reset(true)
         }
         10 => {
-            if e.perform(crate::broker::Op::English(value as u32 & 3)).is_none() {
+            if e.perform(crate::broker::Op::English(value as u32 & 15)).is_none() {
                 return ptr::null_mut();
             }
             e.reset(true)

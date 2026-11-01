@@ -166,13 +166,8 @@ impl Engine {
                     shanjie_engine_load_colloquial(e.handle, table.as_ptr());
                 }
             }
-            // A missing list leaves inline English inert instead of failing the engine.
-            if let Some(list) = data.join("english-words.txt").to_str().and_then(|p| CString::new(p).ok()) {
-                shanjie_engine_load_english(e.handle, list.as_ptr());
-            }
             // A new engine starts with the core's defaults, so every switch is sent each time.
             e.operation(|h, o| shanjie_engine_set_prediction(h, config.prediction as u32, o))?;
-            e.operation(|h, o| shanjie_engine_set_english_key_order(h, config.english_key_order as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_fuzzy(h, config.fuzzy, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank(h, config.rerank as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank_level(h, config.rerank_level, o))?;
