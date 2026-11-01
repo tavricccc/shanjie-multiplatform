@@ -53,6 +53,13 @@
 | `ui/` | `verify-ui.ps1` |
 | 一輪變更完成、準備 commit 或發布 | x64 `verify.ps1` 一次；發布前或改到 x86 相關時加 `verify.ps1 -NativeOnly -Architecture x86` |
 
+### 建置與 Rust
+
+- 平常只用 `cargo check`、`cargo test --lib`（加 `--target x86_64-pc-windows-msvc`），不跑 release build。
+- 完整建置（`build.ps1`）只在使用者要求或要交給使用者測試時做，而且一定連單檔安裝程式一起建，不留只建一半的 `dist/`。
+- 全域 `~/.cargo/config.toml` 已設定：registry 快取每日自動 GC、dev/test 只留行號除錯資訊、相依套件 `opt-level = 1`。不要在 repo 裡設 `target-dir`（腳本寫死 `windows/target`）。
+- 清掉 30 天沒用的 target：`pwsh -File ~/.cargo/clean-stale-targets.ps1 -WhatIf` 先預覽。
+
 ## 多餘的驗證（不要做）
 
 以下都是過去 commit 做過、後來刪掉或證明沒有用的：
