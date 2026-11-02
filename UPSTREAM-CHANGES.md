@@ -39,6 +39,8 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 
 上游的聊天／正式權重（`shanjie_engine_set_profile`）、詞庫、beam decoder 與 bigram scorer 都沒有改。設定只選擇已實作的功能，不會產生新的核心邏輯。
 
+個人詞典按「讀音＋字詞」替換相同的內建列，其他讀音保留；保留被替換列原有的 `manual` 保護與詞包標記，不把合法重複詞條當成整個詞庫載入失敗。出貨的詞庫／詞包與測試用 `data`、`eval` 由固定 Git commit 匯出，強制停用該次匯出的換行轉換，避免 Windows checkout 的 CRLF 使數字表失效或參考結果比對失敗；不修改上游子模組。
+
 ## 與上游行為仍不同之處
 
 - 善解範本（`profiles/shanjie.ini`）與上游 App 一樣開啟上游英文詞表；Windows 範本（微軟注音風格）不開。

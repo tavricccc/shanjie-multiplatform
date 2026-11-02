@@ -67,6 +67,10 @@ pwsh -File scripts/package.ps1                                # 打包並校驗
 
 TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)；尚待實機確認的項目列在 [TODO.md](../TODO.md)。
 
+出貨的詞庫／詞包與測試的 `data`、`eval` 透過 `export-upstream.ps1` 從固定 Git commit 匯出，停用該次匯出的換行轉換；不依 Windows 工作副本的 CRLF。`engine_lm` 含延遲斷言，與其他核心測試分開執行。回收的建置輸出保留在 `.deleted_files`，打包時排除這些目錄。
+
+已在目前程序載入對應架構的 MSVC 與 Windows SDK 時，原生驗證及量測腳本可明確設定 `$env:SHANJIE_USE_CURRENT_TOOLCHAIN='1'`，不變更系統環境；一般建置仍以 `build.ps1 -UseCurrentToolchain` 選用目前工具。未指定時沿用 Visual Studio 的工具偵測。
+
 ## 尚未支援
 
 數位簽章、Windows on ARM。

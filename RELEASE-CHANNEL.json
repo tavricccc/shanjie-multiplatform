@@ -1,6 +1,6 @@
 {
-  "version": "0.15.1",
-  "prerelease": false,
+  "version": "0.15.2",
+  "prerelease": true,
   "recommended_stable": "0.15.1",
   "build_linux": false
 }
