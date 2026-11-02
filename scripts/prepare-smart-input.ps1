@@ -11,7 +11,7 @@ function Replace-SmartContract([string]$old,[string]$new) {
 Replace-SmartContract '    abbr: bool,' "    abbr: bool,`n    mixed_input: bool,`n    mixed_raw: String,`n    mixed_latin: bool,`n    mixed_display_char: Option<char>,"
 Replace-SmartContract '            abbr: false,' "            abbr: false,`n            mixed_input: false,`n            mixed_raw: String::new(),`n            mixed_latin: false,`n            mixed_display_char: None,"
 Replace-SmartContract '    pub fn key(&mut self, k: Key) -> Result<Output, EngineError> {' '    fn key_original(&mut self, k: Key) -> Result<Output, EngineError> {'
-Replace-SmartContract '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, ch));' '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, self.mixed_display_char.unwrap_or(ch)));'
+Replace-SmartContract '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, ch));' '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, self.mixed_display_char.filter(|display| display.eq_ignore_ascii_case(&ch)).unwrap_or(ch)));'
 Replace-SmartContract 'return self.revert_keys(Revert::Overwrite, k.ch, col, sym);' 'return self.revert_keys(Revert::Overwrite, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
 Replace-SmartContract 'return self.revert_keys(Revert::Order, k.ch, col, sym);' 'return self.revert_keys(Revert::Order, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
 Replace-SmartContract "        self.invalidate();`n        self.left.clear();" "        self.invalidate();`n        self.mixed_raw.clear();`n        self.mixed_latin = false;`n        self.left.clear();"

@@ -135,6 +135,10 @@ int wmain(int argc,wchar_t** argv) {
  auto press=[&](WPARAM requested){WPARAM vk=requested;bool shifted=false;
    if(mode.starts_with(L"input-")) {
      if(requested==L'\\')vk=VK_OEM_5;
+     else if(requested==L'.')vk=VK_OEM_PERIOD;
+     else if(requested==L'/')vk=VK_OEM_2;
+     else if(requested==L'⌫')vk=VK_BACK;
+     else if(requested==L'⎋')vk=VK_ESCAPE;
      else if(requested==L'('){vk='9';shifted=true;}
      else if(requested==L')'){vk='0';shifted=true;}
      else if(requested==L'↓')vk=VK_DOWN;

@@ -205,7 +205,7 @@ impl Engine {
         Ok(out)
     }
     pub fn is_mixed_pending(&self) -> bool {
-        self.mixed_latin || !self.mixed_raw.is_empty()
+        self.drun.is_some() || self.mixed_latin || !self.mixed_raw.is_empty()
     }
     pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
@@ -389,7 +389,17 @@ impl Engine {
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
         // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
         if self.drun.is_some() {
-            return self.key_original(key);
+            let out = self.key_original(key)?;
+            // A non-digit Zhuyin key can end the digit run with a whole unfinished
+            // reading (2 then u = ㄉㄧ). Hand all its keys back, in typed order;
+            // tracking only the next key loses the initial at the following tone.
+            if self.drun.is_none() && self.windows_phonetic_pending()
+                && self.cands.is_none() && !self.upstream_english_busy()
+            {
+                self.windows_raw = self.shadow_text();
+                if self.mixed_input { self.mixed_raw = self.windows_raw.clone(); }
+            }
+            return Ok(self.view(out.handled, out.commit));
         }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
             // Symbols the Windows policy kept behind an unfinished reading go in front of the run: upstream's
@@ -418,12 +428,15 @@ impl Engine {
         if key.kind == KeyKind::Enter && key.modifiers == 0 {
             if let Some(out) = self.commit_through_cursor()? { return Ok(self.mixed_view(out)); }
         }
-        let out = self.windows_key(key)?;
+        let mut out = self.windows_key(key)?;
         if self.drun.is_some() {
             // The key upstream let through opened a digit run: the run owns these keys now.
             self.mixed_raw.clear();
             self.mixed_latin = false;
             self.windows_raw.clear();
+            // windows_key built its output while the raw key still overlapped the
+            // new digit buffer. Rebuild after transferring ownership, exactly once.
+            out = self.view(out.handled, out.commit);
         }
         Ok(self.mixed_view(out))
     }
