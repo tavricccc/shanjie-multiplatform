@@ -1,9 +1,9 @@
 #Requires -Version 7
 param([ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[ValidateSet(0,1,2)][int[]]$Themes=@(0),[string]$ResultRoot,[string]$ModelId='builtin',[string]$ModelFixture)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
 $result=if($ResultRoot){[IO.Path]::GetFullPath($ResultRoot)}else{Join-Path $root ('build/word-popup-'+[guid]::NewGuid().ToString('N'))}
-$vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 foreach($arch in $Architectures) {foreach($theme in $Themes){
     $out=Join-Path $result "$arch-theme$theme"
     if(Test-Path -LiteralPath $out){throw 'Use a fresh result directory to isolate popup dictionaries.'}
@@ -20,7 +20,7 @@ foreach($arch in $Architectures) {foreach($theme in $Themes){
     $exe=Join-Path $out 'features.exe'
     $command=@"
 @echo off
-call "$vs/VC/Auxiliary/Build/vcvarsall.bat" $arch >nul
+$(Get-MsvcSetup $arch)
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/add_word_popup.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@
@@ -35,7 +35,16 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         # Elevated test hosts deliberately cannot auto-start a user core. Start
         # the isolated fixture explicitly; its endpoint includes this profile.
         $worker=Start-Process -FilePath "$root/dist/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -RedirectStandardError "$out/core-error.log" -RedirectStandardOutput "$out/core-output.log" -PassThru
-        Start-Sleep -Milliseconds 500
+        # A pipe exists before resource preload finishes. Wait for a real reply;
+        # a fixed sleep races the TSF preload connection on slower cold starts.
+        $ready=$false
+        for($attempt=0;$attempt -lt 10;$attempt++) {
+            if($worker.HasExited){throw 'Isolated add-word core exited during preload.'}
+            $probe=Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--status' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput "$out/core-status.json" -RedirectStandardError "$out/core-status-error.log"
+            if($probe.ExitCode -eq 0 -and (Get-Content "$out/core-status.json" -Raw | ConvertFrom-Json).ok){$ready=$true;break}
+            Start-Sleep -Milliseconds 100
+        }
+        if(!$ready){throw 'Isolated add-word core did not finish preload.'}
         & $exe "$root/dist/$arch/Shanjie.dll" $out *> "$out/result.log"
         if($LASTEXITCODE){throw "Add-word TSF regression failed: $arch, exit $LASTEXITCODE"}
     } finally {

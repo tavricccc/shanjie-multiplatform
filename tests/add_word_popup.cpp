@@ -57,7 +57,7 @@ int wmain(int argc,wchar_t** argv) {
     // Only this process's popup: an installed Shanjie on the same desktop has popups of the same class.
     auto panel=[&]{HWND window=nullptr;while((window=FindWindowExW(nullptr,window,L"Shanjie.AddWord.Popup.v1",nullptr))){DWORD pid=0;GetWindowThreadProcessId(window,&pid);if(pid==GetCurrentProcessId())return window;}return HWND{};};
     auto wait=[&](auto predicate,int check){auto until=std::chrono::steady_clock::now()+std::chrono::seconds(12);while(!predicate()){
-        if(std::chrono::steady_clock::now()>=until){auto p=panel();std::wprintf(L"WAIT %d: popup %ls, status \"%ls\"\n",check,p&&IsWindowVisible(p)?L"shown":L"hidden",p?controlText(GetDlgItem(p,5)).c_str():L"");std::fflush(stdout);}
+        if(std::chrono::steady_clock::now()>=until){auto p=panel();std::printf("WAIT %d: popup %s\n",check,p&&IsWindowVisible(p)?"shown":"hidden");if(p)for(int id:{4,5}){std::printf("STATUS %d codepoints:",id);for(auto ch:controlText(GetDlgItem(p,id)))std::printf(" %04x",unsigned(ch));std::puts("");}std::fflush(stdout);}
         require(std::chrono::steady_clock::now()<until,check);pump();Sleep(10);}};
     HWND focus=GetFocus();doubleCtrl();wait([&]{auto p=panel();return p&&IsWindowVisible(p);},740);
     auto popup=panel();require(GetWindow(popup,GW_OWNER)==store->window&&GetFocus()==focus,741);

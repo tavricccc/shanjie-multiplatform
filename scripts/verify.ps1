@@ -3,6 +3,7 @@ param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [switch]$
     # Empty runs every upstream core test (scripts/test-core.ps1).
     [string[]]$CoreTests)
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/msvc-command.ps1"
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
@@ -12,12 +13,10 @@ try {
     }
     if($CoreOnly){return}
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
-    $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
 @echo off
-call "$vcvars" $Architecture >nul
+$(Get-MsvcSetup $Architecture)
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$Architecture"
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/tsf_smoke.cpp" /link /OUT:"$harness" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib

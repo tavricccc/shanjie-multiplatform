@@ -3,18 +3,22 @@
 param([string]$Output = 'dist/data', [string]$Licenses = "$Output/LICENSES")
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/preserve-output.ps1"
+. "$PSScriptRoot/export-upstream.ps1"
 $upstream = Join-Path $root 'upstream/shanjie'
 $data = Join-Path $root $Output
 $licenseDir = Join-Path $root $Licenses
 # Rebuilt each time, so a notice for data that is no longer shipped never stays behind.
-if (Test-Path -LiteralPath $licenseDir) { Remove-Item -LiteralPath $licenseDir -Recurse -Force }
+Preserve-Output $licenseDir
 New-Item -ItemType Directory -Path "$data/packs",$licenseDir -Force | Out-Null
-Copy-Item "$upstream/data/lexicon/*" $data -Force
+$committed = Join-Path $root ('build/upstream-data/'+[guid]::NewGuid().ToString('N'))
+Export-Upstream $committed @('data/lexicon','data/packs')
+Copy-Item "$committed/data/lexicon/*" $data -Force
 Copy-Item "$root/data/pinyin-map.tsv" $data -Force
 foreach ($pack in @('acg','it')) {
-    Copy-Item "$upstream/data/packs/$pack-add.tsv","$upstream/data/packs/$pack-sources.tsv","$upstream/data/packs/$pack.json" "$data/packs" -Force
+    Copy-Item "$committed/data/packs/$pack-add.tsv","$committed/data/packs/$pack-sources.tsv","$committed/data/packs/$pack.json" "$data/packs" -Force
 }
-Copy-Item "$upstream/data/packs/quotes-add.tsv","$upstream/data/packs/quotes.json" "$data/packs" -Force
+Copy-Item "$committed/data/packs/quotes-add.tsv","$committed/data/packs/quotes.json" "$data/packs" -Force
 # The English list of Windows mixed input is compiled into the core; its notices live in this repo since upstream 0.6.1 dropped the list.
 Copy-Item "$upstream/LICENSE","$upstream/LICENSES/*","$root/LICENSES/windows-models.md","$root/LICENSES/mode-icons.md","$root/LICENSES/english-words-attribution.txt","$root/LICENSES/SCOWL.txt","$root/LICENSES/SymSpell-MIT.txt" $licenseDir -Force
 Copy-Item "$root/data/README.md" (Join-Path $licenseDir 'pinyin-data.md') -Force

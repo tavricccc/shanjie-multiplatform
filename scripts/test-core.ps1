@@ -41,6 +41,8 @@ function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArgum
     if ($failed) { throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')" }
 }
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/export-upstream.ps1"
+. "$PSScriptRoot/preserve-output.ps1"
 $upstream = Join-Path $root 'upstream/shanjie'
 Push-Location $root
 try {
@@ -56,20 +58,22 @@ try {
     # the core that is shipped and every path the tests take from CARGO_MANIFEST_DIR lands in upstream's files.
     $base = Join-Path $root 'build/test'
     $tree = Join-Path $base 'core'
-    if (Test-Path -LiteralPath $tree) { Get-ChildItem -LiteralPath $tree -Exclude target | Remove-Item -Recurse -Force }
+    if (Test-Path -LiteralPath $tree) { Get-ChildItem -LiteralPath $tree -Exclude target,'.deleted_files' | ForEach-Object { Preserve-Output $_.FullName } }
     New-Item -ItemType Directory -Path $tree -Force | Out-Null
     Copy-Item "$root/build/core/src","$root/build/core/Cargo.toml" $tree -Recurse -Force
     Copy-Item "$upstream/core/tests" $tree -Recurse -Force
+    $resources = Join-Path $root ('build/test-resources/'+[guid]::NewGuid().ToString('N'))
+    Export-Upstream $resources @('data','eval')
+    New-Item -ItemType Junction -Path "$resources/data/lm" -Target "$upstream/data/lm" | Out-Null
     foreach ($name in @('data','eval')) {
         $link = Join-Path $base $name
-        $target = Join-Path $upstream $name
         if (Test-Path -LiteralPath $link) {
-            $item = Get-Item -LiteralPath $link
-            if ($item.LinkType -eq 'Junction' -and [IO.Path]::GetFullPath($item.Target) -eq [IO.Path]::GetFullPath($target)) { continue }
-            if (!$item.LinkType) { throw "build/test/$name is not a junction; remove it first." }
-            Remove-Item -LiteralPath $link -Force
+            $archive = Join-Path $base '.deleted_files'
+            New-Item -ItemType Directory -Path $archive -Force | Out-Null
+            # Move the link itself, never recursively delete or traverse its target.
+            Move-Item -LiteralPath $link -Destination (Join-Path $archive ($name+'-'+[guid]::NewGuid().ToString('N')))
         }
-        New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+        New-Item -ItemType Junction -Path $link -Target "$resources/$name" | Out-Null
     }
     # Unprivileged Windows cannot make symlinks. An existing source is copied; a missing one (upstream's
     # "dangling symlink" cases) becomes a directory, which is the same "exists but cannot be read" case,
@@ -115,7 +119,7 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     $content = [IO.File]::ReadAllText($learn)
     if ($unixOnly.Matches($content).Count -ne 3) { throw 'Upstream learning store test changed.' }
     [IO.File]::WriteAllText($learn, $unixOnly.Replace($content, "#[cfg(unix)]`n`$1fn `$2("), [Text.UTF8Encoding]::new($false))
-    foreach ($name in $excluded) { Remove-Item -LiteralPath (Join-Path $tree "tests/$name.rs") }
+    foreach ($name in $excluded) { Preserve-Output (Join-Path $tree "tests/$name.rs") }
     & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $tree 'tests')
     $selected = if ($Tests) { $Tests } else { Get-ChildItem -LiteralPath "$tree/tests" -Filter *.rs | ForEach-Object BaseName }
     $arguments = @(foreach ($test in $selected) { '--test'; $test }) + @(if (!$NoUnitTests) { '--lib' })
@@ -125,5 +129,8 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
-    Invoke-TestBinaries $binaries $tree $skipArguments $MemoryLimit
+    # engine_lm includes a per-key latency assertion: measure it without other
+    # test binaries doing expensive decoding at the same time.
+    Invoke-TestBinaries @($binaries | Where-Object Name -ne 'engine_lm') $tree $skipArguments $MemoryLimit
+    Invoke-TestBinaries @($binaries | Where-Object Name -eq 'engine_lm') $tree $skipArguments $MemoryLimit
 } finally { Pop-Location }

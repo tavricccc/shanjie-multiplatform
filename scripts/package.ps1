@@ -3,6 +3,16 @@ param([switch]$UseExistingBuild)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/preserve-output.ps1"
+# Recoverable build outputs are local maintenance data, never release content.
+function Copy-PayloadDirectory([string]$Source, [string]$Destination) {
+    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse) {
+        $relative = [IO.Path]::GetRelativePath($Source,$file.FullName)
+        if ($relative -match '(^|[\\/])\.deleted_files([\\/]|$)') { continue }
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+    }
+}
 Push-Location $root
 try {
     if (!$UseExistingBuild) {
@@ -18,7 +28,7 @@ try {
         New-Item -ItemType Directory -Path "$output/$arch" -Force | Out-Null
         Copy-Item "$root/dist/$arch/Shanjie.dll" "$output/$arch" -Force
     }
-    Copy-Item "$root/dist/data","$root/dist/LICENSES" $output -Recurse -Force
+    foreach ($name in 'data','LICENSES') { Copy-PayloadDirectory "$root/dist/$name" "$output/$name" }
     Copy-Item "$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
     # Command-line alternatives to the setup window stay out of the package root.
     New-Item -ItemType Directory -Path "$output/scripts" -Force | Out-Null
@@ -26,12 +36,12 @@ try {
     Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" "$output/scripts" -Force
     Copy-Item "$PSScriptRoot/settings.cmd","$PSScriptRoot/重新選擇鍵盤.cmd" "$output/scripts" -Force
     Copy-Item "$root/profiles" $output -Recurse -Force
-    Copy-Item "$root/dist/ui" $output -Recurse -Force
+    Copy-PayloadDirectory "$root/dist/ui" "$output/ui"
     New-Item -ItemType Directory -Path "$output/tools" -Force | Out-Null
     Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
     Copy-Item "$root/dist/setup/安裝善解.exe" $output -Force
     Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-Item "$root/docs" $output -Recurse -Force
+    Copy-PayloadDirectory "$root/docs" "$output/docs"
     Copy-Item "$root/MODEL-SOURCES.json","$root/MODEL-CATALOG.json" $output -Force
     Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {

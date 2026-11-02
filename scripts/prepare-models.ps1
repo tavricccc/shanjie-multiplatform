@@ -3,6 +3,7 @@
 param([string]$Output = 'dist/data')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot/preserve-output.ps1"
 $manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
 if ($manifest.format -ne 2) { throw 'MODEL-SOURCES.json must be format 2.' }
 $cache = Join-Path $root 'build/model'
@@ -24,7 +25,7 @@ function Get-VerifiedAsset($asset) {
 }
 $models = Join-Path $root "$Output/models"
 $folder = Join-Path $root "$Output/$($bundle.folder)"
-if (Test-Path -LiteralPath $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
+Preserve-Output $folder
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 $sources = @{}
 foreach ($asset in $bundle.assets) { $sources[$asset.role] = Get-VerifiedAsset $asset }
@@ -43,6 +44,6 @@ cargo run --release --quiet --manifest-path "$root/build/core/Cargo.toml" --bin 
 if ($LASTEXITCODE) { throw 'The built-in side files do not pair with the model.' }
 # Only the built-in folder belongs in the package; earlier layouts are removed from the output.
 foreach ($retired in @(Get-ChildItem -LiteralPath $models -Directory | Where-Object { $_.FullName -ne (Get-Item $folder).FullName })) {
-    Remove-Item -LiteralPath $retired.FullName -Recurse -Force
+    if ($retired.Name -ne '.deleted_files') { Preserve-Output $retired.FullName }
 }
 Write-Output "prepared $($bundle.folder)"
