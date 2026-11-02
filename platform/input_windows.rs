@@ -28,6 +28,20 @@ impl Engine {
         let original = std::fs::read_to_string(data.join("mcbpmf-data.txt")).map_err(|_| EngineError::LoadFailed)?;
         // Personal rows use the base reading/word/score format, so existing words may be reprioritized.
         let mut base = std::fs::read_to_string(personal).map_err(|_| EngineError::LoadFailed)?;
+        let mut personal_keys: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
+        for line in base.lines() {
+            let mut fields = line.split_whitespace();
+            let (Some(reading), Some(word), Some(_), None) = (fields.next(), fields.next(), fields.next(), fields.next()) else { continue };
+            if word.chars().count() == reading.split('-').count() {
+                personal_keys.entry(reading.to_owned()).or_default().insert(word.to_owned());
+            }
+        }
+        let replaced = |r: &str, w: &str| personal_keys.get(r).is_some_and(|words| words.contains(w));
+        // Replace only the same reading/word pair. Other pronunciations of the word survive.
+        let original: String = original.lines().filter(|line| {
+            let mut fields = line.split_whitespace();
+            !matches!((fields.next(), fields.next()), (Some(r), Some(w)) if replaced(r,w))
+        }).map(|line| format!("{line}\n")).collect();
         base.reserve_exact(original.len()+1); base.push('\n'); base.push_str(&original); drop(original);
         let overlay = std::fs::read_to_string(data.join("overlay-add.tsv")).map_err(|_| EngineError::LoadFailed)?;
         let sandhi = std::fs::read_to_string(data.join("sandhi-add.tsv")).map_err(|_| EngineError::LoadFailed)?;
@@ -36,8 +50,17 @@ impl Engine {
         let mut overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
         let pack_text = if packs != 0 { read_packs_detailed(&pack_dir,packs).map_err(|_| EngineError::LoadFailed)? } else { String::new() };
         if !pack_text.is_empty() { overlay = join_overlays(overlay,&pack_text); }
-        // parse_with keeps the overlay tags, so upstream's ManualSet sees the manual rows.
-        let lex = Arc::new(Lexicon::parse_with(&base,Some(&overlay)).map_err(|_| EngineError::LoadFailed)?);
+        // Keep the original manual protection, including a manual row replaced by a personal score.
+        // Keep pack_text unchanged too: upstream uses its tags to identify pack OOV words.
+        let manual = crate::ManualSet::from_pairs(overlay.lines().filter_map(|line| {
+            crate::overlay_row(line).and_then(|(r,w,_,tag)| (tag == "manual").then_some((w,r)))
+        }));
+        let filtered: String = overlay.lines().filter(|line| {
+            !crate::overlay_row(line).is_some_and(|(r,w,_,_)| replaced(r,w))
+        }).map(|line| format!("{line}\n")).collect();
+        let mut lex = Lexicon::parse_with(&base,Some(&filtered)).map_err(|_| EngineError::LoadFailed)?;
+        lex.manual = Arc::new(manual);
+        let lex = Arc::new(lex);
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
@@ -186,6 +209,36 @@ mod windows_input_tests {
 #[cfg(test)]
 mod personal_lexicon_tests {
     use super::*;
+    #[test]
+    fn personal_duplicates_replace_only_the_same_pair_and_keep_layer_metadata() {
+        let dir = std::env::temp_dir().join(format!("shanjie-personal-overlap-{}",std::process::id()));
+        std::fs::create_dir_all(dir.join("packs")).unwrap();
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -8\nㄋㄧˇ 你 -8\n").unwrap();
+        std::fs::write(dir.join("overlay-add.tsv"), "ㄏㄠˇ\t好\t-8\tmanual\nㄓㄨˋ\t著\t-8\tmanual\nㄓㄜ˙\t著\t-9\tmanual\n").unwrap();
+        std::fs::write(dir.join("sandhi-add.tsv"), "ㄧ\t一\t-8\tsandhi\n").unwrap();
+        std::fs::write(dir.join("names-add.tsv"), "ㄌㄧˇ\t李\t-8\tnames\n").unwrap();
+        std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄧˇ-ㄎㄚ\t米卡\t-8\tacg\n").unwrap();
+        std::fs::write(dir.join("packs/it-add.tsv"), "ㄉㄧㄢˋ-ㄋㄠˇ\t電腦\t-8\tit\n").unwrap();
+        std::fs::write(dir.join("packs/quotes-add.tsv"), "ㄋㄧˇ-ㄏㄠˇ\t你好\t-8\tquotes\n").unwrap();
+        std::fs::write(dir.join("demote.tsv"), "").unwrap();
+        let personal = dir.join("dictionary.tsv");
+        let rows = "ㄨㄛˇ 我 -1\nㄏㄠˇ 好 -1\nㄧ 一 -1\nㄌㄧˇ 李 -1\nㄇㄧˇ-ㄎㄚ 米卡 -1\nㄉㄧㄢˋ-ㄋㄠˇ 電腦 -1\nㄋㄧˇ-ㄏㄠˇ 你好 -1\nㄓㄨˋ 著 -1\n";
+        std::fs::write(&personal, rows).unwrap();
+        for packs in 0..=PACK_ALL {
+            for _ in 0..2 {
+                let e = Engine::new_with_personal(&dir,Layout::Standard,Some(&personal),packs).unwrap();
+                for (r,w) in [("ㄨㄛˇ","我"),("ㄏㄠˇ","好"),("ㄧ","一"),("ㄌㄧˇ","李"),("ㄇㄧˇ-ㄎㄚ","米卡"),("ㄉㄧㄢˋ-ㄋㄠˇ","電腦"),("ㄋㄧˇ-ㄏㄠˇ","你好"),("ㄓㄨˋ","著")] {
+                    let key: Vec<_> = r.split('-').map(str::to_owned).collect();
+                    let entries: Vec<_> = e.lex.entries(&key).into_iter().filter(|item| item.0==w).collect();
+                    assert_eq!(entries,[(w,-1.0)],"packs={packs} reading={r}");
+                }
+                assert!(e.lex.manual().iter().any(|(w,r)| w==['好'] && r==["ㄏㄠˇ"]));
+                assert!(e.lex.manual().iter().any(|(w,r)| w==['著'] && r==["ㄓㄜ˙"]));
+                if packs & PACK_ACG != 0 { assert!(e.pack_text.as_ref().unwrap().contains("\tacg")); }
+            }
+        }
+        assert_eq!(std::fs::read_to_string(personal).unwrap(),rows);
+    }
     #[test]
     fn personal_lexicon_keeps_the_names_layer() {
         let dir = std::env::temp_dir().join(format!("shanjie-names-{}", std::process::id()));
