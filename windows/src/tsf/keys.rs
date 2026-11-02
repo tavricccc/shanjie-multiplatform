@@ -109,6 +109,7 @@ impl Data {
                 self.diagnostic("wants.empty_context",Some(context),Some(vk),Some(0));
                 return Ok(false);
             }
+            if vk.0 == VK_ESCAPE.0 as usize && (self.is_retiring(context) || !self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) { return Ok(true); }
             if self.add_word_shortcut(vk) || self.popup_accepts(vk) { return Ok(true); }
             let s = self.state.borrow();
             let p = &s.prefs;

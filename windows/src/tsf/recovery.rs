@@ -88,14 +88,7 @@ impl Data {
         {
             return Ok(true);
         }
-        if self
-            .retiring
-            .borrow()
-            .iter()
-            .any(|(_, context)| context == &key.context)
-        {
-            return Err(E_FAIL.into());
-        }
+        self.retry_retirement(&key.context, false)?;
         self.ensure_engine()?;
         if let Some((_, old)) = &key.pick {
             let current = &self.state.borrow().snapshot;
@@ -154,13 +147,8 @@ impl Data {
     }
     pub(super) fn recovery_hint(self: &Rc<Self>, context: &ITfContext, expired: bool) {
         let failure = self.state.borrow().engine.failure();
-        let message = if self
-            .retiring
-            .borrow()
-            .iter()
-            .any(|(_, retiring)| retiring == context)
-        {
-            "正在完成上一段組字，後續輸入已保留。"
+        let message = if self.is_retiring(context) {
+            if expired { "上一段組字尚未完成；按任一鍵重試，Esc 保留畫面文字並取消待處理按鍵。" } else { "正在完成上一段組字，後續輸入已保留。" }
         } else if failure == Some(Failure::Ambiguous) {
             "上次輸入結果尚未確認，組字已保留；Esc 取消後重試。"
         } else if expired && self.profile_update.borrow().is_some() {
@@ -180,7 +168,7 @@ impl Data {
             context,
             TF_ES_READ | TF_ES_ASYNCDONTCARE,
             move |cookie| unsafe {
-                if data.recovery.borrow().is_empty() && data.profile_update.borrow().is_none() {
+                if data.recovery.borrow().is_empty() && data.profile_update.borrow().is_none() && !data.is_retiring(&current) {
                     return Ok(());
                 }
                 let (candidate, mut snapshot) = {
@@ -219,9 +207,15 @@ impl Data {
             return self.key_down(context, vk, flags);
         }
         self.watch(context)?;
-        if (!self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) && vk.0 == VK_ESCAPE.0 as usize {
+        if (self.is_retiring(context) || !self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) && vk.0 == VK_ESCAPE.0 as usize {
             self.profile_update.borrow_mut().take();
             self.recovery.borrow_mut().clear();
+            if self.is_retiring(context) {
+                if self.retry_retirement(context, true).is_err() {
+                    self.recovery_hint(context,true);
+                    return Ok(true);
+                }
+            }
             if let Some(watcher) = self.state.borrow().watcher.as_ref() {
                 watcher.stop_retry();
             }

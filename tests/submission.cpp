@@ -32,6 +32,7 @@ public:
     HWND window = nullptr;
     bool layoutReady = false;
     bool deferAsync=false;
+    bool failNextSetText=false, rejectNextAsync=false;
     std::deque<DWORD> delayedLocks;
     void grantDelayed() { deferAsync=false; while(!delayedLocks.empty()) {DWORD flags=delayedLocks.front();delayedLocks.pop_front();requireGrant(flags);} }
     void requireGrant(DWORD flags) {if(!sink_ || FAILED(sink_->OnLockGranted(flags))) {std::puts("DELAYED_LOCK_FAILED");ExitProcess(120);} }
@@ -43,7 +44,7 @@ public:
     ULONG STDMETHODCALLTYPE Release() override { auto n = InterlockedDecrement(&refs_); if (!n) delete this; return n; }
     HRESULT STDMETHODCALLTYPE AdviseSink(REFIID iid, IUnknown* sink, DWORD) override { if (iid != IID_ITextStoreACPSink) return E_NOINTERFACE; return sink->QueryInterface(IID_PPV_ARGS(&sink_)); }
     HRESULT STDMETHODCALLTYPE UnadviseSink(IUnknown*) override { sink_.Reset(); return S_OK; }
-    HRESULT STDMETHODCALLTYPE RequestLock(DWORD flags, HRESULT* result) override { if (!sink_) return E_FAIL; if(deferAsync && !(flags&TS_LF_SYNC)) {delayedLocks.push_back(flags);*result=TS_S_ASYNC;return S_OK;} *result = sink_->OnLockGranted(flags); return S_OK; }
+    HRESULT STDMETHODCALLTYPE RequestLock(DWORD flags, HRESULT* result) override { if (!sink_) return E_FAIL; if(rejectNextAsync && !(flags&TS_LF_SYNC)) {rejectNextAsync=false;*result=E_FAIL;return S_OK;} if(deferAsync && !(flags&TS_LF_SYNC)) {delayedLocks.push_back(flags);*result=TS_S_ASYNC;return S_OK;} *result = sink_->OnLockGranted(flags); return S_OK; }
     HRESULT STDMETHODCALLTYPE GetStatus(TS_STATUS* out) override { *out = {0,0}; return S_OK; }
     HRESULT STDMETHODCALLTYPE QueryInsert(LONG start, LONG end, ULONG, LONG* a, LONG* b) override { *a = start; *b = end; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override { *fetched = count ? 1 : 0; if (count) *out = selection; return S_OK; }
@@ -54,6 +55,7 @@ public:
         *runCount = runCapacity ? 1 : 0; if (runCapacity) runs[0] = {*count,TS_RT_PLAIN}; *next = start + *count; return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetText(DWORD, LONG start, LONG end, const WCHAR* value, ULONG count, TS_TEXTCHANGE* change) override {
+        if(failNextSetText) {failNextSetText=false;std::puts("FAULT retirement SetText E_FAIL");return E_FAIL;}
         if (start < 0 || end < start || end > (LONG)text.size()) return TS_E_INVALIDPOS;
         if(count && !composing) ++earlyWrites; std::printf("EVENT set_text composing=%d start=%ld end=%ld length=%lu\n",composing,start,end,count);
         text.replace(start,end-start,value,count); *change = {start,end,start+(LONG)count};
@@ -159,6 +161,28 @@ int wmain(int argc,wchar_t** argv) {
      require(store->text==expected && store->endedText.empty() && store->composing,71);
      press(VK_RETURN);require(store->text==expected&&store->endedText==expected&&!store->composing,72);
    }
+ } else if(mode.starts_with(L"retire-")) {
+   require(store->text==expected&&store->composing,200);
+   ComPtr<ITfThreadFocusSink> focus;require(SUCCEEDED(service.As(&focus)),201);
+   first->deferAsync=true;
+   first->rejectNextAsync=(mode==L"retire-request-fail");
+   require(SUCCEEDED(focus->OnKillThreadFocus()),202);
+   if(mode==L"retire-write-fail" || mode==L"retire-escape") {
+     require(!first->delayedLocks.empty(),203);
+     first->failNextSetText=true;first->grantDelayed();
+   }
+   if(mode==L"retire-stale") Sleep(800);
+   if(mode==L"retire-deactivate") {
+     require(SUCCEEDED(service->Deactivate())&&SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),204);
+   }
+   if(mode==L"retire-escape") press(VK_ESCAPE);
+   // Failed edits retry on re-entry; stale queued callbacks must not touch the new composition.
+   press('X');
+   require(first->text==expected+L"x"&&first->endedText==expected&&first->composing,205);
+   first->grantDelayed();pump();
+   require(first->text==expected+L"x"&&first->endedText==expected&&first->composing,206);
+   press(VK_RETURN);
+   require(first->text==expected+L"x"&&first->endedText==expected+L"x"&&!first->composing,207);
  } else if(mode.starts_with(L"busy")) {
    if(mode==L"busy-pick"||mode==L"busy-mouse")press(VK_DOWN);
    wchar_t local[32768]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768)>0,50);
@@ -170,12 +194,16 @@ int wmain(int argc,wchar_t** argv) {
      ReleaseMutex(mutex);CloseHandle(mutex);});
    require(WaitForSingleObject(ready,2000)==WAIT_OBJECT_0,53);CloseHandle(ready);
    auto before=store->text;
-   if(mode==L"busy-mouse") {
+   if(mode==L"busy-mouse"||mode==L"busy-pick") {
      ComPtr<ITfUIElementMgr> manager;require(SUCCEEDED(thread.As(&manager)),54);ComPtr<IEnumTfUIElements> elements;require(SUCCEEDED(manager->EnumUIElements(&elements)),55);
      ComPtr<ITfUIElement> element;ULONG count=0;require(SUCCEEDED(elements->Next(1,&element,&count))&&count==1,56);
      ComPtr<ITfCandidateListUIElementBehavior> candidates;require(SUCCEEDED(element.As(&candidates)),57);
-     require(SUCCEEDED(candidates->SetSelection(1))&&SUCCEEDED(candidates->Finalize()),58);
-   } else press(mode==L"busy-pick"?'2':'D');
+     UINT length=0,pick=UINT_MAX;require(SUCCEEDED(candidates->GetCount(&length)),208);
+     for(UINT i=0;i<length;++i) {BSTR word=nullptr;require(SUCCEEDED(candidates->GetString(i,&word)),209);if(word&&expected==word)pick=i;SysFreeString(word);}
+     require(pick<9,210); // Select the word, independently of reading/literal rows and model ranking.
+     if(mode==L"busy-mouse")require(SUCCEEDED(candidates->SetSelection(pick))&&SUCCEEDED(candidates->Finalize()),58);
+     else press('1'+pick);
+   } else press('D');
    require(store->text==before&&store->endedText.empty(),59);
    if(mode==L"busy-focus") {require(SUCCEEDED(keys->OnSetFocus(FALSE)),64);holder.join();pump();require(store->text==L"a"&&store->endedText==L"a"&&!store->composing,65);}
    else if(mode==L"busy-cancel") {press(VK_ESCAPE);holder.join();pump();require(store->text.empty()&&store->endedText.empty(),60);}

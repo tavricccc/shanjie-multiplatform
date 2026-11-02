@@ -1,17 +1,26 @@
 #Requires -Version 7
-param([string]$ResultRoot,[string]$DllRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Modes)
+param([string]$ResultRoot,[string]$DllRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Modes,[ValidateSet(1,2)][int[]]$Keyboards=@(1,2))
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/submission-'+[guid]::NewGuid().ToString('N'))}
 if(!$DllRoot){$DllRoot=Join-Path $root 'dist'}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot)
 $DllRoot=[IO.Path]::GetFullPath($DllRoot)
 New-Item -ItemType Directory -Path $ResultRoot -Force | Out-Null
+$payload = Join-Path $ResultRoot 'payload'
+foreach ($arch in $Architectures) {
+ New-Item -ItemType Directory -Path "$payload/$arch" -Force | Out-Null
+ Copy-Item "$DllRoot/$arch/Shanjie.dll" "$payload/$arch" -Force
+}
+foreach ($name in 'data','tools') { New-Item -ItemType Junction -Path "$payload/$name" -Target "$DllRoot/$name" | Out-Null }
+# Test both layouts independently of the user's installed keyboard selection.
+Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
+$DllRoot = $payload
 $taskProfileRoot=Join-Path $ResultRoot 'profile'
 New-Item -ItemType Directory -Path "$taskProfileRoot/Shanjie" -Force | Out-Null
 $content=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^prediction=.*','prediction=1' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^shift_side=.*','shift_side=2' -replace '(?m)^escape=.*','escape=clear'
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
-$vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 $results=@()
 try {
  $env:LOCALAPPDATA=$taskProfileRoot;$env:SHANJIE_HEADLESS='1';$env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_CORE_LOCAL='1'
@@ -20,7 +29,7 @@ try {
   $exe=Join-Path $out 'submission.exe'
   $command=@"
 @echo off
-call "$vs/VC/Auxiliary/Build/vcvarsall.bat" $arch >nul
+$(Get-MsvcSetup $arch)
 if errorlevel 1 exit /b 1
 cd /d "$out"
 cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/submission.cpp" /link /OUT:"$exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
@@ -28,9 +37,9 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
   Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
   & cmd.exe /d /c "$out/compile.cmd" | Set-Content "$out/compile.log"
   if($LASTEXITCODE){throw "$arch submission harness build failed; see compile.log"}
-  foreach($keyboard in 1,2) {
+  foreach($keyboard in $Keyboards) {
    $prefix=if($keyboard -eq 1){'SU3'}else{'NE3'}
-   $cases=@(@('commit','ADB','adb'),@('commit','XYZ','xyz'),@('commit',$prefix,'你'),@('commit',($prefix+'ADB'),'你adb'),@('commit',('A'*96),('a'*96)),@('cancel','ADB',''),@('focus','ADB','adb'),@('toggle','ADB','adb'),@('refresh','ADB','adb'),@('return','ADB','adb'),@('cancel-generation','ADB',''),@('deactivate','ADB','adb'),@('refresh-twice','ADB','adb'),@('busy','A','adb'),@('busy-epoch','A','adb'),@('busy-cancel','A',''),@('busy-focus','A','a'),@('busy-expire','A','adb'),@('busy-pick',$prefix,'妳'),@('busy-mouse',$prefix,'妳'))
+   $cases=@(@('commit','ADB','adb'),@('commit','XYZ','xyz'),@('commit',$prefix,'你'),@('commit',($prefix+'ADB'),'你adb'),@('commit',('A'*96),('a'*96)),@('cancel','ADB',''),@('focus','ADB','adb'),@('toggle','ADB','adb'),@('refresh','ADB','adb'),@('return','ADB','adb'),@('cancel-generation','ADB',''),@('deactivate','ADB','adb'),@('refresh-twice','ADB','adb'),@('busy','A','adb'),@('busy-epoch','A','adb'),@('busy-cancel','A',''),@('busy-focus','A','a'),@('busy-expire','A','adb'),@('busy-pick',$prefix,'妳'),@('busy-mouse',$prefix,'妳'),@('retire-write-fail','ADB','adb'),@('retire-request-fail','ADB','adb'),@('retire-escape','ADB','adb'),@('retire-deactivate','ADB','adb'),@('retire-stale','ADB','adb'))
    foreach($case in $cases) {
     $testContent=$content -replace '(?m)^keyboard=.*',('keyboard='+$keyboard)
     if($case[0] -like 'busy*'){$testContent=$testContent -replace '(?m)^learning=.*','learning=1'}

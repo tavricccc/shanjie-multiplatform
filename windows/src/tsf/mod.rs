@@ -7,6 +7,7 @@ mod mode;
 mod modifiers;
 mod profile_refresh;
 mod recovery;
+mod retirement;
 mod rerank;
 mod resident;
 mod service;

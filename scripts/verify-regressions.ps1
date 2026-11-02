@@ -4,19 +4,20 @@
 # No registration, foreground activation or desktop input; each case gets its own profile under build/.
 param([ValidateSet('x64','x86')][string]$Architecture='x64',[string]$ResultRoot)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/regressions-'+[guid]::NewGuid().ToString('N'))}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot)
 if(Test-Path -LiteralPath $ResultRoot){throw 'Use a fresh result directory.'}
 & "$PSScriptRoot/verify-add-word.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/add-word"
 & "$PSScriptRoot/verify-english-keys.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/english-keys"
+& "$PSScriptRoot/verify-submission.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/submission"
 # The private-desktop harnesses read an uninstalled payload laid out like the installed folder.
 $payload=[IO.Path]::GetFullPath("$ResultRoot/payload")
 New-Item -ItemType Directory "$payload/$Architecture" -Force|Out-Null
 Copy-Item "$root/dist/$Architecture/Shanjie.dll" "$payload/$Architecture" -Force
 foreach($name in 'data','tools'){New-Item -ItemType Junction -Path "$payload/$name" -Target "$root/dist/$name"|Out-Null}
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
-$vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 $lifecycle=@('cancel-command','cancel-deactivate','cancel-double','cancel-escape','cancel-focus-notification','cancel-keyboard-reading',
     'cancel-late','cancel-mouse','cancel-outside','cancel-owner-destroy','cancel-reentry','cancel-save','cancel-stale-notify',
     'cancel-theme-dark','cancel-theme-light')
@@ -27,7 +28,7 @@ foreach($suite in @(@('tsf_compat',$null),@('popup_lifecycle',$lifecycle))){
     $harness="$out/$name-$Architecture.exe"
     $command=@"
 @echo off
-call "$vs/VC/Auxiliary/Build/vcvarsall.bat" $Architecture >nul
+$(Get-MsvcSetup $Architecture)
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/$name.cpp" /Fo"$out/$name.obj" /Fe"$harness" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@

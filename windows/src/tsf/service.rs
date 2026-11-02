@@ -146,7 +146,7 @@ pub struct Data {
     pub(super) generation: Cell<u64>,
     pub(super) recovery: RefCell<super::recovery::Recovery>,
     pub(super) application_written: Cell<bool>,
-    pub(super) retiring: RefCell<Vec<(u64, ITfContext)>>,
+    pub(super) retiring: RefCell<Vec<Rc<super::retirement::Retirement>>>,
     pub indicator: RefCell<Box<Indicator>>,
     pub(super) word_popup_revision: Cell<u64>,
     pub(super) word_popup: RefCell<Option<Box<crate::word_popup::Popup>>>,
@@ -374,51 +374,7 @@ impl Data {
             (s.context.clone(), s.composition.take(), final_text)
         };
         if let (Some(context), Some(composition)) = (context, composition) {
-            let retirement = self.generation.get();
-            let final_length = final_text.encode_utf16().count();
-            self.diagnostic_retirement("retirement.queued",retirement,&context,&composition,final_length,None);
-            self.retiring
-                .borrow_mut()
-                .push((retirement, context.clone()));
-            let data = self.clone();
-            let captured_context = context.clone();
-            let captured_composition = composition.clone();
-            let requested = self.request(
-                &context,
-                TF_ES_READWRITE | TF_ES_ASYNCDONTCARE,
-                move |cookie| unsafe {
-                    data.diagnostic_retirement("retirement.edit.begin",retirement,&captured_context,&composition,final_length,None);
-                    if !data
-                        .retiring
-                        .borrow()
-                        .iter()
-                        .any(|(id, _)| *id == retirement)
-                    {
-                        data.diagnostic_retirement("retirement.skipped",retirement,&captured_context,&composition,final_length,None);
-                        return Ok(());
-                    }
-                    let range = composition.GetRange();
-                    data.diagnostic_retirement("retirement.range",retirement,&captured_context,&composition,final_length,
-                        Some(match &range {Ok(_)=>0,Err(e)=>e.code().0}));
-                    let range = range?;
-                    data.diagnostic_range("retirement.write.begin",&range,cookie,final_length);
-                    let written = range.SetText(cookie, 0, &final_text.encode_utf16().collect::<Vec<_>>());
-                    data.diagnostic_retirement("retirement.write.end",retirement,&captured_context,&composition,final_length,
-                        Some(match &written {Ok(_)=>0,Err(e)=>e.code().0}));
-                    written?;
-                    let ended = composition.EndComposition(cookie);
-                    data.diagnostic_retirement("retirement.end",retirement,&captured_context,&composition,final_length,
-                        Some(match &ended {Ok(_)=>0,Err(e)=>e.code().0}));
-                    ended?;
-                    data.retiring
-                        .borrow_mut()
-                        .retain(|(id, _)| *id != retirement);
-                    Ok(())
-                },
-            );
-            self.diagnostic_retirement("retirement.request.return",retirement,&context,&captured_composition,final_length,
-                Some(match &requested {Ok(_)=>0,Err(e)=>e.code().0}));
-            requested?;
+            self.retire(context, composition, final_text);
         }
         let mut s = self.state.borrow_mut();
         s.context = None;
@@ -439,6 +395,7 @@ impl Data {
     pub fn deactivate(self: &Rc<Self>) -> Result<()> {
         self.diagnostic("deactivate",None,None,None);
         let cancelled=self.cancel();
+        self.retire_before_deactivate();
         // Unadvising TSF and destroying the last native window can synchronously
         // call OnPopContext. Detach ownership before any external cleanup.
         let (thread,client,sinks,bar,button,candidates,watcher,observer)={
@@ -1147,6 +1104,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
 impl ITfCompositionSink_Impl for Service_Impl {
     fn OnCompositionTerminated(&self, _: u32, ended: Ref<ITfComposition>) -> Result<()> {
         self.data.diagnostic("composition.terminated",None,None,Some((self.data.state.borrow().composition.as_ref()==ended.as_ref()) as i32));
+        self.data.retirement_terminated(ended.as_ref());
         if !self.data.ending.get()
             && self.data.state.borrow().composition.as_ref() == ended.as_ref()
         {
@@ -1191,6 +1149,7 @@ impl ITfThreadMgrEventSink_Impl for Service_Impl {
         if self.data.state.borrow().context.as_ref() == context.as_ref() {
             self.data.cancel()?;
         }
+        if let Some(context) = context.as_ref() { self.data.forget_retirement(context); }
         Ok(())
     }
 }
