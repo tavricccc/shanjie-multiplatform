@@ -129,8 +129,11 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
-    # engine_lm includes a per-key latency assertion: measure it without other
-    # test binaries doing expensive decoding at the same time.
-    Invoke-TestBinaries @($binaries | Where-Object Name -ne 'engine_lm') $tree $skipArguments $MemoryLimit
-    Invoke-TestBinaries @($binaries | Where-Object Name -eq 'engine_lm') $tree $skipArguments $MemoryLimit
+    # Both suites assert per-key latency. Isolate them from other binaries and
+    # from each other's test cases; parallel decoding is not a latency baseline.
+    $latency = @('engine_lm','engine_replay')
+    Invoke-TestBinaries @($binaries | Where-Object Name -notin $latency) $tree $skipArguments $MemoryLimit
+    foreach ($name in $latency) {
+        Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree ($skipArguments + @('--test-threads=1')) $MemoryLimit
+    }
 } finally { Pop-Location }
