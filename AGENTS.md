@@ -77,3 +77,11 @@
 
 - 正式 repo：https://github.com/tavricccc/shanjie-multiplatform （GitHub repository ID：1418506561），協作與發佈以此為準。
 - 主要分支為 main。
+
+## CodeGraph
+
+- 結構理解、符號搜尋、靜態函式呼叫關係與依賴／變更影響分析，優先使用 CodeGraph（`codegraph_explore`；單一符號或檔案用 `codegraph_node`）。結果不足或語言不支援時，再用原始碼搜尋等工具補足；靜態關係不代表執行期行為。
+- 使用前確認目標是本 Git 根目錄 `D:\Software\shanjie-windows-sourcecode\shanjie-windows`，必要時明確傳入 `projectPath`；外層工作區不是索引根目錄。
+- 後續聊天重用 `.codegraph/`，先以 `codegraph_status` 檢查索引與 watcher 狀態；自動更新落後時執行增量 `sync`，不要每次 `init` 或完整 `index`。本機 CLI：`& '..\.build-tools\codegraph\1.6.2\codegraph-win32-x64\bin\codegraph.cmd' status .`（將 `status` 換為 `sync` 可增量更新）。
+- MCP 連線存續時 watcher 自動更新；沒有連線時不常駐，重開後先檢查更新狀態。從 CLI 執行時同樣設定 `$env:CODEGRAPH_TELEMETRY='0'`、`$env:CODEGRAPH_NO_UPDATE_CHECK='1'`，避免遙測與使用者層級的版本檢查快取。
+- 遵守既有專案規則、權限與核准限制；MCP 不擴大寫入、部署或系統變更權限。PowerShell、XAML 等未受支援內容仍需直接查原始檔。

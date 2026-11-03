@@ -13,3 +13,7 @@
 # Python maintenance bytecode
 **/__pycache__/
 *.pyc
+
+# CodeGraph local indexes and caches (including separate WSL indexes)
+/.codegraph/
+/.codegraph-*/
