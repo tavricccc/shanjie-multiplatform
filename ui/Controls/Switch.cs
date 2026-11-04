@@ -10,7 +10,7 @@ using Windows.System;
 namespace Shanjie_UI.Controls;
 
 /// <summary>
-/// Pane's switch: 38 × 22 track, 16 px white knob that springs across; held down, the knob stretches to 21 px.
+/// Switch: 38 × 22 track, 16 px white knob that springs across; held down, the knob stretches to 21 px.
 /// The accent shows only on the track when on.
 /// </summary>
 public sealed partial class Switch : UserControl
@@ -31,7 +31,7 @@ public sealed partial class Switch : UserControl
     public Switch()
     {
         IsTabStop = true;
-        var track = new Border { Width = 38, Height = 22, CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1), Background = Motion.Resource("PaneFillControlBrush"), BorderBrush = Motion.Resource("PaneStrokeBrush") };
+        var track = new Border { Width = 38, Height = 22, CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1), Background = Motion.Resource("SjFillControlBrush"), BorderBrush = Motion.Resource("SjStrokeBrush") };
         on.Background = Motion.Accent;
         var root = new Grid { Width = 38, Height = 22, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         root.Children.Add(track); root.Children.Add(on); root.Children.Add(knob);
