@@ -42,8 +42,6 @@
 - **發布走升版 PR**：功能 PR 都合入 main 後，另開一個只含版本號、`docs/releases/RELEASE-NOTES-<版本>.md` 與 `Changelog.md` 的 PR；它合入 main 時 Actions 建立 Release。其他 PR 不碰這些檔案。既有 Release 不會被重跑改寫，要改說明或 pre-release 狀態用 `gh release edit`。
 - **預發布不遞增版本號。** 下一個要發布的版本固定為 `X.Y.Z`（目前正式版之後的那一版），預發布只加後綴：`X.Y.Z-beta.1`、`X.Y.Z-beta.2`……，`RELEASE-CHANNEL.json` 的 `prerelease` 設 `true`，tag 為 `vX.Y.Z-beta.N`。例：正式版是 0.15.3，預發布依序為 `0.15.4-beta.1`、`0.15.4-beta.2`，不是 0.15.4、0.15.5。
 - 轉正式版時只拿掉後綴成 `X.Y.Z`，`prerelease` 設 `false`，`recommended_stable` 改成該版。beta 期間不更改 `X.Y.Z`。
-- 使用後綴前，`ui/Setup/UpdateService.cs` 的 `Compare` 要能比較後綴；它目前只解析數字，遇到 `-beta.N` 會丟例外。
-
 ## 文件
 
 - 文件只寫目前狀態並保持精簡。各版變更寫在 `Changelog.md` 與 `docs/releases/`；`TODO.md` 只列必須由使用者實機確認的項目，能用腳本測的先自己測。
