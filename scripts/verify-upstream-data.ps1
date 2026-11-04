@@ -37,7 +37,8 @@ $prepareData = Get-Content (Join-Path $root 'scripts/prepare-data.ps1') -Raw
 $profileRust = Get-Content (Join-Path $root 'shared/src/profile.rs') -Raw
 foreach ($id in $upstreamPacks | Where-Object { $packs.ContainsKey($_) }) {
     $key, $default = $packs[$id]
-    if ($prepareData -notmatch "(?<![\w-])$id(?![\w])") { Fail "prepare-data.ps1 does not ship the '$id' pack." }
+    # The id as a quoted list item or a pack file name, so the same word in a comment does not count.
+    if ($prepareData -notmatch "'$id'|/$id-add\.tsv") { Fail "prepare-data.ps1 does not ship the '$id' pack." }
     if ($profileRust -notmatch "`"$key`"") { Fail "shared/src/profile.rs has no '$key'." }
     foreach ($profile in 'windows', 'shanjie') {
         $line = Get-Content (Join-Path $root "profiles/$profile.ini") | Where-Object { $_ -match "^$key=" }
