@@ -6,9 +6,11 @@ namespace Shanjie_UI;
 public sealed partial class MainWindow
 {
     private bool selectingModel;
+    /// Until the first scan the list holds only the built-in model, so what the selector shows is no choice of the user's.
+    private bool modelListReady;
     private async void ModelSelectionChanged(object sender,SelectionChangedEventArgs args)
     {
-        if(selectingModel||Vm.UpdatingModels||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
+        if(!modelListReady||selectingModel||Vm.UpdatingModels||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
         await SelectModelWithConfirmation(choice,async()=>
         {
             var text=new TextBlock{Text=ModelCatalog.Notes(choice.Catalog),TextWrapping=TextWrapping.Wrap,MaxWidth=520};
@@ -48,7 +50,7 @@ public sealed partial class MainWindow
         if(!modelsClosed&&scan>appliedScan){
             appliedScan=scan;bool previous=selectingModel;selectingModel=true;
             try{Vm.RefreshModels(inventory.Models);if(ModelSelector.SelectedIndex!=Vm.ModelVariant)ModelSelector.SelectedIndex=Vm.ModelVariant;}
-            finally{selectingModel=previous;}
+            finally{selectingModel=previous;modelListReady=true;}
             modelIssues=string.Join("\n",inventory.Issues);if(modelIssues.Length>0){Vm.Status="未列入模型：\n"+modelIssues;ShowLoadFeedback();}
         }
     }
@@ -76,7 +78,7 @@ public sealed partial class MainWindow
             modelWatcher.Renamed+=ModelsChanged;
         }
         catch(Exception error) when(error is IOException or UnauthorizedAccessException or InvalidDataException)
-        {Vm.Status="模型清單無法更新，內建模型仍可使用："+error.Message;ShowLoadFeedback();}
+        {modelListReady=true;Vm.Status="模型清單無法更新，內建模型仍可使用："+error.Message;ShowLoadFeedback();}
     }
     private void ModelsChanged(object sender,FileSystemEventArgs args)
     {
