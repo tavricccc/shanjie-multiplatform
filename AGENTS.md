@@ -11,6 +11,7 @@
 ## 上游與核心
 
 - `upstream/shanjie` 是固定 commit 的子模組，追蹤檔案保持乾淨；不把上游整棵 merge 進來。
+- **上游的詞庫、詞包與模型一律完整出貨，並照上游預設啟用。** 同步到的新版有新增或更新的檔案，就必須接上；不得因相容、體積或偏好而停用、略過或改預設值。真的有必要時先告訴使用者，並記在 UPSTREAM-CHANGES.md。`scripts/verify-upstream-data.ps1`（`verify.ps1` 與 CI 會呼叫）會比對，上游新增詞包或模型時它會失敗，要同步更新它的清單。
 - Windows 對核心的變更放在 `platform/` 與 `scripts/prepare-*.ps1`。`build/core` 是產生檔，不手改。這些是核心擴充，不要描述成「只改 config」。
 - 升版：
   1. 本 repo 與子模組都乾淨。
