@@ -2,7 +2,7 @@
 
 對照 [Microsoft Support 繁體中文 IME](https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime) 與 [Microsoft Learn 繁體中文輸入指南](https://learn.microsoft.com/en-us/globalization/input/traditional-chinese-ime)（核對於 2026-10-08），列出兩份操作範本的鍵位與每個設定。
 
-Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後聯想與善解額外的標點／聲調操作預設關閉，Caps Lock、學習、空白提交、拼音空白與反引號標點也用專案自訂的值。這些是本專案的選擇，不是微軟的出廠值。候選排序、整句解碼與學習仍是善解的，沒有重製微軟的私有引擎。
+Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後聯想與善解額外的標點／聲調操作預設關閉，Caps Lock、學習、空白提交、拼音空白也用專案自訂的值。這些是本專案的選擇，不是微軟的出廠值。候選排序、整句解碼與學習仍是善解的，沒有重製微軟的私有引擎。
 
 ## 模型
 
@@ -16,7 +16,8 @@ Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後
 | 完整組字＋↓ | 開轉換候選 | 同樣可開；`candidates.open` 可只選空白 |
 | 完整組字＋空白 | 插入可編輯空格，組字繼續 | 相同；可開 `space_commits` 或 `space_operates` 改為提交／候選操作 |
 | 未開候選＋↑ | 在目前字詞的候選中循環，保持游標，不開窗 | 預設不換字；`up_cycles` 可獨立開啟 |
-| 候選中 ↑／↓／←／→ | 橫向列前後選字 | 相同；不展開格狀 |
+| 候選中 ↑／↓／← | 單列前後選字 | 相同 |
+| 候選中 → | 展開九欄、最多五列的候選格 | 相同；展開後方向鍵移動，頂列 ↑ 收回 |
 | 候選中 Tab | 下一候選 | 相同；預測列仍保留 Tab 進入／Shift＋Tab 退出 |
 | 候選中空白 | 下一頁，末頁回第一頁 | `space_pages`、`wrap_pages` 分別控制換頁／循環 |
 | 候選中 1–9 | 選目前頁／列的候選，保留組字 | 相同；不以普通數字選被動預測或聯想 |
@@ -29,12 +30,14 @@ Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後
 | 其他組字 Esc | 先清未完成讀音，再清完整句 | `input.escape` 可選逐階段、全部清除、保留組字 |
 | Win 快捷鍵 | 交給 Windows，不把 Win 當上游 Command | 兩 profile 共用；Win＋Backspace 不會忘記學習 |
 | App 的 Ctrl／Alt 快捷鍵 | 通過；只攔截已啟用的明確 IME 快捷鍵 | 字碼模式也不讓 Ctrl 標點破壞未完成的碼 |
+| 數字鍵盤數字／運算符號 | 字面輸入，不走注音對照 | 相同；Num Lock 關閉時保留系統方向鍵語意 |
+| Shift＋空白 | 立即切換組字及提交文字的全／半形 | `shift_space_toggle` 開啟時相同 |
 
 微軟文件只列出 ↓、↑、Space、Tab、→、數字、Enter 與聯想的 Shift＋數字，沒有 Esc、Backspace、整句提交與翻頁末端的完整行為；Learn 對 Esc 的描述也和這裡的逐階段取消不同，所以這些都做成可調整的選項。是否與微軟注音完全一致，仍需在真實 App 中對照。
 
 ## 逐項開關
 
-W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只改操作、候選與預測；標「保留」的項目不會被覆寫。目前 schema 7。
+W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只改操作、候選與預測；標「保留」的項目不會被覆寫。目前 schema 9。
 
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
@@ -67,7 +70,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `input.dictionary` | 設定頁編輯、原子保存的個人詞庫 | 保留內容／路徑 |
 | `candidates.open` | 完整組字後 down／space／both | down／both |
 | `candidates.anchor` | 游標右側／左側候選範圍 | right／left |
-| `candidates.layout` | 橫向／直式；不提供格狀 | horizontal／horizontal |
+| `candidates.layout` | 收合時橫向／直式；→ 暫時展開格狀 | horizontal／horizontal |
 | `candidates.enter_commits` | 候選 Enter 是否同時提交 | 1／0 |
 | `candidates.enter_to_cursor` | Enter 只提交游標前；固定詞不拆開 | 1／0；舊設定缺值為 0 |
 | `candidates.up_cycles` | 未開候選的 ↑ 循環換字 | 1／0 |
@@ -81,7 +84,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `shortcuts.ctrl_space_toggle` | 額外 Ctrl＋空白中英切換 | 0／0；保留 App 補全 |
 | `shortcuts.shift_space_toggle` | Shift＋空白全半形 | 1／0 |
 | `shortcuts.ctrl_punctuation` | Ctrl／Ctrl＋Shift 標點 | 1／0 |
-| `shortcuts.backquote_symbols` | 反引號＋標點 | 0／0 |
+| `shortcuts.backquote_symbols` | 反引號＋標點；Windows 舊 schema 升級時開啟 | 1／0 |
 | `shortcuts.code_input` | 反引號＋U／B 的 Unicode／Big5 字碼 | 1／0 |
 | `shortcuts.symbol_keyboard` | Ctrl＋Alt＋逗號符號列表 | 1／0 |
 | `shortcuts.ctrl_backslash` | 善解的 Ctrl＋反斜線頓號 | 0／1 |
@@ -103,7 +106,7 @@ Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成�
 
 ## 不做成虛假選項的功能
 
-候選每頁最多九個，以及 40 音節自動提交仍是核心契約，不放沒有實作後端的頁數／無限組字選單。上游內部格狀程式保留原樣，但 Windows 導覽不會進入該狀態。Backspace 順序採既有上游修正；「可省略韻母」沒有正式 API，因此沒有開關。
+候選每列最多九個、展開最多五列，以及 40 音節自動提交仍是核心契約，不放沒有實作後端的頁數／無限組字選單。Windows 以 → 進入上游既有格狀狀態。Backspace 順序採既有上游修正；「可省略韻母」沒有正式 API，因此沒有開關。
 
 微軟私有候選排序、無聲調拼音分段、聯想模型、舊版相容引擎、私有詞庫匯入、IME Pad 手寫／筆畫／部首辨識、雲端與搜尋都沒有實作，設定中也不提供。注音原文的末尾候選／按鈕已移除，相關核心 API 只留給測試。
 
