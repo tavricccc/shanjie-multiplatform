@@ -12,6 +12,9 @@ namespace Shanjie_UI.Setup;
 /// Ready：已下載並核對，等使用者按「安裝更新」；Failed：這一步失敗（原因在 Error）。</summary>
 internal enum UpdateState { Idle, Checking, UpToDate, Available, Downloading, Ready, Failed }
 
+/// <summary>Stable：只看正式版；Prerelease：另外列出比正式版新的測試版。</summary>
+internal enum UpdateChannel { Stable, Prerelease }
+
 internal sealed record UpdateRelease(string Version, string Notes, DateTimeOffset PublishedAt, long SizeBytes, string PageUrl, bool Prerelease)
 {
     internal Uri Package { get; init; } = null!;
@@ -29,6 +32,7 @@ internal sealed class UpdateService : IDisposable
     readonly HttpClient http;
     readonly Uri source;
     readonly string directory;
+    readonly string channelFile;
     readonly SemaphoreSlim gate = new(1);
     readonly CancellationTokenSource lifetime = new();
     DateTimeOffset retryAfter;
@@ -36,6 +40,8 @@ internal sealed class UpdateService : IDisposable
     bool disposed;
     internal string CurrentVersion { get; }
     internal UpdateState State { get; private set; }
+    /// <summary>要檢查的通道；存在 update-channel.txt，與核心共用的 profile.ini 無關。</summary>
+    internal UpdateChannel Channel { get; private set; }
     /// <summary>使用者選定要下載的版本；預設是正式版，沒有才是測試版。</summary>
     internal UpdateRelease? Latest { get; private set; }
     /// <summary>可選的新版：正式版在前，測試版在後；最多各一個。</summary>
@@ -49,8 +55,10 @@ internal sealed class UpdateService : IDisposable
     internal UpdateService(string version, string data, Uri? testSource = null)
     {
         CurrentVersion = version; directory = Path.Combine(data, "updates"); source = testSource ?? ProductionSource;
+        channelFile = Path.Combine(data, "update-channel.txt");
         if (testSource != null && (testSource.Scheme != "http" || testSource.Host != "127.0.0.1"))
             throw new ArgumentException("測試來源必須是本機 HTTP 服務");
+        Channel = LoadChannel();
         http = new(new HttpClientHandler { UseCookies = false, UseDefaultCredentials = false, AllowAutoRedirect = false });
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Shanjie-Windows/" + version);
         http.Timeout = TimeSpan.FromMinutes(10);
@@ -64,6 +72,31 @@ internal sealed class UpdateService : IDisposable
         if (informational != null && VersionFormat.IsMatch(informational)) return informational;
         var v = assembly.GetName().Version ?? new Version(0, 0, 0);
         return $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
+    }
+
+    /// <summary>讀 update-channel.txt；沒有檔案時，執行中的是測試版就預設測試版通道，否則正式版。</summary>
+    UpdateChannel LoadChannel()
+    {
+        try
+        {
+            if (File.Exists(channelFile)) return File.ReadAllText(channelFile).Trim() == "prerelease" ? UpdateChannel.Prerelease : UpdateChannel.Stable;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        return CurrentVersion.Contains('-') ? UpdateChannel.Prerelease : UpdateChannel.Stable;
+    }
+
+    /// <summary>切換通道並寫入檔案；寫入失敗時這次執行仍使用新通道。檢查或下載中不切換。</summary>
+    internal bool SetChannel(UpdateChannel channel)
+    {
+        if (State is UpdateState.Checking or UpdateState.Downloading) return false;
+        Channel = channel;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(channelFile)!);
+            File.WriteAllText(channelFile, channel == UpdateChannel.Prerelease ? "prerelease" : "stable");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        return true;
     }
 
     /// <summary>X.Y.Z，或測試版的 X.Y.Z-beta.N。</summary>
@@ -113,7 +146,9 @@ internal sealed class UpdateService : IDisposable
             var found = json.RootElement.EnumerateArray().Select(Parse).OfType<UpdateRelease>()
                 .Where(r => Compare(r.Version, CurrentVersion) > 0).ToList();
             var stable = found.Where(r => !r.Prerelease).MaxBy(r => r.Version, Comparer<string>.Create(Compare));
-            var preview = found.Where(r => r.Prerelease && (stable is null || Compare(r.Version, stable.Version) > 0)).MaxBy(r => r.Version, Comparer<string>.Create(Compare));
+            var preview = Channel == UpdateChannel.Prerelease
+                ? found.Where(r => r.Prerelease && (stable is null || Compare(r.Version, stable.Version) > 0)).MaxBy(r => r.Version, Comparer<string>.Create(Compare))
+                : null;
             Choices = new[] { stable, preview }.OfType<UpdateRelease>().ToArray();
             if (Choices.Count == 0) { Set(UpdateState.UpToDate); return; }
             Latest = Choices[0];

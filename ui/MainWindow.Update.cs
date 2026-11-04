@@ -15,8 +15,17 @@ public sealed partial class MainWindow
         updates = new UpdateService(UpdateService.RunningVersion(), UpdateService.DataFolder());
         updates.Changed += (_, _) => DispatcherQueue.TryEnqueue(RenderUpdate);
         Closed += (_, _) => { updateWork?.Cancel(); updates.Dispose(); };
+        UpdateChannelChoice.SelectedIndex = updates.Channel == UpdateChannel.Prerelease ? 1 : 0;
+        UpdateChannelChoice.RegisterPropertyChangedCallback(Controls.Segmented.SelectedIndexProperty, (_, _) => ChangeUpdateChannel());
         RenderUpdate();
         RunUpdate(updates.CheckAsync);
+    }
+
+    private void ChangeUpdateChannel()
+    {
+        if (updates is not { } u) return;
+        var channel = UpdateChannelChoice.SelectedIndex == 1 ? UpdateChannel.Prerelease : UpdateChannel.Stable;
+        if (channel != u.Channel && u.SetChannel(channel)) RunUpdate(u.CheckAsync);
     }
 
     private void RunUpdate(Func<CancellationToken, Task> work)
@@ -54,7 +63,7 @@ public sealed partial class MainWindow
             _ => "檢查更新",
         };
         UpdateButton.Style = ButtonStyle(u.State);
-        UpdateButton.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
+        UpdateButton.IsEnabled = UpdateChannelChoice.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
         // 正式版與測試版都有時，另一個放在旁邊可以改選。
         var other = u.Choices.FirstOrDefault(c => c != latest);
         UpdateSwitch.Visibility = other is not null && u.State is UpdateState.Available or UpdateState.Ready or UpdateState.Failed ? Visibility.Visible : Visibility.Collapsed;
