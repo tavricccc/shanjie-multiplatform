@@ -21,9 +21,10 @@ public static partial class ModelCatalog
     /// The catalog's entry for the package's own set: the same model files (license notices are not part of it).
     private static bool IsBuiltin(ModelEntry m)=>m.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256).ToHashSet()
         .SetEquals(BuiltinAssets.Value.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256));
-    private static Dictionary<string,ModelEntry> CachedNotes()
+    private static Dictionary<string,ModelEntry> CachedNotes()=>CachedNotes(Path.Combine(Folder,"catalog-v2-cache.json"));
+    /// A cache that cannot be read or fails validation only costs the notes; it says nothing about the downloaded models.
+    internal static Dictionary<string,ModelEntry> CachedNotes(string path)
     {
-        string path=Path.Combine(Folder,"catalog-v2-cache.json");
         if(!File.Exists(path))return [];
         try{
             var verified=Interop.Native.Take(Interop.Native.sj_catalog_validate(File.ReadAllText(path)));
