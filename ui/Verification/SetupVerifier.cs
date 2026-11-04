@@ -50,6 +50,10 @@ internal static class SetupVerifier
                 Check(service.SetChannel(UpdateChannel.Prerelease), "Channel could not be switched");
                 await service.CheckAsync(CancellationToken.None);
                 Check(service.Latest?.Version == "0.15.4-beta.1" && service.Latest.Prerelease, "Beta channel did not offer the beta");
+                // Leaving the channel drops its release, so a failed re-check cannot download it.
+                Check(service.SetChannel(UpdateChannel.Stable), "Channel could not be switched back");
+                Check(service.Latest is null && service.Choices.Count == 0 && service.State == UpdateState.Idle, "Switching channel kept the old channel's release");
+                Check(service.SetChannel(UpdateChannel.Prerelease), "Channel could not be switched again");
             }
             using (var again = new UpdateService("0.15.3", data[0], uri)) Check(again.Channel == UpdateChannel.Prerelease, "Update channel was not remembered");
 

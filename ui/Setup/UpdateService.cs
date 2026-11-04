@@ -85,7 +85,7 @@ internal sealed class UpdateService : IDisposable
         return CurrentVersion.Contains('-') ? UpdateChannel.Prerelease : UpdateChannel.Stable;
     }
 
-    /// <summary>切換通道並寫入檔案；寫入失敗時這次執行仍使用新通道。檢查或下載中不切換。</summary>
+    /// <summary>切換通道並寫入檔案；寫入失敗時這次執行仍使用新通道。檢查或下載中不切換。舊通道的選擇一併清掉，重新檢查失敗時才不會下載到它。</summary>
     internal bool SetChannel(UpdateChannel channel)
     {
         if (State is UpdateState.Checking or UpdateState.Downloading) return false;
@@ -96,6 +96,8 @@ internal sealed class UpdateService : IDisposable
             File.WriteAllText(channelFile, channel == UpdateChannel.Prerelease ? "prerelease" : "stable");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        Latest = null; readyPath = null; Choices = [];
+        Set(UpdateState.Idle);
         return true;
     }
 
