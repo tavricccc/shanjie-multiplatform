@@ -7,12 +7,14 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
+    & "$PSScriptRoot/verify-upstream-data.ps1"
     if (!$NativeOnly) {
         if (!$UseExistingBuild) { & "$PSScriptRoot/build.ps1" -Architecture $Architecture }
         & "$PSScriptRoot/test-core.ps1" -Tests $CoreTests -UseExistingCore
     }
     if($CoreOnly){return}
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
+    & "$PSScriptRoot/verify-upstream-data.ps1" -Dist
     # The one unit test that reads the built data and model (dist/data); plain `cargo test --lib` ignores it.
     & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored digit_runs_hand_back_complete_readings
     if ($LASTEXITCODE) { throw 'The mixed-input digit-run regression failed against the built data.' }
