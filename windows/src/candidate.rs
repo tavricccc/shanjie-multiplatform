@@ -24,7 +24,7 @@ fn rgba(value: u32, a: f32) -> D2D1_COLOR_F {
         a,
     }
 }
-/// Pane's colors: a near-opaque glass surface (the candidate window lives in other apps' processes, so it has no
+/// Colors: a near-opaque glass surface (the candidate window lives in other apps' processes, so it has no
 /// system blur), a hairline outline with a light top edge, a soft shadow and the 霧藍 accent.
 pub(crate) struct Palette {
     pub(crate) background: D2D1_COLOR_F,
@@ -115,7 +115,7 @@ impl Palette {
 const SIDE: f32 = 16.0;
 const TOP: f32 = 12.0;
 const BOTTOM: f32 = 22.0;
-/// Opening: a short fade with a slight spring scale (Pane's panel entrance, scaled down for a popup that opens on
+/// Opening: a short fade with a slight spring scale (panel entrance, scaled down for a popup that opens on
 /// every keystroke); moving the selection glides the highlight.
 const OPEN_SCALE: f32 = 0.96;
 const GLIDE_MS: f32 = 170.0;
@@ -835,7 +835,7 @@ impl Host {
             radiusY: radius,
         };
         let ratio = self.size as f32 / 16.0;
-        // Pane's panel corners in both layouts (no pill): 14 for a list, 12 for the single row.
+        // Panel corners in both layouts (no pill): 14 for a list, 12 for the single row.
         let radius = if self.vertical { 14.0 } else { 12.0 } * ratio;
         // Soft shadow: stacked, widening rounded rectangles under the panel, offset downward.
         if self.palette.shadow > 0.0 {
@@ -863,7 +863,7 @@ impl Host {
             0.5,
             None,
         );
-        // Pane's light top edge: a highlight along the upper part of the outline.
+        // Light top edge: a highlight along the upper part of the outline.
         if self.palette.edge.a > 0.0 {
             self.target.PushAxisAlignedClip(
                 &D2D_RECT_F { left: 0.0, top: 0.0, right: width, bottom: (height / 2.0).min(radius) },
@@ -912,7 +912,7 @@ impl Host {
                 );
             }
         }
-        // Pane's item corners, concentric with the panel.
+        // Item corners, concentric with the panel.
         let corner = (self.row * 0.36).min(9.0 * ratio);
         if let Some((x, y, w)) = self.highlight() {
             self.brush.SetColor(&self.palette.accent);
