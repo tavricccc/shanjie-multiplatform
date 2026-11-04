@@ -88,7 +88,7 @@ int wmain(int argc,wchar_t** argv) {
             UINT count=0,target=UINT_MAX,current=0;list->GetCount(&count);list->GetSelection(&current);
             for(UINT i=0;i<count;i++){BSTR text=nullptr;require(SUCCEEDED(list->GetString(i,&text)),930);if(std::wstring(text)==L"你")target=i;std::printf("candidate %u: %u UTF-16 units\n",i,SysStringLen(text));SysFreeString(text);}
             require(target!=UINT_MAX,931);
-            while(current<target){press(VK_RIGHT);UINT next=0;list->GetSelection(&next);require(next>current,932);current=next;}
+            while(current<target){press(VK_DOWN);UINT next=0;list->GetSelection(&next);require(next>current,932);current=next;}
             require(current==target,933);
         }
         press(VK_RETURN);auto before=store->text;

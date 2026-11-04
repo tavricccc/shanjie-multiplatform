@@ -45,6 +45,16 @@ int wmain(int argc,wchar_t** argv) {
         while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
         assert(picks == 2 && pickedIndex == 2);
         std::printf("Vertical candidates: client=%ldx%ld\n",tall.right,tall.bottom);
+        // Expanded candidates use the core's nine columns; clicks in later rows retain their index.
+        presenter.vertical(false); frame.columns = 9; frame.total = 27;
+        for(int i=9;i<27;i++)frame.candidates.push_back(L"候選"+std::to_wstring(i+1));
+        frame.selected = 10; presenter.publish(frame,preferences,caret,96,true);
+        RECT grid{}; GetClientRect(presenter.window(),&grid);
+        assert(grid.bottom-margin > (client.bottom-margin)*2);
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(MulDiv(35,GetDpiForWindow(presenter.window()),96),grid.bottom/2));
+        while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
+        assert(picks == 3 && pickedIndex == 9);
+        frame.candidates.resize(9); frame.columns = 0; frame.total = 9; frame.selected = 1;
         presenter.vertical(false); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
         for (auto notification : {WM_SETTINGCHANGE,WM_THEMECHANGED,WM_DWMCOLORIZATIONCOLORCHANGED}) {
             SendMessageW(presenter.window(),notification,0,0);
@@ -63,6 +73,15 @@ int wmain(int argc,wchar_t** argv) {
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal.bmp"));
                 presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-vertical.bmp")); presenter.vertical(false);
+                for(int i=9;i<36;i++)frame.candidates.push_back(L"候選"+std::to_wstring(i+1));
+                frame.columns = 9; frame.total = 36; frame.selected = 10;
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-grid.bmp"));
+                SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",L"720");
+                presenter.publish(frame,preferences,caret,96,true);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-grid-narrow.bmp"));
+                SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",nullptr);
+                frame.columns = 0;
                 frame.candidates = {L"比方",L"彼方",L"比訪"}; frame.selected = 0;
                 presenter.publish(frame,preferences,caret,96,true);
                 captureNative(presenter.window(),output/(L"reference-"+std::to_wstring(theme)+L"-conversion.bmp"));

@@ -317,10 +317,17 @@ int wmain(int argc, wchar_t** argv) {
         require(noCandidates(),210);
         require(WritePrivateProfileStringW(L"engine",L"rerank_level",L"standard",profile.c_str()),211);
         localNotify(L"Shanjie.ProfileChanged.v2");
+        auto beforeGrid=store->text; auto gridCaret=store->selection.acpStart;
         press('G',212); press('4',214); press(VK_DOWN,216); press(VK_RIGHT,218);
-        UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 0 && tableCount <= 9,220);
-        press(VK_UP,221); UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp == tableCount,223);
-        press(VK_ESCAPE,224); press(VK_RETURN,226);
+        UINT tableCount = 0; candidates->GetCount(&tableCount); require(tableCount > 9 && tableCount <= 45,220);
+        press(VK_DOWN,540); UINT gridSelection=0; candidates->GetSelection(&gridSelection); require(gridSelection==9,542);
+        press(VK_UP,543); press(VK_UP,221);
+        UINT afterUp = 0; candidates->GetCount(&afterUp); require(afterUp > 0 && afterUp <= 9,223);
+        press(VK_RIGHT,545); candidates->GetCount(&tableCount); require(tableCount > 9,547);
+        press(VK_DOWN,548); BSTR gridWord=nullptr; require(SUCCEEDED(candidates->GetString(9,&gridWord)),550);
+        std::wstring chosenGridWord(gridWord); SysFreeString(gridWord);
+        press('1',551); beforeGrid.insert(gridCaret,chosenGridWord); require(store->text==beforeGrid,553);
+        press(VK_RETURN,226);
         press('S',244); press('U',246); press('3',248); press(VK_DOWN,250); press('1',252);
         require(noCandidates(),254); // Windows defaults do not prompt associated phrases.
         press(VK_RETURN,258);
@@ -402,7 +409,7 @@ int wmain(int argc, wchar_t** argv) {
         std::puts("Mixed input: raw English with reading hint, tone composition, live off preserves English passed");
     }
     if (original) {
-        press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);
+        press(VK_TAB,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);
         press(VK_ESCAPE,113); press(VK_ESCAPE,115);
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
         std::puts("Original Shanjie profile: horizontal navigation and unchanged Shift passed");

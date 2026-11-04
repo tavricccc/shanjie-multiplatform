@@ -91,10 +91,11 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
     }
-    // No table expansion reaches the upstream engine. Both profiles stay on a nine-item horizontal page.
+    // In the collapsed bar Right opens the core's grid; Down/Up still move one item.
     k.kind = match k.kind {
-        10 => 8,
-        9 => 7,
+        8 if s.columns == 0 && !s.prediction => 10,
+        10 if s.columns == 0 || s.prediction => 8,
+        9 if s.columns == 0 || s.prediction => 7,
         13 => 8,
         kind => kind,
     };
