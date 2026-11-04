@@ -106,13 +106,13 @@ impl Client {
         if self.failure == Some(Failure::Ambiguous) {
             return None;
         }
-        if self.outstanding.as_ref().is_some_and(|old| old != &op) {
-            self.failure = Some(Failure::Ambiguous);
-            return None;
-        }
         // A rerank left unanswered goes first: the core may have applied it, and its sequence comes before this one.
         if self.outstanding == Some(Op::Rerank) && op != Op::Rerank {
             self.perform(Op::Rerank)?;
+        }
+        if self.outstanding.as_ref().is_some_and(|old| old != &op) {
+            self.failure = Some(Failure::Ambiguous);
+            return None;
         }
         self.failure = None;
         let uncertain = self.outstanding.is_some();
