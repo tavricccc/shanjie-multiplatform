@@ -15,6 +15,10 @@ use windows::{
 pub fn shift(vk: WPARAM) -> bool {
     [16, 160, 161].contains(&vk.0)
 }
+/// The digit keys of the numeric keypad (VK_NUMPAD0..9); they type digits, never Zhuyin.
+pub fn numpad_digit(vk: WPARAM) -> bool {
+    (0x60..=0x69).contains(&vk.0)
+}
 fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
     let mut key = ShanjieKey {
         kind: 0,
@@ -153,6 +157,17 @@ impl Data {
             }
             if !p.flag("input", "caps_lock_english", false) {
                 key.modifiers &= !16;
+            }
+            // With nothing to pick from, a keypad digit is plain text: the application gets it as is, or, while a reading is
+            // pending, key_down commits the reading and then the digit.
+            if numpad_digit(vk)
+                && key.modifiers & 14 == 0
+                && s.special.mode == 0
+                && s.snapshot.candidates.is_empty()
+                && s.pinyin.pending.is_empty()
+                && !s.associated.active()
+            {
+                return Ok(!s.snapshot.preedit.is_empty());
             }
             if Special::starts(key, p) {
                 return Ok(true);
@@ -431,6 +446,12 @@ impl Data {
             && state.selected.is_some()
             && key.modifiers == 0
             && (key.kind == 3 || (key.kind == 1 && (49..=57).contains(&key.ch)));
+        // Optionally the right arrow turns the page (as Space does) while Down keeps stepping through the candidates.
+        let page_right = p.flag("candidates", "right_pages", false)
+            && key.kind == 8
+            && key.modifiers == 0
+            && !state.prediction
+            && !state.candidates.is_empty();
         key = input::candidate_key(
             key,
             &state,
@@ -475,11 +496,15 @@ impl Data {
         } else {
             None
         };
+        let numpad = numpad_digit(vk) && key.modifiers & 14 == 0 && state.candidates.is_empty();
+        if page_right {
+            key.kind = 2;
+        }
         let ascii = !mixed_letter
             && key.kind == 1
             && key.modifiers == 1
             && !p.shift_punctuation(key.ch as u8 as char);
-        if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
+        if (self.state.borrow().full_width && !self.chinese()) || english || ascii || numpad {
             let mut keyboard = [0u8; 256];
             let mut text = [0u16; 4];
             let length = unsafe {
@@ -515,7 +540,7 @@ impl Data {
         if !state.prediction
             && key.kind == 2
             && !state.candidates.is_empty()
-            && (!p.flag("candidates", "space_pages", true)
+            && ((!page_right && !p.flag("candidates", "space_pages", true))
                 || (!p.flag("candidates", "wrap_pages", true)
                     && state.first + (state.selected.unwrap_or(0) / 9 + 1) as u32 * 9
                         >= state.total))
@@ -773,5 +798,15 @@ impl ITfKeyEventSink_Impl for Service_Impl {
     }
     fn OnPreservedKey(&self, _: Ref<ITfContext>, _: *const GUID) -> Result<BOOL> {
         Ok(false.into())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn only_keypad_digits_are_plain_digits() {
+        for vk in 0x60..=0x69 { assert!(numpad_digit(WPARAM(vk)), "{vk:#x}"); }
+        // Main-row digits, VK_MULTIPLY..VK_DIVIDE and the neighbours of the range stay with the normal key path.
+        for vk in [0x30, 0x39, 0x5f, 0x6a, 0x6e, 0x6f, 0x70, 0x20] { assert!(!numpad_digit(WPARAM(vk)), "{vk:#x}"); }
     }
 }

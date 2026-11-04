@@ -6,7 +6,7 @@ using Windows.Foundation;
 namespace Shanjie_UI.Controls;
 
 /// <summary>
-/// Pane's selection highlight: a rounded rectangle with a 1 px stroke on a layer under a list, gliding to the selected
+/// Selection highlight: a rounded rectangle with a 1 px stroke on a layer under a list, gliding to the selected
 /// item (220 ms, glide curve). The first placement jumps there instead of sliding in from elsewhere.
 /// </summary>
 internal sealed class SlidingHighlight
@@ -60,9 +60,9 @@ internal sealed class SlidingHighlight
 
     void Colors()
     {
-        var theme = (ResourceDictionary)((ResourceDictionary)Application.Current.Resources.MergedDictionaries.First(d => d.ThemeDictionaries.ContainsKey("Light") && d.ThemeDictionaries.ContainsKey("Dark") && ((ResourceDictionary)d.ThemeDictionaries["Light"]).ContainsKey("PaneStrokeColor")))
+        var theme = (ResourceDictionary)((ResourceDictionary)Application.Current.Resources.MergedDictionaries.First(d => d.ThemeDictionaries.ContainsKey("Light") && d.ThemeDictionaries.ContainsKey("Dark") && ((ResourceDictionary)d.ThemeDictionaries["Light"]).ContainsKey("SjStrokeColor")))
             .ThemeDictionaries[layer.ActualTheme == ElementTheme.Dark ? "Dark" : "Light"];
-        shape.FillBrush = compositor.CreateColorBrush((Windows.UI.Color)theme["PaneFillSelectedColor"]);
-        shape.StrokeBrush = compositor.CreateColorBrush((Windows.UI.Color)theme["PaneStrokeColor"]);
+        shape.FillBrush = compositor.CreateColorBrush((Windows.UI.Color)theme["SjFillSelectedColor"]);
+        shape.StrokeBrush = compositor.CreateColorBrush((Windows.UI.Color)theme["SjStrokeColor"]);
     }
 }

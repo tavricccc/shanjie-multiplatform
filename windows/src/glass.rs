@@ -1,6 +1,6 @@
 //! Glass material shared by every Shanjie window: the settings window, the installer and the candidate window.
 //!
-//! The look follows Pane: a window of its own behind the content, drawn by the system compositor with the host
+//! A window of its own behind the content, drawn by the system compositor with the host
 //! backdrop (system blur) plus saturation, a luminosity and a tint layer, a gradient highlight edge and two drop
 //! shadows; panels open with a slight spring scale and fade, and close by shrinking and fading out.
 mod effect;
@@ -35,7 +35,7 @@ use windows::{
     },
 };
 
-/// Pane's design tokens. Shanjie has no settings for these, so they stay at Pane's defaults.
+/// Design tokens. Shanjie has no settings for these, so they stay at their defaults.
 pub mod tokens {
     pub const RADIUS: f32 = 20.0;
     pub const TINT_OPACITY: f32 = 0.42;
@@ -280,7 +280,7 @@ impl Glass {
     }
 
     /// Applies the theme, Windows' transparency setting and the glass density (the tint layer's opacity, 0 to 1,
-    /// Pane's 玻璃濃度). Does nothing when none changed.
+    /// 玻璃濃度). Does nothing when none changed.
     pub fn set_theme(&mut self, dark: bool, solid: bool, tint: f32) -> Result<()> {
         let tint = tint.clamp(0.0, 1.0);
         if self.dark == dark && self.solid == solid && self.strength == tint && self.material.Brush().is_ok() {
