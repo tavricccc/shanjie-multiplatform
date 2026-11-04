@@ -446,6 +446,12 @@ impl Data {
             && state.selected.is_some()
             && key.modifiers == 0
             && (key.kind == 3 || (key.kind == 1 && (49..=57).contains(&key.ch)));
+        // Optionally the right arrow turns the page (as Space does) while Down keeps stepping through the candidates.
+        let page_right = p.flag("candidates", "right_pages", false)
+            && key.kind == 8
+            && key.modifiers == 0
+            && !state.prediction
+            && !state.candidates.is_empty();
         key = input::candidate_key(
             key,
             &state,
@@ -491,6 +497,9 @@ impl Data {
             None
         };
         let numpad = numpad_digit(vk) && key.modifiers & 14 == 0 && state.candidates.is_empty();
+        if page_right {
+            key.kind = 2;
+        }
         let ascii = !mixed_letter
             && key.kind == 1
             && key.modifiers == 1
@@ -531,7 +540,7 @@ impl Data {
         if !state.prediction
             && key.kind == 2
             && !state.candidates.is_empty()
-            && (!p.flag("candidates", "space_pages", true)
+            && ((!page_right && !p.flag("candidates", "space_pages", true))
                 || (!p.flag("candidates", "wrap_pages", true)
                     && state.first + (state.selected.unwrap_or(0) / 9 + 1) as u32 * 9
                         >= state.total))
