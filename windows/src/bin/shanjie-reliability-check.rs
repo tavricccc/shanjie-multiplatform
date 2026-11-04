@@ -10,6 +10,9 @@ fn main() {
     match args[2].as_str() {
         "pipe" => broker::verification::pipe_deadlines(),
         "fault" => broker::verification::request_fault(data),
+        "rerank" => broker::verification::rerank_lost(data),
+        "rerank-unknown" => broker::verification::rerank_unknown(data),
+        "outstanding" => broker::verification::outstanding_other(data),
         "busy" => broker::verification::busy_learning(data),
         "ambiguous" => broker::verification::ambiguous(data),
         "capacity" => broker::verification::capacity(data),
