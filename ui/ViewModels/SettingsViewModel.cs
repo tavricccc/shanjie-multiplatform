@@ -92,7 +92,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
-    public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
+    public string CandidateHelp => "↑／↓ 選字，→ 展開多列候選；展開後方向鍵移動，頂列按 ↑ 收回。"
         + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
