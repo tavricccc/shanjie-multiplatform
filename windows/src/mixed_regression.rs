@@ -30,7 +30,7 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
     let data=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
     let mut e=Engine::new(&data,Layout::Standard).unwrap();
     e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
-    e.set_windows_input_options((1<<20)|(1<<21)|(1<<22));
+    e.set_windows_input_options((1<<20)|(1<<21)|(1<<22)|(1<<23));
     for (mixed,english) in [(true,true),(false,true),(true,false),(false,false)] {
         e.set_mixed_input(mixed);e.set_upstream_english(english,true,true,true).unwrap();
         if english {
@@ -38,6 +38,40 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
             assert!(e.digits_typed().is_some(),"the real digit table and model must be active");
             assert!(e.is_mixed_pending(),"Space must reach the open digit run");
             assert_eq!(out.preedit,"9","a buffered key is shown only once");
+            e.reset(ResetMode::Discard);
+            let press=|e:&mut Engine,keys:&str|{
+                let mut out=None;
+                for ch in keys.chars() {
+                    let key=if ch==' ' {Key::new(KeyKind::Space)} else {Key::ch(ch,0)};
+                    out=Some(e.key_with_latin(key,ch.is_ascii_alphabetic().then_some(ch)).unwrap());
+                }
+                out.unwrap()
+            };
+            // A lone digit shows as the digit, uncommitted, and Enter sends it; Space keeps composing.
+            for digit in ["1","2","5","8","0"] {
+                let shown=press(&mut e,digit);
+                assert!(shown.commit.is_empty(),"{mixed} {digit}: not committed early");
+                assert_eq!(shown.preedit,digit,"{mixed} {digit}");
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,digit,"{mixed} {digit} Enter");
+                assert!(e.reset(ResetMode::Commit).commit.is_empty());
+                let spaced=press(&mut e,&format!("{digit} "));
+                assert!(spaced.commit.is_empty());
+                // 5, 8 and 0 alone are whole syllables (ㄓ, ㄚ, ㄢ): Space converts them, as 9 Space does for 哎呦.
+                if ["1","2"].contains(&digit) {assert_eq!(spaced.preedit,format!("{digit} "),"{mixed} {digit} Space");}
+                e.reset(ResetMode::Discard);
+                press(&mut e,digit);
+                assert!(e.key(Key::new(KeyKind::Esc)).unwrap().commit.is_empty(),"{mixed} {digit} cancel");
+                e.reset(ResetMode::Discard);
+            }
+            // The keys stay available: later keys still form readings and numbers, also behind a composition.
+            for (keys,want) in [("184","爸"),("3.14","3.14"),("2026","2026"),("su31","你1"),("13su3","13你")] {
+                if keys=="13su3" && !mixed {continue;}
+                assert_eq!(press(&mut e,keys).preedit,want,"{mixed} {keys}");
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,want,"{mixed} {keys} Enter");
+                assert!(e.reset(ResetMode::Commit).commit.is_empty());
+            }
+            press(&mut e,"1");
+            assert!(!e.key(Key::new(KeyKind::Down)).unwrap().candidates.is_empty(),"Down still opens the list of the reading");
             e.reset(ResetMode::Discard);
         }
         for (keys,want) in [("9 u. ","哎呦"),("gk42u/4","設定"),
