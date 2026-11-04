@@ -1,6 +1,6 @@
 name: ci
 
-# Pull requests into main: the Rust unit tests that need no installed data or models.
+# Pull requests into main: upstream data coverage and the Rust unit tests that need no installed data or models.
 # The upstream core suite (scripts/test-core.ps1) and the TSF/UI verification (scripts/verify.ps1) need models,
 # a built package and a desktop, so they stay local and the release job.
 on:
@@ -27,6 +27,8 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
+      - name: Upstream data coverage
+        run: pwsh -File scripts/verify-upstream-data.ps1
       - name: Prepare the Windows core
         run: pwsh -File scripts/prepare-core.ps1
       - name: Unit tests (shared)
