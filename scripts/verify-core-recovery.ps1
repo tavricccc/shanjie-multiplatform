@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop';$root=Split-Path $PSScriptRoot -Parent
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/core-recovery-'+[guid]::NewGuid().ToString('N'))}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot)
 New-Item -ItemType Directory -Path $ResultRoot -Force | Out-Null
-$saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_FAULT','SHANJIE_TEST_FAULT_SEQUENCE'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
+$saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_FAULT','SHANJIE_TEST_FAULT_SEQUENCE','SHANJIE_TEST_FAULT_OP'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 function Invoke-Owned([string]$Executable,[string[]]$Arguments,[switch]$AllowFailure) {
  $start=[Diagnostics.ProcessStartInfo]::new($Executable);$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true;$start.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
  foreach($argument in $Arguments){$start.ArgumentList.Add($argument)}
@@ -19,13 +19,13 @@ try {
  foreach($arch in $Architectures) {
   $target=if($arch -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
   $exe="$root/windows/target/$target/release/shanjie-reliability-check.exe"
-  foreach($case in @(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('capacity',''))) {
+  foreach($case in @(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('rerank','drop-reply'),@('rerank','before-apply'),@('rerank','after-apply'),@('rerank-unknown','drop-reply'),@('outstanding','drop-reply'),@('capacity',''))) {
    if($Cases -and $case[0] -notin $Cases){continue}
    $label="$arch-$($case[0])-$($case[1])";$folder=Join-Path $ResultRoot $label
    if(Test-Path -LiteralPath $folder){throw 'Use a fresh result directory to isolate this core'}
    New-Item -ItemType Directory -Path "$folder/profile/Shanjie" -Force | Out-Null
    Copy-Item "$root/profiles/windows.ini" "$folder/profile/Shanjie/profile.ini"
-   $env:LOCALAPPDATA="$folder/profile";$env:SHANJIE_TEST_FAULT=$case[1];$env:SHANJIE_TEST_FAULT_SEQUENCE=if($case[0] -eq 'ambiguous'){'8'}else{'5'}
+   $env:LOCALAPPDATA="$folder/profile";$env:SHANJIE_TEST_FAULT=$case[1];$env:SHANJIE_TEST_FAULT_OP=if($case[0] -like 'rerank*'){'rerank'}else{$null};$env:SHANJIE_TEST_FAULT_SEQUENCE=if($case[0] -eq 'ambiguous'){'8'}else{'5'}
    try {
     $log=Invoke-Owned $exe @("$root/dist/data",$case[0])
     Set-Content "$folder/result.log" $log -Encoding utf8NoBOM
