@@ -267,6 +267,43 @@ int wmain(int argc, wchar_t** argv) {
         press(VK_ESCAPE,507); require(store->text == beforeSpaces,509);
         wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
         auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
+        {
+            // Keypad digits: idle they go to the application; a pending reading commits first; an open list picks.
+            BOOL idle = TRUE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_NUMPAD1,0,&idle)) && !idle,900);
+            auto beforeKeypad = store->text; auto keypadCaret = store->selection.acpStart;
+            press('S',901); press('U',903); press('3',905); press(VK_NUMPAD1,907);
+            beforeKeypad.insert(keypadCaret,L"你1");
+            require(store->text == beforeKeypad && noCandidates(),909);
+            auto beforePick = store->text;
+            press('S',910); press('U',912); press('3',914); press(VK_DOWN,916); require(!noCandidates(),918);
+            press(VK_NUMPAD1,919);
+            require(noCandidates() && store->text.size() == beforePick.size() + 1 && store->text.find(L'1',store->selection.acpStart - 1) == std::wstring::npos,921);
+            std::puts("Keypad digits: pass through idle, commit a pending reading, pick from an open list passed");
+
+            // Right arrow: steps by default, turns the page with right_pages, and stops at the end without wrap_pages.
+            // The list holds only the current page, so the page shows in its first candidate.
+            auto top = [&] { BSTR value = nullptr; require(SUCCEEDED(candidates->GetString(0,&value)) && value,922); std::wstring text(value); SysFreeString(value); return text; };
+            auto selected = [&] { UINT value = 0; require(SUCCEEDED(candidates->GetSelection(&value)),923); return value; };
+            press('S',924); press('U',926); press('3',928); press(VK_DOWN,930);
+            auto firstPage = top();
+            press(VK_RIGHT,932); require(top() == firstPage && selected() == 1,934);
+            press(VK_ESCAPE,935); press(VK_ESCAPE,937);
+            require(WritePrivateProfileStringW(L"candidates",L"right_pages",L"1",profile.c_str()),939);
+            require(WritePrivateProfileStringW(L"candidates",L"wrap_pages",L"0",profile.c_str()),940);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            press('S',941); press('U',943); press('3',945); press(VK_DOWN,947);
+            require(top() == firstPage,948);
+            press(VK_RIGHT,949); auto secondPage = top(); require(secondPage != firstPage,951);
+            auto beforeDown = selected(); press(VK_DOWN,952); require(top() == secondPage && selected() == beforeDown + 1,954);
+            std::wstring last; 
+            for (int i = 0; i < 200; ++i) { press(VK_RIGHT,955); last = top(); require(last != firstPage,957); }
+            press(VK_RIGHT,958); require(top() == last,960);
+            press(VK_ESCAPE,961); press(VK_ESCAPE,962);
+            require(WritePrivateProfileStringW(L"candidates",L"right_pages",L"0",profile.c_str()),963);
+            require(WritePrivateProfileStringW(L"candidates",L"wrap_pages",L"1",profile.c_str()),964);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            std::puts("Right arrow: steps by default, turns pages when enabled, stops at the end without wrap passed");
+        }
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"1",profile.c_str()),510);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"1",profile.c_str()),511);
         localNotify(L"Shanjie.ProfileChanged.v2");
