@@ -53,7 +53,7 @@ public sealed partial class MainWindow
             UpdateState.Failed when latest is not null => "重試下載",
             _ => "檢查更新",
         };
-        UpdateButton.Style = u.State is UpdateState.Available or UpdateState.Ready ? (Style)Application.Current.Resources["PaneAccentButton"] : null;
+        UpdateButton.Style = ButtonStyle(u.State);
         UpdateButton.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
         // 正式版與測試版都有時，另一個放在旁邊可以改選。
         var other = u.Choices.FirstOrDefault(c => c != latest);
@@ -63,6 +63,10 @@ public sealed partial class MainWindow
         UpdateNotes.Text = latest?.Notes ?? "";
         UpdateNotes.Visibility = latest is not null && latest.Notes.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>有動作可做（下載、安裝）時用強調色；其餘狀態用主題的一般按鈕。不可設成 null，那會退回系統原生按鈕。</summary>
+    internal static Style ButtonStyle(UpdateState state) =>
+        (Style)Application.Current.Resources[state is UpdateState.Available or UpdateState.Ready ? "PaneAccentButton" : "PaneTextButton"];
 
     private void UpdateAction(object sender, RoutedEventArgs args)
     {

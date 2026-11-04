@@ -26,6 +26,14 @@ internal static class SetupVerifier
         var running = UpdateService.RunningVersion();
         Check(System.Text.RegularExpressions.Regex.IsMatch(running, @"^\d+\.\d+\.\d+(-beta\.\d+)?$"), $"Running version has an unexpected format: {running}");
 
+        // The update button must keep the themed style in every state; a null style falls back to the native button.
+        var themed = Application.Current.Resources;
+        foreach (var state in Enum.GetValues<UpdateState>())
+        {
+            var expected = (Style)themed[state is UpdateState.Available or UpdateState.Ready ? "PaneAccentButton" : "PaneTextButton"];
+            Check(ReferenceEquals(MainWindow.ButtonStyle(state), expected), $"Update button is not themed in state {state}");
+        }
+
         foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
         {
             string suffix = theme == ElementTheme.Light ? "light" : "dark";
