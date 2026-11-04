@@ -83,6 +83,12 @@ pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 - [設計系統](docs/DESIGN.md)、[延遲與資源](docs/PERFORMANCE.md)、[待辦](TODO.md)。
 - [維護規則](AGENTS.md)：上游子模組、commit 與發布、該跑哪些驗證。
 
+## 致謝
+
+- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。
+- [Pane](https://github.com/LBEILC/Pane)（LBEILC）：介面的視覺風格參考了它。
+- [Lucide](https://lucide.dev)：圖示。其他詞庫與演算法的授權見 `LICENSES/`。
+
 ## 授權
 
 程式碼採 Apache-2.0。詞庫、模型與圖示各有資料授權（見 `LICENSES/`），Rust 相依套件的授權全文隨安裝包放在 `LICENSES/windows-rust/`，所以整包不能視為單一 Apache 授權。
