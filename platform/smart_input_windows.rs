@@ -384,11 +384,23 @@ impl Engine {
         Ok(out)
     }
 
+    /// The digit of a run that is one buffered key still shown as an unfinished reading (Windows option, upstream shows the reading).
+    fn lone_digit(&self) -> Option<char> {
+        let run = self.drun.as_ref()?;
+        (self.lone_digit_literal && run.emitted.is_empty() && run.m == 0 && run.buf.len() == 1 && run.buf[0].is_ascii_digit())
+            .then(|| run.buf[0])
+    }
+
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
         // An open digit run (upstream digits.md A.3.4) sees every key first, as in upstream's dispatch.
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
         // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
         if self.drun.is_some() {
+            // Enter sends what the screen shows (upstream A.12), and a lone key shows as its digit here.
+            if key.kind == KeyKind::Enter && self.lone_digit().is_some() {
+                if let Some(run) = self.drun.as_mut() { run.m = 1; }
+                self.clear_pend();
+            }
             let out = self.key_original(key)?;
             // A non-digit Zhuyin key can end the digit run with a whole unfinished
             // reading (2 then u = ㄉㄧ). Hand all its keys back, in typed order;

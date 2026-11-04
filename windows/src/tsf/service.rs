@@ -960,7 +960,7 @@ fn option_operations(p:&Document) -> [crate::broker::Op;4] {
     // Upstream defaults: overwrite, key order and the reversal guard all on.
     let english=upstream as u32 | (p.flag("input","english_overwrite",true) as u32)<<1
         | (p.flag("input","english_key_order",true) as u32)<<2 | (p.flag("input","english_reversal_guard",true) as u32)<<3;
-    [crate::broker::Op::Options(p.input_options()),
+    [crate::broker::Op::Options(p.input_options() | 1 << 23),
      crate::broker::Op::English(english),
      crate::broker::Op::Mixed(zhuyin && p.flag("input","mixed_input",false)),
      crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false))]

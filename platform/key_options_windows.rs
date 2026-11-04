@@ -9,6 +9,7 @@ impl Engine {
         self.space_inputs_zhuyin = flags & (1 << 20) == 0;
         self.enter_to_cursor = flags & (1 << 21) != 0;
         self.punctuation_keeps_reading = flags & (1 << 22) != 0;
+        self.lone_digit_literal = flags & (1 << 23) != 0;
     }
     fn windows_shift_punct(&self, ch: char) -> bool {
         SHIFT_PUNCT.iter().position(|(c, _)| *c == ch).is_some_and(|i| self.shift_punctuation & (1 << i) != 0)
