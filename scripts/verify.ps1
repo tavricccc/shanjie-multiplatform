@@ -13,6 +13,9 @@ try {
     }
     if($CoreOnly){return}
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
+    # The one unit test that reads the built data and model (dist/data); plain `cargo test --lib` ignores it.
+    & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored digit_runs_hand_back_complete_readings
+    if ($LASTEXITCODE) { throw 'The mixed-input digit-run regression failed against the built data.' }
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
 @echo off
