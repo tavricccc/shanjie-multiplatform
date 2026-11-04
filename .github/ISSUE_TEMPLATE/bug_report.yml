@@ -1,0 +1,53 @@
+name: 問題回報
+description: 輸入、候選窗、設定、安裝或解除安裝的異常
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 善解版本
+      description: 設定程式的「關於與相容性」頁。
+      placeholder: 例如 0.15.2
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本與架構
+      placeholder: 例如 Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: 發生問題的程式
+      description: 在哪個 App 或哪種輸入欄位。
+      placeholder: 例如 記事本、Chrome、Word、遊戲
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現步驟
+      description: 按了哪些鍵、怎麼操作。
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期的結果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 實際的結果
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他資訊
+      description: 截圖、使用的鍵盤配置、是否能穩定重現。不要貼私人詞庫或個人輸入內容。

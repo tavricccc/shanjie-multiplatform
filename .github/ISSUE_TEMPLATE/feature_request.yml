@@ -1,0 +1,24 @@
+name: 功能建議
+description: 希望新增或調整的功能
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 想解決什麼問題
+      description: 先說情境，再說想要的功能。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的做法
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 目前的替代做法
+      description: 現在怎麼繞過這個問題，或考慮過哪些其他做法。
+  - type: markdown
+    attributes:
+      value: |
+        善解的輸入核心、詞庫與模型來自[上游](https://github.com/Nanako0129/shanjie)。若建議涉及核心行為，可能需要先和上游討論。
