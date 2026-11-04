@@ -7,7 +7,7 @@ using Windows.System;
 namespace Shanjie_UI.Controls;
 
 /// <summary>
-/// Pane's segmented choice: neutral fill with a thin stroke and 2 px inset, equal segments 28 high; the selected segment's
+/// Segmented choice: neutral fill with a thin stroke and 2 px inset, equal segments 28 high; the selected segment's
 /// text turns bold and primary, and the selected fill glides over.
 /// </summary>
 public sealed partial class Segmented : UserControl
@@ -29,7 +29,7 @@ public sealed partial class Segmented : UserControl
         var grid = new Grid();
         grid.Children.Add(layer); grid.Children.Add(row);
         var shell = new Grid();
-        shell.Children.Add(new Border { Padding = new Thickness(2), CornerRadius = new CornerRadius(Radius), Background = Motion.Resource("PaneFillControlBrush"), BorderBrush = Motion.Resource("PaneStrokeBrush"), BorderThickness = new Thickness(1), Child = grid });
+        shell.Children.Add(new Border { Padding = new Thickness(2), CornerRadius = new CornerRadius(Radius), Background = Motion.Resource("SjFillControlBrush"), BorderBrush = Motion.Resource("SjStrokeBrush"), BorderThickness = new Thickness(1), Child = grid });
         Content = shell;
         FocusRing.Attach(this, shell, Radius);
         highlight = new SlidingHighlight(layer, Radius - 2);
@@ -72,7 +72,7 @@ public sealed partial class Segmented : UserControl
         for (int i = 0; i < items.Count; i++)
         {
             var t = (TextBlock)items[i].Child;
-            t.Foreground = Motion.Resource(i == SelectedIndex ? "PaneText1Brush" : "PaneText2Brush");
+            t.Foreground = Motion.Resource(i == SelectedIndex ? "SjText1Brush" : "SjText2Brush");
             t.FontWeight = i == SelectedIndex ? FontWeights.SemiBold : FontWeights.Normal;
         }
     }

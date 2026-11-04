@@ -75,7 +75,7 @@ public sealed partial class MainWindow
 
     /// <summary>有動作可做（下載、安裝）時用強調色；其餘狀態用主題的一般按鈕。不可設成 null，那會退回系統原生按鈕。</summary>
     internal static Style ButtonStyle(UpdateState state) =>
-        (Style)Application.Current.Resources[state is UpdateState.Available or UpdateState.Ready ? "PaneAccentButton" : "PaneTextButton"];
+        (Style)Application.Current.Resources[state is UpdateState.Available or UpdateState.Ready ? "SjAccentButton" : "SjTextButton"];
 
     private void UpdateAction(object sender, RoutedEventArgs args)
     {

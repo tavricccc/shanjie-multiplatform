@@ -96,7 +96,7 @@ internal static class SetupVerifier
         var themed = Application.Current.Resources;
         foreach (var state in Enum.GetValues<UpdateState>())
         {
-            var expected = (Style)themed[state is UpdateState.Available or UpdateState.Ready ? "PaneAccentButton" : "PaneTextButton"];
+            var expected = (Style)themed[state is UpdateState.Available or UpdateState.Ready ? "SjAccentButton" : "SjTextButton"];
             Check(ReferenceEquals(MainWindow.ButtonStyle(state), expected), $"Update button is not themed in state {state}");
         }
 

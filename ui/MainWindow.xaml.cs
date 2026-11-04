@@ -55,7 +55,7 @@ public sealed partial class MainWindow : UserControl
         for (int i = 0; i < Nav.Children.Count; i++)
         {
             var row = (StackPanel)((Grid)Nav.Children[i]).Children[0];
-            var brush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[i == index ? "PaneText1Brush" : "PaneText2Brush"];
+            var brush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[i == index ? "SjText1Brush" : "SjText2Brush"];
             ((Controls.Icon)row.Children[0]).Foreground = brush;
             var text = (TextBlock)row.Children[1]; text.Foreground = brush; text.FontWeight = i == index ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
         }

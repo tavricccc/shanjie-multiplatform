@@ -23,7 +23,7 @@ internal sealed record UpdateRelease(string Version, string Notes, DateTimeOffse
 
 /// <summary>
 /// 從正式 repo 的 GitHub Releases 取比目前新的最新正式版與最新測試版（pre-release，只在比正式版新時列出），使用者選一個；下載單檔安裝程式並核對 Release 附的 SHA-256，
-/// 再以 <c>--auto-update</c> 啟動：安裝視窗自己裝完並開啟新版設定。做法沿用 Pane 的 UpdateService。
+/// 再以 <c>--auto-update</c> 啟動：安裝視窗自己裝完並開啟新版設定。做法參考 Pane 的 UpdateService。
 /// </summary>
 internal sealed class UpdateService : IDisposable
 {
