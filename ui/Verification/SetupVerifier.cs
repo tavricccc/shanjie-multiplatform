@@ -79,6 +79,14 @@ internal static class SetupVerifier
 
     public static async Task Run(string output)
     {
+        string invalidNotes=Path.Combine(Path.GetTempPath(),"shanjie-notes-"+Guid.NewGuid().ToString("N")+".json");
+        try
+        {
+            File.WriteAllText(invalidNotes,"{ not a catalog");
+            Check(Models.ModelCatalog.CachedNotes(invalidNotes).Count==0,"An invalid notes cache must read as no notes");
+        }
+        finally { File.Delete(invalidNotes); }
+
         var upgrade = SetupStatus.Parse("""{"installed_version":"0.11.0","keyboards":2,"listed":2,"package_version":"0.12.0","registered32":2,"registered64":2,"target":"C:\\Program Files\\Shanjie"}""");
         Check(upgrade.Installed && upgrade.SuggestedKeyboard == 2 && upgrade.Target == @"C:\Program Files\Shanjie", "Install status parsing failed");
         var fresh = SetupStatus.Parse("""{"installed_version":null,"keyboards":null,"listed":0,"package_version":"0.12.0","registered32":0,"registered64":0,"target":"C:\\Program Files\\Shanjie"}""");
