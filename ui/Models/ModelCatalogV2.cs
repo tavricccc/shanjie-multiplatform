@@ -30,7 +30,7 @@ public static partial class ModelCatalog
             var list=JsonSerializer.Deserialize<ModelList>(verified,Json);
             return list?.Models.Where(Supported).ToDictionary(m=>m.Id)??[];
         }
-        catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){return [];}
+        catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException or InvalidDataException){return [];}
     }
     private static ModelSpec Spec(ModelEntry m)
     {
