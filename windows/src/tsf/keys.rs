@@ -791,3 +791,13 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         Ok(false.into())
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn only_keypad_digits_are_plain_digits() {
+        for vk in 0x60..=0x69 { assert!(numpad_digit(WPARAM(vk)), "{vk:#x}"); }
+        // Main-row digits, VK_MULTIPLY..VK_DIVIDE and the neighbours of the range stay with the normal key path.
+        for vk in [0x30, 0x39, 0x5f, 0x6a, 0x6e, 0x6f, 0x70, 0x20] { assert!(!numpad_digit(WPARAM(vk)), "{vk:#x}"); }
+    }
+}
