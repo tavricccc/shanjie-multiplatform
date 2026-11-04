@@ -4,7 +4,7 @@
 
 ## 開始前
 
-- 先讀 [TODO.md](TODO.md)；動到核心或上游前讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md) 與 `UPSTREAM.json`。架構與驗證指令見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+- 先看開啟中的 issue；動到核心或上游前讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md) 與 `UPSTREAM.json`。架構與驗證指令見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 - 查上游（Nanako0129/shanjie）有沒有比 `UPSTREAM.json` 新的 release，有就提醒使用者。
 - 定位是移植：功能、預設值與上游一致；與上游不同的預設或行為（新增或改變的設定）要明確告訴使用者，並記在 UPSTREAM-CHANGES.md。
 
@@ -34,7 +34,7 @@
 
 ## Commit、push 與發布
 
-- 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、TODO、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
+- 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
 - push、開 PR、Release、安裝到實機、刪除使用者資料都先問。
 - 建置、CI 與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。
 
@@ -46,7 +46,7 @@
 - 轉正式版時只拿掉後綴成 `X.Y.Z`，`prerelease` 設 `false`，`recommended_stable` 改成該版。beta 期間不更改 `X.Y.Z`。
 ## 文件
 
-- 文件只寫目前狀態並保持精簡。各版變更寫在 `Changelog.md` 與 `docs/releases/`；`TODO.md` 只列必須由使用者實機確認的項目，能用腳本測的先自己測。
+- 文件只寫目前狀態並保持精簡。各版變更寫在 `Changelog.md` 與 `docs/releases/`；待辦與需要實機確認的項目開 issue，能用腳本測的先自己測。
 - 每次回報列出這輪改了哪些文件及改了什麼。
 - 背景 harness、離屏 render 與擷取不是前景 App、高對比、多螢幕、讀屏或實際安裝的驗收，不要這樣描述。
 
@@ -62,7 +62,7 @@
 
 | 改到 | 跑 |
 | --- | --- |
-| 只有文件、TODO、Changelog、註解 | 不建置、不測試 |
+| 只有文件、Changelog、註解 | 不建置、不測試 |
 | `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔 |
 | `shared/`、`windows/src` 的邏輯 | 對應 crate 的 `cargo test --lib`，加上相關的 `verify-*.ps1` |
 | 按鍵路徑或核心請求 | 再跑 `measure-engine.ps1` |
@@ -80,7 +80,7 @@
 
 以下都是過去 commit 做過、後來刪掉或證明沒有用的：
 
-- **驗證紀錄與證據文件**：`VERIFICATION.md`、`docs/verification.md`、`docs/releases/VERIFICATION-*.md`，以及「record … verification／evidence／boundary」這類 commit（歷史上 26 個；0.13.x 有四個 commit 只為在證據檔加一兩行）。結果在回報裡說，未驗的寫進 TODO，不另寫紀錄。
+- **驗證紀錄與證據文件**：`VERIFICATION.md`、`docs/verification.md`、`docs/releases/VERIFICATION-*.md`，以及「record … verification／evidence／boundary」這類 commit（歷史上 26 個；0.13.x 有四個 commit 只為在證據檔加一兩行）。結果在回報裡說，未驗的開 issue，不另寫紀錄。
 - **以版本號命名的一次性測試**：`features_090`、`features_0100`、`compat_0122` 與對應的 `verify-features-*.ps1` 後來都改名併入 `verify.ps1`。新回歸加進以功能命名的既有 harness，並由 `verify.ps1` 呼叫，不另開只跑一次的腳本。
 - **沒人讀的 fixture 與參數**：`tests/fixtures/classes-v5` 沒有任何測試引用、harness 的模型參數沒有用到，都已刪除。新增 fixture 必須有測試讀它。
 - **同一行為測兩次**：加詞浮層的唯讀與密碼欄在 `add_word_popup` 與 `tsf_compat` 各測一次，前者依賴真實桌面而時好時壞，已刪。一個行為只放在最適合的 harness。

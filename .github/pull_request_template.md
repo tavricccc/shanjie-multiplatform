@@ -21,6 +21,6 @@ Closes #
 
 - [ ] 已跟上最新 `main`
 - [ ] 沒有改版本號（升版 PR 除外，內容見 AGENTS.md「版本號」）
-- [ ] 行為變更已更新對應的測試、`Changelog.md`、`TODO.md` 或文件
+- [ ] 行為變更已更新對應的測試、`Changelog.md` 或文件
 - [ ] 與上游預設或行為不同之處已記在 `UPSTREAM-CHANGES.md`
 - [ ] 沒有加入私人詞典或真實學習資料

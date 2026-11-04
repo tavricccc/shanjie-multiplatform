@@ -65,7 +65,7 @@ cargo test --manifest-path windows/Cargo.toml --lib
 pwsh -File scripts/package.ps1                                # 打包並校驗
 ```
 
-TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)；尚待實機確認的項目列在 [TODO.md](../TODO.md)。
+TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)。
 
 出貨的詞庫／詞包與測試的 `data`、`eval` 透過 `export-upstream.ps1` 從固定 Git commit 匯出，停用該次匯出的換行轉換；不依 Windows 工作副本的 CRLF。`engine_lm` 與 `engine_replay` 含延遲斷言，與其他核心測試分開，逐套、逐案例執行。回收的建置輸出保留在 `.deleted_files`，打包時排除這些目錄。
 
