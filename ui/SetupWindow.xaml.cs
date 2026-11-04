@@ -177,11 +177,11 @@ public sealed partial class SetupWindow : UserControl
             (_, false) => ("安裝未完成", "安裝失敗"),
             (_, true) => ("解除安裝未完成", "解除安裝失敗"),
         };
-        // Pane's done state: accent circle with a check; a failure shows the warning sign instead.
+        // Done state: accent circle with a check; a failure shows the warning sign instead.
         bool ok = outcome.Outcome != SetupOutcome.Failed;
         DoneIcon.Glyph = ok ? "check" : "warn";
-        DoneCircle.Background = ok ? Controls.Motion.Accent : Controls.Motion.Resource("PaneFillControlBrush");
-        DoneIcon.Foreground = ok ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : Controls.Motion.Resource("PaneText1Brush");
+        DoneCircle.Background = ok ? Controls.Motion.Accent : Controls.Motion.Resource("SjFillControlBrush");
+        DoneIcon.Foreground = ok ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : Controls.Motion.Resource("SjText1Brush");
         DoneHint.Text = outcome.Outcome == SetupOutcome.Succeeded && !uninstalling ? "請重新開啟正在使用輸入法的程式；登出再登入後，核心會在登入時自動啟動。" : "";
         DoneText.Text = outcome.Message;
         Show(Page.Done);

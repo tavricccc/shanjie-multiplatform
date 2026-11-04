@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.System;
 namespace Shanjie_UI.Controls;
 
-/// <summary>Pane's slider: 4 px track filled with the accent up to the value, 16 px white knob that springs to 1.15 while held.</summary>
+/// <summary>Slider: 4 px track filled with the accent up to the value, 16 px white knob that springs to 1.15 while held.</summary>
 public sealed partial class RangeSlider : UserControl
 {
     public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(nameof(Value), typeof(double), typeof(RangeSlider), new PropertyMetadata(0.0, (d, _) => ((RangeSlider)d).Place()));
@@ -29,7 +29,7 @@ public sealed partial class RangeSlider : UserControl
     {
         IsTabStop = true;
         fill.Background = Motion.Accent;
-        var track = new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = Motion.Resource("PaneFillControlBrush"), BorderBrush = Motion.Resource("PaneStrokeBrush"), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
+        var track = new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = Motion.Resource("SjFillControlBrush"), BorderBrush = Motion.Resource("SjStrokeBrush"), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
         var root = new Grid { Width = TrackWidth, Height = 18, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         root.Children.Add(track); root.Children.Add(fill); root.Children.Add(thumb);
         Content = root;

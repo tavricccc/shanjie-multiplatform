@@ -151,6 +151,66 @@ pub fn request_fault(data: &Path) {
     assert_eq!(client.perform(Op::Reset(false)).unwrap().commit, "");
     println!("PASS {mode}: sequence result acknowledged once");
 }
+/// A rerank whose reply was lost or late must not stop the next key: it is completed first, under its own sequence.
+pub fn rerank_lost(data: &Path) {
+    let mode = std::env::var("SHANJIE_TEST_FAULT").unwrap();
+    let typed = |client: &mut Client, keys: &str| {
+        for ch in keys.chars() {
+            assert!(client.perform(key(ch)).is_some());
+        }
+    };
+    let mut client = Client::open(data, config(false)).unwrap();
+    typed(&mut client, "su3");
+    assert!(client.perform(Op::Rerank).is_none(), "the fault must lose this reply");
+    assert_ne!(client.failure, Some(Failure::Ambiguous));
+    typed(&mut client, "cl3");
+    let commit = client.perform(Op::Reset(false)).unwrap().commit;
+    assert!(client.failure.is_none());
+    assert_eq!(client.perform(Op::Reset(false)).unwrap().commit, "", "committed once");
+    let mut control = Client::open(data, config(false)).unwrap();
+    typed(&mut control, "su3");
+    control.perform(Op::Rerank).unwrap();
+    typed(&mut control, "cl3");
+    assert_eq!(commit, control.perform(Op::Reset(false)).unwrap().commit);
+    println!("PASS {mode}: unanswered rerank completes before the next key, commit once");
+}
+/// When the core restarted, nobody can say whether the rerank ran: keep the guard, and a new session types normally.
+pub fn rerank_unknown(data: &Path) {
+    let mut client = Client::open(data, config(false)).unwrap();
+    for ch in "su3".chars() {
+        assert!(client.perform(key(ch)).is_some());
+    }
+    assert!(client.perform(Op::Rerank).is_none(), "the fault must lose this reply");
+    control(data, true).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    for _ in 0..5 {
+        assert!(client.perform(key('c')).is_none());
+        if client.failure == Some(Failure::Ambiguous) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert_eq!(client.failure, Some(Failure::Ambiguous));
+    let mut fresh = Client::open(data, config(false)).unwrap();
+    for ch in "su3".chars() {
+        assert!(fresh.perform(key(ch)).is_some());
+    }
+    assert_eq!(fresh.perform(Op::Reset(false)).unwrap().commit, "你");
+    println!("PASS rerank with an unknown result stays ambiguous; a new session recovers input");
+}
+/// Only a rerank is completed for the next operation; any other unanswered operation still blocks a different one.
+pub fn outstanding_other(data: &Path) {
+    let mut client = Client::open(data, config(false)).unwrap();
+    assert!(client.perform(Op::Mixed(true)).is_some());
+    for ch in "adb".chars() {
+        assert!(client.perform(key(ch)).is_some());
+    }
+    let enter = Op::Key { kind: 3, ch: 0, modifiers: 0, latin: None };
+    assert!(client.perform(enter).is_none(), "the fault must lose this reply");
+    assert!(client.perform(key('x')).is_none());
+    assert_eq!(client.failure, Some(Failure::Ambiguous));
+    println!("PASS a different unanswered operation stays guarded");
+}
 pub fn busy_learning(data: &Path) {
     use windows::{
         core::PCWSTR,

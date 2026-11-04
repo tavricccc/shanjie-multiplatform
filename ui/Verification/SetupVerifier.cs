@@ -8,6 +8,75 @@ internal static class SetupVerifier
 {
     private static void Check(bool condition, string message) { if (!condition) throw new InvalidDataException(message); }
 
+    /// <summary>Update channel filtering against a canned release list served on 127.0.0.1; nothing leaves the machine.</summary>
+    private static async Task CheckUpdateChannels()
+    {
+        int port;
+        using (var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)) { probe.Start(); port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port; }
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        string body = "[]";
+        var server = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                try
+                {
+                    var context = await listener.GetContextAsync();
+                    byte[] bytes = System.Text.Encoding.UTF8.GetBytes(body);
+                    context.Response.ContentType = "application/json";
+                    await context.Response.OutputStream.WriteAsync(bytes);
+                    context.Response.Close();
+                }
+                catch (Exception) { break; }
+            }
+        });
+        string Release(string tag, bool pre) => $$"""
+            {"draft":false,"tag_name":"v{{tag}}","prerelease":{{(pre ? "true" : "false")}},"body":"","published_at":"2026-01-01T00:00:00Z","html_url":"http://127.0.0.1:{{port}}/r/{{tag}}",
+             "assets":[{"name":"Shanjie-Windows-Setup.exe","size":1,"browser_download_url":"http://127.0.0.1:{{port}}/a/{{tag}}/exe"},
+                       {"name":"Shanjie-Windows-Setup.exe.sha256","size":1,"browser_download_url":"http://127.0.0.1:{{port}}/a/{{tag}}/sha"}]}
+            """;
+        string[] data = [Path.Combine(Path.GetTempPath(), "shanjie-channel-" + Guid.NewGuid().ToString("N")), Path.Combine(Path.GetTempPath(), "shanjie-channel-" + Guid.NewGuid().ToString("N"))];
+        var uri = new Uri($"http://127.0.0.1:{port}/");
+        try
+        {
+            // Stable channel (default for a stable build) hides a newer beta; switching shows it and is remembered.
+            body = $"[{Release("0.15.3", false)},{Release("0.15.4-beta.1", true)}]";
+            using (var service = new UpdateService("0.15.3", data[0], uri))
+            {
+                await service.CheckAsync(CancellationToken.None);
+                Check(service.Channel == UpdateChannel.Stable && service.State == UpdateState.UpToDate && service.Choices.Count == 0, "Stable channel offered a beta");
+                Check(service.SetChannel(UpdateChannel.Prerelease), "Channel could not be switched");
+                await service.CheckAsync(CancellationToken.None);
+                Check(service.Latest?.Version == "0.15.4-beta.1" && service.Latest.Prerelease, "Beta channel did not offer the beta");
+                // Leaving the channel drops its release, so a failed re-check cannot download it.
+                Check(service.SetChannel(UpdateChannel.Stable), "Channel could not be switched back");
+                Check(service.Latest is null && service.Choices.Count == 0 && service.State == UpdateState.Idle, "Switching channel kept the old channel's release");
+                Check(service.SetChannel(UpdateChannel.Prerelease), "Channel could not be switched again");
+            }
+            using (var again = new UpdateService("0.15.3", data[0], uri)) Check(again.Channel == UpdateChannel.Prerelease, "Update channel was not remembered");
+
+            // A beta build defaults to the beta channel, sees the next beta, and prefers its own stable release over later betas.
+            body = $"[{Release("0.15.3", false)},{Release("0.15.4-beta.1", true)},{Release("0.15.4-beta.2", true)}]";
+            using (var beta = new UpdateService("0.15.4-beta.1", data[1], uri))
+            {
+                Check(beta.Channel == UpdateChannel.Prerelease, "A beta build did not default to the beta channel");
+                await beta.CheckAsync(CancellationToken.None);
+                Check(beta.Latest?.Version == "0.15.4-beta.2", "Beta build was not offered the next beta");
+                body = $"[{Release("0.15.3", false)},{Release("0.15.4-beta.2", true)},{Release("0.15.4", false)}]";
+                await beta.CheckAsync(CancellationToken.None);
+                Check(beta.Choices.Count == 1 && beta.Latest?.Version == "0.15.4" && !beta.Latest.Prerelease, "Stable release did not replace the older beta");
+            }
+        }
+        finally
+        {
+            listener.Stop();
+            await server;
+            foreach (var folder in data) try { Directory.Delete(folder, true); } catch (IOException) { }
+        }
+    }
+
     public static async Task Run(string output)
     {
         string invalidNotes=Path.Combine(Path.GetTempPath(),"shanjie-notes-"+Guid.NewGuid().ToString("N")+".json");
@@ -25,6 +94,23 @@ internal static class SetupVerifier
         Check(SetupStatus.Parse("""{"package_version":"0.12.0","listed":1,"registered64":1,"registered32":0}""").KeyboardSummary.Contains("不一致"), "Inconsistent registration was not reported");
         Check(SetupEvent.Parse("""{"stage":"Copy","status":"running","done":25,"total":600}""") is { Done: 25, Total: 600 }, "Progress line parsing failed");
         Check(SetupEvent.Parse("not json") is null && SetupEvent.Parse("""{"status":"started"}""") is null, "Malformed progress lines were accepted");
+
+        // Update ordering: a beta is newer than the stable release before it and older than its own stable release.
+        string[] ascending = ["0.15.3", "0.15.4-beta.1", "0.15.4-beta.2", "0.15.4-beta.10", "0.15.4", "0.15.10", "0.16.0"];
+        for (int i = 0; i < ascending.Length; i++)
+            for (int j = 0; j < ascending.Length; j++)
+                Check(Math.Sign(UpdateService.Compare(ascending[i], ascending[j])) == Math.Sign(i.CompareTo(j)), $"Version order wrong: {ascending[i]} vs {ascending[j]}");
+        var running = UpdateService.RunningVersion();
+        Check(System.Text.RegularExpressions.Regex.IsMatch(running, @"^\d+\.\d+\.\d+(-beta\.\d+)?$"), $"Running version has an unexpected format: {running}");
+        await CheckUpdateChannels();
+
+        // The update button must keep the themed style in every state; a null style falls back to the native button.
+        var themed = Application.Current.Resources;
+        foreach (var state in Enum.GetValues<UpdateState>())
+        {
+            var expected = (Style)themed[state is UpdateState.Available or UpdateState.Ready ? "SjAccentButton" : "SjTextButton"];
+            Check(ReferenceEquals(MainWindow.ButtonStyle(state), expected), $"Update button is not themed in state {state}");
+        }
 
         foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
         {
