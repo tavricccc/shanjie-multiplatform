@@ -18,6 +18,14 @@ internal static class SetupVerifier
         Check(SetupEvent.Parse("""{"stage":"Copy","status":"running","done":25,"total":600}""") is { Done: 25, Total: 600 }, "Progress line parsing failed");
         Check(SetupEvent.Parse("not json") is null && SetupEvent.Parse("""{"status":"started"}""") is null, "Malformed progress lines were accepted");
 
+        // Update ordering: a beta is newer than the stable release before it and older than its own stable release.
+        string[] ascending = ["0.15.3", "0.15.4-beta.1", "0.15.4-beta.2", "0.15.4-beta.10", "0.15.4", "0.15.10", "0.16.0"];
+        for (int i = 0; i < ascending.Length; i++)
+            for (int j = 0; j < ascending.Length; j++)
+                Check(Math.Sign(UpdateService.Compare(ascending[i], ascending[j])) == Math.Sign(i.CompareTo(j)), $"Version order wrong: {ascending[i]} vs {ascending[j]}");
+        var running = UpdateService.RunningVersion();
+        Check(System.Text.RegularExpressions.Regex.IsMatch(running, @"^\d+\.\d+\.\d+(-beta\.\d+)?$"), $"Running version has an unexpected format: {running}");
+
         foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
         {
             string suffix = theme == ElementTheme.Light ? "light" : "dark";

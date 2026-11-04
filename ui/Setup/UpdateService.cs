@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -55,25 +56,45 @@ internal sealed class UpdateService : IDisposable
         http.Timeout = TimeSpan.FromMinutes(10);
     }
 
+    /// <summary>執行中的版本；測試版保留 -beta.N 後綴（去掉 + 之後的組建資訊），否則更新檢查會把 beta.1 當成正式版。</summary>
     internal static string RunningVersion()
     {
-        var v = typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0);
+        var assembly = typeof(UpdateService).Assembly;
+        string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0];
+        if (informational != null && VersionFormat.IsMatch(informational)) return informational;
+        var v = assembly.GetName().Version ?? new Version(0, 0, 0);
         return $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
     }
+
+    /// <summary>X.Y.Z，或測試版的 X.Y.Z-beta.N。</summary>
+    static readonly Regex VersionFormat = new(@"^\d+\.\d+\.\d+(-beta\.\d+)?$", RegexOptions.CultureInvariant);
 
     internal static string DataFolder() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Shanjie");
 
-    /// <summary>逐段比數字；a 比 b 新回傳正數。</summary>
+    /// <summary>
+    /// 依 semver 比較；a 比 b 新回傳正數。先逐段比 X.Y.Z；數字相同時，沒有後綴的正式版比有後綴的測試版新，
+    /// 兩個測試版再逐段比後綴（beta.2 比 beta.1 新，beta.10 比 beta.2 新）。
+    /// </summary>
     internal static int Compare(string a, string b)
     {
-        int[] x = a.Split('.').Select(int.Parse).ToArray(), y = b.Split('.').Select(int.Parse).ToArray();
-        for (int i = 0; i < Math.Max(x.Length, y.Length); i++)
+        string[] x = a.Split('-', 2), y = b.Split('-', 2);
+        int[] cx = x[0].Split('.').Select(int.Parse).ToArray(), cy = y[0].Split('.').Select(int.Parse).ToArray();
+        for (int i = 0; i < Math.Max(cx.Length, cy.Length); i++)
         {
-            int d = (i < x.Length ? x[i] : 0).CompareTo(i < y.Length ? y[i] : 0);
+            int d = (i < cx.Length ? cx[i] : 0).CompareTo(i < cy.Length ? cy[i] : 0);
             if (d != 0) return d;
         }
-        return 0;
+        if (x.Length != y.Length) return x.Length == 1 ? 1 : -1;
+        if (x.Length == 1) return 0;
+        string[] px = x[1].Split('.'), py = y[1].Split('.');
+        for (int i = 0; i < Math.Min(px.Length, py.Length); i++)
+        {
+            bool nx = int.TryParse(px[i], out int vx), ny = int.TryParse(py[i], out int vy);
+            int d = nx && ny ? vx.CompareTo(vy) : nx ? -1 : ny ? 1 : string.CompareOrdinal(px[i], py[i]);
+            if (d != 0) return d;
+        }
+        return px.Length.CompareTo(py.Length);
     }
 
     void Set(UpdateState state, string? error = null) { State = state; Error = error; Changed?.Invoke(this, EventArgs.Empty); }
@@ -115,7 +136,7 @@ internal sealed class UpdateService : IDisposable
     {
         if (root.GetProperty("draft").GetBoolean()) return null;
         string version = root.GetProperty("tag_name").GetString()!.TrimStart('v');
-        if (!Regex.IsMatch(version, @"^\d+\.\d+\.\d+$")) return null;
+        if (!VersionFormat.IsMatch(version)) return null;
         var files = root.GetProperty("assets").EnumerateArray().ToArray();
         var package = files.FirstOrDefault(f => f.GetProperty("name").GetString() == Package);
         var sums = files.FirstOrDefault(f => f.GetProperty("name").GetString() == Package + ".sha256");
