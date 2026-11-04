@@ -15,6 +15,10 @@ use windows::{
 pub fn shift(vk: WPARAM) -> bool {
     [16, 160, 161].contains(&vk.0)
 }
+/// The digit keys of the numeric keypad (VK_NUMPAD0..9); they type digits, never Zhuyin.
+pub fn numpad_digit(vk: WPARAM) -> bool {
+    (0x60..=0x69).contains(&vk.0)
+}
 fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
     let mut key = ShanjieKey {
         kind: 0,
@@ -153,6 +157,17 @@ impl Data {
             }
             if !p.flag("input", "caps_lock_english", false) {
                 key.modifiers &= !16;
+            }
+            // With nothing to pick from, a keypad digit is plain text: the application gets it as is, or, while a reading is
+            // pending, key_down commits the reading and then the digit.
+            if numpad_digit(vk)
+                && key.modifiers & 14 == 0
+                && s.special.mode == 0
+                && s.snapshot.candidates.is_empty()
+                && s.pinyin.pending.is_empty()
+                && !s.associated.active()
+            {
+                return Ok(!s.snapshot.preedit.is_empty());
             }
             if Special::starts(key, p) {
                 return Ok(true);
@@ -475,11 +490,12 @@ impl Data {
         } else {
             None
         };
+        let numpad = numpad_digit(vk) && key.modifiers & 14 == 0 && state.candidates.is_empty();
         let ascii = !mixed_letter
             && key.kind == 1
             && key.modifiers == 1
             && !p.shift_punctuation(key.ch as u8 as char);
-        if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
+        if (self.state.borrow().full_width && !self.chinese()) || english || ascii || numpad {
             let mut keyboard = [0u8; 256];
             let mut text = [0u16; 4];
             let length = unsafe {
