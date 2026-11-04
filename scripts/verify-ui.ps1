@@ -18,10 +18,45 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     & "$root/build/candidate-host-$architecture.exe" "$root/dist/$architecture/Shanjie.dll" "$root/build/native-review/$architecture"
     if ($LASTEXITCODE) { throw "$architecture WinUI IPC failed." }
 }
+# A saved downloaded model survives closing and reopening the settings: separate processes, isolated profile, a package the scan really validates.
+# A WinUI process can load the installed input method, which then starts its own core on the test profile.
+# A core's pipe name covers its executable and profile, so this stop reaches only that core, never the user's.
+function Get-OutsideCores { Get-CimInstance Win32_Process -Filter "Name='shanjie-core.exe'" | Where-Object { $_.ExecutablePath -notlike "$root*" } }
+$coresBefore = @(Get-OutsideCores | ForEach-Object ProcessId)
+function Stop-CoresOnProfile([string]$profileRoot) {
+    $saved = $env:LOCALAPPDATA, $env:SHANJIE_TEST_PROFILE
+    $env:LOCALAPPDATA = [IO.Path]::GetFullPath($profileRoot); $env:SHANJIE_TEST_PROFILE = '1'
+    try {
+        Get-OutsideCores | Where-Object ProcessId -notin $coresBefore | ForEach-Object ExecutablePath | Sort-Object -Unique | ForEach-Object {
+            Start-Process -FilePath $_ -ArgumentList '--stop' -WindowStyle Hidden -Wait
+        }
+    } finally { $env:LOCALAPPDATA, $env:SHANJIE_TEST_PROFILE = $saved }
+    Start-Sleep -Milliseconds 500
+}
+$modelOutput = Join-Path $root ('build/ui-model-startup/' + [guid]::NewGuid().ToString('N'))
+$modelFolder = Join-Path $modelOutput 'profile/Shanjie/Models/fixture-model'
+New-Item -ItemType Directory -Path $modelFolder -Force | Out-Null
+Copy-Item "$root/dist/data/models/builtin/bigram.winmap","$root/dist/data/models/builtin/classes.sjc" $modelFolder
+$assets = (Get-Content "$root/MODEL-SOURCES.json" -Raw | ConvertFrom-Json).builtin.assets
+$bigram = $assets | Where-Object role -eq 'bigram'; $classes = $assets | Where-Object role -eq 'classes'
+@{ id = 'fixture-model'; name = 'Fixture model'; model_release = $bigram.release; classes_release = $classes.release
+   model_sha256 = $bigram.sha256; classes_sha256 = $classes.sha256; model_size = $bigram.size; classes_size = $classes.size
+   map_sha256 = (Get-FileHash "$modelFolder/bigram.winmap" -Algorithm SHA256).Hash.ToLowerInvariant() } | ConvertTo-Json | Set-Content "$modelFolder/model.json" -Encoding utf8NoBOM
+(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^model_id=.*','model_id=fixture-model' | Set-Content "$modelOutput/profile/Shanjie/profile.ini" -Encoding utf8NoBOM
+foreach ($phase in 'first-open','reopen') {
+    $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-model-startup',('"' + $modelOutput + '"'),$phase -WindowStyle Hidden -PassThru
+    $process.WaitForExit()
+    $result = Get-Content "$modelOutput/result-$phase.txt" -Raw
+    if ($result -ne 'PASS') { throw "Saved model after reopening: $result" }
+}
+Stop-CoresOnProfile "$modelOutput/profile"
+Remove-Item -LiteralPath $modelOutput -Recurse -Force
+Write-Host 'Saved model kept across settings restarts.'
 $output = Join-Path $root 'build/ui-review-final'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
 $process.WaitForExit()
 if ((Get-Content "$output/result.txt" -Raw) -ne 'PASS') { throw 'WinUI loading, profile persistence or visual capture failed.' }
+Stop-CoresOnProfile "$output/profile"
 Write-Host "WinUI profile/capture checks passed: $output"
 # Setup and uninstall pages, rendered offscreen with sample progress; nothing is installed.
 $setupOutput = Join-Path $root 'build/ui-review-setup'

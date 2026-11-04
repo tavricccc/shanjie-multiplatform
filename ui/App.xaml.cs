@@ -44,6 +44,16 @@ public partial class App : Application
             catch(Exception error) { File.WriteAllText(Path.Combine(output,arguments[3]=="owner"?"result.txt":$"secondary-{Environment.ProcessId}-error.txt"),error.ToString()); instance?.Dispose(); }
             Environment.Exit(arguments[3]=="owner" && File.ReadAllText(Path.Combine(output,"result.txt")).StartsWith("PASS")?0:1);
         }
+        else if (arguments.Length == 4 && arguments[1] == "--verify-model-startup")
+        {
+            string output = Path.GetFullPath(arguments[2]);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
+            Environment.SetEnvironmentVariable("SHANJIE_TEST_PROFILE", "1");
+            string result = Path.Combine(output, $"result-{arguments[3]}.txt");
+            try { window = new MainWindow(); await Verification.ModelStartupVerifier.Run((MainWindow)window, arguments[3]); File.WriteAllText(result, "PASS"); }
+            catch (Exception error) { File.WriteAllText(result, error.ToString()); }
+            Environment.Exit(0);
+        }
         else if (arguments.Length == 3 && arguments[1] == "--verify-reliability")
         {
             string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
