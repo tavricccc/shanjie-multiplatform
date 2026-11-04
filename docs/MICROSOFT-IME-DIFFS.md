@@ -75,6 +75,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `candidates.space_pages` | 空白換候選／聯想下一頁 | 1／1 |
 | `candidates.space_operates` | 空白是否操作候選 | 0／0 |
 | `candidates.wrap_pages` | 末頁空白是否循環到首頁 | 1／1 |
+| `candidates.right_pages` | 候選中 → 換下一頁（↓ 仍移到下一個候選字） | 0／0 |
 | `candidates.big5` | 篩選候選、即時預測與聯想，不重寫既有組字 | 0／0；保留 |
 | `shortcuts.shift_toggle` | 單按 Shift 中英切換 | 1／0 |
 | `shortcuts.shift_side` | 左右／左／右 Shift | 0／0 |

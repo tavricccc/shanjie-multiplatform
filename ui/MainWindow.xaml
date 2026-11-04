@@ -159,6 +159,10 @@
                             <controls:SettingToggle Label="未開候選時，↑ 直接換下一個候選" IsOn="{x:Bind Vm.UpCycles, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="候選中 Backspace 同時刪除前一個字" Description="關閉時只收回候選，保留組字。" IsOn="{x:Bind Vm.BackspaceDeletes, Mode=TwoWay}"/>
                         </controls:SettingCard>
+                        <TextBlock Text="翻頁" Style="{StaticResource SjGroupTitle}"/>
+                        <controls:SettingCard>
+                            <controls:SettingToggle Label="→ 右鍵換下一頁候選" Description="開啟後 → 翻到下一頁，↓ 仍是移到下一個候選字。預設關閉：→ 和 ↓ 都移到下一個候選字。" IsOn="{x:Bind Vm.RightPages, Mode=TwoWay}"/>
+                        </controls:SettingCard>
                         <TextBlock Text="空白鍵操作候選" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
