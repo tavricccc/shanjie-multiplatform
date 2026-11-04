@@ -27,7 +27,7 @@
 - 開工前先看有沒有對應的 issue 或別人的 PR；有就在 issue 留言認領，沒有就先開一個，避免兩個人做同一件事。
 - PR 標題用英文 `type: description`，內文用 [PR 模板](.github/pull_request_template.md)，關聯 issue 寫 `Closes #N`。一個 PR 只做一件事；功能與修正的 PR 不改版本號，發布另開升版 PR（見下方「版本號」）。
 - PR 要先跟上最新 `main`（rebase 或 merge 都可以），並依下方「驗證」表跑過該跑的項目後再開；沒跑的在 PR 裡寫明。
-- 目前 PR 沒有自動檢查（CI 只在版本號變更合入 main 時跑），所以驗證結果以 PR 內文為準。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
+- PR 會自動跑 `ci.yml`（`shared/` 與 `windows/` 的 `cargo test --lib`），須通過才能合入。核心測試、TSF 與介面驗證需要模型、建置產物或桌面，不在 CI，結果寫在 PR 內文。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
 - Bug 與功能建議用 [issue 模板](.github/ISSUE_TEMPLATE/)；問題要附版本、Windows 版本與重現步驟。
 
 ## Commit、push 與發布
