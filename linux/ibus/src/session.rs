@@ -328,7 +328,7 @@ impl Shanjie {
             self.snapshot.candidates.clear();
             out.push(Effect::HideLookup);
         }
-        if self.pinyin.handles(key) {
+        if self.special.mode == 0 && self.pinyin.handles(key) {
             let state = self.snapshot.clone();
             let engine = self.engine.as_mut().ok_or(())?;
             let o = output(self.pinyin.key(key, engine, state, p.flag("input", "alphanumeric", true), p.flag("input", "pinyin_space_converts", false)))?;

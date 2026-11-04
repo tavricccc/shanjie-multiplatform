@@ -160,6 +160,9 @@ pub fn set_model(path: &Path, id: &str) -> Result<()> {
     doc.set("engine", "model_id", id);
     write_profile(path, &doc.content())
 }
+pub fn changed() -> Result<()> {
+    notify(CHANGED_MESSAGE)
+}
 pub fn restart() -> Result<()> {
     notify(RESTART_MESSAGE)
 }

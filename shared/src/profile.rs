@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const SCHEMA: u32 = 8;
+pub const SCHEMA: u32 = 9;
 
 /// The model bundle the package ships: always upstream's current released set, whatever it is called.
 pub const BUILTIN: &str = "builtin";
@@ -214,6 +214,10 @@ impl Document {
             }
             self.remove("engine", "class_table");
             self.remove("engine", "model");
+        }
+        // Earlier Windows templates shipped backquote_symbols=0; enable it when upgrading from those schemas.
+        if schema < 9 && windows {
+            self.set("shortcuts", "backquote_symbols", 1);
         }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
@@ -444,6 +448,10 @@ mod tests {
         let preset=super::preset(&old.content(),true).unwrap();
         assert_eq!(super::Document::parse(&preset).unwrap().model_id(),"model-v5-classes-v3");
         assert!(!super::export_preset(&old.content(),"public").unwrap().contains("model_id="));
+        let mut legacy_win=super::Document::parse("[profile]\nschema=8\ninteraction=windows\n[shortcuts]\nbackquote_symbols=0\n").unwrap();
+        legacy_win.migrate();assert!(legacy_win.flag("shortcuts","backquote_symbols",false));
+        let mut current_off=super::Document::parse("[profile]\nschema=9\ninteraction=windows\n[shortcuts]\nbackquote_symbols=0\n").unwrap();
+        current_off.migrate();assert!(!current_off.flag("shortcuts","backquote_symbols",true));
     }
     use super::*;
     #[test]

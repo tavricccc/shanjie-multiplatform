@@ -23,14 +23,48 @@ int wmain(int argc,wchar_t** argv) {
     ComPtr<ITfKeyEventSink> keys;tip.As(&keys);
     auto press=[&](int vk,bool shift=false,bool caps=false,bool required=true){
         for(int k:{VK_SHIFT,VK_LSHIFT,VK_RSHIFT,VK_CONTROL,VK_MENU,VK_CAPITAL})GetKeyState(k);
-        BYTE keyboard[256]{};if(shift){keyboard[VK_SHIFT]=0x80;keyboard[VK_LSHIFT]=0x80;}if(caps)keyboard[VK_CAPITAL]=1;
+        BYTE keyboard[256]{};keyboard[VK_NUMLOCK]=1;if(shift){keyboard[VK_SHIFT]=0x80;keyboard[VK_LSHIFT]=0x80;}if(caps)keyboard[VK_CAPITAL]=1;
         require(SetKeyboardState(keyboard),914);BOOL test=FALSE,eaten=FALSE;
         LPARAM flags=LPARAM(1)|(LPARAM(MapVirtualKeyW(vk,MAPVK_VK_TO_VSC))<<16);
         require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&test)),915);
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"caps"){
+    if(scenario==L"numpad"){
+        for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
+        for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
+        require(store->text==L"0123456789+-*/.",934);
+        press(VK_RETURN);require(store->text==L"0123456789+-*/.",935);
+        const wchar_t* typing=std::getenv("SHANJIE_TEST_ETEN")?L"NE3":L"SU3";
+        for(auto ch:std::wstring(typing))press(ch);
+        press(VK_NUMPAD1);press(VK_DIVIDE);press(VK_RETURN);
+        require(store->text==L"0123456789+-*/.你1/",936);
+    }else if(scenario==L"width"){
+        press('A',true);require(store->text==L"A",937);
+        press(VK_SPACE,true);require(store->text==L"Ａ",938);
+        press(VK_NUMPAD2);press(VK_RETURN);require(store->text==L"Ａ２",939);
+        press(VK_SPACE,true);press('B',true);press(VK_RETURN);require(store->text==L"Ａ２B",940);
+        press(VK_SPACE,true);press('C',true);require(SUCCEEDED(keys->OnSetFocus(FALSE)),957);
+        require(store->text==L"Ａ２BＣ",958);
+    }else if(scenario==L"width-english"){
+        press(VK_SPACE,true);press('A');press(VK_NUMPAD2);press(VK_DECIMAL);press(VK_SPACE);
+        require(store->text==L"ａ２．　",951);
+        press(VK_SPACE,true);BOOL test=TRUE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'B',0,&test))&&!test,952);
+    }else if(scenario==L"width-disabled"){
+        BOOL test=TRUE;BYTE keyboard[256]{};keyboard[VK_SHIFT]=keyboard[VK_LSHIFT]=0x80;SetKeyboardState(keyboard);
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_SPACE,0,&test))&&!test,953);
+    }else if(scenario==L"backquote-disabled"){
+        press(VK_OEM_3);press(VK_OEM_COMMA);require(store->text==L"`",954);press(VK_ESCAPE);
+    }else if(scenario==L"backquote"){
+        for(auto entry:{std::pair{VK_OEM_COMMA,L'，'},std::pair{VK_OEM_PERIOD,L'。'},std::pair{VK_OEM_2,L'／'},std::pair{VK_OEM_1,L'；'},std::pair{VK_OEM_MINUS,L'－'}}){
+            auto before=store->text;press(VK_OEM_3);press(entry.first);require(store->text==before+entry.second,941);
+        }
+        press(VK_OEM_3);press('2',true);require(store->text==L"，。／；－＠",942);
+        // Unicode code entry remains available alongside punctuation.
+        press(VK_OEM_3);press('U');for(auto ch:std::wstring(L"FF0C"))press(ch);press(VK_SPACE);
+        require(store->text==L"，。／；－＠，",943);
+    }else if(scenario==L"caps"){
         // HELLO is in the public bundled English list; RUST is intentionally absent.
         for(auto ch:std::wstring(L"HELLO"))press(ch,false,true);
         press(VK_RETURN);require(store->text==L"HELLO",918);

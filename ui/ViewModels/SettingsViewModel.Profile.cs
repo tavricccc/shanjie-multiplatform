@@ -136,7 +136,7 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
-        profile.Set("profile", "schema", 8); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
+        profile.Set("profile", "schema", 9); profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Rankings[Ranking]);
         var apps = string.Join(";", ChatApps.Split([';', ',', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).Distinct());
         if (apps == DefaultChatApps) profile.Remove("engine", "chat_apps"); else profile.Set("engine", "chat_apps", apps);

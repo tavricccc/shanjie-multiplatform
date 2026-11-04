@@ -243,6 +243,16 @@ impl Data {
                 let width = self.state.borrow().full_width;
                 self.state.borrow_mut().full_width = !width;
                 self.set_mode(self.chinese())?;
+                let mut out = self.state.borrow().snapshot.clone();
+                if !out.preedit.is_empty() {
+                    out.commit.clear();
+                    out.handled = true;
+                    let data = self.clone();
+                    let current = context.clone();
+                    self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
+                        data.apply(&current, cookie, out, false)
+                    })?;
+                }
             }
             return Ok(true);
         }
@@ -279,8 +289,15 @@ impl Data {
                 return Ok(true);
             }
         }
-        if p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key) {
-            let mark = std::ffi::CString::new(input::punctuation(key)).unwrap();
+        let numpad = (VK_NUMPAD0.0 as usize..=VK_DIVIDE.0 as usize).contains(&vk.0)
+            && key.kind == 1 && key.modifiers & 14 == 0
+            && self.state.borrow().special.mode == 0 && self.chinese();
+        if numpad || (p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key)) {
+            let mark = if numpad {
+                char::from_u32(key.ch).unwrap().to_string()
+            } else {
+                input::punctuation(key).into()
+            };
             let data = self.clone();
             let current = context.clone();
             self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
@@ -309,7 +326,7 @@ impl Data {
                     s.raw_reading.clear();
                     s.associated.clear();
                     let mut out = output(s.engine.perform(crate::broker::Op::Punctuation(
-                        mark.to_str().unwrap().into(),
+                        mark,
                     )))?;
                     out.commit = converted.commit + &out.commit;
                     out
@@ -388,7 +405,7 @@ impl Data {
                 c.data.close();
             }
         }
-        if self.state.borrow().pinyin.handles(key) {
+        if self.state.borrow().special.mode == 0 && self.state.borrow().pinyin.handles(key) {
             let data = self.clone();
             let current = context.clone();
             self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
@@ -415,6 +432,8 @@ impl Data {
                 let out = {
                     let mut s = data.state.borrow_mut();
                     let pending = if s.special.mode == 0 {
+                        s.pinyin.clear();
+                        s.raw_reading.clear();
                         output(s.engine.reset(false))?
                     } else {
                         Snapshot::default()
