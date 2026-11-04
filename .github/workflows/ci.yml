@@ -1,0 +1,35 @@
+name: ci
+
+# Pull requests into main: the Rust unit tests that need no installed data or models.
+# The upstream core suite (scripts/test-core.ps1) and the TSF/UI verification (scripts/verify.ps1) need models,
+# a built package and a desktop, so they stay local and the release job.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Prepare the Windows core
+        run: pwsh -File scripts/prepare-core.ps1
+      - name: Unit tests (shared)
+        run: cargo test --manifest-path shared/Cargo.toml --lib --target x86_64-pc-windows-msvc
+      - name: Unit tests (windows)
+        run: cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc
