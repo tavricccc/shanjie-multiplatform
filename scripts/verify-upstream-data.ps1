@@ -52,17 +52,19 @@ if ($prepareData -notmatch 'data/lexicon/\*') { Fail 'prepare-data.ps1 must copy
 
 # --- Built output (after a build): every upstream file is there and identical. ---
 if ($Dist) {
+    # Compare with the pinned Git blobs: the shipped data comes from them, and the checkout may have other line endings.
+    function Same-AsUpstream([string]$built, [string]$path) { (git -C (Join-Path $root 'upstream/shanjie') rev-parse "HEAD:data/$path") -eq (git hash-object --no-filters $built) }
     $data = Join-Path $root 'dist/data'
     foreach ($file in Get-ChildItem (Join-Path $upstream 'lexicon') -File) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }
-        if ((Get-FileHash $built).Hash -ne (Get-FileHash $file.FullName).Hash) { Fail "dist/data/$($file.Name) differs from upstream." }
+        if (!(Same-AsUpstream $built "lexicon/$($file.Name)")) { Fail "dist/data/$($file.Name) differs from upstream." }
     }
     foreach ($id in $upstreamPacks) {
         foreach ($name in "$id-add.tsv", "$id.json") {
             $built = Join-Path $data "packs/$name"
             if (!(Test-Path $built)) { Fail "dist/data/packs is missing $name."; continue }
-            if ((Get-FileHash $built).Hash -ne (Get-FileHash (Join-Path $upstream "packs/$name")).Hash) { Fail "dist/data/packs/$name differs from upstream." }
+            if (!(Same-AsUpstream $built "packs/$name")) { Fail "dist/data/packs/$name differs from upstream." }
         }
     }
     foreach ($name in $assets.Keys) {
