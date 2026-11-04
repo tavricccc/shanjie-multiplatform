@@ -21,11 +21,20 @@
   6. 分批 commit：pin 與覆蓋、Windows 功能、文件；更新 UPSTREAM-CHANGES.md。
 - 不向上游提 PR；右側候選與平台 backend 等和作者討論 API 後再整理。
 
+## 分支、Issue 與 Pull Request
+
+- **不直接 push main。** 每個任務從最新的 `main` 開新分支，名稱 `type/short-name`（`feat/`、`fix/`、`docs/`、`chore/`），完成後開 PR 合入；不 force push 共用分支。
+- 開工前先看有沒有對應的 issue 或別人的 PR；有就在 issue 留言認領，沒有就先開一個，避免兩個人做同一件事。
+- PR 標題用英文 `type: description`，內文用 [PR 模板](.github/pull_request_template.md)，關聯 issue 寫 `Closes #N`。一個 PR 只做一件事，不和功能混著改版本號。
+- PR 要先跟上最新 `main`（rebase 或 merge 都可以），並依下方「驗證」表跑過該跑的項目後再開；沒跑的在 PR 裡寫明。
+- 目前 PR 沒有自動檢查（CI 只在版本號變更合入 main 時跑），所以驗證結果以 PR 內文為準。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
+- Bug 與功能建議用 [issue 模板](.github/ISSUE_TEMPLATE/)；問題要附版本、Windows 版本與重現步驟。
+
 ## Commit、push 與發布
 
 - 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、TODO、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
-- push、Release、安裝到實機、刪除使用者資料都先問。
-- 版本號在 `windows/Cargo.toml`、`windows/Cargo.lock`、`ui/Shanjie.UI.csproj`、`RELEASE-CHANNEL.json`；push 到 main 且版本號變更時 Actions 建立 Release。發布前寫好 `docs/releases/RELEASE-NOTES-<版本>.md` 與 Changelog。既有 Release 不會被重跑改寫，要改說明或 pre-release 狀態用 `gh release edit`。
+- push、開 PR、Release、安裝到實機、刪除使用者資料都先問。
+- 版本號在 `windows/Cargo.toml`、`windows/Cargo.lock`、`ui/Shanjie.UI.csproj`、`RELEASE-CHANNEL.json`；版本號變更的 PR 合入 main 時 Actions 建立 Release。發布前寫好 `docs/releases/RELEASE-NOTES-<版本>.md` 與 Changelog。既有 Release 不會被重跑改寫，要改說明或 pre-release 狀態用 `gh release edit`。
 - 建置、CI 與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。
 
 ## 文件
