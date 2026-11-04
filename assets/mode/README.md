@@ -6,4 +6,6 @@
 - `chinese`：中，中文模式（DLL 資源 101）。
 - `english`：A，英文模式（DLL 資源 102）。
 
+中／A 的可見字形填滿圖示約八成高度，避免工作列 16–24 px 尺寸下字太小；只重建這兩個模式圖示可用 `scripts/make-icons.ps1 -ModesOnly`。
+
 `scripts/make-icons.ps1` 以 Noto Sans TC 粗體繪製並輸出 `*.ico`（16–256 px，PNG 內嵌）、`*.png`（128 px 母圖；中、A 的版本由游標旁提示 `include_bytes!` 後依 DPI 縮放）與 `*.svg`。授權說明見 `LICENSES/mode-icons.md`。

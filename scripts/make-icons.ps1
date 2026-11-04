@@ -2,7 +2,7 @@
 # Regenerates the icons, all monochrome: a flat dark squircle with a white bold sans glyph (no gradient, frame
 # or colour). shanjie = 解 (the input method itself: profile icon, settings app, tiles), chinese = 中 and
 # english = A (mode switch). Needs the Noto Sans TC font; glyphs are rasterized, no font is shipped.
-param([string]$Font = 'Noto Sans TC')
+param([string]$Font = 'Noto Sans TC', [switch]$ModesOnly)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $out = Join-Path (Split-Path $PSScriptRoot -Parent) 'assets/mode'
@@ -33,6 +33,14 @@ function New-Icon([int]$size, [string]$glyph, [Drawing.Color]$fill) {
     $em = if ($glyph -eq 'A') { 40 } else { 37 }
     $text.AddString($glyph, $family, [int][Drawing.FontStyle]::Bold, $em, [Drawing.PointF]::new(0, 0), [Drawing.StringFormat]::GenericTypographic)
     $bounds = $text.GetBounds()
+    if ($glyph -in @('中', 'A')) {
+        # Size the visible outline, not the font's em box: both glyphs fill the small tray icon.
+        $scale = 52.0 / [Math]::Max($bounds.Width, $bounds.Height)
+        $resize = [Drawing.Drawing2D.Matrix]::new()
+        $resize.Scale($scale, $scale)
+        $text.Transform($resize)
+        $bounds = $text.GetBounds()
+    }
     $move = [Drawing.Drawing2D.Matrix]::new()
     $move.Translate(32 - ($bounds.X + $bounds.Width / 2), 32 - ($bounds.Y + $bounds.Height / 2))
     $text.Transform($move)
@@ -64,16 +72,19 @@ $modes = @(
     @{ Name = 'english'; Glyph = 'A'; Fill = [Drawing.Color]::FromArgb(0x2B, 0x2B, 0x2B) },
     @{ Name = 'shanjie'; Glyph = '解'; Fill = [Drawing.Color]::FromArgb(0x2B, 0x2B, 0x2B) })
 foreach ($mode in $modes) {
+    if ($ModesOnly -and $mode.Name -eq 'shanjie') { continue }
     $bitmaps = @(foreach ($s in $sizes) { New-Icon $s $mode.Glyph $mode.Fill })
     Save-Ico (Join-Path $out "$($mode.Name).ico") $bitmaps
     # 128 px master for the cursor-side hint, which scales it to the actual DPI.
     (New-Icon 128 $mode.Glyph $mode.Fill).Save((Join-Path $out "$($mode.Name).png"), [Drawing.Imaging.ImageFormat]::Png)
     $hex = '#{0:X2}{1:X2}{2:X2}' -f $mode.Fill.R, $mode.Fill.G, $mode.Fill.B
+    $svgSize = switch ($mode.Name) { 'chinese' { 60 }; 'english' { 72 }; default { 37 } }
     $svg = @"
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="$hex"/><text x="32" y="32" text-anchor="middle" dominant-baseline="central" font-family="'Noto Sans TC','Microsoft JhengHei UI',sans-serif" font-weight="700" font-size="37" fill="#fff">$($mode.Glyph)</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="$hex"/><text x="32" y="32" text-anchor="middle" dominant-baseline="central" font-family="'Noto Sans TC','Microsoft JhengHei UI',sans-serif" font-weight="700" font-size="$svgSize" fill="#fff">$($mode.Glyph)</text></svg>
 "@
     Set-Content (Join-Path $out "$($mode.Name).svg") $svg.Trim() -Encoding utf8NoBOM
 }
+if ($ModesOnly) { return }
 
 # The settings app, Installed Apps entry and tile assets use the same Chinese-mode artwork as the input method.
 $ui = Join-Path (Split-Path $PSScriptRoot -Parent) 'ui/Assets'
