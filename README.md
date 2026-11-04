@@ -80,7 +80,7 @@ pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
 - [上游差異](UPSTREAM-CHANGES.md)：核心覆蓋與升版流程。更新上游前先讀。
-- [設計系統](docs/DESIGN.md)、[延遲與資源](docs/PERFORMANCE.md)、[待辦](TODO.md)。
+- [設計系統](docs/DESIGN.md)、[延遲與資源](docs/PERFORMANCE.md)。
 - [維護規則](AGENTS.md)：上游子模組、commit 與發布、該跑哪些驗證。
 
 ## 致謝
