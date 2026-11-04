@@ -1,88 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Pane's design tokens and control styles for Shanjie's glass windows: text, stroke and fill colors per theme,
+  Design tokens and control styles for Shanjie's glass windows: text, stroke and fill colors per theme,
   radii (panel 20, item 12, control 10), control heights (24 / 28 / 32 / 40) and the accent (霧藍).
   The font is Noto Sans when installed, otherwise the system default (GlassWindow.Font).
 -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
-            <Color x:Key="PaneText1Color">#EB141418</Color>
-            <Color x:Key="PaneText2Color">#9E141418</Color>
-            <Color x:Key="PaneText3Color">#6B141418</Color>
-            <Color x:Key="PaneStrokeColor">#14000000</Color>
-            <Color x:Key="PaneFillHoverColor">#0B000000</Color>
-            <Color x:Key="PaneFillSelectedColor">#9EFFFFFF</Color>
-            <Color x:Key="PaneFillControlColor">#80FFFFFF</Color>
-            <SolidColorBrush x:Key="PaneText1Brush" Color="{ThemeResource PaneText1Color}"/>
-            <SolidColorBrush x:Key="PaneText2Brush" Color="{ThemeResource PaneText2Color}"/>
-            <SolidColorBrush x:Key="PaneText3Brush" Color="{ThemeResource PaneText3Color}"/>
-            <SolidColorBrush x:Key="PaneStrokeBrush" Color="{ThemeResource PaneStrokeColor}"/>
-            <SolidColorBrush x:Key="PaneFillHoverBrush" Color="{ThemeResource PaneFillHoverColor}"/>
-            <SolidColorBrush x:Key="PaneFillSelectedBrush" Color="{ThemeResource PaneFillSelectedColor}"/>
-            <SolidColorBrush x:Key="PaneFillControlBrush" Color="{ThemeResource PaneFillControlColor}"/>
+            <Color x:Key="SjText1Color">#EB141418</Color>
+            <Color x:Key="SjText2Color">#9E141418</Color>
+            <Color x:Key="SjText3Color">#6B141418</Color>
+            <Color x:Key="SjStrokeColor">#14000000</Color>
+            <Color x:Key="SjFillHoverColor">#0B000000</Color>
+            <Color x:Key="SjFillSelectedColor">#9EFFFFFF</Color>
+            <Color x:Key="SjFillControlColor">#80FFFFFF</Color>
+            <SolidColorBrush x:Key="SjText1Brush" Color="{ThemeResource SjText1Color}"/>
+            <SolidColorBrush x:Key="SjText2Brush" Color="{ThemeResource SjText2Color}"/>
+            <SolidColorBrush x:Key="SjText3Brush" Color="{ThemeResource SjText3Color}"/>
+            <SolidColorBrush x:Key="SjStrokeBrush" Color="{ThemeResource SjStrokeColor}"/>
+            <SolidColorBrush x:Key="SjFillHoverBrush" Color="{ThemeResource SjFillHoverColor}"/>
+            <SolidColorBrush x:Key="SjFillSelectedBrush" Color="{ThemeResource SjFillSelectedColor}"/>
+            <SolidColorBrush x:Key="SjFillControlBrush" Color="{ThemeResource SjFillControlColor}"/>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-            <Color x:Key="PaneText1Color">#F0FFFFFF</Color>
-            <Color x:Key="PaneText2Color">#A3FFFFFF</Color>
-            <Color x:Key="PaneText3Color">#66FFFFFF</Color>
-            <Color x:Key="PaneStrokeColor">#14FFFFFF</Color>
-            <Color x:Key="PaneFillHoverColor">#0FFFFFFF</Color>
-            <Color x:Key="PaneFillSelectedColor">#1FFFFFFF</Color>
-            <Color x:Key="PaneFillControlColor">#12FFFFFF</Color>
-            <SolidColorBrush x:Key="PaneText1Brush" Color="{ThemeResource PaneText1Color}"/>
-            <SolidColorBrush x:Key="PaneText2Brush" Color="{ThemeResource PaneText2Color}"/>
-            <SolidColorBrush x:Key="PaneText3Brush" Color="{ThemeResource PaneText3Color}"/>
-            <SolidColorBrush x:Key="PaneStrokeBrush" Color="{ThemeResource PaneStrokeColor}"/>
-            <SolidColorBrush x:Key="PaneFillHoverBrush" Color="{ThemeResource PaneFillHoverColor}"/>
-            <SolidColorBrush x:Key="PaneFillSelectedBrush" Color="{ThemeResource PaneFillSelectedColor}"/>
-            <SolidColorBrush x:Key="PaneFillControlBrush" Color="{ThemeResource PaneFillControlColor}"/>
+            <Color x:Key="SjText1Color">#F0FFFFFF</Color>
+            <Color x:Key="SjText2Color">#A3FFFFFF</Color>
+            <Color x:Key="SjText3Color">#66FFFFFF</Color>
+            <Color x:Key="SjStrokeColor">#14FFFFFF</Color>
+            <Color x:Key="SjFillHoverColor">#0FFFFFFF</Color>
+            <Color x:Key="SjFillSelectedColor">#1FFFFFFF</Color>
+            <Color x:Key="SjFillControlColor">#12FFFFFF</Color>
+            <SolidColorBrush x:Key="SjText1Brush" Color="{ThemeResource SjText1Color}"/>
+            <SolidColorBrush x:Key="SjText2Brush" Color="{ThemeResource SjText2Color}"/>
+            <SolidColorBrush x:Key="SjText3Brush" Color="{ThemeResource SjText3Color}"/>
+            <SolidColorBrush x:Key="SjStrokeBrush" Color="{ThemeResource SjStrokeColor}"/>
+            <SolidColorBrush x:Key="SjFillHoverBrush" Color="{ThemeResource SjFillHoverColor}"/>
+            <SolidColorBrush x:Key="SjFillSelectedBrush" Color="{ThemeResource SjFillSelectedColor}"/>
+            <SolidColorBrush x:Key="SjFillControlBrush" Color="{ThemeResource SjFillControlColor}"/>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
-    <Color x:Key="PaneAccentColor">#FF5874C9</Color>
-    <SolidColorBrush x:Key="PaneAccentBrush" Color="{StaticResource PaneAccentColor}"/>
-    <Color x:Key="PaneDangerColor">#FFE5484D</Color>
-    <SolidColorBrush x:Key="PaneDangerBrush" Color="{StaticResource PaneDangerColor}"/>
-    <SolidColorBrush x:Key="PaneSuccessBrush" Color="#FF2F9E5B"/>
-    <SolidColorBrush x:Key="PaneWarningBrush" Color="#FFF5A524"/>
-    <CornerRadius x:Key="PaneRadiusItem">12</CornerRadius>
-    <CornerRadius x:Key="PaneRadiusControl">10</CornerRadius>
+    <Color x:Key="SjAccentColor">#FF5874C9</Color>
+    <SolidColorBrush x:Key="SjAccentBrush" Color="{StaticResource SjAccentColor}"/>
+    <Color x:Key="SjDangerColor">#FFE5484D</Color>
+    <SolidColorBrush x:Key="SjDangerBrush" Color="{StaticResource SjDangerColor}"/>
+    <SolidColorBrush x:Key="SjSuccessBrush" Color="#FF2F9E5B"/>
+    <SolidColorBrush x:Key="SjWarningBrush" Color="#FFF5A524"/>
+    <CornerRadius x:Key="SjRadiusItem">12</CornerRadius>
+    <CornerRadius x:Key="SjRadiusControl">10</CornerRadius>
 
-    <!-- WinUI controls (text boxes, drop-downs, number boxes, check and radio buttons) in Pane's colors:
+    <!-- WinUI controls (text boxes, drop-downs, number boxes, check and radio buttons) in the theme colors:
          neutral control fill with a thin stroke, 10 px corners, the accent only for state and focus. -->
-    <StaticResource x:Key="TextControlBackground" ResourceKey="PaneFillControlBrush"/>
-    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PaneFillControlBrush"/>
-    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PaneFillSelectedBrush"/>
-    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="TextControlForeground" ResourceKey="PaneText1Brush"/>
-    <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PaneText1Brush"/>
-    <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PaneText1Brush"/>
-    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PaneText3Brush"/>
+    <StaticResource x:Key="TextControlBackground" ResourceKey="SjFillControlBrush"/>
+    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="SjFillControlBrush"/>
+    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="SjFillSelectedBrush"/>
+    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="TextControlForeground" ResourceKey="SjText1Brush"/>
+    <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="SjText1Brush"/>
+    <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="SjText1Brush"/>
+    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="SjText3Brush"/>
     <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
-    <StaticResource x:Key="ComboBoxBackground" ResourceKey="PaneFillControlBrush"/>
-    <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PaneFillSelectedBrush"/>
-    <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PaneFillSelectedBrush"/>
-    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="ComboBoxForeground" ResourceKey="PaneText1Brush"/>
-    <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PaneText2Brush"/>
-    <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PaneFillControlBrush"/>
-    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="RadioButtonOuterEllipseCheckedFill" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="RadioButtonOuterEllipseCheckedStroke" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="RadioButtonOuterEllipseFill" ResourceKey="PaneFillControlBrush"/>
-    <StaticResource x:Key="RadioButtonOuterEllipseStroke" ResourceKey="PaneStrokeBrush"/>
-    <StaticResource x:Key="ProgressBarForeground" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="PaneAccentBrush"/>
-    <StaticResource x:Key="ScrollBarThumbFill" ResourceKey="PaneText3Brush"/>
+    <StaticResource x:Key="ComboBoxBackground" ResourceKey="SjFillControlBrush"/>
+    <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="SjFillSelectedBrush"/>
+    <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="SjFillSelectedBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="ComboBoxForeground" ResourceKey="SjText1Brush"/>
+    <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="SjText2Brush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="SjFillControlBrush"/>
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseCheckedFill" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseCheckedStroke" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseFill" ResourceKey="SjFillControlBrush"/>
+    <StaticResource x:Key="RadioButtonOuterEllipseStroke" ResourceKey="SjStrokeBrush"/>
+    <StaticResource x:Key="ProgressBarForeground" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="ScrollBarThumbFill" ResourceKey="SjText3Brush"/>
     <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
         <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="FontSize" Value="12"/>
     </Style>
@@ -98,26 +98,26 @@
     </Style>
 
     <!-- Group title above a card; note text under it -->
-    <Style x:Key="PaneGroupTitle" TargetType="TextBlock">
+    <Style x:Key="SjGroupTitle" TargetType="TextBlock">
         <Setter Property="Margin" Value="2,20,0,8"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+        <Setter Property="Foreground" Value="{ThemeResource SjText2Brush}"/>
     </Style>
-    <Style x:Key="PaneNote" TargetType="TextBlock">
+    <Style x:Key="SjNote" TargetType="TextBlock">
         <Setter Property="Margin" Value="2,6,2,0"/><Setter Property="FontSize" Value="11"/><Setter Property="LineHeight" Value="18"/>
-        <Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource PaneText3Brush}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource SjText3Brush}"/>
     </Style>
-    <Style x:Key="PaneSectionTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{ThemeResource PaneText1Brush}"/>
+    <Style x:Key="SjSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{ThemeResource SjText1Brush}"/>
     </Style>
-    <Style x:Key="PaneBody" TargetType="TextBlock">
+    <Style x:Key="SjBody" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12"/><Setter Property="LineHeight" Value="19"/><Setter Property="TextWrapping" Value="Wrap"/>
-        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+        <Setter Property="Foreground" Value="{ThemeResource SjText2Brush}"/>
     </Style>
 
     <!-- Icon button: transparent, neutral fill on hover -->
-    <Style x:Key="PaneIconButton" TargetType="Button">
+    <Style x:Key="SjIconButton" TargetType="Button">
         <Setter Property="Width" Value="28"/><Setter Property="Height" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Foreground" Value="{ThemeResource PaneText2Brush}"/>
+        <Setter Property="Foreground" Value="{ThemeResource SjText2Brush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -126,8 +126,8 @@
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal"/>
-                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource PaneFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource PaneText1Brush}"/></VisualState.Setters></VisualState>
-                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource PaneFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource PaneText1Brush}"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource SjFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource SjText1Brush}"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Bg.Background" Value="{ThemeResource SjFillHoverBrush}"/><Setter Target="Content.Foreground" Value="{ThemeResource SjText1Brush}"/></VisualState.Setters></VisualState>
                                 <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Bg.Opacity" Value="0.4"/></VisualState.Setters></VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
@@ -138,15 +138,15 @@
     </Style>
 
     <!-- Text button: neutral fill and thin stroke, darker on hover; the implicit style for every Button -->
-    <Style x:Key="PaneTextButton" TargetType="Button">
+    <Style x:Key="SjTextButton" TargetType="Button">
         <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{ThemeResource PaneText1Brush}"/>
+        <Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{ThemeResource SjText1Brush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root">
-                        <Border x:Name="Bg" Background="{ThemeResource PaneFillControlBrush}" BorderBrush="{ThemeResource PaneStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}"/>
-                        <Border x:Name="Hover" Background="{ThemeResource PaneFillHoverBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+                        <Border x:Name="Bg" Background="{ThemeResource SjFillControlBrush}" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}"/>
+                        <Border x:Name="Hover" Background="{ThemeResource SjFillHoverBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
                         <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" Foreground="{TemplateBinding Foreground}"/>
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
@@ -161,16 +161,16 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <Style TargetType="Button" BasedOn="{StaticResource PaneTextButton}"/>
+    <Style TargetType="Button" BasedOn="{StaticResource SjTextButton}"/>
 
     <!-- Accent button for the one main action in a footer (settings 儲存): same size as a text button, accent fill -->
-    <Style x:Key="PaneAccentButton" TargetType="Button" BasedOn="{StaticResource PaneTextButton}">
+    <Style x:Key="SjAccentButton" TargetType="Button" BasedOn="{StaticResource SjTextButton}">
         <Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root">
-                        <Border Background="{StaticResource PaneAccentBrush}" CornerRadius="{TemplateBinding CornerRadius}"/>
+                        <Border Background="{StaticResource SjAccentBrush}" CornerRadius="{TemplateBinding CornerRadius}"/>
                         <Border x:Name="Hover" Background="#1FFFFFFF" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
                         <Border x:Name="Press" Background="#1A000000" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
                         <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"/>
@@ -189,9 +189,9 @@
     </Style>
 
     <!-- Primary button for the installer's single main action: same size as a text button, accent fill, white semibold text -->
-    <Style x:Key="PanePrimaryButton" TargetType="Button">
+    <Style x:Key="SjPrimaryButton" TargetType="Button">
         <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="Background" Value="{StaticResource PaneAccentBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Background" Value="{StaticResource SjAccentBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="White"/><Setter Property="UseSystemFocusVisuals" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>

@@ -11,6 +11,7 @@
 ## 上游與核心
 
 - `upstream/shanjie` 是固定 commit 的子模組，追蹤檔案保持乾淨；不把上游整棵 merge 進來。
+- **上游的詞庫、詞包與模型一律完整出貨，並照上游預設啟用。** 同步到的新版有新增或更新的檔案，就必須接上；不得因相容、體積或偏好而停用、略過或改預設值。真的有必要時先告訴使用者，並記在 UPSTREAM-CHANGES.md。`scripts/verify-upstream-data.ps1`（`verify.ps1` 與 CI 會呼叫）會比對，上游新增詞包或模型時它會失敗，要同步更新它的清單。
 - Windows 對核心的變更放在 `platform/` 與 `scripts/prepare-*.ps1`。`build/core` 是產生檔，不手改。這些是核心擴充，不要描述成「只改 config」。
 - 升版：
   1. 本 repo 與子模組都乾淨。
@@ -21,13 +22,28 @@
   6. 分批 commit：pin 與覆蓋、Windows 功能、文件；更新 UPSTREAM-CHANGES.md。
 - 不向上游提 PR；右側候選與平台 backend 等和作者討論 API 後再整理。
 
+## 分支、Issue 與 Pull Request
+
+- **不直接 push main。** 每個任務從最新的 `main` 開新分支，名稱 `type/short-name`（`feat/`、`fix/`、`docs/`、`test/`、`ci/`、`refactor/`、`chore/`），完成後開 PR 合入；不 force push 共用分支。
+- 開工前先看有沒有對應的 issue 或別人的 PR；有就在 issue 留言認領，沒有就先開一個，避免兩個人做同一件事。
+- PR 與 issue 的標題、內文、留言盡量用繁體中文；程式碼、檔名與專有名詞可保留原文，commit 訊息仍用英文。
+- PR 標題格式 `type: 說明`（`type` 保留英文），內文用 [PR 模板](.github/pull_request_template.md)，關聯 issue 寫 `Closes #N`。一個 PR 只做一件事；功能與修正的 PR 不改版本號，發布另開升版 PR（見下方「版本號」）。
+- PR 要先跟上最新 `main`（rebase 或 merge 都可以），並依下方「驗證」表跑過該跑的項目後再開；沒跑的在 PR 裡寫明。
+- PR 會自動跑 `ci.yml`（上游資料檢查，以及 `shared/` 與 `windows/` 的 `cargo test --lib`），須通過才能合入。核心測試、TSF 與介面驗證需要模型、建置產物或桌面，不在 CI，結果寫在 PR 內文。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
+- Bug 與功能建議用 [issue 模板](.github/ISSUE_TEMPLATE/)；問題要附版本、Windows 版本與重現步驟。
+
 ## Commit、push 與發布
 
 - 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、TODO、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
-- push、Release、安裝到實機、刪除使用者資料都先問。
-- 版本號在 `windows/Cargo.toml`、`windows/Cargo.lock`、`ui/Shanjie.UI.csproj`、`RELEASE-CHANNEL.json`；push 到 main 且版本號變更時 Actions 建立 Release。發布前寫好 `docs/releases/RELEASE-NOTES-<版本>.md` 與 Changelog。既有 Release 不會被重跑改寫，要改說明或 pre-release 狀態用 `gh release edit`。
+- push、開 PR、Release、安裝到實機、刪除使用者資料都先問。
 - 建置、CI 與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。
 
+### 版本號
+
+- 版本號在 `windows/Cargo.toml`、`windows/Cargo.lock`、`ui/Shanjie.UI.csproj`、`RELEASE-CHANNEL.json`，四處與 tag 必須一致。
+- **發布走升版 PR**：功能 PR 都合入 main 後，另開一個只含版本號、`docs/releases/RELEASE-NOTES-<版本>.md` 與 `Changelog.md` 的 PR；它合入 main 時 Actions 建立 Release。其他 PR 不碰這些檔案。既有 Release 不會被重跑改寫，要改說明或 pre-release 狀態用 `gh release edit`。
+- **預發布不遞增版本號。** 下一個要發布的版本固定為 `X.Y.Z`（目前正式版之後的那一版），預發布只加後綴：`X.Y.Z-beta.1`、`X.Y.Z-beta.2`……，`RELEASE-CHANNEL.json` 的 `prerelease` 設 `true`，tag 為 `vX.Y.Z-beta.N`。例：正式版是 0.15.3，預發布依序為 `0.15.4-beta.1`、`0.15.4-beta.2`，不是 0.15.4、0.15.5。
+- 轉正式版時只拿掉後綴成 `X.Y.Z`，`prerelease` 設 `false`，`recommended_stable` 改成該版。beta 期間不更改 `X.Y.Z`。
 ## 文件
 
 - 文件只寫目前狀態並保持精簡。各版變更寫在 `Changelog.md` 與 `docs/releases/`；`TODO.md` 只列必須由使用者實機確認的項目，能用腳本測的先自己測。

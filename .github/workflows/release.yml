@@ -94,6 +94,8 @@ jobs:
         run: pwsh -File scripts/package.ps1
       - name: Unit tests
         run: cargo test --manifest-path windows/Cargo.toml --lib
+      - name: Mixed-input regression against the built data
+        run: cargo test --manifest-path windows/Cargo.toml --lib -- --ignored digit_runs_hand_back_complete_readings
       - name: Upload to the release
         if: needs.release.outputs.publish == 'true'
         env:

@@ -25,6 +25,7 @@ use std::sync::Arc;
 }
 
 #[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
     let data=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
     let mut e=Engine::new(&data,Layout::Standard).unwrap();

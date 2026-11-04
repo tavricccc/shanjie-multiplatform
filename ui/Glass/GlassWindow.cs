@@ -11,7 +11,7 @@ using Windows.UI.ViewManagement;
 namespace Shanjie_UI.Glass;
 
 /// <summary>
-/// A Pane-style glass window. Two top-level windows: the content window (no redirection surface, so transparent
+/// A glass window. Two top-level windows: the content window (no redirection surface, so transparent
 /// XAML really is transparent, clipped to a rounded rectangle) hosts the XAML through <see cref="DesktopWindowXamlSource"/>;
 /// the glass window right behind it is drawn by Rust (<c>glass.rs</c>): blur, saturation, tint, highlight edge, shadows.
 /// Opening scales the glass up with a slight spring while the content fades in; closing and minimizing shrink and fade out.
@@ -40,7 +40,7 @@ internal sealed partial class GlassWindow : IDisposable
     /// <summary>Asked before a user close (title bar button, Alt+F4, taskbar); returning false keeps the window open.</summary>
     internal Func<bool> CanClose { get; set; } = () => true;
     float tint = SavedTint();
-    /// <summary>Glass density: the tint layer's opacity, 0 to 1 (Pane's default 0.42).</summary>
+    /// <summary>Glass density: the tint layer's opacity, 0 to 1 (default 0.42).</summary>
     internal float Tint { get => tint; set { tint = Math.Clamp(value, 0, 1); ApplyTheme(); } }
     float Speed => system.AnimationsEnabled ? 1 : 0;
     float Dpi => GetDpiForWindow(Handle) / 96f;
@@ -270,7 +270,7 @@ internal sealed partial class GlassWindow : IDisposable
                 switch ((int)w & 0xFFF0)
                 {
                     case 0xF020 when revealed && Speed > 0 && !IsIconic(Handle): Minimize(); return 0;
-                    case 0xF030: return 0; // Pane's windows do not maximize
+                    case 0xF030: return 0; // These windows do not maximize
                     case 0xF060: if (!closing && CanClose()) Close(); return 0;
                 }
                 break;

@@ -15,8 +15,17 @@ public sealed partial class MainWindow
         updates = new UpdateService(UpdateService.RunningVersion(), UpdateService.DataFolder());
         updates.Changed += (_, _) => DispatcherQueue.TryEnqueue(RenderUpdate);
         Closed += (_, _) => { updateWork?.Cancel(); updates.Dispose(); };
+        UpdateChannelChoice.SelectedIndex = updates.Channel == UpdateChannel.Prerelease ? 1 : 0;
+        UpdateChannelChoice.RegisterPropertyChangedCallback(Controls.Segmented.SelectedIndexProperty, (_, _) => ChangeUpdateChannel());
         RenderUpdate();
         RunUpdate(updates.CheckAsync);
+    }
+
+    private void ChangeUpdateChannel()
+    {
+        if (updates is not { } u) return;
+        var channel = UpdateChannelChoice.SelectedIndex == 1 ? UpdateChannel.Prerelease : UpdateChannel.Stable;
+        if (channel != u.Channel && u.SetChannel(channel)) RunUpdate(u.CheckAsync);
     }
 
     private void RunUpdate(Func<CancellationToken, Task> work)
@@ -53,8 +62,8 @@ public sealed partial class MainWindow
             UpdateState.Failed when latest is not null => "重試下載",
             _ => "檢查更新",
         };
-        UpdateButton.Style = u.State is UpdateState.Available or UpdateState.Ready ? (Style)Application.Current.Resources["PaneAccentButton"] : null;
-        UpdateButton.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
+        UpdateButton.Style = ButtonStyle(u.State);
+        UpdateButton.IsEnabled = UpdateChannelChoice.IsEnabled = u.State is not (UpdateState.Checking or UpdateState.Downloading);
         // 正式版與測試版都有時，另一個放在旁邊可以改選。
         var other = u.Choices.FirstOrDefault(c => c != latest);
         UpdateSwitch.Visibility = other is not null && u.State is UpdateState.Available or UpdateState.Ready or UpdateState.Failed ? Visibility.Visible : Visibility.Collapsed;
@@ -63,6 +72,10 @@ public sealed partial class MainWindow
         UpdateNotes.Text = latest?.Notes ?? "";
         UpdateNotes.Visibility = latest is not null && latest.Notes.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>有動作可做（下載、安裝）時用強調色；其餘狀態用主題的一般按鈕。不可設成 null，那會退回系統原生按鈕。</summary>
+    internal static Style ButtonStyle(UpdateState state) =>
+        (Style)Application.Current.Resources[state is UpdateState.Available or UpdateState.Ready ? "SjAccentButton" : "SjTextButton"];
 
     private void UpdateAction(object sender, RoutedEventArgs args)
     {

@@ -16,8 +16,11 @@ fn fault(sequence: u64, op: &Op) -> Option<String> {
     if std::env::var_os("SHANJIE_TEST_PROFILE").is_none() {
         return None;
     }
-    let matches = if std::env::var("SHANJIE_TEST_FAULT_OP").as_deref() == Ok("prediction") {
+    let selector = std::env::var("SHANJIE_TEST_FAULT_OP");
+    let matches = if selector.as_deref() == Ok("prediction") {
         matches!(op, Op::Prediction(_))
+    } else if selector.as_deref() == Ok("rerank") {
+        matches!(op, Op::Rerank)
     } else {
         sequence == std::env::var("SHANJIE_TEST_FAULT_SEQUENCE").ok()?.parse::<u64>().ok()?
     };
