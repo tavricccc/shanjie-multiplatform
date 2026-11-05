@@ -635,3 +635,30 @@ fn big5_text(code: u32) -> String {
     }
 }
 
+#[cfg(test)]
+mod special_tests {
+    use super::*;
+    #[test]
+    fn backquote_defaults_follow_interaction_and_explicit_opt_out() {
+        for (settings, expected) in [("[profile]\ninteraction=windows\n", true), ("[profile]\ninteraction=shanjie\n", false), ("[profile]\ninteraction=windows\n[shortcuts]\nbackquote_symbols=0\n", false)] {
+            let prefs = Document::parse(settings).unwrap();
+            let mut special = Special::default();
+            special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
+            let result = special.key(ShanjieKey { kind: 1, ch: 44, modifiers: 0 }, &prefs);
+            assert_eq!(result.commit, if expected { "，" } else { "" });
+        }
+    }
+    #[test]
+    fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {
+        let prefs = Document::default();
+        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～")] {
+            let mut special = Special::default();
+            special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
+            assert_eq!(special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers }, &prefs).commit, expected);
+        }
+        let mut special = Special::default();
+        for ch in "`uFF0C".chars() { special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs); }
+        assert_eq!(special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit, "，");
+        assert_eq!(special.mode, 0);
+    }
+}

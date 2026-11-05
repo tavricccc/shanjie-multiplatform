@@ -450,6 +450,16 @@ mod tests {
         assert_eq!(super::Document::parse(&preset).unwrap().model_id(),"model-v5-classes-v3");
         assert!(!super::export_preset(&old.content(),"public").unwrap().contains("model_id="));
     }
+    #[test]
+    fn backquote_migration_aligns_legacy_windows_once() {
+        for (schema, interaction, enabled) in [(8, "windows", true), (9, "windows", false), (8, "shanjie", false)] {
+            let mut doc = super::Document::parse(&format!("[profile]\nschema={schema}\ninteraction={interaction}\n[shortcuts]\nbackquote_symbols=0\n")).unwrap();
+            doc.migrate();
+            assert_eq!(doc.flag("shortcuts", "backquote_symbols", !enabled), enabled);
+            doc.set("shortcuts", "backquote_symbols", 0); doc.migrate();
+            assert!(!doc.flag("shortcuts", "backquote_symbols", true));
+        }
+    }
     use super::*;
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {
