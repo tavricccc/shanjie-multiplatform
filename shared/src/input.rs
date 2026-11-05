@@ -79,6 +79,14 @@ pub fn is_punctuation(k: ShanjieKey) -> bool {
 pub fn pending(s: &Snapshot) -> bool {
     s.reading_hint || s.phonetic_pending
 }
+/// Display-width conversion only; the core retains its original text for switching back.
+pub fn full_width(text: &str) -> String {
+    text.chars().map(|c| match c {
+        ' ' => '\u{3000}',
+        '!'..='~' => char::from_u32(c as u32 + 0xfee0).unwrap(),
+        _ => c,
+    }).collect()
+}
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
