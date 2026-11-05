@@ -369,7 +369,8 @@ impl Host {
                 let tag = if self.state.selected.is_none() {
                     String::new()
                 } else {
-                    format!("{}{}", if self.state.associated { "⇧" } else { "" }, i + 1)
+                    let number = if self.state.columns > 0 { i % self.state.columns as usize + 1 } else { i + 1 };
+                    format!("{}{}", if self.state.associated { "⇧" } else { "" }, number)
                 };
                 let word = self.text_factory.CreateTextLayout(
                     &value.encode_utf16().collect::<Vec<_>>(),
@@ -524,14 +525,13 @@ impl Host {
         }
     }
     fn row_top(&self, index: usize) -> f32 {
-        if self.vertical {
-            self.top() + (index - self.start) as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
-        } else {
-            self.top()
-        }
+        let row = if self.state.columns > 0 { index / crate::input::GRID_COLUMNS }
+            else if self.vertical { index - self.start } else { 0 };
+        self.top() + row as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
     }
     fn height(&self) -> f32 {
-        let lines = if self.vertical { self.end - self.start } else { 1 };
+        let lines = if self.state.columns > 0 { self.items.len().div_ceil(crate::input::GRID_COLUMNS) }
+            else if self.vertical { self.end - self.start } else { 1 };
         let rows = if self.items.is_empty() {
             0.0
         } else {
@@ -544,6 +544,22 @@ impl Host {
     fn fit_view(&mut self, selected: Option<usize>) -> f32 {
         let ratio = self.size as f32 / 16.0;
         let count = self.items.len();
+        if self.state.columns > 0 && count > 0 {
+            self.start = 0;
+            self.end = count;
+            let columns = crate::input::GRID_COLUMNS;
+            let mut widths = [0.0f32; crate::input::GRID_COLUMNS];
+            for (i, item) in self.items.iter().enumerate() {
+                widths[i % columns] = widths[i % columns].max(item.natural);
+            }
+            let gaps = (columns - 1) as f32 * 2.0 * ratio;
+            let natural = widths.iter().sum::<f32>();
+            let scale = ((self.work_width - 10.0 * ratio - gaps).max(1.0) / natural).min(1.0);
+            for (i, item) in self.items.iter_mut().enumerate() {
+                item.width = widths[i % columns] * scale;
+            }
+            return (natural * scale + gaps + 10.0 * ratio).min(self.work_width);
+        }
         if self.vertical {
             // A page holds at most nine candidates, so every row is shown; rows share one width.
             self.start = 0;
@@ -602,7 +618,11 @@ impl Host {
     fn slot(&self, i: usize) -> (f32, f32, f32) {
         let ratio = self.size as f32 / 16.0;
         let mut x = (5.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
-        if !self.vertical {
+        if self.state.columns > 0 {
+            for item in &self.items[..i % crate::input::GRID_COLUMNS] {
+                x += item.width + 2.0 * ratio;
+            }
+        } else if !self.vertical {
             for item in &self.items[self.start..i] {
                 x += item.width + 2.0 * ratio;
             }

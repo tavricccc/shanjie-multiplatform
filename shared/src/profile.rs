@@ -132,6 +132,11 @@ impl Document {
             return;
         }
         let windows = self.get("profile", "interaction", "windows") == "windows";
+        if self.get("candidates", "right_action", "").is_empty() {
+            let action = if self.flag("candidates", "right_pages", false) { "page" } else { "none" };
+            self.set("candidates", "right_action", action);
+        }
+        self.remove("candidates", "right_pages");
         if schema < 4
             && !self
                 .0
@@ -326,7 +331,7 @@ const PERSONAL: [(&str, &[&str]); 4] = [
     ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
-const CHOICES: [(&str, &str, &[&str]); 7] = [
+const CHOICES: [(&str, &str, &[&str]); 8] = [
     ("profile", "interaction", &["windows", "shanjie"]),
     ("engine", "ranking", &["auto", "chat", "formal"]),
     ("engine", "rerank_level", &RERANK_LEVELS),
@@ -334,6 +339,7 @@ const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("candidates", "layout", &["horizontal", "vertical"]),
     ("candidates", "anchor", &["right", "left"]),
     ("candidates", "open", &["down", "space", "both"]),
+    ("candidates", "right_action", &["none", "page", "expand"]),
 ];
 /// A preset over the current profile: the personal keys stay the user's.
 pub fn merge_preset(previous: &Document, mut preset: Document) -> String {
