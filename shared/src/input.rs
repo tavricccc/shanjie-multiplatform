@@ -28,6 +28,14 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
             }
         }
         '1' => "！",
+        '2' if shift => "＠",
+        '3' if shift => "＃",
+        '4' if shift => "＄",
+        '5' if shift => "％",
+        '6' if shift => "＾",
+        '7' if shift => "＆",
+        '8' if shift => "＊",
+        '-' => if shift { "＿" } else { "－" },
         ';' => {
             if shift {
                 "："
@@ -66,7 +74,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
                 "＝"
             }
         }
-        '`' => "｀",
+        '`' => if shift { "～" } else { "｀" },
         _ => "",
     }
 }
@@ -124,7 +132,7 @@ impl Special {
         k.kind == 1
             && ((k.ch == 96
                 && k.modifiers == 0
-                && (p.flag("shortcuts", "backquote_symbols", false)
+                && (p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows")
                     || p.flag("shortcuts", "code_input", true)))
                 || (p.flag("shortcuts", "symbol_keyboard", true) && k.ch == 44 && k.modifiers == 6))
     }
@@ -226,7 +234,7 @@ impl Special {
                 self.mode = if lower == 'u' { 2 } else { 3 };
                 return self.view();
             }
-            if p.flag("shortcuts", "backquote_symbols", false) {
+            if p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows") {
                 let text = punctuation(k);
                 if !text.is_empty() {
                     self.clear();
@@ -642,5 +650,33 @@ fn big5_text(code: u32) -> String {
         } else {
             String::new()
         }
+    }
+}
+
+#[cfg(test)]
+mod special_tests {
+    use super::*;
+    #[test]
+    fn backquote_defaults_follow_interaction_and_explicit_opt_out() {
+        for (settings, expected) in [("[profile]\ninteraction=windows\n", true), ("[profile]\ninteraction=shanjie\n", false), ("[profile]\ninteraction=windows\n[shortcuts]\nbackquote_symbols=0\n", false)] {
+            let prefs = Document::parse(settings).unwrap();
+            let mut special = Special::default();
+            special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
+            let result = special.key(ShanjieKey { kind: 1, ch: 44, modifiers: 0 }, &prefs);
+            assert_eq!(result.commit, if expected { "，" } else { "" });
+        }
+    }
+    #[test]
+    fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {
+        let prefs = Document::default();
+        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～")] {
+            let mut special = Special::default();
+            special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
+            assert_eq!(special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers }, &prefs).commit, expected);
+        }
+        let mut special = Special::default();
+        for ch in "`uFF0C".chars() { special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs); }
+        assert_eq!(special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit, "，");
+        assert_eq!(special.mode, 0);
     }
 }

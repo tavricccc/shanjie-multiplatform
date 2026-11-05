@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const SCHEMA: u32 = 8;
+pub const SCHEMA: u32 = 9;
 
 /// The model bundle the package ships: always upstream's current released set, whatever it is called.
 pub const BUILTIN: &str = "builtin";
@@ -214,6 +214,11 @@ impl Document {
             }
             self.remove("engine", "class_table");
             self.remove("engine", "model");
+        }
+        // Legacy INI files do not distinguish the old default from a manual opt-out.
+        // Align Windows once; an explicit opt-out in schema 9 and later is retained.
+        if schema < 9 && windows {
+            self.set("shortcuts", "backquote_symbols", 1);
         }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
@@ -444,6 +449,16 @@ mod tests {
         let preset=super::preset(&old.content(),true).unwrap();
         assert_eq!(super::Document::parse(&preset).unwrap().model_id(),"model-v5-classes-v3");
         assert!(!super::export_preset(&old.content(),"public").unwrap().contains("model_id="));
+    }
+    #[test]
+    fn backquote_migration_aligns_legacy_windows_once() {
+        for (schema, interaction, enabled) in [(8, "windows", true), (9, "windows", false), (8, "shanjie", false)] {
+            let mut doc = super::Document::parse(&format!("[profile]\nschema={schema}\ninteraction={interaction}\n[shortcuts]\nbackquote_symbols=0\n")).unwrap();
+            doc.migrate();
+            assert_eq!(doc.flag("shortcuts", "backquote_symbols", !enabled), enabled);
+            doc.set("shortcuts", "backquote_symbols", 0); doc.migrate();
+            assert!(!doc.flag("shortcuts", "backquote_symbols", true));
+        }
     }
     use super::*;
     #[test]

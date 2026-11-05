@@ -34,7 +34,7 @@ Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後
 
 ## 逐項開關
 
-W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只改操作、候選與預測；標「保留」的項目不會被覆寫。目前 schema 7。
+W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只改操作、候選與預測；標「保留」的項目不會被覆寫。目前 schema 9；升級舊 Windows 設定時一次開啟反引號標點，之後保留使用者關閉的值。
 
 | 設定分類與 INI key | 設定頁／作用 | W／S |
 | --- | --- | --- |
@@ -82,7 +82,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `shortcuts.ctrl_space_toggle` | 額外 Ctrl＋空白中英切換 | 0／0；保留 App 補全 |
 | `shortcuts.shift_space_toggle` | Shift＋空白全半形 | 1／0 |
 | `shortcuts.ctrl_punctuation` | Ctrl／Ctrl＋Shift 標點 | 1／0 |
-| `shortcuts.backquote_symbols` | 反引號＋標點 | 0／0 |
+| `shortcuts.backquote_symbols` | 反引號＋標點 | 1／0 |
 | `shortcuts.code_input` | 反引號＋U／B 的 Unicode／Big5 字碼 | 1／0 |
 | `shortcuts.symbol_keyboard` | Ctrl＋Alt＋逗號符號列表 | 1／0 |
 | `shortcuts.ctrl_backslash` | 善解的 Ctrl＋反斜線頓號 | 0／1 |

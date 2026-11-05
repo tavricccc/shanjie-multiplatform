@@ -54,6 +54,9 @@ fn after_update() {
     if let Err(error) = shanjie_windows::broker::retire_and_start(&binaries.join("data")) {
         eprintln!("常駐核心未能啟動：{error}");
     }
+    if let Err(error) = profile::changed() {
+        eprintln!("未能通知已開啟的視窗重新載入設定：{error}");
+    }
     match installer::restart_stale_hosts(&binaries) {
         Ok(ended) if !ended.is_empty() => println!("已重新啟動仍使用舊版的系統元件：{}", ended.join("、")),
         Err(error) => eprintln!("未能重新啟動系統元件：{error}"),
