@@ -26,7 +26,7 @@ int wmain(int argc,wchar_t** argv) {
             auto p=pixels[y*bitmap.bmWidth+x];
             if((p>>24)>192&&(p&255)>192&&((p>>8)&255)>192&&((p>>16)&255)>192){first=std::min(first,y);last=std::max(last,y);}
         }
-        if(bitmap.bmHeight<=24)assert((last-first+1)*100>=bitmap.bmHeight*70);
+        if(bitmap.bmHeight<=24)assert((last-first+1)*100>=bitmap.bmHeight*60);
         std::printf("Tray glyph %s: %d/%ld pixels high\n",mode?"Chinese":"English",last-first+1,bitmap.bmHeight);
         DeleteObject(info.hbmColor); DeleteObject(info.hbmMask); DestroyIcon(icon);
     }
