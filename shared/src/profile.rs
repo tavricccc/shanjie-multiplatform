@@ -429,6 +429,22 @@ mod tests {
         }
     }
     #[test]
+    fn legacy_right_pages_migrates_and_presets_validate_the_three_actions() {
+        for (legacy, action) in [(0, "none"), (1, "page")] {
+            let mut doc = super::Document::parse(&format!("[candidates]\nright_pages={legacy}\n")).unwrap();
+            doc.migrate();
+            assert_eq!(doc.get("candidates", "right_action", ""), action);
+            assert!(!doc.0["candidates"].contains_key("right_pages"));
+            doc.set("candidates", "right_action", "expand");doc.set("candidates", "right_pages", 0);doc.migrate();
+            assert_eq!(doc.get("candidates", "right_action", ""), "expand");
+        }
+        for action in ["none", "page", "expand"] {
+            let imported = super::import_preset("", &format!("[candidates]\nright_action={action}\n")).unwrap();
+            assert_eq!(super::Document::parse(&imported).unwrap().get("candidates", "right_action", ""), action);
+        }
+        assert!(super::import_preset("", "[candidates]\nright_action=table\n").is_err());
+    }
+    #[test]
     fn presets_keep_the_personal_engine_choices() {
         assert!(super::FUZZY_KEYS.iter().all(|k| super::PERSONAL[0].1.contains(k)));
         let mine = "[profile]\nschema=8\n[engine]\nrerank=0\nrerank_level=aggressive\nfuzzy_zh_z=1\n[input]\ncjk_spacing=1\n";
