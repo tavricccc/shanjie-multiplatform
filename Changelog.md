@@ -2,6 +2,17 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.15.4-beta.3（Windows pre-release）
+
+詳見 [0.15.4-beta.3 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.3.md)。
+
+- → 右方向鍵改為「無／下一頁／展開」選單（預設無），舊開關自動對應；展開為三欄多列候選。
+- 九宮格數字與運算符號一律當字面字元，不當注音；閒置時也先進組字區，不再直接交給應用程式。
+- Shift＋空白切換全／半形時立即更新組字區。
+- 反引號標點補上更多符號，Windows 範本預設開啟；舊版 Windows 設定升級時一次改為開啟，包含手動關閉的值。
+- 修復 Windows 互動模式開啟上游英文時，勾選單獨聲調仍只打出數字。
+- 放大系統匣與游標旁提示的「中／A」圖示。
+
 ## 0.15.4-beta.2（Windows pre-release）
 
 詳見 [0.15.4-beta.2 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.2.md)。
