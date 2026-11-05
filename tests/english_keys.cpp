@@ -30,7 +30,22 @@ int wmain(int argc,wchar_t** argv) {
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"fullwidth"){
+    if(scenario==L"backquote-disabled"){
+        press(VK_OEM_3);press(VK_OEM_COMMA);require(store->text==L"`",954);press(VK_ESCAPE);
+    }else if(scenario==L"backquote"){
+        for(auto entry:{std::pair{VK_OEM_COMMA,L'，'},std::pair{VK_OEM_PERIOD,L'。'},std::pair{VK_OEM_2,L'／'},std::pair{VK_OEM_1,L'；'},std::pair{VK_OEM_MINUS,L'－'}}){
+            auto before=store->text;press(VK_OEM_3);press(entry.first);require(store->text==before+entry.second,941);
+        }
+        press(VK_OEM_3);press('2',true);require(store->text==L"，。／；－＠",942);
+        auto before=store->text;
+        if(std::getenv("SHANJIE_TEST_PINYIN")){press('N');press('I');before+=L"ni";}
+        press(VK_OEM_3);press('U');for(auto ch:std::wstring(L"FF0C"))press(ch);
+        auto code=store->text;store->externalCaret((LONG)before.size());
+        MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
+        require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
+        press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
+        require(store->text==before+L"，一",945);
+    }else if(scenario==L"fullwidth"){
         press('A',true);require(store->text==L"A",937);
         press(VK_SPACE,true);require(store->text==L"Ａ",938);
         press(VK_SPACE,true);require(store->text==L"A",939);
