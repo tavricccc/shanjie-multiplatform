@@ -2,6 +2,12 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.15.4-beta.2（Windows pre-release）
+
+詳見 [0.15.4-beta.2 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.2.md)。
+
+- 修復候選窗組字列只標第一個字：選到多字候選時，反白整個會被取代的範圍。
+
 ## 0.15.4-beta.1（Windows pre-release）
 
 詳見 [0.15.4-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.1.md)。
