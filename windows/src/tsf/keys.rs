@@ -464,17 +464,19 @@ impl Data {
             && state.selected.is_some()
             && key.modifiers == 0
             && (key.kind == 3 || (key.kind == 1 && (49..=57).contains(&key.ch)));
-        // Optionally the right arrow turns the page (as Space does) while Down keeps stepping through the candidates.
-        let page_right = p.flag("candidates", "right_pages", false)
-            && key.kind == 8
+        let right = key.kind == 8
             && key.modifiers == 0
             && !state.prediction
             && !state.candidates.is_empty();
+        let action = p.get("candidates", "right_action", "none");
+        let page_right = right && action == "page";
+        let expand_right = right && action == "expand" && state.columns == 0;
         key = input::candidate_key(
             key,
             &state,
             p.get("profile", "interaction", "windows") == "windows",
         );
+        if expand_right { key.kind = 10; }
         if p.flag("shortcuts", "forget_candidate", false)
             && p.flag("input", "learning", true)
             && key.kind == 4

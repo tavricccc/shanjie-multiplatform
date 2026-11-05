@@ -236,10 +236,23 @@ pub struct Host {
     start: usize,
     end: usize,
     work_width: f32,
+    /// Room for the panel on the roomier side of the caret, in DIPs; the grid shows only the rows that fit.
+    work_height: f32,
     /// Microsoft IME style: one candidate per row instead of the horizontal pill.
     pub vertical: bool,
     /// The candidate target is the character right of the cursor (profile `anchor=right`).
     pub anchor_right: bool,
+}
+/// The visible grid items: whole rows, moved only as far as needed to keep the selection inside.
+fn grid_window(count: usize, selected: Option<usize>, start: usize, max_rows: usize) -> (usize, usize) {
+    let columns = crate::input::GRID_COLUMNS;
+    let total = count.div_ceil(columns);
+    let rows = max_rows.clamp(1, total.max(1));
+    let mut top = (start / columns).min(total.saturating_sub(rows));
+    if let Some(row) = selected.map(|i| i / columns) {
+        if row < top { top = row } else if row >= top + rows { top = row + 1 - rows }
+    }
+    (top * columns, ((top + rows) * columns).min(count))
 }
 impl Host {
     pub fn start(callback: HWND, owner: Option<HWND>) -> Result<Box<Self>> {
@@ -285,6 +298,7 @@ impl Host {
                 start: 0,
                 end: 0,
                 work_width: 0.0,
+                work_height: 0.0,
                 vertical: false,
                 anchor_right: true,
             });
@@ -369,7 +383,8 @@ impl Host {
                 let tag = if self.state.selected.is_none() {
                     String::new()
                 } else {
-                    format!("{}{}", if self.state.associated { "⇧" } else { "" }, i + 1)
+                    let number = if self.state.columns > 0 { i % self.state.columns as usize + 1 } else { i + 1 };
+                    format!("{}{}", if self.state.associated { "⇧" } else { "" }, number)
                 };
                 let word = self.text_factory.CreateTextLayout(
                     &value.encode_utf16().collect::<Vec<_>>(),
@@ -524,14 +539,13 @@ impl Host {
         }
     }
     fn row_top(&self, index: usize) -> f32 {
-        if self.vertical {
-            self.top() + (index - self.start) as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
-        } else {
-            self.top()
-        }
+        let row = if self.state.columns > 0 { (index - self.start) / crate::input::GRID_COLUMNS }
+            else if self.vertical { index - self.start } else { 0 };
+        self.top() + row as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
     }
     fn height(&self) -> f32 {
-        let lines = if self.vertical { self.end - self.start } else { 1 };
+        let lines = if self.state.columns > 0 { (self.end - self.start).div_ceil(crate::input::GRID_COLUMNS) }
+            else if self.vertical { self.end - self.start } else { 1 };
         let rows = if self.items.is_empty() {
             0.0
         } else {
@@ -544,6 +558,23 @@ impl Host {
     fn fit_view(&mut self, selected: Option<usize>) -> f32 {
         let ratio = self.size as f32 / 16.0;
         let count = self.items.len();
+        if self.state.columns > 0 && count > 0 {
+            let gap = 2.0 * ratio;
+            let rows = (self.work_height - self.top() - 5.0 * ratio + gap) / (self.row + gap);
+            (self.start, self.end) = grid_window(count, selected, self.start, rows.max(1.0) as usize);
+            let columns = crate::input::GRID_COLUMNS;
+            let mut widths = [0.0f32; crate::input::GRID_COLUMNS];
+            for (i, item) in self.items.iter().enumerate() {
+                widths[i % columns] = widths[i % columns].max(item.natural);
+            }
+            let gaps = (columns - 1) as f32 * 2.0 * ratio;
+            let natural = widths.iter().sum::<f32>();
+            let scale = ((self.work_width - 10.0 * ratio - gaps).max(1.0) / natural).min(1.0);
+            for (i, item) in self.items.iter_mut().enumerate() {
+                item.width = widths[i % columns] * scale;
+            }
+            return (natural * scale + gaps + 10.0 * ratio).min(self.work_width);
+        }
         if self.vertical {
             // A page holds at most nine candidates, so every row is shown; rows share one width.
             self.start = 0;
@@ -601,8 +632,13 @@ impl Host {
     /// Left edge, top and width of candidate `i` inside the panel.
     fn slot(&self, i: usize) -> (f32, f32, f32) {
         let ratio = self.size as f32 / 16.0;
-        let mut x = (5.0 + if self.start > 0 { 14.0 } else { 0.0 }) * ratio;
-        if !self.vertical {
+        let arrow = self.start > 0 && self.state.columns == 0;
+        let mut x = (5.0 + if arrow { 14.0 } else { 0.0 }) * ratio;
+        if self.state.columns > 0 {
+            for item in &self.items[..i % crate::input::GRID_COLUMNS] {
+                x += item.width + 2.0 * ratio;
+            }
+        } else if !self.vertical {
             for item in &self.items[self.start..i] {
                 x += item.width + 2.0 * ratio;
             }
@@ -717,7 +753,7 @@ impl Host {
             let same = shown && self.state.candidates == state.candidates && self.state.first == state.first && self.size == size;
             let from = if same && self.state.selected != state.selected { self.highlight() } else { None };
             let page = self.start;
-            if self.state.candidates != state.candidates || self.state.first != state.first {
+            if self.state.candidates != state.candidates || self.state.first != state.first || self.state.columns != state.columns {
                 self.start = 0;
             }
             self.state = state;
@@ -759,6 +795,9 @@ impl Host {
                     )?;
                     self.scale = GetDpiForWindow(self.window) as f32 / 96.0;
                 }
+                let spacing = (6.0 * self.scale).round() as i32;
+                let room = (monitor.rcWork.bottom - caret.bottom).max(caret.top - monitor.rcWork.top) - spacing;
+                self.work_height = room as f32 / self.scale;
                 let measured = self.measure((monitor.rcWork.right - monitor.rcWork.left) as f32 / self.scale)?;
                 self.panel = (measured, self.height());
                 let width = (measured * self.scale).ceil() as i32;
@@ -997,8 +1036,8 @@ impl Host {
         }
         self.brush.SetColor(&self.palette.label);
         for (present, center, direction) in [
-            (self.start > 0, 10.0 * ratio, -1.0),
-            (self.end < self.items.len(), width - 10.0 * ratio, 1.0),
+            (self.state.columns == 0 && self.start > 0, 10.0 * ratio, -1.0),
+            (self.state.columns == 0 && self.end < self.items.len(), width - 10.0 * ratio, 1.0),
         ] {
             if present {
                 let middle = self.top() + self.row / 2.0;
@@ -1078,11 +1117,11 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
             let x = (lp.0 as u16 as i16) as f32 / host.scale - SIDE;
             let y = ((lp.0 >> 16) as u16 as i16) as f32 / host.scale - TOP;
             let ratio = host.size as f32 / 16.0;
-            if host.start > 0 && x < 17.0 * ratio {
+            if host.state.columns == 0 && host.start > 0 && x < 17.0 * ratio {
                 let _ = host.scroll(false);
                 return LRESULT(0);
             }
-            if host.end < host.items.len() && x > host.panel.0 - 17.0 * ratio {
+            if host.state.columns == 0 && host.end < host.items.len() && x > host.panel.0 - 17.0 * ratio {
                 let _ = host.scroll(true);
                 return LRESULT(0);
             }
@@ -1167,5 +1206,22 @@ impl Drop for Buffer {
             let _ = DeleteDC(self.dc);
             let _ = DeleteObject(self.bitmap.into());
         }
+    }
+}
+#[cfg(test)]
+mod grid_tests {
+    use super::grid_window;
+    #[test]
+    fn the_grid_window_keeps_whole_rows_and_the_selection_visible() {
+        assert_eq!(grid_window(45, Some(0), 0, 20), (0, 45), "everything fits");
+        assert_eq!(grid_window(44, Some(43), 0, 20), (0, 44), "a short last row");
+        assert_eq!(grid_window(45, Some(0), 0, 4), (0, 12));
+        assert_eq!(grid_window(45, Some(12), 0, 4), (3, 15), "down scrolls one row");
+        assert_eq!(grid_window(45, Some(5), 3, 4), (3, 15), "inside: no movement");
+        assert_eq!(grid_window(45, Some(2), 3, 4), (0, 12), "up scrolls one row");
+        assert_eq!(grid_window(45, Some(44), 0, 4), (33, 45));
+        assert_eq!(grid_window(44, Some(43), 0, 4), (33, 44));
+        assert_eq!(grid_window(45, Some(20), 0, 0), (18, 21), "always one row");
+        assert_eq!(grid_window(9, None, 6, 20), (0, 9), "a stale start is clamped");
     }
 }

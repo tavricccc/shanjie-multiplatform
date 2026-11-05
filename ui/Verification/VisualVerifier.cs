@@ -95,6 +95,40 @@ internal static class VisualVerifier
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
         await VerifyModelRescans(settings); VerifyCatalogText();
+        // The single right-arrow selector migrates old switches and persists all three choices in both modes.
+        string beforeRight = File.ReadAllText(Models.ProfileStore.Path);
+        var rightChoice = (Microsoft.UI.Xaml.Controls.ComboBox)settings.FindName("CandidateRightAction");
+        foreach (int legacyRight in new[] { 0, 1 }) {
+            File.WriteAllText(Models.ProfileStore.Path, $"[profile]\nschema=8\ninteraction=windows\n[candidates]\nright_pages={legacyRight}\n");
+            settings.Vm.Load(); await Task.Delay(60);
+            if (rightChoice.SelectedIndex != legacyRight || settings.Vm.RightAction != legacyRight)
+                throw new InvalidDataException("Legacy right-arrow switch did not migrate to the selector");
+        }
+        foreach (bool windowsMode in new[] { true, false }) {
+            settings.LoadProfile(windowsMode);
+            settings.ShowSection(MainWindow.Pages.Candidates);
+            foreach (int action in new[] { 0, 1, 2 }) {
+                rightChoice.SelectedIndex = action; await Task.Delay(60);
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+                if (settings.Vm.RightAction != action || rightChoice.SelectedIndex != action)
+                    throw new InvalidDataException("Right-arrow selector did not round-trip");
+                if (action == 1 && !settings.Vm.CanWrapSpacePages)
+                    throw new InvalidDataException("Page wrapping is disabled while Right turns pages");
+                string help = settings.Vm.CandidateHelp;
+                if ((action == 1 && !help.Contains("下一頁")) || (action == 2 && !help.Contains("展開"))
+                    || !help.Contains(windowsMode ? "Enter 選字並提交" : "Enter 選字後保留組字"))
+                    throw new InvalidDataException("Candidate help does not describe the selected mode and action");
+            }
+            settings.CaptureElement.UpdateLayout();
+            rightChoice.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 });
+            await Task.Delay(180);
+            var scroll = (Microsoft.UI.Xaml.Controls.ScrollViewer)settings.FindName("ContentScroll");
+            var bounds = rightChoice.TransformToVisual(scroll).TransformBounds(new Windows.Foundation.Rect(0, 0, rightChoice.ActualWidth, rightChoice.ActualHeight));
+            if (rightChoice.ActualWidth < 140 || rightChoice.ActualHeight <= 0 || bounds.Top < 0 || bounds.Bottom > scroll.ActualHeight)
+                throw new InvalidDataException("Right-arrow selector is outside the settings viewport");
+            await Capture(settings.CaptureElement, Path.Combine(output, $"candidate-right-action-{(windowsMode ? "windows" : "shanjie")}.png"));
+        }
+        File.WriteAllText(Models.ProfileStore.Path, beforeRight); settings.Vm.Load();
         // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");

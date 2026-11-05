@@ -59,7 +59,7 @@ public partial class SettingsViewModel
             Escape = Array.IndexOf(new[] { "staged", "clear", "ignore" }, profile.Read("input", "escape", "staged"));
             SpaceAfterCommit = profile.Flag("input", "space_after_commit", true); PinyinSpaceConverts = profile.Flag("input", "pinyin_space_converts", Interaction == 0);
             SpaceCommits = profile.Flag("input", "space_commits", false); SpaceOperates = profile.Flag("candidates", "space_operates", false);
-            SpacePages = profile.Flag("candidates", "space_pages", true); WrapPages = profile.Flag("candidates", "wrap_pages", true); RightPages = profile.Flag("candidates", "right_pages", false);
+            SpacePages = profile.Flag("candidates", "space_pages", true); WrapPages = profile.Flag("candidates", "wrap_pages", true); RightAction = Array.IndexOf(new[] { "none", "page", "expand" }, profile.Read("candidates", "right_action", "none"));
             BackquoteSymbols = profile.Flag("shortcuts", "backquote_symbols", Interaction == 0); CodeInput = profile.Flag("shortcuts", "code_input", Interaction == 0);
             SymbolKeyboard = profile.Flag("shortcuts", "symbol_keyboard", Interaction == 0); CtrlBackslash = profile.Flag("shortcuts", "ctrl_backslash", Interaction == 1);
             ForgetCandidate = profile.Flag("shortcuts", "forget_candidate", false);
@@ -156,7 +156,7 @@ public partial class SettingsViewModel
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
-            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","right_pages",RightPages), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
+            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","right_action",new[] { "none", "page", "expand" }[RightAction]), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
