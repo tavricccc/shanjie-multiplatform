@@ -188,7 +188,10 @@ int wmain(int argc, wchar_t** argv) {
         auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload()==S_FALSE && liveObjects()==0,368);
         FreeLibrary(dll); CoUninitialize(); std::puts("PASS: activation and system shortcuts require no model or lexicon"); return 0;
     }
-    auto press = [&](WPARAM vk, int check) { BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1); };
+    auto press = [&](WPARAM vk, int check) {
+        if(!visual) { BYTE keyboard[256]{}; keyboard[VK_NUMLOCK]=1; require(SetKeyboardState(keyboard),1045); }
+        BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1);
+    };
     // Release a service while its background job may still be running; the next
     // service must acquire that job, not launch a second model load.
     require(SUCCEEDED(service->Deactivate()),464); keys.Reset(); service.Reset();
@@ -412,6 +415,7 @@ int wmain(int argc, wchar_t** argv) {
             for (wchar_t key : std::wstring(L"ENGLISH")) press(key,516);
             for (int i=0;i<spaces;++i) press(VK_SPACE,518);
             auto expected = beforeEnglish; expected.insert(englishCaret,L"english"+std::wstring(spaces,L' '));
+            if(store->text!=expected)std::wprintf(L"Mixed English mismatch: actual [%ls] expected [%ls]\n",store->text.c_str(),expected.c_str());
             require(store->text == expected,520);
             press('5',521); press('J',523); press(VK_OEM_2,525); press(VK_SPACE,527); press('J',529); press('P',531); press('6',533);
             expected.insert(englishCaret+7+spaces,L"中文");
