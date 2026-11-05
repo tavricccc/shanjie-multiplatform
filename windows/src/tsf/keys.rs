@@ -162,7 +162,7 @@ impl Data {
             if !p.flag("input", "caps_lock_english", false) {
                 key.modifiers &= !16;
             }
-            if numpad_literal(vk, key, &s.snapshot) {
+            if s.special.mode == 0 && numpad_literal(vk, key, &s.snapshot) {
                 return Ok(true);
             }
             if Special::starts(key, p) {
@@ -290,7 +290,8 @@ impl Data {
                 return Ok(true);
             }
         }
-        let numpad = self.chinese() && numpad_literal(vk, key, &state);
+        // During code entry a keypad digit is part of the code, handled with the special input below.
+        let numpad = self.chinese() && self.state.borrow().special.mode == 0 && numpad_literal(vk, key, &state);
         if numpad || (p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key)) {
             let mark = if numpad { char::from_u32(key.ch).unwrap().to_string() } else { input::punctuation(key).into() };
             let data = self.clone();
@@ -299,6 +300,7 @@ impl Data {
                 let out = {
                     let mut s = data.state.borrow_mut();
                     let mut converted = Snapshot::default();
+                    let unfinished = numpad && s.pinyin.pending.is_empty() && input::pending(&s.snapshot);
                     if !s.pinyin.pending.is_empty() {
                         let state = s.snapshot.clone();
                         let super::service::State { pinyin, engine, .. } = &mut *s;
@@ -320,15 +322,15 @@ impl Data {
                     }
                     s.raw_reading.clear();
                     s.associated.clear();
-                    // A keypad character ends code entry without consuming it as a hex digit.
-                    let special = if numpad && s.special.mode != 0 {
-                        s.special.clear();
-                        s.snapshot.preedit.clone()
-                    } else { String::new() };
-                    let mut out = output(s.engine.perform(crate::broker::Op::Punctuation(
-                        mark,
-                    )))?;
-                    out.commit = converted.commit + &special + &out.commit;
+                    // A keypad character must not drop an unfinished reading: commit it, then the character.
+                    let mut out = if unfinished {
+                        let mut out = output(s.engine.reset(false))?;
+                        out.commit.push_str(&mark);
+                        out
+                    } else {
+                        output(s.engine.perform(crate::broker::Op::Punctuation(mark)))?
+                    };
+                    out.commit = converted.commit + &out.commit;
                     out
                 };
                 data.apply(&current, cookie, out, false)
