@@ -361,6 +361,9 @@ pub unsafe extern "C" fn sj_translate(vk: usize, flags: isize, out: *mut Shanjie
         36 => 11,
         35 => 12,
         9 => 13,
+        // Num Lock off arrives as navigation virtual keys instead.
+        96..=105 => { k.ch = (vk - 96 + b'0' as usize) as u32; 1 }
+        106..=111 => { k.ch = b"*+,-./"[vk - 106] as u32; 1 }
         _ => {
             let keyboard = [0u8; 256];
             let mut chars = [0u16; 8];

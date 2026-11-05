@@ -15,9 +15,13 @@ use windows::{
 pub fn shift(vk: WPARAM) -> bool {
     [16, 160, 161].contains(&vk.0)
 }
-/// The digit keys of the numeric keypad (VK_NUMPAD0..9); they type digits, never Zhuyin.
-pub fn numpad_digit(vk: WPARAM) -> bool {
-    (0x60..=0x69).contains(&vk.0)
+/// Keypad characters are literal, except 1–9 when they select an open candidate.
+pub fn numpad_literal(vk: WPARAM, key: ShanjieKey, s: &Snapshot) -> bool {
+    (0x60..=0x6f).contains(&vk.0)
+        && key.modifiers & 14 == 0
+        && !((0x61..=0x69).contains(&vk.0)
+            && !s.candidates.is_empty()
+            && (!s.prediction || s.selected.is_some()))
 }
 fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
     let mut key = ShanjieKey {
@@ -158,16 +162,8 @@ impl Data {
             if !p.flag("input", "caps_lock_english", false) {
                 key.modifiers &= !16;
             }
-            // With nothing to pick from, a keypad digit is plain text: the application gets it as is, or, while a reading is
-            // pending, key_down commits the reading and then the digit.
-            if numpad_digit(vk)
-                && key.modifiers & 14 == 0
-                && s.special.mode == 0
-                && s.snapshot.candidates.is_empty()
-                && s.pinyin.pending.is_empty()
-                && !s.associated.active()
-            {
-                return Ok(!s.snapshot.preedit.is_empty());
+            if numpad_literal(vk, key, &s.snapshot) {
+                return Ok(true);
             }
             if Special::starts(key, p) {
                 return Ok(true);
@@ -294,8 +290,9 @@ impl Data {
                 return Ok(true);
             }
         }
-        if p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key) {
-            let mark = std::ffi::CString::new(input::punctuation(key)).unwrap();
+        let numpad = self.chinese() && numpad_literal(vk, key, &state);
+        if numpad || (p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key)) {
+            let mark = if numpad { char::from_u32(key.ch).unwrap().to_string() } else { input::punctuation(key).into() };
             let data = self.clone();
             let current = context.clone();
             self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
@@ -323,10 +320,15 @@ impl Data {
                     }
                     s.raw_reading.clear();
                     s.associated.clear();
+                    // A keypad character ends code entry without consuming it as a hex digit.
+                    let special = if numpad && s.special.mode != 0 {
+                        s.special.clear();
+                        s.snapshot.preedit.clone()
+                    } else { String::new() };
                     let mut out = output(s.engine.perform(crate::broker::Op::Punctuation(
-                        mark.to_str().unwrap().into(),
+                        mark,
                     )))?;
-                    out.commit = converted.commit + &out.commit;
+                    out.commit = converted.commit + &special + &out.commit;
                     out
                 };
                 data.apply(&current, cookie, out, false)
@@ -496,7 +498,6 @@ impl Data {
         } else {
             None
         };
-        let numpad = numpad_digit(vk) && key.modifiers & 14 == 0 && state.candidates.is_empty();
         if page_right {
             key.kind = 2;
         }
@@ -504,7 +505,7 @@ impl Data {
             && key.kind == 1
             && key.modifiers == 1
             && !p.shift_punctuation(key.ch as u8 as char);
-        if (self.state.borrow().full_width && !self.chinese()) || english || ascii || numpad {
+        if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
             let mut keyboard = [0u8; 256];
             let mut text = [0u16; 4];
             let length = unsafe {
@@ -798,15 +799,5 @@ impl ITfKeyEventSink_Impl for Service_Impl {
     }
     fn OnPreservedKey(&self, _: Ref<ITfContext>, _: *const GUID) -> Result<BOOL> {
         Ok(false.into())
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn only_keypad_digits_are_plain_digits() {
-        for vk in 0x60..=0x69 { assert!(numpad_digit(WPARAM(vk)), "{vk:#x}"); }
-        // Main-row digits, VK_MULTIPLY..VK_DIVIDE and the neighbours of the range stay with the normal key path.
-        for vk in [0x30, 0x39, 0x5f, 0x6a, 0x6e, 0x6f, 0x70, 0x20] { assert!(!numpad_digit(WPARAM(vk)), "{vk:#x}"); }
     }
 }
