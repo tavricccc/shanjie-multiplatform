@@ -161,14 +161,16 @@
                         </controls:SettingCard>
                         <TextBlock Text="翻頁" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingToggle Label="→ 右鍵換下一頁候選" Description="開啟後 → 翻到下一頁，↓ 仍是移到下一個候選字。預設關閉：→ 和 ↓ 都移到下一個候選字。" IsOn="{x:Bind Vm.RightPages, Mode=TwoWay}"/>
+                            <controls:SettingRow Label="→ 右方向鍵" Description="無：維持原方向鍵操作；下一頁：翻頁；展開：三欄多列，數字選字以反白所在的九項為一組，↑／↓ 逐項移動，頂列 ↑ 收回。">
+                                <ComboBox x:Name="CandidateRightAction" SelectedIndex="{x:Bind Vm.RightAction, Mode=TwoWay}" MinWidth="140"><ComboBoxItem Content="無"/><ComboBoxItem Content="下一頁"/><ComboBoxItem Content="展開"/></ComboBox>
+                            </controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Text="空白鍵操作候選" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
                             <controls:SettingRow Label="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}"><controls:Segmented Options="↓ 下鍵|空白鍵|↓ 或空白鍵" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
                             <controls:SettingToggle Label="空白換下一頁候選" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
-                            <controls:SettingToggle Label="最後一頁再按空白回到第一頁" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
+                            <controls:SettingToggle Label="最後一頁再換頁時回到第一頁" Description="適用於空白鍵與設為「下一頁」的右方向鍵。" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Text="字元集" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>

@@ -132,6 +132,11 @@ impl Document {
             return;
         }
         let windows = self.get("profile", "interaction", "windows") == "windows";
+        if self.get("candidates", "right_action", "").is_empty() {
+            let action = if self.flag("candidates", "right_pages", false) { "page" } else { "none" };
+            self.set("candidates", "right_action", action);
+        }
+        self.remove("candidates", "right_pages");
         if schema < 4
             && !self
                 .0
@@ -331,7 +336,7 @@ const PERSONAL: [(&str, &[&str]); 4] = [
     ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
-const CHOICES: [(&str, &str, &[&str]); 7] = [
+const CHOICES: [(&str, &str, &[&str]); 8] = [
     ("profile", "interaction", &["windows", "shanjie"]),
     ("engine", "ranking", &["auto", "chat", "formal"]),
     ("engine", "rerank_level", &RERANK_LEVELS),
@@ -339,6 +344,7 @@ const CHOICES: [(&str, &str, &[&str]); 7] = [
     ("candidates", "layout", &["horizontal", "vertical"]),
     ("candidates", "anchor", &["right", "left"]),
     ("candidates", "open", &["down", "space", "both"]),
+    ("candidates", "right_action", &["none", "page", "expand"]),
 ];
 /// A preset over the current profile: the personal keys stay the user's.
 pub fn merge_preset(previous: &Document, mut preset: Document) -> String {
@@ -426,6 +432,22 @@ mod tests {
             let doc = super::Document::parse(&format!("[engine]\nranking={fixed}\n")).unwrap();
             assert_eq!((doc.ranking(Some("discord.exe")), doc.ranking(None)), (want, want));
         }
+    }
+    #[test]
+    fn legacy_right_pages_migrates_and_presets_validate_the_three_actions() {
+        for (legacy, action) in [(0, "none"), (1, "page")] {
+            let mut doc = super::Document::parse(&format!("[candidates]\nright_pages={legacy}\n")).unwrap();
+            doc.migrate();
+            assert_eq!(doc.get("candidates", "right_action", ""), action);
+            assert!(!doc.0["candidates"].contains_key("right_pages"));
+            doc.set("candidates", "right_action", "expand");doc.set("candidates", "right_pages", 0);doc.migrate();
+            assert_eq!(doc.get("candidates", "right_action", ""), "expand");
+        }
+        for action in ["none", "page", "expand"] {
+            let imported = super::import_preset("", &format!("[candidates]\nright_action={action}\n")).unwrap();
+            assert_eq!(super::Document::parse(&imported).unwrap().get("candidates", "right_action", ""), action);
+        }
+        assert!(super::import_preset("", "[candidates]\nright_action=table\n").is_err());
     }
     #[test]
     fn presets_keep_the_personal_engine_choices() {

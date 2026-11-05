@@ -1,6 +1,8 @@
 use crate::{protocol::Snapshot, profile::Document};
 use shanjie_core::ffi::ShanjieKey;
 use std::{collections::HashMap, fs, path::Path};
+/// Visual grid columns; the core still selects digits in groups of nine.
+pub const GRID_COLUMNS: usize = 3;
 /// The two core calls the phonetic helpers need; the platform engine implements it.
 pub trait Core { fn key(&mut self, key: ShanjieKey) -> Option<Snapshot>; fn reset(&mut self, discard: bool) -> Option<Snapshot>; }
 pub fn punctuation(key: ShanjieKey) -> &'static str {
@@ -109,9 +111,10 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
     }
-    // No table expansion reaches the upstream engine. Both profiles stay on a nine-item horizontal page.
+    // Up/Down step one candidate. Up in the first visual grid row collapses the table.
     k.kind = match k.kind {
         10 => 8,
+        9 if s.columns > 0 && s.first == 0 && s.selected.is_some_and(|i| i < GRID_COLUMNS) && !s.prediction => 9,
         9 => 7,
         13 => 8,
         kind => kind,
@@ -119,6 +122,28 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
     let _ = windows;
     k
 }
+#[cfg(test)]
+mod candidate_tests {
+    use super::*;
+    #[test]
+    fn both_interactions_step_and_collapse_the_first_visual_grid_row() {
+        let mut state = Snapshot { candidates: vec!["字".into(); 18], selected: Some(0), ..Default::default() };
+        for windows in [true, false] {
+            for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13,8)] {
+                assert_eq!(candidate_key(ShanjieKey { kind, ch: 0, modifiers: 0 }, &state, windows).kind, expected);
+            }
+            state.columns = 9; state.selected = Some(3);
+            assert_eq!(candidate_key(ShanjieKey { kind: 9, ch: 0, modifiers: 0 }, &state, windows).kind, 7);
+            assert_eq!(candidate_key(ShanjieKey { kind: 10, ch: 0, modifiers: 0 }, &state, windows).kind, 8);
+            state.selected = Some(2);
+            assert_eq!(candidate_key(ShanjieKey { kind: 9, ch: 0, modifiers: 0 }, &state, windows).kind, 9);
+            state.prediction = true; state.selected = None;
+            assert_eq!(candidate_key(ShanjieKey { kind: 10, ch: 0, modifiers: 0 }, &state, windows).kind, 10);
+            state.columns = 0; state.prediction = false; state.selected = Some(0);
+        }
+    }
+}
+
 const SYMBOLS: &str =
     "，。？！；：、（）「」『』【】《》〈〉—…～·「」＋－×÷＝≠≤≥±∞√％‰℃℉°′″→←↑↓★☆○●□■△▲◎※〒＄€£¥";
 #[derive(Clone, Default)]

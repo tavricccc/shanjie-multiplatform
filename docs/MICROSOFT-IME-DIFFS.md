@@ -16,7 +16,7 @@ Windows 範本採微軟公開的常用鍵位，但即時讀音預測、選字後
 | 完整組字＋↓ | 開轉換候選 | 同樣可開；`candidates.open` 可只選空白 |
 | 完整組字＋空白 | 插入可編輯空格，組字繼續 | 相同；可開 `space_commits` 或 `space_operates` 改為提交／候選操作 |
 | 未開候選＋↑ | 在目前字詞的候選中循環，保持游標，不開窗 | 預設不換字；`up_cycles` 可獨立開啟 |
-| 候選中 ↑／↓／←／→ | 橫向列前後選字 | 相同；不展開格狀 |
+| 候選中 ↑／↓／←／→ | 預設逐項選字；→ 可設為下一頁或展開三欄候選 | 相同；展開時 ↑↓ 逐項移動，頂列 ↑ 收回 |
 | 候選中 Tab | 下一候選 | 相同；預測列仍保留 Tab 進入／Shift＋Tab 退出 |
 | 候選中空白 | 下一頁，末頁回第一頁 | `space_pages`、`wrap_pages` 分別控制換頁／循環 |
 | 候選中 1–9 | 選目前頁／列的候選，保留組字 | 相同；不以普通數字選被動預測或聯想 |
@@ -74,8 +74,8 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `candidates.backspace_deletes` | 收回候選後再刪前一音節 | 0／0 |
 | `candidates.space_pages` | 空白換候選／聯想下一頁 | 1／1 |
 | `candidates.space_operates` | 空白是否操作候選 | 0／0 |
-| `candidates.wrap_pages` | 末頁空白是否循環到首頁 | 1／1 |
-| `candidates.right_pages` | 候選中 → 換下一頁（↓ 仍移到下一個候選字） | 0／0 |
+| `candidates.wrap_pages` | 末頁換頁（空白／→ 下一頁）是否循環到首頁 | 1／1 |
+| `candidates.right_action` | 候選中 →：none／page／expand（無／下一頁／展開） | none／none；舊 right_pages=0/1 遷移為 none/page |
 | `candidates.big5` | 篩選候選、即時預測與聯想，不重寫既有組字 | 0／0；保留 |
 | `shortcuts.shift_toggle` | 單按 Shift 中英切換 | 1／0 |
 | `shortcuts.shift_side` | 左右／左／右 Shift | 0／0 |
