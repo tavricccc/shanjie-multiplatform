@@ -45,6 +45,23 @@ int wmain(int argc,wchar_t** argv) {
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
         press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
         require(store->text==before+L"，一",945);
+    }else if(scenario==L"fullwidth"){
+        press('A',true);require(store->text==L"A",937);
+        press(VK_SPACE,true);require(store->text==L"Ａ",938);
+        press(VK_SPACE,true);require(store->text==L"A",939);
+        press(VK_SPACE,true);press('B',true);press(VK_SPACE);require(store->text==L"ＡＢ　",940);
+        press(VK_RETURN);require(store->text==L"ＡＢ　",941);
+        press(VK_SPACE,true);press('C',true);require(store->text==L"ＡＢ　C",942);
+        press(VK_SPACE,true);require(store->text==L"ＡＢ　Ｃ",943);
+        require(SUCCEEDED(keys->OnSetFocus(FALSE))&&store->text==L"ＡＢ　Ｃ",944);
+    }else if(scenario==L"fullwidth-english"){
+        press(VK_SPACE,true);press('A');press('2');press(VK_OEM_PERIOD);press(VK_SPACE);
+        require(store->text==L"ａ２．　",945);
+        press(VK_SPACE,true);BOOL test=TRUE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'B',0,&test))&&!test,946);
+    }else if(scenario==L"fullwidth-disabled"){
+        BOOL test=TRUE;BYTE keyboard[256]{};keyboard[VK_SHIFT]=keyboard[VK_LSHIFT]=0x80;SetKeyboardState(keyboard);
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_SPACE,0,&test))&&!test,947);
     }else if(scenario==L"caps"){
         // HELLO is in the public bundled English list; RUST is intentionally absent.
         for(auto ch:std::wstring(L"HELLO"))press(ch,false,true);
