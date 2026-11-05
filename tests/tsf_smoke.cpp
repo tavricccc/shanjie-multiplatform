@@ -268,17 +268,21 @@ int wmain(int argc, wchar_t** argv) {
         wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
         auto profile = std::wstring(local) + L"/Shanjie/profile.ini";
         {
-            // Keypad digits: idle they go to the application; a pending reading commits first; an open list picks.
-            BOOL idle = TRUE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_NUMPAD1,0,&idle)) && !idle,900);
+            // Keypad literals: compose with pending text, while 1–9 still select an open list.
+            BOOL idle = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_NUMPAD1,0,&idle)) && idle,900);
             auto beforeKeypad = store->text; auto keypadCaret = store->selection.acpStart;
             press('S',901); press('U',903); press('3',905); press(VK_NUMPAD1,907);
             beforeKeypad.insert(keypadCaret,L"你1");
             require(store->text == beforeKeypad && noCandidates(),909);
+            press(VK_DIVIDE,970); beforeKeypad.insert(store->selection.acpStart - 1,L"/");
+            require(store->text == beforeKeypad,972);
+            press(VK_ESCAPE,973); // Literal insertion kept the whole composition editable.
+            press('S',975); press('U',977); press('3',979); press(VK_NUMPAD1,981); press(VK_RETURN,983);
             auto beforePick = store->text;
             press('S',910); press('U',912); press('3',914); press(VK_DOWN,916); require(!noCandidates(),918);
             press(VK_NUMPAD1,919);
             require(noCandidates() && store->text.size() == beforePick.size() + 1 && store->text.find(L'1',store->selection.acpStart - 1) == std::wstring::npos,921);
-            std::puts("Keypad digits: pass through idle, commit a pending reading, pick from an open list passed");
+            std::puts("Keypad literals: editable composition, operators and candidate selection passed");
 
             // Right arrow: steps by default, turns the page with right_pages, and stops at the end without wrap_pages.
             // The list holds only the current page, so the page shows in its first candidate.

@@ -801,3 +801,20 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         Ok(false.into())
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn keypad_literals_preserve_candidate_selection() {
+        let mut key = ShanjieKey { kind: 1, ch: 49, modifiers: 0 };
+        let mut state = Snapshot::default();
+        for vk in 0x60..=0x6f { assert!(numpad_literal(WPARAM(vk), key, &state)); }
+        for vk in [0x30, 0x39, 0x5f, 0x70, 0x20] { assert!(!numpad_literal(WPARAM(vk), key, &state)); }
+        state.candidates = vec!["你".into()]; state.selected = Some(0);
+        for vk in 0x61..=0x69 { assert!(!numpad_literal(WPARAM(vk), key, &state)); }
+        for vk in [0x60, 0x6a, 0x6b, 0x6d, 0x6e, 0x6f] { assert!(numpad_literal(WPARAM(vk), key, &state)); }
+        state.prediction = true; state.selected = None;
+        assert!(numpad_literal(WPARAM(0x61), key, &state));
+        for modifiers in [2, 4, 8] { key.modifiers = modifiers; assert!(!numpad_literal(WPARAM(0x61), key, &state)); }
+    }
+}
