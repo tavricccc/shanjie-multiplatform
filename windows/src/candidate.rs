@@ -129,6 +129,35 @@ const READING_TOP: f32 = 4.0;
 /// From a one-line layout's top to the middle of its glyphs. A CJK font's line box leaves more room above the
 /// characters than below (Noto Sans TC: ascent 1.16 em, the ideographic box 0.88 em above the baseline and
 /// 0.12 em below), so centring the line box leaves the text visibly off; centre the ideographic box instead.
+/// UTF-16 length of the first `chars` characters of `units`, clamped to the text that is there.
+fn mark_units(units: &[u16], chars: usize) -> usize {
+    let mut at = 0;
+    for _ in 0..chars {
+        match units.get(at) {
+            Some(0xd800..=0xdbff) => at = (at + 2).min(units.len()),
+            Some(_) => at += 1,
+            None => break,
+        }
+    }
+    at
+}
+
+#[cfg(test)]
+mod mark_tests {
+    use super::mark_units;
+
+    #[test]
+    fn mark_covers_the_selected_candidate() {
+        let text: Vec<u16> = "你好測試".encode_utf16().collect();
+        assert_eq!(mark_units(&text, 1), 1);
+        assert_eq!(mark_units(&text, 2), 2);
+        assert_eq!(mark_units(&text, 9), 4, "clamped to the text");
+        let astral: Vec<u16> = "𠀀好".encode_utf16().collect();
+        assert_eq!(mark_units(&astral, 1), 2);
+        assert_eq!(mark_units(&astral, 2), 3);
+    }
+}
+
 fn middle(layout: &IDWriteTextLayout, size: f32) -> f32 {
     let mut line = [DWRITE_LINE_METRICS::default()];
     let mut count = 0;
@@ -395,9 +424,14 @@ impl Host {
                     mark = Some((0, hint.len()));
                 }
             } else if self.anchor_right && cursor < units.len() {
-                // Right anchor: the character after the cursor is the one being chosen.
-                let len = if (0xd800..0xdc00).contains(&units[cursor]) { 2 } else { 1 };
-                mark = Some((cursor, len.min(units.len() - cursor)));
+                // Right anchor: the text after the cursor that the selected candidate replaces (one character per
+                // syllable, so as many characters as the candidate has; one when nothing is selected).
+                let chars = if self.state.associated {
+                    1
+                } else {
+                    self.state.selected.and_then(|i| self.state.candidates.get(i)).map_or(1, |c| c.chars().count().max(1))
+                };
+                mark = Some((cursor, mark_units(&units[cursor..], chars)));
             } else if !self.anchor_right && !units.is_empty() && cursor < units.len() {
                 let mut start = cursor.saturating_sub(1);
                 if start > 0 && (0xdc00..0xe000).contains(&units[start]) {
