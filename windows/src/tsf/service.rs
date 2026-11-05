@@ -371,6 +371,7 @@ impl Data {
                 s.engine = Engine::default();
                 s.preload = None;
             }
+            let final_text = if s.full_width { crate::input::full_width(&final_text) } else { final_text };
             (s.context.clone(), s.composition.take(), final_text)
         };
         if let (Some(context), Some(composition)) = (context, composition) {
@@ -510,18 +511,7 @@ impl Data {
             self.diagnostic_range("apply.initial_range",&range,cookie,0);
             let width = self.state.borrow().full_width;
             let committed = if width {
-                out.commit
-                    .chars()
-                    .map(|c| {
-                        if c == ' ' {
-                            '\u{3000}'
-                        } else if ('!'..='~').contains(&c) {
-                            char::from_u32(c as u32 + 0xfee0).unwrap()
-                        } else {
-                            c
-                        }
-                    })
-                    .collect::<String>()
+                crate::input::full_width(&out.commit)
             } else {
                 out.commit.clone()
             };
@@ -566,8 +556,9 @@ impl Data {
                 }
                 // Start before the first write, avoiding TSF's temporary
                 // composition that otherwise commits the first character.
-                self.diagnostic_range("write.preedit.begin",&range,cookie,out.preedit.encode_utf16().count());
-                let result=range.SetText(cookie, 0, &out.preedit.encode_utf16().collect::<Vec<_>>());
+                let preedit = if width { crate::input::full_width(&out.preedit) } else { out.preedit.clone() };
+                self.diagnostic_range("write.preedit.begin",&range,cookie,preedit.encode_utf16().count());
+                let result=range.SetText(cookie, 0, &preedit.encode_utf16().collect::<Vec<_>>());
                 self.diagnostic("write.preedit.end",Some(context),None,Some(result.as_ref().err().map_or(0,|e|e.code().0)));
                 result?;
             } else if let Some(c) = composition {

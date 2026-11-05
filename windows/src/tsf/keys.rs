@@ -258,6 +258,16 @@ impl Data {
                 let width = self.state.borrow().full_width;
                 self.state.borrow_mut().full_width = !width;
                 self.set_mode(self.chinese())?;
+                let mut out = self.state.borrow().snapshot.clone();
+                if !out.preedit.is_empty() {
+                    out.commit.clear();
+                    out.handled = true;
+                    let data = self.clone();
+                    let current = context.clone();
+                    self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
+                        data.apply(&current, cookie, out, false)
+                    })?;
+                }
             }
             return Ok(true);
         }
