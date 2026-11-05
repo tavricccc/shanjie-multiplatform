@@ -413,9 +413,9 @@ impl Engine {
             }
             return Ok(self.view(out.handled, out.commit));
         }
-        // Upstream's digit run replaces rule 22a. The Windows switch asks for the mark, so it wins on an empty composition;
-        // lone_digit_literal limits this to the Windows front end, leaving upstream's own defaults as they are.
-        if self.lone_digit_literal && self.standalone_tones && self.digits_active()
+        // Upstream's digit run replaces rule 22a. In the Windows interaction the switch asks for the mark, so it wins on
+        // an empty composition; the Shanjie interaction keeps upstream's digit run.
+        if self.tones_over_digits && self.standalone_tones && self.digits_active()
             && key.kind == KeyKind::Char && key.modifiers == 0
             && self.syls.is_empty() && self.cands.is_none() && self.pred_sel.is_none()
             && !self.windows_phonetic_pending() && self.run.is_empty()
