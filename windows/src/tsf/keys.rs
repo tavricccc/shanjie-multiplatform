@@ -417,7 +417,7 @@ impl Data {
                 c.data.close();
             }
         }
-        if self.state.borrow().pinyin.handles(key) {
+        if self.state.borrow().special.mode == 0 && !Special::starts(key, &p) && self.state.borrow().pinyin.handles(key) {
             let data = self.clone();
             let current = context.clone();
             self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
@@ -444,7 +444,11 @@ impl Data {
                 let out = {
                     let mut s = data.state.borrow_mut();
                     let pending = if s.special.mode == 0 {
-                        output(s.engine.reset(false))?
+                        let mut pending = output(s.engine.reset(false))?;
+                        if !s.pinyin.pending.is_empty() { pending.commit = s.snapshot.preedit.clone(); }
+                        s.pinyin.clear();
+                        s.raw_reading.clear();
+                        pending
                     } else {
                         Snapshot::default()
                     };
