@@ -87,6 +87,16 @@ pub fn full_width(text: &str) -> String {
         _ => c,
     }).collect()
 }
+#[cfg(test)]
+mod width_tests {
+    #[test]
+    fn full_width_changes_ascii_without_rewriting_chinese_or_emoji() {
+        let original = "A0z -_. 中，。😀";
+        assert_eq!(super::full_width(original), "Ａ０ｚ　－＿．　中，。😀");
+        assert_eq!(super::full_width("Ａ１　中"), "Ａ１　中");
+    }
+}
+
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
