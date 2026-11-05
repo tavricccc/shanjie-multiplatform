@@ -28,9 +28,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool PinyinSpaceConverts { get; set; }
     [ObservableProperty] public partial bool SpaceInputsZhuyin { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial bool SpacePages { get; set; }
-    public bool CanWrapSpacePages => SpaceOperates && SpacePages;
+    public bool CanWrapSpacePages => (SpaceOperates && SpacePages) || RightAction == 1;
     [ObservableProperty] public partial bool WrapPages { get; set; }
-    [ObservableProperty] public partial bool RightPages { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp)), NotifyPropertyChangedFor(nameof(CanWrapSpacePages))] public partial int RightAction { get; set; }
     [ObservableProperty] public partial bool BackquoteSymbols { get; set; }
     [ObservableProperty] public partial bool CodeInput { get; set; }
     [ObservableProperty] public partial bool Learning { get; set; }
@@ -64,7 +64,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int MixedMode { get; set; }
     [ObservableProperty] public partial bool EnglishOverwrite { get; set; }
     [ObservableProperty] public partial bool EnglishReversalGuard { get; set; }
-    [ObservableProperty] public partial bool EnterToCursor { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterToCursor { get; set; }
     public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
     public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode >= 2;
     partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesUpstreamEnglish));
@@ -93,9 +93,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
-    public string CandidateHelp => (Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。")
+    public string CandidateHelp => (RightAction switch {
+        1 => Interaction == 0 ? "↑／↓ 或 ← 選字；→ 換下一頁。" : "← 或 ↑／↓ 選字；→ 換下一頁。",
+        2 => Interaction == 0 ? "↑／↓ 逐項選字；→ 展開三欄候選。" : "← 選字、→ 展開三欄候選；↑／↓ 逐項移動。",
+        _ => Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。"
+    })
         + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
-        + (EnterCommits ? "Enter 選字並提交整句。" : "Enter 選字後保留組字。");
+        + (EnterCommits ? (EnterToCursor ? "Enter 選字並提交游標前的組字。" : "Enter 選字並提交整句。") : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
         ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"
             +(ModelId==ModelCatalog.Builtin?"":"\n\n"+ModelCatalog.Notes(AvailableModels.First(m=>m.Id==ModelId).Catalog))
