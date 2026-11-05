@@ -33,9 +33,9 @@ function New-Icon([int]$size, [string]$glyph, [Drawing.Color]$fill) {
     $em = if ($glyph -eq 'A') { 40 } else { 37 }
     $text.AddString($glyph, $family, [int][Drawing.FontStyle]::Bold, $em, [Drawing.PointF]::new(0, 0), [Drawing.StringFormat]::GenericTypographic)
     $bounds = $text.GetBounds()
-    if ($glyph -in @('中', 'A') -and ($size -le 24 -or $size -eq 128)) {
-        # Size the visible outline, not the font's em box: both glyphs fill the small tray icon.
-        $scale = 52.0 / [Math]::Max($bounds.Width, $bounds.Height)
+    if ($glyph -in @('中', 'A', '解') -and ($size -le 24 -or $size -eq 128)) {
+        # Size the visible outline, not the font's em box: the glyphs share one size in the small tray icon.
+        $scale = 44.0 / [Math]::Max($bounds.Width, $bounds.Height)
         $resize = [Drawing.Drawing2D.Matrix]::new()
         $resize.Scale($scale, $scale)
         $text.Transform($resize)
@@ -78,7 +78,7 @@ foreach ($mode in $modes) {
     # 128 px master for the cursor-side hint, which scales it to the actual DPI.
     (New-Icon 128 $mode.Glyph $mode.Fill).Save((Join-Path $out "$($mode.Name).png"), [Drawing.Imaging.ImageFormat]::Png)
     $hex = '#{0:X2}{1:X2}{2:X2}' -f $mode.Fill.R, $mode.Fill.G, $mode.Fill.B
-    $svgSize = switch ($mode.Name) { 'chinese' { 60 }; 'english' { 72 }; default { 37 } }
+    $svgSize = switch ($mode.Name) { 'chinese' { 51 }; 'english' { 61 }; default { 45 } }
     $svg = @"
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="$hex"/><text x="32" y="32" text-anchor="middle" dominant-baseline="central" font-family="'Noto Sans TC','Microsoft JhengHei UI',sans-serif" font-weight="700" font-size="$svgSize" fill="#fff">$($mode.Glyph)</text></svg>
 "@
