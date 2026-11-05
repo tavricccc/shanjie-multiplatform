@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-pub const SCHEMA: u32 = 8;
+pub const SCHEMA: u32 = 9;
 
 /// The model bundle the package ships: always upstream's current released set, whatever it is called.
 pub const BUILTIN: &str = "builtin";
@@ -214,6 +214,11 @@ impl Document {
             }
             self.remove("engine", "class_table");
             self.remove("engine", "model");
+        }
+        // Legacy INI files do not distinguish the old default from a manual opt-out.
+        // Align Windows once; an explicit opt-out in schema 9 and later is retained.
+        if schema < 9 && windows {
+            self.set("shortcuts", "backquote_symbols", 1);
         }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")

@@ -28,6 +28,14 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
             }
         }
         '1' => "！",
+        '2' if shift => "＠",
+        '3' if shift => "＃",
+        '4' if shift => "＄",
+        '5' if shift => "％",
+        '6' if shift => "＾",
+        '7' if shift => "＆",
+        '8' if shift => "＊",
+        '-' => if shift { "＿" } else { "－" },
         ';' => {
             if shift {
                 "："
@@ -66,7 +74,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
                 "＝"
             }
         }
-        '`' => "｀",
+        '`' => if shift { "～" } else { "｀" },
         _ => "",
     }
 }
@@ -106,7 +114,7 @@ impl Special {
         k.kind == 1
             && ((k.ch == 96
                 && k.modifiers == 0
-                && (p.flag("shortcuts", "backquote_symbols", false)
+                && (p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows")
                     || p.flag("shortcuts", "code_input", true)))
                 || (p.flag("shortcuts", "symbol_keyboard", true) && k.ch == 44 && k.modifiers == 6))
     }
@@ -208,7 +216,7 @@ impl Special {
                 self.mode = if lower == 'u' { 2 } else { 3 };
                 return self.view();
             }
-            if p.flag("shortcuts", "backquote_symbols", false) {
+            if p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows") {
                 let text = punctuation(k);
                 if !text.is_empty() {
                     self.clear();
@@ -626,3 +634,4 @@ fn big5_text(code: u32) -> String {
         }
     }
 }
+

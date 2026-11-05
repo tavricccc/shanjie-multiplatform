@@ -163,6 +163,9 @@ pub fn set_model(path: &Path, id: &str) -> Result<()> {
 pub fn restart() -> Result<()> {
     notify(RESTART_MESSAGE)
 }
+pub fn changed() -> Result<()> {
+    notify(CHANGED_MESSAGE)
+}
 pub fn save_dictionary(text: &str, folder: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
     let content = dictionary_content(text)?;

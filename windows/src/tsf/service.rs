@@ -1226,7 +1226,7 @@ impl ITfTextEditSink_Impl for Service_Impl {
                 let mut target = 0;
                 left.GetText(cookie, 0, &mut text, &mut target)?;
                 let mut s = self.data.state.borrow_mut();
-                if target == s.snapshot.cursor {
+                if target == s.snapshot.cursor || s.special.mode != 0 || !s.pinyin.pending.is_empty() {
                     return Ok(());
                 }
                 if s.associated.active() {
