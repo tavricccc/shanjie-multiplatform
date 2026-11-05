@@ -8,12 +8,14 @@ $payload=Join-Path $ResultRoot 'payload';New-Item -ItemType Directory $payload -
 foreach($arch in $Architectures){New-Item -ItemType Directory "$payload/$arch" -Force|Out-Null;Copy-Item "$root/dist/$arch/Shanjie.dll" "$payload/$arch" -Force}
 foreach($name in 'data','tools'){New-Item -ItemType Junction -Path "$payload/$name" -Target "$root/dist/$name"|Out-Null}
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
-$saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
+$saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
 $cases=@();foreach($mode in 1,2,3){foreach($scenario in 'caps','caps-zh'){$cases+=,@($mode,$scenario,1,1)}}
 foreach($mode in 2,3){foreach($scenario in 'shift','shift-caps'){$cases+=,@($mode,$scenario,1,1)}}
 $cases+=,@(3,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
 foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
 $cases+=,@(0,'backquote-disabled',1,1)
+foreach($mode in 0,1,2,3){$cases+=,@($mode,'numpad',1,1)}
+$cases+=,@(0,'numpad',2,1)
 $cases+=,@(0,'fullwidth',1,1);$cases+=,@(0,'fullwidth-english',1,1);$cases+=,@(0,'fullwidth-disabled',1,1)
 try{
  $env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_HEADLESS='1';$env:SHANJIE_CORE_LOCAL=$null
@@ -35,6 +37,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    $text=$text -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[0]-band 2)-ne 0))" -replace '(?m)^caps_lock_english=.*','caps_lock_english=0'
    if($case[1] -eq 'backquote-disabled'){$text=$text -replace '(?m)^backquote_symbols=.*','backquote_symbols=0'}
    $env:SHANJIE_TEST_PINYIN=if($case[2] -ge 3){'1'}else{$null}
+   $env:SHANJIE_TEST_ETEN=if($case[2] -eq 2){'1'}else{$null}
    if($case[1] -eq 'fullwidth-english'){$text=$text -replace '(?m)^chinese=.*','chinese=0'}
    if($case[1] -eq 'fullwidth-disabled'){$text=$text -replace '(?m)^shift_space_toggle=.*','shift_space_toggle=0'}
    Set-Content "$folder/profile/Shanjie/profile.ini" $text -Encoding utf8NoBOM;$env:LOCALAPPDATA="$folder/profile"

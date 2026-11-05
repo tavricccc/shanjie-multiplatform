@@ -23,7 +23,7 @@ int wmain(int argc,wchar_t** argv) {
     ComPtr<ITfKeyEventSink> keys;tip.As(&keys);
     auto press=[&](int vk,bool shift=false,bool caps=false,bool required=true){
         for(int k:{VK_SHIFT,VK_LSHIFT,VK_RSHIFT,VK_CONTROL,VK_MENU,VK_CAPITAL})GetKeyState(k);
-        BYTE keyboard[256]{};if(shift){keyboard[VK_SHIFT]=0x80;keyboard[VK_LSHIFT]=0x80;}if(caps)keyboard[VK_CAPITAL]=1;
+        BYTE keyboard[256]{};keyboard[VK_NUMLOCK]=1;if(shift){keyboard[VK_SHIFT]=0x80;keyboard[VK_LSHIFT]=0x80;}if(caps)keyboard[VK_CAPITAL]=1;
         require(SetKeyboardState(keyboard),914);BOOL test=FALSE,eaten=FALSE;
         LPARAM flags=LPARAM(1)|(LPARAM(MapVirtualKeyW(vk,MAPVK_VK_TO_VSC))<<16);
         require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&test)),915);
@@ -45,6 +45,20 @@ int wmain(int argc,wchar_t** argv) {
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
         press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
         require(store->text==before+L"，一",945);
+    }else if(scenario==L"numpad"){
+        for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
+        for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
+        require(store->text==L"0123456789+-*/.",934);
+        press(VK_RETURN,false,false,false);
+        const wchar_t* typing=std::getenv("SHANJIE_TEST_ETEN")?L"NE3":L"SU3";
+        for(auto ch:std::wstring(typing))press(ch);
+        press(VK_NUMPAD1);press(VK_DIVIDE);
+        require(store->text==L"0123456789+-*/.你1/",935);
+        press(VK_ESCAPE);require(store->text==L"0123456789+-*/.",936);
+        auto base=store->text;press(typing[0]);press(VK_NUMPAD1);press(VK_RETURN,false,false,false);
+        require(store->text.size()==base.size()+2&&store->text.back()==L'1',937);
+        base=store->text;press(VK_OEM_3);press('U');press(VK_NUMPAD4);press('E');press(VK_NUMPAD0);press(VK_NUMPAD0);press(VK_SPACE);
+        require(store->text==base+L"一",938);
     }else if(scenario==L"fullwidth"){
         press('A',true);require(store->text==L"A",937);
         press(VK_SPACE,true);require(store->text==L"Ａ",938);
