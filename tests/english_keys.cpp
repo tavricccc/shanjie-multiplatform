@@ -40,8 +40,10 @@ int wmain(int argc,wchar_t** argv) {
         press(VK_NUMPAD1);press(VK_DIVIDE);
         require(store->text==L"0123456789+-*/.你1/",935);
         press(VK_ESCAPE);require(store->text==L"0123456789+-*/.",936);
-        press(VK_OEM_3);press('U');press(VK_NUMPAD2);press(VK_RETURN,false,false,false);
-        require(store->text==L"0123456789+-*/.`U2",937);
+        auto base=store->text;press(typing[0]);press(VK_NUMPAD1);press(VK_RETURN,false,false,false);
+        require(store->text.size()==base.size()+2&&store->text.back()==L'1',937);
+        base=store->text;press(VK_OEM_3);press('U');press(VK_NUMPAD4);press('E');press(VK_NUMPAD0);press(VK_NUMPAD0);press(VK_SPACE);
+        require(store->text==base+L"一",938);
     }else if(scenario==L"caps"){
         // HELLO is in the public bundled English list; RUST is intentionally absent.
         for(auto ch:std::wstring(L"HELLO"))press(ch,false,true);
