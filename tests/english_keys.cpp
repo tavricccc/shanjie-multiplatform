@@ -33,7 +33,7 @@ int wmain(int argc,wchar_t** argv) {
     if(scenario==L"standalone-tones"){
         for(int key:{'3','4','6','7'}){press(key);press(VK_RETURN,false,false,false);}
         require(store->text==L"ˇˋˊ˙",948);
-    }else if(scenario==L"standalone-tones-off"){
+    }else if(scenario==L"standalone-tones-off"||scenario==L"standalone-tones-shanjie"){
         press('3');press(VK_RETURN,false,false,false);require(store->text==L"3",950);
     }else if(scenario==L"backquote-disabled"){
         press(VK_OEM_3);press(VK_OEM_COMMA);require(store->text==L"`",954);press(VK_ESCAPE);

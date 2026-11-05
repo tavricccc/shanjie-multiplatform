@@ -17,7 +17,7 @@ $cases+=,@(0,'backquote-disabled',1,1)
 foreach($mode in 0,1,2,3){$cases+=,@($mode,'numpad',1,1)}
 $cases+=,@(0,'numpad',2,1)
 foreach($mode in 0,1,2,3){$cases+=,@($mode,'standalone-tones',1,1)}
-foreach($mode in 2,3){$cases+=,@($mode,'standalone-tones-off',1,1)}
+foreach($mode in 2,3){$cases+=,@($mode,'standalone-tones-off',1,1);$cases+=,@($mode,'standalone-tones-shanjie',1,1)}
 $cases+=,@(0,'fullwidth',1,1);$cases+=,@(0,'fullwidth-english',1,1);$cases+=,@(0,'fullwidth-disabled',1,1)
 try{
  $env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_HEADLESS='1';$env:SHANJIE_CORE_LOCAL=$null
@@ -37,7 +37,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*',"keyboard=$($case[2])"
    $text=$text -replace '(?m)^mixed_input=.*',"mixed_input=$([int](($case[0]-band 1)-ne 0))" -replace '(?m)^enter_to_cursor=.*',"enter_to_cursor=$($case[3])"
    $text=$text -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[0]-band 2)-ne 0))" -replace '(?m)^caps_lock_english=.*','caps_lock_english=0'
-   $text=$text -replace '(?m)^standalone_tones=.*',"standalone_tones=$([int]($case[1] -eq 'standalone-tones'))"
+   $text=$text -replace '(?m)^standalone_tones=.*',"standalone_tones=$([int]($case[1] -in 'standalone-tones','standalone-tones-shanjie'))"
+   if($case[1] -eq 'standalone-tones-shanjie'){$text=$text -replace '(?m)^interaction=.*','interaction=shanjie'}
    if($case[1] -eq 'backquote-disabled'){$text=$text -replace '(?m)^backquote_symbols=.*','backquote_symbols=0'}
    $env:SHANJIE_TEST_PINYIN=if($case[2] -ge 3){'1'}else{$null}
    $env:SHANJIE_TEST_ETEN=if($case[2] -eq 2){'1'}else{$null}
