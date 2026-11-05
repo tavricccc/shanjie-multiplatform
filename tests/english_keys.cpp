@@ -30,7 +30,12 @@ int wmain(int argc,wchar_t** argv) {
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"backquote-disabled"){
+    if(scenario==L"standalone-tones"){
+        for(int key:{'3','4','6','7'}){press(key);press(VK_RETURN,false,false,false);}
+        require(store->text==L"ˇˋˊ˙",948);
+    }else if(scenario==L"standalone-tones-off"||scenario==L"standalone-tones-shanjie"){
+        press('3');press(VK_RETURN,false,false,false);require(store->text==L"3",950);
+    }else if(scenario==L"backquote-disabled"){
         press(VK_OEM_3);press(VK_OEM_COMMA);require(store->text==L"`",954);press(VK_ESCAPE);
     }else if(scenario==L"backquote"){
         for(auto entry:{std::pair{VK_OEM_COMMA,L'，'},std::pair{VK_OEM_PERIOD,L'。'},std::pair{VK_OEM_2,L'／'},std::pair{VK_OEM_1,L'；'},std::pair{VK_OEM_MINUS,L'－'}}){

@@ -413,6 +413,20 @@ impl Engine {
             }
             return Ok(self.view(out.handled, out.commit));
         }
+        // Upstream's digit run replaces rule 22a. In the Windows interaction the switch asks for the mark, so it wins on
+        // an empty composition; the Shanjie interaction keeps upstream's digit run.
+        if self.tones_over_digits && self.standalone_tones && self.digits_active()
+            && key.kind == KeyKind::Char && key.modifiers == 0
+            && self.syls.is_empty() && self.cands.is_none() && self.pred_sel.is_none()
+            && !self.windows_phonetic_pending() && self.run.is_empty()
+            && !self.mixed_latin && self.mixed_raw.is_empty() && !self.upstream_english_busy()
+        {
+            if let Some(tone) = self.layout.tone_of(key.ch) {
+                let mark = TONE_MARKS[tone];
+                let out = self.insert_token(format!("{PUNCT_PREFIX}{mark}"), Some(mark.to_string()), None)?;
+                return Ok(self.mixed_view(out));
+            }
+        }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
             // Symbols the Windows policy kept behind an unfinished reading go in front of the run: upstream's
             // run replaces that reading, and the symbols were typed before the letter.
