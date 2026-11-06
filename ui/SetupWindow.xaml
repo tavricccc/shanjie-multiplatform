@@ -15,7 +15,7 @@
                     <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="72" Height="72" Margin="0,8,0,6"/>
                     <TextBlock x:Name="WelcomeTitle" Text="安裝善解輸入法" Style="{StaticResource SetupTitle}"/>
                     <TextBlock x:Name="WelcomeText" Style="{StaticResource SetupBody}"/>
-                    <TextBlock Style="{StaticResource HelpText}" TextAlignment="Center" Margin="0,6,0,0" Text="善解是本機注音輸入法：輸入內容、詞庫與學習都留在這台電腦。安裝時 Windows 會要求系統管理員權限，用來註冊輸入法並設定登入時啟動核心。"/>
+                    <TextBlock Style="{StaticResource HelpText}" TextAlignment="Center" Margin="0,6,0,0" Text="善解是本機注音輸入法：輸入內容、詞庫與學習都留在這台電腦。安裝時 Windows 會要求系統管理員權限，用來註冊輸入法，並設定登入時啟動核心與每天檢查更新。"/>
                     <TextBlock x:Name="WelcomeTarget" Style="{StaticResource HelpText}" TextAlignment="Center" IsTextSelectionEnabled="True"/>
                     <InfoBar x:Name="StatusError" Severity="Error" IsClosable="False" Title="無法讀取目前的安裝狀態"/>
                 </StackPanel>
@@ -34,7 +34,7 @@
                 <StackPanel x:Name="UninstallPage" Spacing="10" Visibility="Collapsed">
                     <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="72" Height="72" Margin="0,8,0,6"/>
                     <TextBlock x:Name="UninstallTitle" Text="解除安裝善解輸入法" Style="{StaticResource SetupTitle}"/>
-                    <TextBlock Style="{StaticResource SetupBody}" Text="會移除輸入法註冊、登入時啟動核心的排程，並刪除全部程式檔案；仍被開啟中程式使用的檔案會在重新登入或重新開機後自動刪除。Windows 會要求系統管理員權限。"/>
+                    <TextBlock Style="{StaticResource SetupBody}" Text="會移除輸入法註冊、啟動核心與檢查更新的排程，並刪除全部程式檔案；仍被開啟中程式使用的檔案會在重新登入或重新開機後自動刪除。Windows 會要求系統管理員權限。"/>
                     <TextBlock Style="{StaticResource SjGroupTitle}" Text="個人資料" Margin="0,8,0,0"/>
                     <Border Style="{StaticResource OptionCard}">
                         <RadioButtons x:Name="DataChoice" SelectedIndex="0" AutomationProperties.Name="個人資料">
