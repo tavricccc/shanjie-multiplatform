@@ -58,6 +58,38 @@ impl State {
         result
     }
 }
+/// A detached session is kept this long for its client to resume.
+const IDLE_SESSION: Duration = Duration::from_secs(300);
+const MAX_SESSIONS: usize = 256;
+/// The session `id`, built when there is none. Building can load the resources for seconds, so it runs outside the
+/// lock: other clients keep opening and resuming. If a retry of the same client got there first, its session stands.
+fn open_or_attach<T>(
+    sessions: &Mutex<HashMap<String, Arc<Mutex<T>>>>,
+    id: &str,
+    keep_detached: impl Fn(&T) -> bool,
+    build: impl FnOnce() -> Option<T>,
+) -> Option<Arc<Mutex<T>>> {
+    {
+        let mut states = sessions.lock().unwrap();
+        states.retain(|_, state| Arc::strong_count(state) > 1 || keep_detached(&state.lock().unwrap()));
+        if let Some(state) = states.get(id) {
+            return Some(state.clone());
+        }
+        if states.len() >= MAX_SESSIONS {
+            return None;
+        }
+    }
+    let built = Arc::new(Mutex::new(build()?));
+    let mut states = sessions.lock().unwrap();
+    if let Some(state) = states.get(id) {
+        return Some(state.clone());
+    }
+    if states.len() >= MAX_SESSIONS {
+        return None;
+    }
+    states.insert(id.to_owned(), built.clone());
+    Some(built)
+}
 pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
     let mut attached: Option<(String, Arc<Mutex<State>>)> = None;
     while let Ok(request) = read::<Request>(&mut pipe) {
@@ -82,38 +114,23 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 {
                     reply(None, None, false)
                 } else {
-                    let mut states = sessions.lock().unwrap();
-                    states.retain(|_, state| {
-                        Arc::strong_count(state) > 1
-                            || state.lock().unwrap().touched.elapsed() < Duration::from_secs(300)
-                    });
-                    let existing = states.get(&id).cloned();
-                    let state = if let Some(state) = existing {
-                        Some(state)
-                    } else if states.len() >= 256 {
-                        None
-                    } else {
-                        Engine::open_local(&data, &config)
-                        .and_then(|mut engine| {
-                            engine.rerank_in_background();
-                            if engine.replay(&replay) {
-                                let mut initial = reply(Some(&engine), None, true);
-                                initial.sequence = sequence;
-                                initial.found = true;
-                                let state = Arc::new(Mutex::new(State {
-                                    config: config.clone(),
-                                    engine,
-                                    sequence,
-                                    cached: initial,
-                                    touched: Instant::now(),
-                                }));
-                                states.insert(id.clone(), state.clone());
-                                Some(state)
-                            } else {
-                                None
-                            }
+                    let state = open_or_attach(&sessions, &id, |state| state.touched.elapsed() < IDLE_SESSION, || {
+                        let mut engine = Engine::open_local(&data, &config)?;
+                        engine.rerank_in_background();
+                        if !engine.replay(&replay) {
+                            return None;
+                        }
+                        let mut initial = reply(Some(&engine), None, true);
+                        initial.sequence = sequence;
+                        initial.found = true;
+                        Some(State {
+                            config: config.clone(),
+                            engine,
+                            sequence,
+                            cached: initial,
+                            touched: Instant::now(),
                         })
-                    };
+                    });
                     if let Some(state) = state {
                         let result = {
                             let state = state.lock().unwrap();
@@ -196,5 +213,67 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
         if write(&mut pipe, &result).is_err() {
             break;
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    type Table = Mutex<HashMap<String, Arc<Mutex<u32>>>>;
+    #[test]
+    fn building_a_session_leaves_the_table_free() {
+        let table = Table::default();
+        let state = open_or_attach(&table, "a", |_| true, || {
+            assert!(table.try_lock().is_ok(), "other clients can open and resume during a load");
+            Some(1)
+        });
+        assert_eq!(*state.unwrap().lock().unwrap(), 1);
+        assert!(table.lock().unwrap().contains_key("a"));
+    }
+    #[test]
+    fn an_existing_session_is_attached_and_not_rebuilt() {
+        let table = Table::default();
+        let first = open_or_attach(&table, "a", |_| true, || Some(1)).unwrap();
+        let again = open_or_attach(&table, "a", |_| true, || panic!("must not rebuild")).unwrap();
+        assert!(Arc::ptr_eq(&first, &again));
+    }
+    #[test]
+    fn a_session_opened_during_the_build_wins() {
+        let table = Table::default();
+        let state = open_or_attach(&table, "a", |_| true, || {
+            table.lock().unwrap().insert("a".into(), Arc::new(Mutex::new(1)));
+            Some(2)
+        });
+        assert_eq!(*state.unwrap().lock().unwrap(), 1);
+    }
+    #[test]
+    fn a_failed_build_leaves_no_session() {
+        let table = Table::default();
+        assert!(open_or_attach(&table, "a", |_| true, || None).is_none());
+        assert!(table.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn the_session_limit_holds_before_and_after_the_build() {
+        let table = Table::default();
+        for index in 0..MAX_SESSIONS {
+            let state = open_or_attach(&table, &index.to_string(), |_| true, || Some(0));
+            std::mem::forget(state);
+        }
+        assert!(open_or_attach(&table, "over", |_| true, || panic!("must not load past the limit")).is_none());
+        table.lock().unwrap().remove("0");
+        let state = open_or_attach(&table, "over", |_| true, || {
+            table.lock().unwrap().insert("0".into(), Arc::new(Mutex::new(0)));
+            Some(1)
+        });
+        assert!(state.is_none());
+    }
+    #[test]
+    fn only_expired_detached_sessions_are_dropped() {
+        let table = Table::default();
+        let attached = open_or_attach(&table, "attached", |_| true, || Some(1)).unwrap();
+        drop(open_or_attach(&table, "detached", |_| true, || Some(1)));
+        drop(open_or_attach(&table, "next", |_| false, || Some(1)));
+        let states = table.lock().unwrap();
+        assert!(states.contains_key("attached") && states.contains_key("next") && !states.contains_key("detached"));
+        drop(attached);
     }
 }
