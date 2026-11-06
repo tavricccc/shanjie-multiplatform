@@ -2,6 +2,13 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.15.4-beta.5（Windows pre-release）
+
+詳見 [0.15.4-beta.5 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.5.md)。
+
+- 核心載入整組模型後的 Private 從約 202 MiB 降到約 161 MiB，載入從約 1.5 秒降到約 1.25 秒；候選與排序結果不變。
+- 再開一個會話從約 0.3 秒降到約 1 毫秒，載入時也不再擋住其他應用程式開啟會話。
+
 ## 0.15.4-beta.4（Windows pre-release）
 
 詳見 [0.15.4-beta.4 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.4.md)。
