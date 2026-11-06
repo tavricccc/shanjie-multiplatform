@@ -486,6 +486,9 @@ int wmain(int argc, wchar_t** argv) {
             } else {candidates->GetSelection(&selection);require(selection==1&&count<=9,1040);}
             press(VK_ESCAPE,1041);press(VK_ESCAPE,1043);
         }
+        // The template turns the single-Shift switch on as upstream does; turned off, Shift passes through untouched.
+        require(WritePrivateProfileStringW(L"shortcuts",L"shift_toggle",L"0",profile.c_str()),116);
+        localNotify(L"Shanjie.ProfileChanged.v2");
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
         std::puts("Original Shanjie profile: none/page/expand candidate navigation and unchanged Shift passed");
     }

@@ -168,7 +168,7 @@
                         </controls:SettingCard>
                         <TextBlock Text="空白鍵操作候選" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="關閉時用 ↓ 開啟選字，空白不開啟或翻動候選（Windows 範本的預設）。開啟後依下方設定操作（善解範本的預設，與上游相同）；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
                             <controls:SettingRow Label="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}"><controls:Segmented Options="↓ 下鍵|空白鍵|↓ 或空白鍵" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
                             <controls:SettingToggle Label="空白換下一頁候選" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="最後一頁再換頁時回到第一頁" Description="適用於空白鍵與設為「下一頁」的右方向鍵。" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>

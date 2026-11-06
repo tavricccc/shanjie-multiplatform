@@ -504,6 +504,15 @@ mod tests {
         }
     }
     #[test]
+    fn shanjie_template_follows_upstream_defaults() {
+        let doc = template(false);
+        for (section, key) in [("candidates", "space_operates"), ("shortcuts", "shift_toggle"), ("input", "learning"),
+            ("input", "caps_lock_english"), ("shortcuts", "forget_candidate")] {
+            assert!(doc.flag(section, key, false), "{key}");
+        }
+        assert_eq!(doc.get("candidates", "open", ""), "both");
+        assert!(doc.flag("candidates", "space_pages", false));
+    }
     fn stale_big5_values_load_harmlessly() {
         let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nlayout=horizontal\n";
         let mut doc = Document::parse(stale).unwrap();
