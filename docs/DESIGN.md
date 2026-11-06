@@ -115,6 +115,12 @@ components:
 
 九頁共用一份草稿，按「儲存」才套用並通知已啟用的實例。開關共用 `SettingToggle`；ComboBox、NumberBox、TextBox 都對應真實設定；InfoBar 顯示儲存結果與格式錯誤，清除學習用 ContentDialog。操作預設只改按鍵、選字與預測，不動詞庫、學習、外觀與模型。「重新啟動輸入法」先保存草稿，再通知各實例提交組字並重載核心，不終止 App。來源：`ui/MainWindow.xaml`、`shared/src/profile.rs`。
 
+### 快速設定
+
+與設定共用一張玻璃，蓋住導覽與內容；頂部是標題、步驟點與視窗按鈕，底部固定略過／上一步／下一步。範本與「保留現況」是卡片，選中時加 2 點藍色邊框與勾選；細節是一次展開一項的清單，收合時顯示目前選擇，右邊的示範跟著展開的那一項與選擇變動。文字用一般人看得懂的話，描述結果，不用設定鍵名。
+
+示範場景裡的候選窗沿用 `candidate.rs` 的配色與比例，字級略小以放得下；格狀與直向清單會截短。組字面板的標記與真實視窗相同：微弱的藍色底，游標在句尾時不標。動畫遵守 Windows 的「動畫效果」設定，關閉時固定在關鍵畫面。
+
 ### 候選與預測
 
 一般項用 `candidate-item`，目前選取用 `candidate-item-selected`，表面依主題用 `candidate-surface`／`candidate-surface-dark`。被動預測沒有序號與反白，Tab 進入後才出現，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號。滑鼠點擊帶原候選索引與 sequence，TSF 拒絕過期點擊。來源：`windows/src/candidate.rs`、`windows/src/tsf/`。

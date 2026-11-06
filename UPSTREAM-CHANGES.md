@@ -34,6 +34,7 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 | TSF 組字、提交、游標、sink、COM lifetime | `windows/src/tsf/` |
 | 候選窗繪製、滑鼠點選、DPI 定位 | `windows/src/candidate.rs`、`tsf/candidates.rs` |
 | 設定檔、詞庫／學習保存、WinUI 綁定、跨實例通知 | `shared/`、`windows/src/profile.rs`、`bridge.rs`、`native.rs`、`ui/` |
+| 快速設定（第一次開啟設定時的範本、細節與動畫示範；標記檔 `quick-setup.txt` 在 `profile.ini` 之外，上游沒有這個流程） | `ui/QuickSetupView.xaml`、`ui/Setup/`、`ui/Controls/TypingDemo.cs` |
 | 中英文之間自動加空格（上游 cjk-spacing，殼層） | `shared/src/spacing.rs`、`tsf/service.rs`、`tsf/keys.rs` |
 | 依 App 自動選聊天／書面（上游 profile-choice） | `shared/src/profile.rs` 的 `ranking`、`tsf/resident.rs` |
 | 語意校正在背景執行（上游 s7c2b 2.1 的 runner） | `windows/src/engine.rs`、`broker/`、`tsf/rerank.rs` |

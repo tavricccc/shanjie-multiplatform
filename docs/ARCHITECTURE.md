@@ -48,6 +48,17 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 更新檢查由 `Shanjie.UI.exe --check-update` 這個短命程序負責，常駐核心不連網。隱藏排程 `ShanjieUpdateCheck`（登入後 2 分鐘、之後每 24 小時）與開啟設定程式都走這個入口。自動檢查關閉、沒有新版或離線時，程序直接結束；排程檢查在這一版 24 小時內已通知過，或系統處於全螢幕或勿擾時也直接結束。開啟設定程式時（`--from-settings`）只要有新版就通知。否則顯示 `UpdateCard`：與設定程式相同的玻璃視窗，以 `WS_EX_NOACTIVATE` 置於主螢幕右下角，不搶焦點，一分鐘後自動關閉。通知時間存在 `update-notice.txt`；出更新的版本不用等 24 小時。「查看更新」以 `--about` 啟動設定程式，已開啟時經單一實例管道轉送 `ABOUT` 請求，保留未儲存的草稿；下載與安裝仍由使用者在「關於」頁操作。
 
+### 快速設定
+
+全新安裝或從舊版升級後，第一次以一般方式開啟設定程式時，主視窗會先蓋上快速設定（`QuickSetupView`）：選範本、調幾個細節、試打。
+
+- **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
+- **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
+- **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿。內容是已存的 profile、範本（與設定頁相同的 `sj_profile_preset`，保留個人鍵）、再加上使用者實際改動的鍵；按「套用」才經 `ProfileStore.Save` 寫入並通知實例。沒有差異就不寫，所以略過與保留現況都不會碰檔案。升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
+- **試打區**：是設定程式裡一般的 TextBox，和個人詞典、聊天 App 清單的欄位一樣由目前的輸入法處理，不另外載入核心；內容不保存。
+
+動畫（`TypingDemo`）是原生 XAML 元素加計時器，沒有影片也沒有新相依。每一格的內容來自真實核心與 `tests/windows_interaction.cpp` 的結果（`QuickSetupDemos`）；Windows 關閉動畫時停在該腳本的關鍵畫面，不跑計時器。
+
 ## 安裝與版本目錄
 
 DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版；刪除一律是真的刪除，不另留備份；使用中刪不掉的檔案（通常是 App 仍載入的 `Shanjie.dll`）只留下那幾個，同時排入 Windows 重新開機刪除，並登記一次性的 SYSTEM 排程 `ShanjieCleanup`（`installer/cleanup_task.rs`），在下次任一使用者登入或開機時只刪那些路徑，完成後自行移除。輸入法清單只經 Windows 的 `InstallLayoutOrTip` 加入或移除善解自己的 TIP（由 Windows 加在最後，缺少中文（台灣）時一併加入），不改寫其他語言與輸入法；之後從 `HKCU\Control Panel\International\User Profile` 讀回，只核對善解的配置。某個語言只剩善解時拒絕解除安裝，因為移除最後一個輸入法會讓 Windows 連語言一起拿掉。變更前保存註冊（含上述清單）、啟動檔案、登入啟動與更新檢查排程，失敗時嘗試完整回復。常駐核心由工作排程器根目錄的隱藏工作 `ShanjieCore` 在任一使用者登入時啟動；安裝時移除舊版的 `Run` 啟動值，解除安裝時一併移除這個排程與 `ShanjieUpdateCheck`。安裝紀錄格式見 [README](../README.md#疑難排解)。
