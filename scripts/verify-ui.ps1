@@ -52,6 +52,18 @@ foreach ($phase in 'first-open','reopen') {
 Stop-CoresOnProfile "$modelOutput/profile"
 Remove-Item -LiteralPath $modelOutput -Recurse -Force
 Write-Host 'Saved model kept across settings restarts.'
+# Quick Setup shows once: separate processes on one isolated profile, like reopening the settings and upgrading.
+$quickOutput = Join-Path $root ('build/ui-quick-setup/' + [guid]::NewGuid().ToString('N'))
+foreach ($phase in 'first-open','reopen','after-upgrade') {
+    if ($phase -eq 'after-upgrade') { Set-Content "$quickOutput/profile/Shanjie/quick-setup.txt" 'shown 0.0.0-older' -Encoding utf8NoBOM }
+    $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickOutput + '"'),$phase -WindowStyle Hidden -PassThru
+    $process.WaitForExit()
+    $result = Get-Content "$quickOutput/result-$phase.txt" -Raw
+    if ($result -ne 'PASS') { throw "Quick Setup $phase`: $result" }
+}
+Stop-CoresOnProfile "$quickOutput/profile"
+Remove-Item -LiteralPath $quickOutput -Recurse -Force
+Write-Host 'Quick Setup showed once across reopening and upgrading.'
 $output = Join-Path $root 'build/ui-review-final'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
 $process.WaitForExit()

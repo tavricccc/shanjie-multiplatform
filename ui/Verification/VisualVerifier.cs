@@ -200,6 +200,7 @@ internal static class VisualVerifier
             settings.ShowAppearance(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-appearance.png"));
             settings.ShowDictionary(); await Task.Delay(350); await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-dictionary.png"));
         }
+        await QuickSetupVerifier.Run(settings, output);
         settings.Close();
     }
 }
