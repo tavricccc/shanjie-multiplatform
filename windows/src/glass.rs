@@ -79,6 +79,13 @@ pub fn dark() -> bool {
         .unwrap_or(false)
 }
 
+/// Lowest tint opacity: with the luminosity layer it lets at most 20% of the backdrop through, which keeps
+/// text readable over any window behind the glass. The density setting spans from here to fully opaque.
+const TINT_FLOOR: f32 = 0.68;
+fn effective_tint(density: f32) -> f32 {
+    TINT_FLOOR + (1.0 - TINT_FLOOR) * density.clamp(0.0, 1.0)
+}
+
 fn argb(a: f32, r: u8, g: u8, b: u8) -> Color {
     Color { A: (255.0 * a).round().clamp(0.0, 255.0) as u8, R: r, G: g, B: b }
 }
@@ -300,7 +307,7 @@ impl Glass {
             self.material.SetBrush(&brush)?;
         }
         let color = |v: &SpriteVisual, value: Color| -> Result<()> { v.Brush()?.cast::<CompositionColorBrush>()?.SetColor(value) };
-        let (t, l) = (tint, LUMINOSITY_OPACITY);
+        let (t, l) = (effective_tint(tint), LUMINOSITY_OPACITY);
         color(&self.tint, if dark { argb(t, 28, 28, 32) } else { argb(t, 246, 246, 248) })?;
         color(&self.luminosity, if dark { argb(l, 10, 10, 12) } else { argb(l, 255, 255, 255) })?;
         let layers = if solid { 0.0 } else { 1.0 };
@@ -512,5 +519,47 @@ pub extern "C" fn sj_glass_solid() -> bool {
 pub extern "C" fn sj_glass_free(glass: *mut Glass) {
     if !glass.is_null() {
         drop(unsafe { Box::from_raw(glass) });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn linear(v: f32) -> f32 {
+        let v = v / 255.0;
+        if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    }
+    fn over(alpha: f32, top: f32, bottom: f32) -> f32 {
+        alpha * top + (1.0 - alpha) * bottom
+    }
+    /// Reads the text colour's alpha and grey from the theme, so a change there is checked too.
+    fn text(theme: &str, key: &str) -> (f32, f32) {
+        let start = theme.find(&format!("x:Key=\"{key}\">#")).unwrap() + key.len() + 10;
+        let hex = |at: usize| u8::from_str_radix(&theme[start + at..start + at + 2], 16).unwrap() as f32;
+        (hex(0) / 255.0, hex(2))
+    }
+    fn contrast(dark: bool, backdrop: f32, key: &str) -> f32 {
+        let xaml = include_str!("../../ui/Themes/Sj.xaml");
+        let theme = &xaml[xaml.find(if dark { "x:Key=\"Dark\"" } else { "x:Key=\"Light\"" }).unwrap()..];
+        let (luminosity, tint) = if dark { (10.0, 28.0) } else { (255.0, 246.0) };
+        let glass = over(effective_tint(0.0), tint, over(LUMINOSITY_OPACITY, luminosity, backdrop));
+        let (alpha, grey) = text(theme, key);
+        let (a, b) = (linear(over(alpha, grey, glass)), linear(glass));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+    #[test]
+    fn text_stays_readable_over_the_worst_backdrop_at_the_lowest_density() {
+        for (dark, backdrop) in [(false, 0.0), (true, 255.0)] {
+            assert!(contrast(dark, backdrop, "SjText1Color") >= 7.0, "text1 dark={dark}");
+            assert!(contrast(dark, backdrop, "SjText2Color") >= 4.5, "text2 dark={dark}");
+            assert!(contrast(dark, backdrop, "SjText3Color") >= 3.0, "text3 dark={dark}");
+        }
+    }
+    #[test]
+    fn density_spans_from_the_floor_to_opaque() {
+        assert_eq!(effective_tint(0.0), TINT_FLOOR);
+        assert_eq!(effective_tint(1.0), 1.0);
+        assert!(effective_tint(0.42) > TINT_FLOOR);
     }
 }

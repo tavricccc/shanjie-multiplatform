@@ -8,8 +8,8 @@
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <Color x:Key="SjText1Color">#EB141418</Color>
-            <Color x:Key="SjText2Color">#9E141418</Color>
-            <Color x:Key="SjText3Color">#6B141418</Color>
+            <Color x:Key="SjText2Color">#C7141418</Color>
+            <Color x:Key="SjText3Color">#9E141418</Color>
             <Color x:Key="SjStrokeColor">#14000000</Color>
             <Color x:Key="SjFillHoverColor">#0B000000</Color>
             <Color x:Key="SjFillSelectedColor">#9EFFFFFF</Color>
@@ -25,7 +25,7 @@
         <ResourceDictionary x:Key="Dark">
             <Color x:Key="SjText1Color">#F0FFFFFF</Color>
             <Color x:Key="SjText2Color">#A3FFFFFF</Color>
-            <Color x:Key="SjText3Color">#66FFFFFF</Color>
+            <Color x:Key="SjText3Color">#73FFFFFF</Color>
             <Color x:Key="SjStrokeColor">#14FFFFFF</Color>
             <Color x:Key="SjFillHoverColor">#0FFFFFFF</Color>
             <Color x:Key="SjFillSelectedColor">#1FFFFFFF</Color>
