@@ -38,3 +38,7 @@ windows = { version = "0.62.2", features = [
 ] }
 
 [workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
