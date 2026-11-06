@@ -45,7 +45,7 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 設定是草稿，按「儲存」才寫入 `%LOCALAPPDATA%\Shanjie\profile.ini` 並通知已啟用的實例。解析、schema 遷移、範本與保存都在 Rust（`shared/`）；讀取只在記憶體中遷移，明確儲存時才備份與寫回。命令列的 `apply-windows.cmd`／`apply-shanjie.cmd` 走同一套邏輯。設定程式跨程序只開一份，重複啟動會轉到既有視窗。
 
-更新檢查由 `Shanjie.UI.exe --check-update` 這個短命程序負責，常駐核心不連網。隱藏排程 `ShanjieUpdateCheck`（登入後 2 分鐘、之後每 24 小時）與開啟設定程式都走這個入口。自動檢查關閉、沒有新版、離線、這一版已通知過，或系統處於全螢幕或勿擾時，程序直接結束。否則顯示 `UpdateCard`：與設定程式相同的玻璃視窗，以 `WS_EX_NOACTIVATE` 置於主螢幕右下角，不搶焦點，一分鐘沒有回應視同「稍後」。紀錄存在 `update-notice.txt`：「稍後」隔天再提醒，「查看更新」與關閉則這一版不再通知，出更新的版本會再通知。「查看更新」以 `--about` 啟動設定程式，已開啟時經單一實例管道轉送 `ABOUT` 請求，保留未儲存的草稿；下載與安裝仍由使用者在「關於」頁操作。
+更新檢查由 `Shanjie.UI.exe --check-update` 這個短命程序負責，常駐核心不連網。隱藏排程 `ShanjieUpdateCheck`（登入後 2 分鐘、之後每 24 小時）與開啟設定程式都走這個入口。自動檢查關閉、沒有新版或離線時，程序直接結束；排程檢查在這一版 24 小時內已通知過，或系統處於全螢幕或勿擾時也直接結束。開啟設定程式時（`--from-settings`）只要有新版就通知。否則顯示 `UpdateCard`：與設定程式相同的玻璃視窗，以 `WS_EX_NOACTIVATE` 置於主螢幕右下角，不搶焦點，一分鐘後自動關閉。通知時間存在 `update-notice.txt`；出更新的版本不用等 24 小時。「查看更新」以 `--about` 啟動設定程式，已開啟時經單一實例管道轉送 `ABOUT` 請求，保留未儲存的草稿；下載與安裝仍由使用者在「關於」頁操作。
 
 ## 安裝與版本目錄
 

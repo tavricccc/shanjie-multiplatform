@@ -6,7 +6,7 @@ namespace Shanjie_UI.Setup;
 
 /// <summary>
 /// 背景更新通知的選擇：自動檢查開關（update-auto.txt）與每個版本的通知紀錄（update-notice.txt）。
-/// 兩者都跟 update-channel.txt 一樣獨立於與核心共用的 profile.ini。「稍後」隔天再提醒，關掉或查看後這一版不再通知，出更新的版本會再通知。
+/// 兩者都跟 update-channel.txt 一樣獨立於與核心共用的 profile.ini。排程檢查同一版一天最多通知一次，出更新的版本不用等；開啟設定程式時只要有新版就通知。
 /// </summary>
 internal sealed class UpdateNotice(string data)
 {
@@ -30,12 +30,10 @@ internal sealed class UpdateNotice(string data)
         try { if (!File.Exists(noticeFile)) return true; saved = File.ReadAllLines(noticeFile); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return true; }
         if (saved.Length != 2 || saved[0] != version) return true;
-        if (saved[1] == "dismissed") return false;
         return !DateTimeOffset.TryParse(saved[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var until) || now >= until;
     }
 
-    internal void Later(string version, DateTimeOffset now) => Save(noticeFile, version + "\n" + (now + Snooze).ToString("O", CultureInfo.InvariantCulture));
-    internal void Dismiss(string version) => Save(noticeFile, version + "\ndismissed");
+    internal void Shown(string version, DateTimeOffset now) => Save(noticeFile, version + "\n" + (now + Snooze).ToString("O", CultureInfo.InvariantCulture));
 
     static void Save(string path, string text)
     {
@@ -43,8 +41,9 @@ internal sealed class UpdateNotice(string data)
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    /// <summary>--check-update：查到該通知的新版就回傳卡片；關閉、已有一張、離線、勿擾或全螢幕時回傳 null，下次排程再查。</summary>
-    internal static async Task<UpdateCard?> Check()
+    /// <summary>--check-update：查到該通知的新版就回傳卡片；關閉、已有一張、離線、今天通知過、勿擾或全螢幕時回傳 null，下次排程再查。
+    /// 使用者剛開啟設定程式（fromSettings）時人就在電腦前，不看今天通知過沒有，也不看勿擾狀態。</summary>
+    internal static async Task<UpdateCard?> Check(bool fromSettings)
     {
         string folder = UpdateService.DataFolder();
         var notice = new UpdateNotice(folder);
@@ -57,15 +56,16 @@ internal sealed class UpdateNotice(string data)
         if (service.State != UpdateState.Available) return null;
         // 測試版通道同時有正式版與測試版時，通知比較新的那個；「關於」頁仍可改選。
         var release = service.Choices[^1];
-        if (!notice.ShouldShow(release.Version, DateTimeOffset.UtcNow) || !AcceptsNotifications()) return null;
-        return new UpdateCard(release, notice);
+        if (!fromSettings && (!notice.ShouldShow(release.Version, DateTimeOffset.UtcNow) || !AcceptsNotifications())) return null;
+        notice.Shown(release.Version, DateTimeOffset.UtcNow);
+        return new UpdateCard(release);
     }
 
     /// <summary>開啟設定程式時也查一次，走同一條路：卡片在獨立程序，設定視窗不用等網路。</summary>
     internal static void CheckInBackground()
     {
         if (!new UpdateNotice(UpdateService.DataFolder()).Enabled) return;
-        try { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--check-update") { UseShellExecute = false })?.Dispose(); }
+        try { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--check-update --from-settings") { UseShellExecute = false })?.Dispose(); }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
