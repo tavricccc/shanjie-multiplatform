@@ -88,6 +88,9 @@ pub struct Checkpoint {
     /// Task Scheduler XML of the logon task, absent in checkpoints written before it existed.
     #[serde(default)]
     task: Option<String>,
+    /// Task Scheduler XML of the update check, absent in checkpoints written before it existed.
+    #[serde(default)]
+    update_task: Option<String>,
 }
 pub struct Native<'a> {
     pub target: &'a Path,
@@ -227,6 +230,7 @@ impl Effects for Native<'_> {
             files: save_files(self.target)?,
             languages: language_list::mask(&language_list::read()?),
             task: logon_task::read()?,
+            update_task: update_task::read()?,
         };
         fs::create_dir_all(self.backup)?;
         atomic_file(
@@ -286,6 +290,9 @@ impl Effects for Native<'_> {
             Phase::Login => {
                 logon_task::register(&logon_task::definition(
                     &self.binaries.join("tools/shanjie-core.exe"),
+                ))?;
+                update_task::register(&update_task::definition(
+                    &self.binaries.join("ui/Shanjie.UI.exe"),
                 ))?;
                 unsafe { remove_run_entry()? };
             }
@@ -363,6 +370,11 @@ impl Effects for Native<'_> {
                 {
                     return Err("登入啟動排程校驗失敗。".into());
                 }
+                if !update_task::read()?.is_some_and(|xml| {
+                    update_task::matches(&xml, &self.binaries.join("ui/Shanjie.UI.exe"))
+                }) {
+                    return Err("更新檢查排程校驗失敗。".into());
+                }
                 atomic_file(&self.backup.join("completed.txt"), b"committed")?;
             }
         }
@@ -394,6 +406,9 @@ impl Effects for Native<'_> {
         }
         if let Err(error) = logon_task::restore(checkpoint.task.as_deref()) {
             failures.push(format!("登入啟動排程：{error}"));
+        }
+        if let Err(error) = update_task::restore(checkpoint.update_task.as_deref()) {
+            failures.push(format!("更新檢查排程：{error}"));
         }
         for file in &checkpoint.files {
             if let Err(error) = restore_file(file) {
