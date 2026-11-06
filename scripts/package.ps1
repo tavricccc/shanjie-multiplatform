@@ -1,5 +1,6 @@
 #Requires -Version 7
-param([switch]$UseExistingBuild)
+# -SkipVerify: for a quick test build only; the installer still checks SHA256SUMS.txt when it installs.
+param([switch]$UseExistingBuild, [switch]$SkipVerify)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/preserve-output.ps1"
@@ -49,8 +50,10 @@ try {
         "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $relative"
     }
     Set-Content "$output/SHA256SUMS.txt" $hashes -Encoding utf8NoBOM
-    & "$output/tools/shanjie-manager.exe" verify-package $output
-    if ($LASTEXITCODE) { throw 'Native package verification failed.' }
+    if (!$SkipVerify) {
+        & "$output/tools/shanjie-manager.exe" verify-package $output
+        if ($LASTEXITCODE) { throw 'Native package verification failed.' }
+    }
     # The only distributed form is the single-file installer: the setup stub carrying this same verified package.
     $setup = Join-Path $root 'dist/Shanjie-Windows-Setup.exe'
     Preserve-Output $setup
