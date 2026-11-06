@@ -89,6 +89,15 @@ pub fn is_punctuation(k: ShanjieKey) -> bool {
 pub fn pending(s: &Snapshot) -> bool {
     s.reading_hint || s.phonetic_pending
 }
+/// What the candidate panel draws. Without the reading panel it only gets what upstream's panel shows: the composition
+/// stays in the App, so a state with no candidates and no hint closes the panel. Hints always draw.
+pub fn panel_view(mut s: Snapshot, reading_panel: bool) -> Snapshot {
+    if !reading_panel && !s.reading_hint {
+        s.preedit.clear();
+        s.cursor = 0;
+    }
+    s
+}
 /// Display-width conversion only; the core retains its original text for switching back.
 pub fn full_width(text: &str) -> String {
     text.chars().map(|c| match c {

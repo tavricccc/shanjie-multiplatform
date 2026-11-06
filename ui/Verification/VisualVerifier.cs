@@ -160,6 +160,8 @@ internal static class VisualVerifier
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");
             settings.Vm.Save(); settings.Vm.Load();
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} persistence failed");
+            bool forced = (mode & 1) != 0;
+            if (settings.Vm.ReadingPanelShown != forced || settings.Vm.CanChooseReadingPanel == forced || settings.Vm.ReadingPanel) throw new InvalidDataException($"Mixed mode {mode} reading panel rule failed");
         }
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
         foreach (bool enabled in new[] { true, false }) {

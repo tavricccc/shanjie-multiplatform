@@ -61,6 +61,15 @@ impl Document {
             }
         }
     }
+    /// The raw-key mixing mode (`[input] mixed_input`): takes effect on Zhuyin keyboards only, whatever the file says.
+    pub fn raw_key_mixing(&self) -> bool {
+        self.number("input", "keyboard", 0) < 3 && self.flag("input", "mixed_input", false)
+    }
+    /// Whether the reading panel shows. Raw-key mixing keeps keys in the composition and its Zhuyin hint in the panel, so it
+    /// forces the panel on at read time; the stored `[candidates] reading_panel` is left alone for when the mode is off.
+    pub fn reading_panel(&self) -> bool {
+        self.raw_key_mixing() || self.flag("candidates", "reading_panel", false)
+    }
     pub fn fuzzy(&self) -> u32 {
         FUZZY_KEYS.iter().enumerate().fold(0, |flags, (bit, key)| flags | (self.flag("engine", key, false) as u32) << bit)
     }
@@ -239,6 +248,7 @@ impl Document {
         if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
             self.set("candidates", "layout", "horizontal");
         }
+        // `reading` is an old switch from before the panel merged with the candidates; `reading_panel` is not it.
         for key in [
             "big5",
             "reading",
@@ -482,6 +492,17 @@ mod tests {
         }
     }
     use super::*;
+    fn template(windows: bool) -> Document {
+        Document::parse(if windows { include_str!("../../profiles/windows.ini") } else { include_str!("../../profiles/shanjie.ini") }).unwrap()
+    }
+    #[test]
+    fn templates_default_to_upstream_mixing_without_the_reading_panel() {
+        for windows in [true, false] {
+            let doc = template(windows);
+            assert!(doc.flag("input", "upstream_english", false) && !doc.flag("input", "mixed_input", true));
+            assert!(!doc.flag("candidates", "reading_panel", true) && !doc.reading_panel());
+        }
+    }
     #[test]
     fn stale_big5_values_load_harmlessly() {
         let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nlayout=horizontal\n";
@@ -493,6 +514,62 @@ mod tests {
         assert!(!import_preset(stale, stale).unwrap().contains("big5"));
     }
     #[test]
+    fn raw_key_mixing_forces_the_reading_panel_without_rewriting_it() {
+        let doc = |keyboard, mixed, upstream, panel| {
+            let mut doc = Document::parse(&format!("[profile]\nschema=9\ninteraction=windows\n[input]\nkeyboard={keyboard}\nmixed_input={mixed}\nupstream_english={upstream}\n[candidates]\nreading_panel={panel}\n")).unwrap();
+            doc.migrate();
+            doc
+        };
+        // Off, upstream only, then the user's own choice.
+        assert!(!doc(0, 0, 0, 0).reading_panel() && !doc(0, 0, 1, 0).reading_panel());
+        assert!(doc(0, 0, 1, 1).reading_panel());
+        // Raw-key mixing alone and together with upstream's, on both Zhuyin layouts; the stored value stays 0.
+        for (keyboard, upstream) in [(0, 0), (0, 1), (1, 0), (2, 0)] {
+            let forced = doc(keyboard, 1, upstream, 0);
+            assert!(forced.reading_panel() && !forced.flag("candidates", "reading_panel", true));
+        }
+        // Pinyin keyboards never run the mode, so nothing forces the panel.
+        assert!(!doc(3, 1, 0, 0).raw_key_mixing() && !doc(3, 1, 0, 0).reading_panel());
+    }
+    #[test]
+    fn migration_keeps_the_new_panel_key_and_explicit_values() {
+        // A profile from before the setting: the key is added off, a stale `reading` is still dropped, explicit values stay.
+        let mut doc = Document::parse("[profile]\nschema=9\ninteraction=shanjie\n[input]\nlearning=0\nmixed_input=0\nupstream_english=0\ncaps_lock_english=0\n[candidates]\nreading=1\nspace_operates=0\n[shortcuts]\nshift_toggle=0\nforget_candidate=0\n").unwrap();
+        doc.migrate();
+        assert!(!doc.0["candidates"].contains_key("reading"));
+        assert_eq!(doc.0["candidates"].get("reading_panel").map(String::as_str), Some("0"));
+        for (section, key) in [("input", "learning"), ("input", "upstream_english"), ("input", "caps_lock_english"),
+            ("candidates", "space_operates"), ("shortcuts", "shift_toggle"), ("shortcuts", "forget_candidate")] {
+            assert!(!doc.flag(section, key, true), "{key}");
+        }
+        // Turned on, it survives further migrations and a shared preset.
+        doc.set("candidates", "reading_panel", 1);
+        doc.migrate();
+        assert!(doc.reading_panel());
+        let shared = export_preset(&doc.content(), "panel").unwrap();
+        assert!(Document::parse(&import_preset("", &shared).unwrap()).unwrap().reading_panel());
+        // Missing keys take the new defaults of the profile's own template.
+        let mut empty = Document::parse("[profile]\nschema=9\ninteraction=windows\n").unwrap();
+        empty.migrate();
+        assert!(empty.flag("input", "upstream_english", false) && !empty.reading_panel());
+    }
+    #[test]
+    fn the_panel_without_the_reading_row_closes_on_composition_alone() {
+        let state = |candidates: &[&str], reading_hint| crate::protocol::Snapshot {
+            preedit: "gj".into(),
+            cursor: 2,
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+            reading_hint,
+            ..Default::default()
+        };
+        let closed = crate::input::panel_view(state(&[], false), false);
+        assert!(closed.preedit.is_empty() && closed.candidates.is_empty(), "nothing left to draw: the panel closes");
+        let listed = crate::input::panel_view(state(&["好"], false), false);
+        assert!(listed.preedit.is_empty() && listed.candidates.len() == 1, "candidates without the sentence row");
+        assert_eq!(crate::input::panel_view(state(&["ㄕㄨ", "gj"], true), false).preedit, "gj", "a hint always draws");
+        let on = crate::input::panel_view(state(&[], false), true);
+        assert!(on.preedit == "gj" && on.cursor == 2);
+    }
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {
         let rows = ["ㄋㄧˇ  你", "ㄏㄠˇ\t好\t-1.25"];

@@ -19,7 +19,7 @@ Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encodi
 $DllRoot = $payload
 $taskProfileRoot=Join-Path $ResultRoot 'profile'
 New-Item -ItemType Directory -Path "$taskProfileRoot/Shanjie" -Force | Out-Null
-$content=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^prediction=.*','prediction=1' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^shift_side=.*','shift_side=2' -replace '(?m)^escape=.*','escape=clear'
+$content=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^prediction=.*','prediction=1' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^shift_side=.*','shift_side=2' -replace '(?m)^escape=.*','escape=clear'
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $results=@()
 try {

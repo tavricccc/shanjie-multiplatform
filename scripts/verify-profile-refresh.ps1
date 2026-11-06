@@ -18,7 +18,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM;& cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log";if($LASTEXITCODE){throw 'Refresh harness compilation failed'}
     foreach($fault in $Faults){foreach($scenario in $Scenarios){
       $folder=Join-Path $out "$fault-$scenario";if(Test-Path $folder){throw 'Use a fresh result directory for fault isolation'};New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
-      $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*','keyboard=1'
+      $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*','keyboard=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
       Set-Content "$folder/profile/Shanjie/profile.ini" $text -Encoding utf8NoBOM
       $env:LOCALAPPDATA="$folder/profile";$env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_HEADLESS='1'
       $env:SHANJIE_TEST_FAULT=if($fault -eq 'none'){$null}else{$fault};$env:SHANJIE_TEST_FAULT_OP='prediction'
