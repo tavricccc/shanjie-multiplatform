@@ -45,7 +45,7 @@ pub fn matches(xml: &str, ui: &Path) -> bool {
         && element(xml, "Arguments").as_deref() == Some(ARGUMENT)
         && element(xml, "GroupId").as_deref() == Some(USERS)
         && xml.contains("<LogonTrigger")
-        && element(xml, "Interval").as_deref() == Some("PT24H")
+        && xml.contains("<Repetition")
 }
 pub fn read() -> Result<Option<String>> {
     unsafe {
@@ -113,7 +113,7 @@ mod tests {
         assert!(matches(&xml, ui));
         assert!(!matches(&xml, old));
         assert!(!matches(&xml.replace(ARGUMENT, "--setup"), ui));
-        assert!(!matches(&xml.replace("PT24H", "PT1H"), ui));
+        assert!(!matches(&xml.replace("Repetition", "Other"), ui));
     }
     #[test]
     fn task_scheduler_accepts_the_definition_without_registering_it() {

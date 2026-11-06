@@ -370,9 +370,15 @@ impl Effects for Native<'_> {
                 {
                     return Err("登入啟動排程校驗失敗。".into());
                 }
-                if !update_task::read()?.is_some_and(|xml| {
-                    update_task::matches(&xml, &self.binaries.join("ui/Shanjie.UI.exe"))
+                let stored = update_task::read()?;
+                if !stored.as_deref().is_some_and(|xml| {
+                    update_task::matches(xml, &self.binaries.join("ui/Shanjie.UI.exe"))
                 }) {
+                    // Rollback removes the task, so keep what Task Scheduler actually stored.
+                    atomic_file(
+                        &self.backup.join("update-task.xml"),
+                        stored.unwrap_or_default().as_bytes(),
+                    )?;
                     return Err("更新檢查排程校驗失敗。".into());
                 }
                 atomic_file(&self.backup.join("completed.txt"), b"committed")?;
