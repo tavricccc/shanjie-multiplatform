@@ -77,7 +77,7 @@ internal static class SetupVerifier
         }
     }
 
-    /// <summary>Which versions get a card: a snooze lasts a day, a dismissal lasts until a newer version.</summary>
+    /// <summary>Scheduled checks show the same version at most once a day; a newer version does not wait.</summary>
     private static void CheckUpdateNotice()
     {
         string folder = Path.Combine(Path.GetTempPath(), "shanjie-notice-" + Guid.NewGuid().ToString("N"));
@@ -87,13 +87,10 @@ internal static class SetupVerifier
             var notice = new UpdateNotice(folder);
             Check(notice.Enabled, "Automatic checks must default to on");
             Check(notice.ShouldShow("1.0.0", now), "A first notice was withheld");
-            notice.Later("1.0.0", now);
-            Check(!notice.ShouldShow("1.0.0", now.AddHours(23)), "Later reminded within the day");
-            Check(new UpdateNotice(folder).ShouldShow("1.0.0", now.AddHours(24)), "Later did not remind the next day");
-            Check(notice.ShouldShow("1.0.1", now.AddHours(1)), "A newer version waited for the older snooze");
-            notice.Dismiss("1.0.0");
-            Check(!notice.ShouldShow("1.0.0", now.AddDays(30)), "A dismissed version came back");
-            Check(notice.ShouldShow("1.0.1", now), "A dismissal hid a newer version");
+            notice.Shown("1.0.0", now);
+            Check(!notice.ShouldShow("1.0.0", now.AddHours(23)), "Shown twice within the day");
+            Check(new UpdateNotice(folder).ShouldShow("1.0.0", now.AddHours(24)), "Not shown again the next day");
+            Check(notice.ShouldShow("1.0.1", now.AddHours(1)), "A newer version waited for the older notice");
             File.WriteAllText(Path.Combine(folder, "update-notice.txt"), "garbage");
             Check(notice.ShouldShow("1.0.0", now), "An unreadable record withheld the notice");
             notice.Enabled = false;
@@ -106,11 +103,10 @@ internal static class SetupVerifier
 
     private static async Task CaptureUpdateCard(string output)
     {
-        string folder = Path.Combine(Path.GetTempPath(), "shanjie-notice-" + Guid.NewGuid().ToString("N"));
         var release = new UpdateRelease("0.16.0-beta.12", "", new DateTimeOffset(2026, 11, 5, 0, 0, 0, TimeSpan.Zero), 90_000_000, "http://127.0.0.1/", true);
         foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
         {
-            var card = new UpdateCard(release, new UpdateNotice(folder));
+            var card = new UpdateCard(release);
             card.SetThemeForVerification(theme);
             card.Host.AppWindow.Move(new PointInt32(-12000, -12000));
             card.Host.AppWindow.Show(false);

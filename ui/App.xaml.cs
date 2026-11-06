@@ -108,11 +108,11 @@ public partial class App : Application
             }
             catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
         }
-        else if (arguments.Length == 2 && arguments[1] == "--check-update")
+        else if (arguments.Length is 2 or 3 && arguments[1] == "--check-update")
         {
             // Runs unattended: anything going wrong just waits for the next scheduled check.
             try {
-                var card = await Setup.UpdateNotice.Check();
+                var card = await Setup.UpdateNotice.Check(arguments.Length == 3 && arguments[2] == "--from-settings");
                 if (card is null) { Exit(); return; }
                 window = card; card.Host.Show();
             }

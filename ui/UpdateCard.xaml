@@ -6,7 +6,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="28" Height="28"/>
             <TextBlock Grid.Column="1" Text="善解有新版本" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SjText1Brush}"/>
-            <Button Grid.Column="2" Style="{StaticResource SjIconButton}" Click="Dismiss" ToolTipService.ToolTip="這一版不再通知" AutomationProperties.Name="這一版不再通知"><controls:Icon Glyph="close" Width="16" Height="16" Foreground="{ThemeResource SjText1Brush}"/></Button>
+            <Button Grid.Column="2" Style="{StaticResource SjIconButton}" Click="Later" ToolTipService.ToolTip="關閉" AutomationProperties.Name="關閉"><controls:Icon Glyph="close" Width="16" Height="16" Foreground="{ThemeResource SjText1Brush}"/></Button>
         </Grid>
         <StackPanel Grid.Row="1" Spacing="3" Padding="0,0,6,0">
             <TextBlock x:Name="VersionText" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}" TextTrimming="CharacterEllipsis"/>
