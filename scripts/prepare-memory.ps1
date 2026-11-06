@@ -16,3 +16,8 @@ Set-Overlay 'lib.rs' 'lex.words.shrink_to_fit();' "lex.words.shrink_to_fit();`n 
 Set-Overlay 'digits.rs' 'let (mut prefixes, mut han) = (HashSet::new(), HashSet::new());' "let (mut prefixes, mut han) = (HashSet::new(), HashSet::<String>::new());`n        let mut expanded: HashSet<&'a str> = HashSet::new();"
 Set-Overlay 'digits.rs' 'for s in &syls {' 'for s in syls.iter().filter(|s| expanded.insert(**s)) {'
 Set-Overlay 'digits.rs' 'han.extend(syls.iter().map(|s| s.to_string()));' "for s in &syls {`n                    if !han.contains(*s) {`n                        han.insert(s.to_string());`n                    }`n                }"
+# The words only the overlay and packs have, kept for the colloquial term's k.
+Set-Overlay 'colloquial.rs' 'overlay_only: HashSet<String>,' 'overlay_only: WordSet,'
+Set-Overlay 'colloquial.rs' 'Ok(Colloquial { lm, n1, overlay_only })' 'Ok(Colloquial { lm, n1, overlay_only: WordSet::new(overlay_only) })'
+$root = Split-Path $PSScriptRoot -Parent
+Add-Content (Join-Path $CorePath 'src/colloquial.rs') (Get-Content "$root/platform/word_set_windows.rs" -Raw)
