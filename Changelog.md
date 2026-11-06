@@ -2,6 +2,13 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.15.4-beta.4（Windows pre-release）
+
+詳見 [0.15.4-beta.4 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.4.md)。
+
+- 新增自動檢查更新（預設開啟）：有新版時在右下角顯示通知卡片，不自動下載；可在「關於」關閉。
+- 改善玻璃視窗在深色或鮮豔背景上的文字可讀性：玻璃設有最低濃度，既有濃度值看起來會比以前濃。
+
 ## 0.15.4-beta.3（Windows pre-release）
 
 詳見 [0.15.4-beta.3 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.3.md)。
