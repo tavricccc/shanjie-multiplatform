@@ -17,6 +17,9 @@
 | `core/src/engine.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、注音順序混打與容錯、Enter 只提交游標前。上游英文段、英文字的寫法選單、數字串進行中直接交給上游。注音順序混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
 | `core/src/engine.rs` 資源 | 常駐快取共用不可變詞庫、詞包、數字表、模型、會意與常談；詞庫快取鍵含所選詞包與 `names-add.tsv`、`digits.tsv`、`acg-add.tsv`、`quotes-add.tsv`、`it-add.tsv`，模型快取鍵含詞類表、KN 與兩個 trigram 表。命中快取時照上游 `load_lm`／`load_tinylm` 重設小模型、英文與數字快取 | `prepare-resident.ps1`、`platform/resident_windows.rs` |
 | `core/src/trigram.rs` | Windows 的 `Mapped` 改用與模型陣列相同的唯讀映射；`.winmap` 旁的 `trigram.sjt3`（書面）與 `trigram-chat.sjt3`（聊天）各自存在才載入，壞檔拒絕 | `prepare-trigram.ps1`、`platform/mapped_windows.rs` |
+| `core/src/predict.rs`、`core/src/lib.rs` | 預測索引與詞庫建好後收掉 `Vec` 多配的容量；內容不變 | `prepare-memory.ps1` |
+| `core/src/digits.rs` | `Legal::new` 每個音節只展開一次；產生的集合不變 | `prepare-memory.ps1` |
+| `core/src/colloquial.rs` | `overlay_only` 由 `HashSet<String>` 改為單一排序字串；查詢結果不變 | `prepare-memory.ps1`、`platform/word_set_windows.rs` |
 | `core/src/ffi.rs` | 追加 Windows 專用的候選、輸入選項、標點、預測列查詢 ABI；不改上游既有簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
 | `core/Cargo.toml` | 產生的 core 可獨立建置，加入模型轉換工具 | `prepare-core.ps1`、`platform/map_model.rs` |
 
