@@ -365,6 +365,12 @@ impl Glass {
         self.root.SetTransformMatrix(Matrix4x4 { M11: dpi, M22: dpi, M33: 1.0, M44: 1.0, ..Default::default() })?;
         let (left, bottom) = ((MARGIN * dpi).round() as i32, (MARGIN_BOTTOM * dpi).round() as i32);
         unsafe {
+            // A window that never activates gets no chance to re-seat the glass, so a topmost panel needs
+            // topmost glass: otherwise any window taking focus lands between the two and hides the glass.
+            let topmost = WINDOW_EX_STYLE(GetWindowLongW(above, GWL_EXSTYLE) as u32).contains(WS_EX_TOPMOST);
+            if topmost {
+                SetWindowPos(self.window, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER)?;
+            }
             SetWindowPos(
                 self.window,
                 Some(above),
