@@ -48,8 +48,6 @@ int wmain(int argc,wchar_t** argv) {
         auto code=store->text;store->externalCaret((LONG)before.size());
         MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
-        press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
-        require(store->text==before+L"，一",945);
     }else if(scenario==L"numpad"){
         for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
         for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);

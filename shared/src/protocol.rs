@@ -38,7 +38,6 @@ pub struct Config {
     pub ranking: u32,
     pub right: bool,
     pub learning: bool,
-    pub big5: bool,
     pub dictionary: String,
     pub prediction: bool,
     #[serde(default = "on")]
@@ -71,7 +70,6 @@ impl Default for Config {
             ranking: 0,
             right: true,
             learning: false,
-            big5: false,
             dictionary: "dictionary.tsv".into(),
             prediction: true,
             acg: true,
@@ -95,7 +93,6 @@ impl Config {
             ranking: p.ranking(None),
             right: p.get("candidates", "anchor", "right") == "right",
             learning: p.flag("input", "learning", true),
-            big5: p.flag("candidates", "big5", false),
             dictionary: p.get("input", "dictionary", "dictionary.tsv").to_owned(),
             prediction: p.flag("engine", "prediction", true),
             acg: p.flag("engine", "acg_pack", true),

@@ -255,8 +255,8 @@ impl Special {
         let ch = char::from_u32(k.ch).unwrap_or('\0');
         if self.mode == 1 && k.kind == 1 && k.modifiers & 30 == 0 {
             let lower = ch.to_ascii_lowercase();
-            if p.flag("shortcuts", "code_input", true) && (lower == 'u' || lower == 'b') {
-                self.mode = if lower == 'u' { 2 } else { 3 };
+            if p.flag("shortcuts", "code_input", true) && lower == 'u' {
+                self.mode = 2;
                 return self.view();
             }
             if p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows") {
@@ -271,28 +271,22 @@ impl Special {
                 }
             }
         }
-        if [2, 3].contains(&self.mode)
+        if self.mode == 2
             && k.kind == 1
             && k.modifiers & 30 == 0
             && ch.is_ascii_hexdigit()
         {
-            if self.digits.len() < if self.mode == 2 { 6 } else { 4 } {
+            if self.digits.len() < 6 {
                 self.digits.push(ch);
             }
             return self.view();
         }
         if [2, 3].contains(&k.kind) && !self.digits.is_empty() {
             let code = u32::from_str_radix(&self.digits, 16).unwrap();
-            let text = if self.mode == 2 {
-                char::from_u32(code)
-                    .filter(|c| *c != '\0')
-                    .map(|c| c.to_string())
-                    .unwrap_or_default()
-            } else if self.digits.len() == 4 {
-                big5_text(code)
-            } else {
-                String::new()
-            };
+            let text = char::from_u32(code)
+                .filter(|c| *c != '\0')
+                .map(|c| c.to_string())
+                .unwrap_or_default();
             if !text.is_empty() {
                 self.clear();
                 return Snapshot {
@@ -625,58 +619,6 @@ impl Pinyin {
         Some(s)
     }
 }
-/// Big5 (code page 950) two-byte code to text; an invalid pair yields an empty string.
-#[cfg(windows)]
-fn big5_text(code: u32) -> String {
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn MultiByteToWideChar(page: u32, flags: u32, text: *const u8, length: i32, output: *mut u16, capacity: i32) -> i32;
-    }
-    const MB_ERR_INVALID_CHARS: u32 = 8;
-    let bytes = [(code >> 8) as u8, code as u8];
-    let mut wide = [0u16; 2];
-    let len = unsafe {
-        MultiByteToWideChar(950, MB_ERR_INVALID_CHARS, bytes.as_ptr(), 2, wide.as_mut_ptr(), 2)
-    };
-    String::from_utf16(&wide[..len as usize]).unwrap()
-}
-/// Big5 (CP950) two-byte code to text through glibc iconv; an invalid pair yields an empty string.
-#[cfg(unix)]
-fn big5_text(code: u32) -> String {
-    use std::ffi::{c_char, c_void};
-    extern "C" {
-        fn iconv_open(to: *const c_char, from: *const c_char) -> *mut c_void;
-        fn iconv(
-            cd: *mut c_void,
-            input: *mut *mut c_char,
-            input_left: *mut usize,
-            output: *mut *mut c_char,
-            output_left: *mut usize,
-        ) -> usize;
-        fn iconv_close(cd: *mut c_void) -> i32;
-    }
-    let bytes = [(code >> 8) as u8, code as u8];
-    let mut output = [0u8; 8];
-    unsafe {
-        let cd = iconv_open(c"UTF-8".as_ptr(), c"CP950".as_ptr());
-        if cd as isize == -1 {
-            return String::new();
-        }
-        let mut input = bytes.to_vec();
-        let (mut input_ptr, mut input_left) = (input.as_mut_ptr().cast::<c_char>(), input.len());
-        let (mut output_ptr, mut output_left) =
-            (output.as_mut_ptr().cast::<c_char>(), output.len());
-        let ok = iconv(cd, &mut input_ptr, &mut input_left, &mut output_ptr, &mut output_left)
-            != usize::MAX
-            && input_left == 0;
-        iconv_close(cd);
-        if ok {
-            String::from_utf8_lossy(&output[..output.len() - output_left]).into_owned()
-        } else {
-            String::new()
-        }
-    }
-}
 
 #[cfg(test)]
 mod special_tests {
@@ -690,6 +632,15 @@ mod special_tests {
             let result = special.key(ShanjieKey { kind: 1, ch: 44, modifiers: 0 }, &prefs);
             assert_eq!(result.commit, if expected { "，" } else { "" });
         }
+    }
+    #[test]
+    fn backquote_b_is_not_a_code_input() {
+        let prefs = Document::default();
+        let mut special = Special::default();
+        let mut commit = String::new();
+        for ch in "`bA440".chars() { commit += &special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs).commit; }
+        commit += &special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit;
+        assert!(!commit.contains('一'));
     }
     #[test]
     fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {

@@ -37,7 +37,6 @@ const FLAGS: &[(&str, &str, fn(bool) -> bool)] = &[
     ("input", "upstream_english", |_| false),
     ("input", "english_inline", |_| true),
     ("input", "context", |_| true),
-    ("candidates", "big5", |_| false),
     ("input", "standalone_tones", |w| !w),
     ("input", "space_inputs_zhuyin", |_| true),
     ("candidates", "enter_commits", |w| w),

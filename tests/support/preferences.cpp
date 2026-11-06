@@ -22,7 +22,7 @@ Preferences loadPreferences() {
     FLAG(spaceAfterCommit,"input","space_after_commit");FLAG(pinyinSpaceConverts,"input","pinyin_space_converts");
     FLAG(spacePages,"candidates","space_pages");FLAG(backquoteSymbols,"shortcuts","backquote_symbols");FLAG(codeInput,"shortcuts","code_input");
     FLAG(learning,"input","learning");FLAG(associations,"input","associations");FLAG(alphanumeric,"input","alphanumeric");
-    FLAG(big5,"candidates","big5");FLAG(enterCommits,"candidates","enter_commits");FLAG(upCycles,"candidates","up_cycles");
+    FLAG(enterCommits,"candidates","enter_commits");FLAG(upCycles,"candidates","up_cycles");
     FLAG(backspaceDeletes,"candidates","backspace_deletes");FLAG(wrapPages,"candidates","wrap_pages");FLAG(symbolKeyboard,"shortcuts","symbol_keyboard");
     FLAG(shiftPunctuation,"input","shift_punctuation");FLAG(plainPunctuation,"input","plain_punctuation");FLAG(standaloneTones,"input","standalone_tones");
     FLAG(ctrlBackslash,"shortcuts","ctrl_backslash");FLAG(forgetCandidate,"shortcuts","forget_candidate");FLAG(modeIndicator,"appearance","mode_indicator");

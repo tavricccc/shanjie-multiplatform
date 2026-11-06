@@ -106,7 +106,7 @@
                             <controls:SettingToggle Label="Ctrl＋標點輸入全形標點" Description="例如 Ctrl＋逗號輸入 ，；需要 Shift 的符號，仍要一起按 Shift。" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋反斜線輸入頓號" Description="善解原有操作；Ctrl 標點開啟時也能輸入頓號。" IsOn="{x:Bind Vm.CtrlBackslash, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="反引號＋標點輸入全形標點" IsOn="{x:Bind Vm.BackquoteSymbols, Mode=TwoWay}"/>
-                            <controls:SettingToggle Label="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
+                            <controls:SettingToggle Label="反引號＋U 輸入 Unicode" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋Alt＋逗號開啟符號鍵盤" IsOn="{x:Bind Vm.SymbolKeyboard, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="Windows 標誌鍵與一般 App 的 Ctrl／Alt 快捷鍵交由系統及 App 處理。"/>
@@ -171,10 +171,6 @@
                             <controls:SettingRow Label="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}"><controls:Segmented Options="↓ 下鍵|空白鍵|↓ 或空白鍵" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
                             <controls:SettingToggle Label="空白換下一頁候選" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="最後一頁再換頁時回到第一頁" Description="適用於空白鍵與設為「下一頁」的右方向鍵。" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
-                        </controls:SettingCard>
-                        <TextBlock Text="字元集" Style="{StaticResource SjGroupTitle}"/>
-                        <controls:SettingCard>
-                            <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
                         </controls:SettingCard>
                     </StackPanel>
                     <StackPanel x:Name="Appearance" Visibility="Collapsed">

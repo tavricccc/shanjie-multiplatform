@@ -266,7 +266,6 @@ pub unsafe extern "C" fn sj_engine_new(
         ranking,
         right: flags & 1 != 0,
         learning: flags & 2 != 0,
-        big5: flags & 4 != 0,
         dictionary: text(dictionary).into(),
         prediction: flags & 8 != 0,
         ..Default::default()

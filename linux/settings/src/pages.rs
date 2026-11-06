@@ -225,7 +225,7 @@ fn keys(ui: &Shared) -> Vec<adw::PreferencesGroup> {
     symbols.add(&switch(ui, "Ctrl＋標點輸入全形標點", "例如 Ctrl＋逗號輸入 ，；需要 Shift 的符號，仍要一起按 Shift。", "shortcuts", "ctrl_punctuation"));
     symbols.add(&switch(ui, "Ctrl＋反斜線輸入頓號", "善解原有操作；Ctrl 標點開啟時也能輸入頓號。", "shortcuts", "ctrl_backslash"));
     symbols.add(&switch(ui, "反引號＋標點輸入全形標點", "", "shortcuts", "backquote_symbols"));
-    symbols.add(&switch(ui, "反引號＋U／B 輸入 Unicode／Big5", "", "shortcuts", "code_input"));
+    symbols.add(&switch(ui, "反引號＋U 輸入 Unicode", "", "shortcuts", "code_input"));
     symbols.add(&switch(ui, "Ctrl＋Alt＋逗號開啟符號鍵盤", "", "shortcuts", "symbol_keyboard"));
     vec![width, symbols]
 }
@@ -312,9 +312,7 @@ fn candidates(ui: &Shared) -> Vec<adw::PreferencesGroup> {
     enabled(ui, &wrap, |d| d.flag("candidates", "space_operates") && d.flag("candidates", "space_pages"));
     space.add(&wrap);
 
-    let charset = group("字元集", "");
-    charset.add(&switch(ui, "候選只顯示 Big5 字元集", "同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。", "candidates", "big5"));
-    vec![operation, space, charset]
+    vec![operation, space]
 }
 
 fn appearance(ui: &Shared) -> Vec<adw::PreferencesGroup> {

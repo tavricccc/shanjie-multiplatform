@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 26] = [
+pub const REBUILD: [(&str, &str); 25] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -34,7 +34,6 @@ pub const REBUILD: [(&str, &str); 26] = [
     ("input", "english_key_order"),
     ("candidates", "anchor"),
     ("input", "learning"),
-    ("candidates", "big5"),
     ("input", "dictionary"),
     ("input", "context"),
     ("input", "mixed_input"),
@@ -241,6 +240,7 @@ impl Document {
             self.set("candidates", "layout", "horizontal");
         }
         for key in [
+            "big5",
             "reading",
             "tab_expands",
             "right_expands",
@@ -326,14 +326,13 @@ pub fn dictionary_content(text: &str) -> Result<String> {
     Ok(content)
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
-const PERSONAL: [(&str, &[&str]); 4] = [
+const PERSONAL: [(&str, &[&str]); 3] = [
     ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
         "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
-    ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 8] = [
@@ -483,6 +482,17 @@ mod tests {
         }
     }
     use super::*;
+    #[test]
+    fn stale_big5_values_load_harmlessly() {
+        let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nlayout=horizontal\n";
+        let mut doc = Document::parse(stale).unwrap();
+        doc.migrate();
+        assert!(!doc.0["candidates"].contains_key("big5"));
+        assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
+        assert!(!preset(stale, true).unwrap().contains("big5"));
+        assert!(!import_preset(stale, stale).unwrap().contains("big5"));
+    }
+    #[test]
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {
         let rows = ["ㄋㄧˇ  你", "ㄏㄠˇ\t好\t-1.25"];

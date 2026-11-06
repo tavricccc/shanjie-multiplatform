@@ -100,9 +100,7 @@ impl Engine {
             e.operation(|h, o| shanjie_engine_set_rerank(h, engine.rerank as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank_level(h, engine.rerank_level, o))?;
             e.operation(|h, o| shanjie_engine_set_profile(h, engine.ranking, o))?;
-            if shanjie_windows_set_candidate_anchor(e.handle, engine.right as u32) != 0
-                || shanjie_windows_set_candidate_charset(e.handle, engine.big5 as u32) != 0
-            {
+            if shanjie_windows_set_candidate_anchor(e.handle, engine.right as u32) != 0 {
                 return None;
             }
             if engine.learning {

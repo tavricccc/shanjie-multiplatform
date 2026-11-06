@@ -73,7 +73,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
     [ObservableProperty] public partial string InstalledKeyboardHelp { get; set; } = "";
-    [ObservableProperty] public partial bool Big5 { get; set; }
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
     public Models.PunctuationKey[] ShiftKeys { get; } = Models.PunctuationKey.ShiftRow();
     public Models.PunctuationKey[] PlainKeys { get; } = Models.PunctuationKey.PlainRow();

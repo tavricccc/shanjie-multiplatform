@@ -74,7 +74,7 @@ public partial class SettingsViewModel
             MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishOverwrite = profile.Flag("input", "english_overwrite", true); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
-            UseContext = profile.Flag("input", "context", true); Big5 = profile.Flag("candidates", "big5", false);
+            UseContext = profile.Flag("input", "context", true);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
             SpaceInputsZhuyin = profile.Flag("input", "space_inputs_zhuyin", true);
@@ -156,7 +156,7 @@ public partial class SettingsViewModel
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
-            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","right_action",new[] { "none", "page", "expand" }[RightAction]), ("candidates","big5",Big5), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
+            ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","right_action",new[] { "none", "page", "expand" }[RightAction]), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
             ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
