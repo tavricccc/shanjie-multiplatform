@@ -121,7 +121,7 @@ components:
 
 ### 混打注音提示
 
-Windows 注音順序混打時，原始按鍵（如 `gj`）留在組字區，`mixed-reading-hint` 顯示 `ㄕㄨ`：同一個候選視窗與尺寸，藍底白字，沒有序號，不能點選。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`。
+原鍵混打時，原始按鍵（如 `gj`）留在組字區，`mixed-reading-hint` 顯示 `ㄕㄨ`：同一個候選視窗與尺寸，藍底白字，沒有序號，不能點選。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`。
 
 ### 圖示與中英模式提示
 

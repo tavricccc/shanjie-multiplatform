@@ -2,7 +2,7 @@
 
 使用 [善解](https://github.com/Nanako0129/shanjie) v0.6.1 Release，實際 commit 以 `UPSTREAM.json` 為準；內建模型組與上游 App 相同，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
 
-`upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、注音順序混打等都是核心行為變更，不是改設定就能做到。
+`upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。
 
 ## 核心覆蓋
 
@@ -12,9 +12,9 @@
 | `core/src/learn_store.rs` | 紀錄格式、欄位驗證沿用上游；檔案處理改用 Windows 原子替換與同步。忘記詞時 flush 失敗仍替換檔案，寫入失敗刪除暫存檔 | `platform/learning_windows.rs` |
 | `core/src/learn.rs` | 日期改用 Win32 API；計分與衰減不變 | `platform/clock_windows.rs` |
 | `core/src/lm.rs` | 9 個模型陣列與 3 個詞類陣列改為唯讀映射；`.winmap`（SJWM0002）專用讀取與來源雜湊核對 | `prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
-| `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、Big5 篩選、聯想、預測列種類查詢；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
+| `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、聯想、預測列種類查詢；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字 | `prepare-keys.ps1`、`platform/key_options_windows.rs` |
-| `core/src/engine.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、注音順序混打與容錯、Enter 只提交游標前。上游英文段、英文字的寫法選單、數字串進行中直接交給上游。注音順序混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
+| `core/src/engine.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、原鍵混打與容錯、Enter 只提交游標前。上游英文段、英文字的寫法選單、數字串進行中直接交給上游。原鍵混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
 | `core/src/engine.rs` 資源 | 常駐快取共用不可變詞庫、詞包、數字表、模型、會意與常談；詞庫快取鍵含所選詞包與 `names-add.tsv`、`digits.tsv`、`acg-add.tsv`、`quotes-add.tsv`、`it-add.tsv`，模型快取鍵含詞類表、KN 與兩個 trigram 表。命中快取時照上游 `load_lm`／`load_tinylm` 重設小模型與英文快取；上游每個引擎各建一份的數字表快取（合法讀音與字詞讀音）改由同一詞庫與模型的引擎共用 | `prepare-resident.ps1`、`platform/resident_windows.rs` |
 | `core/src/trigram.rs` | Windows 的 `Mapped` 改用與模型陣列相同的唯讀映射；`.winmap` 旁的 `trigram.sjt3`（書面）與 `trigram-chat.sjt3`（聊天）各自存在才載入，壞檔拒絕 | `prepare-trigram.ps1`、`platform/mapped_windows.rs` |
 | `core/src/predict.rs`、`core/src/lib.rs` | 預測索引與詞庫建好後收掉 `Vec` 多配的容量；內容不變 | `prepare-memory.ps1` |
@@ -44,12 +44,12 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 
 個人詞典按「讀音＋字詞」替換相同的內建列，其他讀音保留；保留被替換列原有的 `manual` 保護與詞包標記，不把合法重複詞條當成整個詞庫載入失敗。出貨的詞庫／詞包與測試用 `data`、`eval` 由固定 Git commit 匯出，強制停用該次匯出的換行轉換，避免 Windows checkout 的 CRLF 使數字表失效或參考結果比對失敗；不修改上游子模組。
 
-上游數字串開啟時，Windows 的待處理查詢會包含它，讓 Space 仍交給核心決定數字或第一聲。數字串結束並留下未完成注音時，以上游記錄的完整按鍵順序恢復 Windows 混打與原始讀音紀錄；當次顯示字元只套用到同一英文字母的大小寫，不覆蓋回放的數字。新數字串接手後重建輸出，避免同一按鍵同時顯示在原始字串與數字緩衝區。不關閉上游數字判斷，也不改變混打預設。
+上游數字串開啟時，Windows 的待處理查詢會包含它，讓 Space 仍交給核心決定數字或第一聲。數字串結束並留下未完成注音時，以上游記錄的完整按鍵順序恢復原鍵混打與原始讀音紀錄；當次顯示字元只套用到同一英文字母的大小寫，不覆蓋回放的數字。新數字串接手後重建輸出，避免同一按鍵同時顯示在原始字串與數字緩衝區。不關閉上游數字判斷，也不改變混打預設。
 
 ## 與上游行為仍不同之處
 
 - Windows 範本預設開啟「反引號＋標點」，善解範本仍關閉；缺省判斷依互動模式。schema < 9 的 Windows 設定一次改為開啟，包含舊版手動關閉的值（INI 無法分辨設定來源）；schema 9 後保留關閉。支援 Shift 數字列符號、減號／底線與波浪號；一般 Ctrl 標點的可用按鍵不變。
-- 反引號特殊輸入優先於拼音處理；進入時先提交原有拼音組字，再清理拼音與原始讀音暫存。Unicode／Big5 內碼不受拼音攔截，宿主在特殊模式內的選取通知不重寫組字顯示。
+- 反引號特殊輸入優先於拼音處理；進入時先提交原有拼音組字，再清理拼音與原始讀音暫存。Unicode 內碼不受拼音攔截，宿主在特殊模式內的選取通知不重寫組字顯示。
 - Windows 的全／半形切換立即更新組字顯示，提交與失焦送出採相同轉換；ASCII `!`–`~` 對應 `U+FF01`–`U+FF5E`，空白對應 `U+3000`，中文標點不變。核心保留原字元，切回半形可還原組字中的 ASCII。
 
 - 善解範本（`profiles/shanjie.ini`）與上游 App 一樣開啟上游英文詞表；Windows 範本（微軟注音風格）不開。
@@ -63,7 +63,12 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 - 中英文自動加空格：上游只在可讀游標前文且學習未暫停時取開頭字元；Windows 在未組字時讀游標前文（「使用游標前文」關閉時，只有這個開關開著才讀）。
 - 上游的 App 內「學習暫停（安全輸入／此 App）」與「不要備份選字記憶」是 macOS 殼層功能，Windows 沒有對應。
 - 上游 0.6.1 把「依按鍵順序判斷英文」預設改為開；新設定檔照上游，既有設定檔保留原本的值（多半是關）。
-- 上游 0.6.1 的「單按 Shift 切換中英」（`shanjie_engine_set_ascii`，每個 App 各自記住）沒有接上；Windows 沿用自己的 Shift 切換。
+- 上游 0.6.1 的「單按 Shift 切換中英」（`shanjie_engine_set_ascii`，每個 App 各自記住）沒有接上；Windows 沿用自己的 Shift 切換，兩個範本預設都開。
+- 組字面板（`[candidates] reading_panel`）是 Windows 專屬，**原鍵混打需要它**，兩個範本預設關閉。關閉時與上游相同：組字只在 App 內，沒有候選也沒有提示就不顯示面板。開啟後在候選窗位置顯示整句組字，好處是游標移進句子時會標出游標所在的字，使用者可依需要開啟；游標在句尾時不標，上游沒有這個面板。
+- 原鍵混打（`[input] mixed_input`，鍵名不變）是 Windows 專屬的混打方式：按鍵排不成合法注音就當英文，原始按鍵留在組字區，面板提示注音，聲調完成後轉中文，Enter 保留原文。選用（含兩者並用）時組字面板固定開啟，不改寫 `reading_panel` 的值，離開這個模式就回到原值。
+- 候選中 Tab：上游是關閉候選並繼續處理這個鍵（`core` 的兜底分支）。Windows 操作預設的 Tab 與 → 共用 `[candidates] right_action`，範本預設 `expand` 且候選直式，對齊微軟注音；善解操作預設的 Tab 與上游相同。
+- 範本預設：兩個範本的混打方式都是上游判斷（`upstream_english=1`、`mixed_input=0`），上游判斷不支援的配置（倚天、拼音）沒有作用。善解範本改成與上游相同：`space_operates=1`（空白開候選、候選中換頁）、`shift_toggle=1`、`learning=1`、`caps_lock_english=1`、`forget_candidate=1`（上游 ⌘⌫，Windows 是 Ctrl＋Shift＋Backspace）。只影響新設定檔與缺少的鍵，已存的值不改。
+- 善解範本仍與上游不同：`add_word=1`（雙 Ctrl 加詞，上游沒有）；`glass_tint=42`（上游 0，Windows 玻璃視窗有最低濃度，候選窗不讀它）；上游「瀏覽器第一個字不顯示預測」與英文段提示「空白：英文斷開」Windows 沒有。
 - 「自動檢查更新」是 Windows 設定頁「關於」的選項，預設開，存在 `%LOCALAPPDATA%\Shanjie\update-auto.txt`，不在 `profile.ini`，上游沒有對應。開啟時由隱藏排程 `ShanjieUpdateCheck` 在登入與之後每 24 小時向 GitHub 查詢，排程同一版一天最多通知一次，開啟設定程式時只要有新版就通知；都不自動下載。
 - Windows 的玻璃視窗（設定、安裝、更新卡片）有最低濃度，任何背景最多透出 20%，「玻璃濃度」從這個下限調到不透明，避免深色背景蓋過文字；次要文字也加深。
 - 「更新通道」是 Windows 設定頁「關於」的選項（正式版／測試版），存在 `%LOCALAPPDATA%\Shanjie\update-channel.txt`，不在 `profile.ini`，上游沒有對應。預設是正式版；正在執行測試版（版本號帶 `-beta.N`）且尚未選擇時預設測試版。
@@ -76,4 +81,4 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 - 符號連結改為複製；不存在的來源以資料夾代替（同樣是「存在但讀不到」）。
 - 唯讀映射中的檔案不能刪除或改寫：`tri_tiny` 先釋放模型再刪檔；`load_lm_refuses_a_bad_trigram_table` 跳過。
 - 上游 unix 學習檔（權限、FIFO、硬連結）由 Windows 儲存取代：`learn_store` 不跑，`engine_learn` 的三個 unix 測試與 `engine_fuzzy_rerank` 的權限設定不用；`english_codes_through_the_c_abi` 需要 `mkfifo`，跳過。
-- Windows 自己的組字政策（標點保留讀音、注音順序混打等）預設關閉時與上游相同，上游斷言不改寫；開啟後的行為由 `platform/` 內的單元測試涵蓋。
+- Windows 自己的組字政策（標點保留讀音、原鍵混打等）預設關閉時與上游相同，上游斷言不改寫；開啟後的行為由 `platform/` 內的單元測試涵蓋。
