@@ -38,6 +38,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     # Force Standard and the chat profile (the harness is no chat program, so automatic would pick formal);
     # desktop active profile and prior learning must not change fixtures.
     $profileText = (Get-Content "$profileRoot/Shanjie/profile.ini" -Raw) -replace '(?m)^keyboard=.*','keyboard=1' -replace '(?m)^ranking=.*','ranking=chat'
+    # The harness sets the mode and the right-arrow action it tests itself.
+    if ($Interaction -eq 'windows') { $profileText = $profileText -replace '(?m)^upstream_english=.*','upstream_english=0' -replace '(?m)^right_action=.*','right_action=none' }
     Set-Content "$profileRoot/Shanjie/profile.ini" $profileText -Encoding utf8NoBOM
     $previousLocalAppData = $env:LOCALAPPDATA
     $previousHeadless = $env:SHANJIE_HEADLESS

@@ -116,6 +116,11 @@ mod width_tests {
     }
 }
 
+/// Whether this key runs `[candidates] right_action` in an open list: → in both interactions, Tab too in the Windows one,
+/// where the two act together as in Microsoft Bopomofo. The Shanjie interaction leaves Tab to the core, as upstream.
+pub fn right_action_key(k: &ShanjieKey, s: &Snapshot, windows: bool) -> bool {
+    (k.kind == 8 || (windows && k.kind == 13)) && k.modifiers == 0 && !s.prediction && !s.candidates.is_empty()
+}
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
@@ -125,20 +130,34 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
         10 => 8,
         9 if s.columns > 0 && s.first == 0 && s.selected.is_some_and(|i| i < GRID_COLUMNS) && !s.prediction => 9,
         9 => 7,
-        13 => 8,
+        // Tab steps in the Windows interaction; the Shanjie one sends it to the core, which closes the list and passes it on.
+        13 if windows => 8,
         kind => kind,
     };
-    let _ = windows;
     k
 }
 #[cfg(test)]
 mod candidate_tests {
     use super::*;
     #[test]
+    fn tab_shares_the_right_action_in_the_windows_interaction_only() {
+        let key = |kind, modifiers| ShanjieKey { kind, ch: 0, modifiers };
+        let list = Snapshot { candidates: vec!["字".into(); 9], selected: Some(0), ..Default::default() };
+        assert!(right_action_key(&key(13, 0), &list, true) && right_action_key(&key(8, 0), &list, true));
+        assert!(!right_action_key(&key(13, 0), &list, false) && right_action_key(&key(8, 0), &list, false));
+        assert!(!right_action_key(&key(13, 1), &list, true), "Shift+Tab is not the action");
+        let prediction = Snapshot { prediction: true, ..list.clone() };
+        assert!(!right_action_key(&key(13, 0), &prediction, true), "the prediction row keeps its own Tab");
+        assert!(!right_action_key(&key(13, 0), &Snapshot::default(), true), "no list, no action");
+        // Without an action (none) Tab is the next candidate in the Windows interaction; the Shanjie one hands it to the core.
+        assert_eq!(candidate_key(key(13, 0), &list, true).kind, 8);
+        assert_eq!(candidate_key(key(13, 0), &list, false).kind, 13);
+    }
+    #[test]
     fn both_interactions_step_and_collapse_the_first_visual_grid_row() {
         let mut state = Snapshot { candidates: vec!["字".into(); 18], selected: Some(0), ..Default::default() };
         for windows in [true, false] {
-            for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13,8)] {
+            for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13, if windows { 8 } else { 13 })] {
                 assert_eq!(candidate_key(ShanjieKey { kind, ch: 0, modifiers: 0 }, &state, windows).kind, expected);
             }
             state.columns = 9; state.selected = Some(3);

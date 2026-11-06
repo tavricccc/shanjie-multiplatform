@@ -36,7 +36,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
    $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*',"keyboard=$($case[2])"
    $text=$text -replace '(?m)^mixed_input=.*',"mixed_input=$([int](($case[0]-band 1)-ne 0))" -replace '(?m)^enter_to_cursor=.*',"enter_to_cursor=$($case[3])"
-   $text=$text -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[0]-band 2)-ne 0))" -replace '(?m)^caps_lock_english=.*','caps_lock_english=0'
+   $text=$text -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[0]-band 2)-ne 0))" -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^right_action=.*','right_action=none'
    $text=$text -replace '(?m)^standalone_tones=.*',"standalone_tones=$([int]($case[1] -in 'standalone-tones','standalone-tones-shanjie'))"
    if($case[1] -eq 'standalone-tones-shanjie'){$text=$text -replace '(?m)^interaction=.*','interaction=shanjie'}
    if($case[1] -eq 'backquote-disabled'){$text=$text -replace '(?m)^backquote_symbols=.*','backquote_symbols=0'}

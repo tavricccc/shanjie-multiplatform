@@ -85,7 +85,7 @@ internal static class VisualVerifier
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
-        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=horizontal")) throw new InvalidDataException("Latest model/horizontal migration failed");
+        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=vertical")) throw new InvalidDataException("Latest model/Windows vertical template failed");
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");

@@ -162,7 +162,7 @@
                         </controls:SettingCard>
                         <TextBlock Text="翻頁" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="→ 右方向鍵" Description="無：維持原方向鍵操作；下一頁：翻頁；展開：三欄多列，數字選字以反白所在的九項為一組，↑／↓ 逐項移動，頂列 ↑ 收回。">
+                            <controls:SettingRow Label="{x:Bind Vm.RightActionLabel, Mode=OneWay}" Description="無：維持原方向鍵操作；下一頁：翻頁；展開：三欄多列，數字選字以反白所在的九項為一組，↑／↓ 逐項移動，頂列 ↑ 收回。Windows 操作預設的 Tab 跟 → 同一個動作，並預設展開，與微軟注音相同；善解操作預設的 Tab 與上游相同，關閉候選並交給 App。">
                                 <ComboBox x:Name="CandidateRightAction" SelectedIndex="{x:Bind Vm.RightAction, Mode=TwoWay}" MinWidth="140"><ComboBoxItem Content="無"/><ComboBoxItem Content="下一頁"/><ComboBoxItem Content="展開"/></ComboBox>
                             </controls:SettingRow>
                         </controls:SettingCard>

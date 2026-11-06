@@ -464,10 +464,7 @@ impl Data {
             && state.selected.is_some()
             && key.modifiers == 0
             && (key.kind == 3 || (key.kind == 1 && (49..=57).contains(&key.ch)));
-        let right = key.kind == 8
-            && key.modifiers == 0
-            && !state.prediction
-            && !state.candidates.is_empty();
+        let right = input::right_action_key(&key, &state, p.get("profile", "interaction", "windows") == "windows");
         let action = p.get("candidates", "right_action", "none");
         let page_right = right && action == "page";
         let expand_right = right && action == "expand" && state.columns == 0;

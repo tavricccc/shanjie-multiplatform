@@ -3,7 +3,8 @@ using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp)), NotifyPropertyChangedFor(nameof(RightActionLabel))] public partial int Interaction { get; set; }
+    public string RightActionLabel => Interaction == 0 ? "Tab 與 → 右方向鍵" : "→ 右方向鍵";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
     [ObservableProperty] public partial int CandidateLayout { get; set; }
@@ -111,11 +112,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
     public string CandidateHelp => (RightAction switch {
-        1 => Interaction == 0 ? "↑／↓ 或 ← 選字；→ 換下一頁。" : "← 或 ↑／↓ 選字；→ 換下一頁。",
-        2 => Interaction == 0 ? "↑／↓ 逐項選字；→ 展開三欄候選。" : "← 選字、→ 展開三欄候選；↑／↓ 逐項移動。",
-        _ => Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。"
+        1 => Interaction == 0 ? "↑／↓ 或 ← 選字；Tab 或 → 換下一頁。" : "← 或 ↑／↓ 選字；→ 換下一頁。Tab 關閉候選並交給 App。",
+        2 => Interaction == 0 ? "↑／↓ 逐項選字；Tab 或 → 展開三欄候選。" : "← 選字、→ 展開三欄候選；↑／↓ 逐項移動。Tab 關閉候選並交給 App。",
+        _ => Interaction == 0 ? "↑／↓ 或 ←／→ 選字，Tab 移到下一候選。" : "←／→ 或 ↑／↓ 選字。Tab 關閉候選並交給 App。"
     })
-        + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
+        + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? (EnterToCursor ? "Enter 選字並提交游標前的組字。" : "Enter 選字並提交整句。") : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
         ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"

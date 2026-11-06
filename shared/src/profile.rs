@@ -513,6 +513,21 @@ mod tests {
         assert_eq!(doc.get("candidates", "open", ""), "both");
         assert!(doc.flag("candidates", "space_pages", false));
     }
+    #[test]
+    fn windows_template_follows_microsoft_for_the_candidate_list_and_keeps_explicit_values() {
+        let doc = template(true);
+        assert_eq!((doc.get("candidates", "layout", ""), doc.get("candidates", "right_action", "")), ("vertical", "expand"));
+        let shanjie = template(false);
+        assert_eq!((shanjie.get("candidates", "layout", ""), shanjie.get("candidates", "right_action", "")), ("horizontal", "none"));
+        let mut mine = Document::parse("[profile]\nschema=9\ninteraction=windows\n[candidates]\nlayout=horizontal\nright_action=none\n").unwrap();
+        mine.migrate();
+        assert_eq!((mine.get("candidates", "layout", ""), mine.get("candidates", "right_action", "")), ("horizontal", "none"));
+        // A profile from before right_action keeps its old → (the legacy mapping, not the template).
+        let mut legacy = Document::parse("[profile]\nschema=5\ninteraction=windows\n").unwrap();
+        legacy.migrate();
+        assert_eq!(legacy.get("candidates", "right_action", ""), "none");
+    }
+    #[test]
     fn stale_big5_values_load_harmlessly() {
         let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nlayout=horizontal\n";
         let mut doc = Document::parse(stale).unwrap();
