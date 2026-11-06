@@ -3,7 +3,7 @@
          section title and grouped cards on the right, Shanjie's save bar at the bottom. -->
     <Grid x:Name="Root" Background="Transparent">
         <Grid.ColumnDefinitions><ColumnDefinition Width="216"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,16">
+        <Border x:Name="NavPane" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,16">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <StackPanel x:Name="AppTitleBar" Orientation="Horizontal" Spacing="10" Padding="8,0,8,16" Background="Transparent">
@@ -27,7 +27,7 @@
                 <TextBlock Grid.Row="2" Padding="8,12,8,0" TextWrapping="Wrap" LineHeight="19" FontSize="11" Foreground="{ThemeResource SjText3Brush}" Text="{x:Bind Vm.DraftHelp, Mode=OneWay}"/>
             </Grid>
         </Border>
-        <Grid Grid.Column="1">
+        <Grid x:Name="MainPane" Grid.Column="1">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid x:Name="Head" Padding="24,20,14,12" Background="Transparent">
                 <TextBlock x:Name="SectionTitle" Text="一般" Margin="0,0,72,0" Style="{StaticResource SjSectionTitle}"/>
@@ -41,6 +41,7 @@
                     <StackPanel x:Name="General">
                         <TextBlock Text="操作預設" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
+                            <controls:SettingRow Label="快速設定" Description="用動畫一步步選打字方式和幾個常用選項。"><Button Content="重新開啟快速設定" Click="ReopenQuickSetup"/></controls:SettingRow>
                             <controls:SettingRow Label="載入操作預設"><ComboBox x:Name="Preset" SelectionChanged="LoadPreset"/></controls:SettingRow>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="匯入操作預設…" Click="ImportPreset"/><Button Content="匯出目前操作…" Click="ExportPreset"/></StackPanel></controls:SettingRow>
                         </controls:SettingCard>
@@ -253,5 +254,6 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"><Button Content="重新啟動輸入法" Click="Restart" MinHeight="32" ToolTipService.ToolTip="儲存設定、提交目前組字並重載善解核心"/><Button Content="取消" Click="Cancel" MinHeight="32"/><Button Content="儲存" Style="{StaticResource SjAccentButton}" Click="Save" MinHeight="32"/></StackPanel>
             </Grid>
         </Grid>
+        <Grid x:Name="QuickSetupLayer" Grid.ColumnSpan="2" Visibility="Collapsed"/>
     </Grid>
 </UserControl>

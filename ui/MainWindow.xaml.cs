@@ -134,6 +134,34 @@ public sealed partial class MainWindow : UserControl
     {
         Vm.Preset(windows); StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = true;
     }
+    internal QuickSetupView? QuickSetup { get; private set; }
+    /// Covers the settings pages in this window, so the single-instance forwarding and the glass stay as they are.
+    internal void OpenQuickSetup(bool reopened = false)
+    {
+        if (QuickSetup is not null) return;
+        Setup.QuickSetupGate.MarkShown();
+        QuickSetup = new QuickSetupView(reopened, FinishQuickSetup, () => Host.Minimize(true), () => { if (Host.CanClose()) Host.Close(); });
+        NavPane.Visibility = MainPane.Visibility = Visibility.Collapsed;
+        QuickSetupLayer.Children.Add(QuickSetup); QuickSetupLayer.Visibility = Visibility.Visible;
+        Host.SetCaption(QuickSetup.Caption);
+    }
+    private void FinishQuickSetup(bool applied)
+    {
+        QuickSetupLayer.Children.Clear(); QuickSetupLayer.Visibility = Visibility.Collapsed; QuickSetup = null;
+        NavPane.Visibility = MainPane.Visibility = Visibility.Visible;
+        Host.SetCaption(AppTitleBar, Head);
+        if (!applied) return;
+        Vm.Load(); RefreshPresets(); Vm.Status = "快速設定已套用。"; StatusBar.Severity = InfoBarSeverity.Success; StatusBar.IsOpen = true;
+    }
+    private async void ReopenQuickSetup(object sender, RoutedEventArgs args)
+    {
+        if (Vm.HasChanges)
+        {
+            var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "先儲存目前的修改？", Content = "快速設定會從已儲存的設定開始，要先把這裡還沒儲存的修改存起來。", PrimaryButtonText = "儲存並繼續", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !SaveDraft()) return;
+        }
+        OpenQuickSetup(true);
+    }
     private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); RefreshPresets(); ShowLoadFeedback(); }
     private void Cancel(object sender, RoutedEventArgs args) => Close();
     private void Uninstall(object sender, RoutedEventArgs args)
