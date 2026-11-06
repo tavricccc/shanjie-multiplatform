@@ -1,7 +1,7 @@
 {
   "example_only": false,
   "format": 2,
-  "generated_at": "2026-11-06T05:27:01.570204+00:00",
+  "generated_at": "2026-11-06T05:39:43.024292+00:00",
   "models": [
     {
       "advisories": [
@@ -33,18 +33,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:53.871494+00:00",
+          "checked_at": "2026-11-06T05:31:06.612798+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/ba3a65092f0e115f66e32226e9c69ad82a5d23d9a59b12104dac38744cac17fd.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/66a8df7abac5bd0dfee46be7e2b92fcaf4f9b773775c9da1b493634d9eeba17b.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:17.769178+00:00",
+          "checked_at": "2026-11-06T05:35:55.554860+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/643fa52eb4e25c770e15ca24b9af59d4f046fa4789f0dec70e783211be9394b1.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/023f943ef50bc04537e3966b00fc65557de19e64ce968cba661d28c325f19b46.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -527,18 +527,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:51.433274+00:00",
+          "checked_at": "2026-11-06T05:31:03.447520+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/dd6c44d9ab0330e259c31490cbff68315a0b8cc148f36193ca5f2947655e47e7.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/17cc82beb0415524892ec0ac69f2d92eee9ec4318be02702b87ca6135fbce928.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:14.826467+00:00",
+          "checked_at": "2026-11-06T05:35:51.777843+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/95c8339d5cc415b95431993eeaffdc76d864c2bca60447e1dbc25cbf021549e6.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/3977f3f2b6cc03e8e624c0e472e4e5392f5f13fa23adef54c19416425d9a81b3.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -731,18 +731,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:34.512527+00:00",
+          "checked_at": "2026-11-06T05:30:42.471530+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/a8eff346c79ba8ecfc2599b7b136a295de356018a047a88917ffe382a5a6e2b6.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/f991950fbf428a400d497f5f4c66df1fb7ca69312c73d9cd028c8ec54811d307.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:23:54.203529+00:00",
+          "checked_at": "2026-11-06T05:35:25.805013+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/1a327ba3fc9981a84211813d7a5a3f0e2092099481886fa05c3e3995721f0c9b.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/df6eb95067b1094539d076eb5dbf11429df650ff8ce728573ba49e4e343b9478.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1146,18 +1146,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:31.809947+00:00",
+          "checked_at": "2026-11-06T05:30:39.397562+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/33e905c95917e14bdf4af55baf255458f9c129d66610b1ffa661a4be53545637.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/03598c14fb1aa9fe776eb0fde85c07a0d6c645d7353b30e2c610cb67b5f349b8.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:23:50.946974+00:00",
+          "checked_at": "2026-11-06T05:35:21.936015+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/8a394c410a5907d71425a0944ce25247948212c44bbe3e6e3281f7c4b3266633.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/97be8e29ff2787fcffd80622d0a8375e88af06db501d2b044d173cc94b855fdd.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1216,18 +1216,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:27.849396+00:00",
+          "checked_at": "2026-11-06T05:30:34.269656+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/4bf114785003157b98cac951994804cbaa7f89d4eac01f88bfcaf7bd58b9766b.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/5371e083ee3efe8e7f8263df93f99fbef639eb8a8e512d2bdebd414c197d86c8.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:23:46.335075+00:00",
+          "checked_at": "2026-11-06T05:35:16.100408+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/791f733371acc82487b290fff014ec7886c9039dbc90ee250f168cdd5c6e435d.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/e5b09cf12e2a9744262a0fea754ce42af1e38247e32f248ea0a205f31d5960c2.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1569,18 +1569,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:40.763881+00:00",
+          "checked_at": "2026-11-06T05:30:50.208314+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/8d800e256467791d30104c81d3c618e36981f0add49aa33ea344aab5c47fa5ea.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/ca95b9d8e14aa6865bd1b93bb157177632d89fcf1eeb47d40864ed18086fb123.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:01.746533+00:00",
+          "checked_at": "2026-11-06T05:35:35.327411+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/af697e4937682a4ba25a06b8f9634e637ec7cc2ace83b4fe14cd74e22cd34eab.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/10a154f8e9971920e3ad0efac49e8cc0b7f9c5d7a56edef25d811a34d20dc25f.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1687,18 +1687,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:46.360144+00:00",
+          "checked_at": "2026-11-06T05:30:57.278322+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/0c8a4954216865b2bdab1b3fc9dcd298ec159de5e1dee9cda608810a3f8015f7.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/188960f80a5526189f55039d4ac9827ace9f8ddc4e6b7fd8c55bca9b40cf2d81.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:08.677497+00:00",
+          "checked_at": "2026-11-06T05:35:44.131714+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/c69b364de16d8c2e7be037cb7887c0b4b86af5031b73d56e67ce943b6df92257.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/f2d69a0a1e0dcd07768533d01840d8173d5709454199d095f5457d910b0f3551.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -1749,18 +1749,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:56.249815+00:00",
+          "checked_at": "2026-11-06T05:31:09.492609+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/855f942af61752af7d4b9d7812b6340e2b44a567f53050a313ff2798f1342e64.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/7af17438a8b6969c91d96466b3c85a20f7cf5be42afbf952d6141b5f4f5861be.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:20.667696+00:00",
+          "checked_at": "2026-11-06T05:35:59.266167+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/030444569a6b0923755044071d7631aecb659782c0f21c1af3db9a47cd477d14.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/2bce29fe4b3d6d550762b14fe35d95131dd5037c8691c921126b158a7bde9a7a.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2105,18 +2105,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:43.294420+00:00",
+          "checked_at": "2026-11-06T05:30:53.289232+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/70530a7a23de0faa27e5ce24a0db2085dfd06cc8dd19d6db45d75ff2cd4170c7.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/808d770651035f00db48467c945856fdda721b8d42678215883a6b8665888e62.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:04.850140+00:00",
+          "checked_at": "2026-11-06T05:35:39.131914+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/d692638461ac780e9fbc2ebaac27efe7fa2a9b331f5f5f0052cb64ac4c7c09ba.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/8034c9883f9e6e5dfcf38a4c9b3bd9ccc2886dd9a9980e3e8c70b9c3849903e8.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2171,18 +2171,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:37.103060+00:00",
+          "checked_at": "2026-11-06T05:30:45.577597+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/58d3b0428c608b9fa7016b72671c74f54d2351c78a1c5de465ae348fadd397d9.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/9d78dcf5b171c515b0c82ab23ba6cf5ff73ade96f2bb286f5f4fd4d6de308deb.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:23:57.274825+00:00",
+          "checked_at": "2026-11-06T05:35:29.617734+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/132dd37d9b69952c65885598e794a7ed0b4c7d01e0b660ebbcc790c74509fd99.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/987174abf05811755ad36b3b6c20666d6a412fe4028591e0e38063ee0c09d8d7.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2665,18 +2665,18 @@
       ],
       "compatibility": [
         {
-          "checked_at": "2026-11-06T05:20:48.912068+00:00",
+          "checked_at": "2026-11-06T05:31:00.317522+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/8ad77455d579f6f485d4cfe84457a131df310349546916944b8c528d7ca1b28d.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/407f69be976fe696205e8ed0daafcb6ece27f3e8be2a6aa06c624f65024e4995.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x64"
         },
         {
-          "checked_at": "2026-11-06T05:24:11.765657+00:00",
+          "checked_at": "2026-11-06T05:35:47.907443+00:00",
           "profile_id": "windows-bundle-v1",
-          "report": "reports/64fcf10b306e2e820a014e452c0c954ccbda388c0c3ba81019483802daa3f8c9.json",
-          "source_commit": "d65f97474a1ca34fb315dc7baea2983bf0542c14",
+          "report": "reports/c5f7fd9bdaef5e2595e45616a76f54dd0ed512108c3d62b1a51725f8cb24ae6b.json",
+          "source_commit": "e772ae76a88d58dc59a17dd62c658f4ef0be0214",
           "state": "usable",
           "target": "windows-x86"
         }
@@ -2690,5 +2690,5 @@
       ]
     }
   ],
-  "revision": "ad834da46cf310397c65ec813ebe122521736fe16016ee60e46282c6173745ce"
+  "revision": "eba1f1c7df013976fb1db83965c60eb738c3a605370971719745f195186c75f9"
 }
