@@ -92,6 +92,8 @@ impl Engine {
             Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>,
             Arc<Lexicon>,
             LmState,
+            // What upstream's digit_env builds once per engine; every engine of this entry may share it.
+            Option<(Arc<DigitTable>, Arc<DigitCache>)>,
         )>;
         static CACHE: OnceLock<Mutex<Models>> = OnceLock::new();
         // The class pairing and optional side file are part of the load contract,
@@ -117,14 +119,15 @@ impl Engine {
             .map_err(|_| EngineError::LoadFailed)?;
         if let Some(index) = cache
             .iter()
-            .position(|(key, lex, _)| key == &stamp && Arc::ptr_eq(lex, &self.lex))
+            .position(|(key, lex, _, _)| key == &stamp && Arc::ptr_eq(lex, &self.lex))
         {
             // What upstream's load_lm does after building the state; the prediction index was built with it.
             let entry = cache.remove(index);
             self.invalidate();
             self.lm = Some(entry.2.clone());
             self.set_tinylm(None);
-            self.digit_cache = None;
+            // Keyed like digit_env's own check, and only for the table it was built from.
+            self.digit_cache = entry.3.as_ref().filter(|(table, _)| self.digit_table.as_ref().is_some_and(|own| Arc::ptr_eq(own, table))).map(|(_, cache)| cache.clone());
             self.en_words = None;
             self.en_cache();
             self.digit_env();
@@ -136,8 +139,14 @@ impl Engine {
         if cache.len() == 4 {
             cache.remove(0);
         }
-        cache.push((stamp, self.lex.clone(), self.lm.as_ref().unwrap().clone()));
+        let digits = self.digit_table.clone().zip(self.digit_cache.clone());
+        cache.push((stamp, self.lex.clone(), self.lm.as_ref().unwrap().clone(), digits));
         Ok(())
+    }
+    /// Whether two engines use the same digit tables (tests).
+    #[doc(hidden)]
+    pub fn windows_shares_digit_cache(&self, other: &Engine) -> bool {
+        self.digit_cache.as_ref().zip(other.digit_cache.as_ref()).is_some_and(|(a, b)| Arc::ptr_eq(a, b))
     }
 }
 impl Engine{
