@@ -149,6 +149,11 @@ internal static class VisualVerifier
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
+        // A saved opt-out stays: saving must not run the older-schema migration again.
+        bool backquote = settings.Vm.BackquoteSymbols;
+        settings.Vm.BackquoteSymbols = false; settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.BackquoteSymbols) throw new InvalidDataException("Saving reset an explicit backquote opt-out");
+        settings.Vm.BackquoteSymbols = backquote; settings.Vm.Save(); settings.Vm.Load();
         foreach (var mode in new[] { 1, 2, 3, 0 })
         {
             settings.SetMixedModeForVerification(mode); await Task.Delay(60);
