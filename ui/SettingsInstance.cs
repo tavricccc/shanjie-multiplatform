@@ -28,7 +28,7 @@ internal sealed class SettingsInstance : IDisposable
         try { return owns = mutex.WaitOne(0); }
         catch (AbandonedMutexException) { return owns = true; }
     }
-    public static async Task<SettingsInstance?> Open()
+    public static async Task<SettingsInstance?> Open(string verb = "SHOW")
     {
         // Some independently released 0.9.x builds have no forwarding protocol. Preserve their draft and bring
         // that window back until the user closes it; do not create a second one.
@@ -58,7 +58,7 @@ internal sealed class SettingsInstance : IDisposable
             + ":" + Path.GetFullPath(Models.ProfileStore.Path).ToUpperInvariant();
         var instance = new SettingsInstance(Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(scope))));
         Trace("START "+instance.pipeName);
-        string request="SHOW " + Guid.NewGuid().ToString("D");
+        string request=verb + " " + Guid.NewGuid().ToString("D");
         var until=DateTime.UtcNow.AddSeconds(10);
         for (int attempt = 0; attempt < 40 && DateTime.UtcNow<until; attempt++)
         {
@@ -106,11 +106,13 @@ internal sealed class SettingsInstance : IDisposable
                     using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
                     await writer.WriteLineAsync(Environment.ProcessId.ToString().AsMemory(), timeout.Token);
                     string? request=await reader.ReadLineAsync(timeout.Token);
-                    if (request is null || !request.StartsWith("SHOW ") || !Guid.TryParse(request[5..],out Guid id)) continue;
+                    bool about=request?.StartsWith("ABOUT ")==true;
+                    if (request is null || !(about || request.StartsWith("SHOW ")) || !Guid.TryParse(request[(request.IndexOf(' ')+1)..],out Guid id)) continue;
                     bool duplicate=accepted.Contains(id);
                     if (duplicate || queue.TryEnqueue(() => {
                         ActivationCount++;
                         Trace("ACTIVATE "+ActivationCount);
+                        if (about) window.ShowSection(MainWindow.Pages.About);
                         if (Environment.GetEnvironmentVariable("SHANJIE_TEST_PROFILE")=="1") return;
                         if (IsIconic(handle)) ShowWindow(handle, 9);
                         window.Activate(); SetForegroundWindow(handle);

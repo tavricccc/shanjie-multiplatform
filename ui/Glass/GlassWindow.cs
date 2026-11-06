@@ -29,7 +29,7 @@ internal sealed partial class GlassWindow : IDisposable
     readonly WndProc proc;
     readonly string className = "ShanjieGlassHost" + Guid.NewGuid().ToString("N");
     readonly nint glass;
-    readonly bool resizable;
+    readonly bool resizable, notification;
     readonly double minWidth, minHeight;
     bool ready, shown, closing, minimizing, iconic, disposed, revealed;
     int lastWidth, lastHeight;
@@ -45,16 +45,19 @@ internal sealed partial class GlassWindow : IDisposable
     float Speed => system.AnimationsEnabled ? 1 : 0;
     float Dpi => GetDpiForWindow(Handle) / 96f;
 
-    internal GlassWindow(FrameworkElement content, string title, double width, double height, bool resizable)
+    internal GlassWindow(FrameworkElement content, string title, double width, double height, bool resizable, bool notification = false)
     {
-        this.content = content; this.resizable = resizable; minWidth = width; minHeight = height;
+        this.content = content; this.resizable = resizable; this.notification = notification; minWidth = width; minHeight = height;
         if (Font is { } font && content is Microsoft.UI.Xaml.Controls.Control control) control.FontFamily = font;
         proc = WindowProc;
         var module = GetModuleHandleW(null);
         var wc = new WndClass { Size = (uint)Marshal.SizeOf<WndClass>(), Proc = proc, Instance = module, Name = className, Icon = LoadIconW(module, 32512), Cursor = LoadCursorW(0, 32512) };
         if (RegisterClassExW(ref wc) == 0) throw new System.ComponentModel.Win32Exception();
         // WS_POPUP | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX; WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP.
-        Handle = CreateWindowExW(0x240000, className, title, 0x800E0000, 0, 0, 1, 1, 0, 0, module, 0);
+        // A notification never takes focus and stays out of the taskbar: WS_POPUP; WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP.
+        Handle = notification
+            ? CreateWindowExW(0x08200088, className, title, 0x80000000, 0, 0, 1, 1, 0, 0, module, 0)
+            : CreateWindowExW(0x240000, className, title, 0x800E0000, 0, 0, 1, 1, 0, 0, module, 0);
         if (Handle == 0) throw new System.ComponentModel.Win32Exception();
         int none = 1, noColor = unchecked((int)0xFFFFFFFE), noPeek = 1;
         DwmSetWindowAttribute(Handle, 33, ref none, 4);    // DWMWA_WINDOW_CORNER_PREFERENCE: the region rounds it
@@ -76,7 +79,7 @@ internal sealed partial class GlassWindow : IDisposable
         system.AdvancedEffectsEnabledChanged += (_, _) => content.DispatcherQueue.TryEnqueue(ApplyTheme);
         system.ColorValuesChanged += (_, _) => content.DispatcherQueue.TryEnqueue(ApplyTheme);
         ApplyTheme();
-        Center(width, height);
+        if (notification) PlaceBottomRight(width, height); else Center(width, height);
         open.Add(this);
     }
 
@@ -93,6 +96,17 @@ internal sealed partial class GlassWindow : IDisposable
         SetWindowPos(Handle, 0, work.Left + Math.Max(0, (work.Right - work.Left - w) / 2), work.Top + Math.Max(0, (work.Bottom - work.Top - h) / 2), w, h, 0x14);
     }
 
+    /// <summary>Above the taskbar on the primary monitor.</summary>
+    void PlaceBottomRight(double width, double height)
+    {
+        var monitor = MonitorFromPoint(default, 1); // MONITOR_DEFAULTTOPRIMARY
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        GetMonitorInfoW(monitor, ref info);
+        GetDpiForMonitor(monitor, 0, out uint dpi, out _);
+        int w = (int)Math.Ceiling(width * dpi / 96), h = (int)Math.Ceiling(height * dpi / 96), margin = (int)(16 * dpi / 96);
+        SetWindowPos(Handle, 0, info.Work.Right - w - margin, info.Work.Bottom - h - margin, w, h, 0x14);
+    }
+
     /// <summary>Starts the user-facing window: hidden (cloaked) until content and glass have drawn a frame, then opens.</summary>
     internal async void Show()
     {
@@ -101,9 +115,9 @@ internal sealed partial class GlassWindow : IDisposable
         Cloak(true);
         sj_glass_state(glass, 0, 0);
         ContentVisual.Opacity = 0;
-        ShowWindow(Handle, 5);
+        ShowWindow(Handle, notification ? 4 : 5); // SW_SHOWNOACTIVATE : SW_SHOW
         Follow();
-        Activate();
+        if (!notification) Activate();
         // A fresh settings page takes a frame or two to draw; fading from the first moment would show only the end of it.
         var rendered = new TaskCompletionSource();
         void Rendered(object? sender, object e) { if (content.IsLoaded) rendered.TrySetResult(); }
@@ -255,6 +269,7 @@ internal sealed partial class GlassWindow : IDisposable
         switch (m)
         {
             case 0x83: return 0; // WM_NCCALCSIZE: no frame; the whole window is client area
+            case 0x21 when notification: return 3; // WM_MOUSEACTIVATE: MA_NOACTIVATE, buttons work without taking focus
             case 0x84: return HitTest(l);
             case 0x14: return 1; // WM_ERASEBKGND
             case 0x24 when l != 0: // WM_GETMINMAXINFO
