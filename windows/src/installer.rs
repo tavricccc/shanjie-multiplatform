@@ -21,6 +21,7 @@ mod logon_task;
 mod permissions;
 pub mod progress;
 mod transaction;
+mod update_task;
 pub const SERVICE: &str = "{8912696E-8A31-4DF3-A7BC-0261F3B6A147}";
 pub fn install_root() -> PathBuf {
     PathBuf::from(std::env::var_os("ProgramFiles").expect("Program Files")).join("Shanjie")
@@ -888,6 +889,7 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         remove_run_entry()?;
     }
     logon_task::remove()?;
+    update_task::remove()?;
     if let Ok(entries) = fs::read_dir(target.join("versions")) {
         for entry in entries.flatten() {
             if entry.file_name() == ".deleted_files" {

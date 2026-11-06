@@ -3,7 +3,7 @@ using Shanjie_UI.Setup;
 
 namespace Shanjie_UI;
 
-// 關於 → 更新：一列狀態加按鈕，有新版時下面列出更新說明。第一次打開「關於」時自動查一次，不在背景排程。
+// 關於 → 更新：一列狀態加按鈕，有新版時下面列出更新說明。第一次打開「關於」時自動查一次；背景排程與卡片見 UpdateNotice。
 public sealed partial class MainWindow
 {
     private UpdateService? updates;
@@ -17,6 +17,9 @@ public sealed partial class MainWindow
         Closed += (_, _) => { updateWork?.Cancel(); updates.Dispose(); };
         UpdateChannelChoice.SelectedIndex = updates.Channel == UpdateChannel.Prerelease ? 1 : 0;
         UpdateChannelChoice.RegisterPropertyChangedCallback(Controls.Segmented.SelectedIndexProperty, (_, _) => ChangeUpdateChannel());
+        var notice = new UpdateNotice(UpdateService.DataFolder());
+        AutoUpdateToggle.IsOn = notice.Enabled;
+        AutoUpdateToggle.RegisterPropertyChangedCallback(Controls.SettingToggle.IsOnProperty, (_, _) => notice.Enabled = AutoUpdateToggle.IsOn);
         RenderUpdate();
         RunUpdate(updates.CheckAsync);
     }

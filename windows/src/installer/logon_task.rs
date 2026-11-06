@@ -51,7 +51,7 @@ pub fn definition(core: &Path) -> String {
 </Task>"#
     )
 }
-fn element(xml: &str, name: &str) -> Option<String> {
+pub(super) fn element(xml: &str, name: &str) -> Option<String> {
     let open = format!("<{name}>");
     let start = xml.find(&open)? + open.len();
     let end = start + xml[start..].find(&format!("</{name}>"))?;

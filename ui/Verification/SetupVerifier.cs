@@ -77,6 +77,48 @@ internal static class SetupVerifier
         }
     }
 
+    /// <summary>Which versions get a card: a snooze lasts a day, a dismissal lasts until a newer version.</summary>
+    private static void CheckUpdateNotice()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "shanjie-notice-" + Guid.NewGuid().ToString("N"));
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        try
+        {
+            var notice = new UpdateNotice(folder);
+            Check(notice.Enabled, "Automatic checks must default to on");
+            Check(notice.ShouldShow("1.0.0", now), "A first notice was withheld");
+            notice.Later("1.0.0", now);
+            Check(!notice.ShouldShow("1.0.0", now.AddHours(23)), "Later reminded within the day");
+            Check(new UpdateNotice(folder).ShouldShow("1.0.0", now.AddHours(24)), "Later did not remind the next day");
+            Check(notice.ShouldShow("1.0.1", now.AddHours(1)), "A newer version waited for the older snooze");
+            notice.Dismiss("1.0.0");
+            Check(!notice.ShouldShow("1.0.0", now.AddDays(30)), "A dismissed version came back");
+            Check(notice.ShouldShow("1.0.1", now), "A dismissal hid a newer version");
+            File.WriteAllText(Path.Combine(folder, "update-notice.txt"), "garbage");
+            Check(notice.ShouldShow("1.0.0", now), "An unreadable record withheld the notice");
+            notice.Enabled = false;
+            Check(!new UpdateNotice(folder).Enabled, "Turning automatic checks off was not remembered");
+            notice.Enabled = true;
+            Check(new UpdateNotice(folder).Enabled, "Turning automatic checks on was not remembered");
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    private static async Task CaptureUpdateCard(string output)
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "shanjie-notice-" + Guid.NewGuid().ToString("N"));
+        var release = new UpdateRelease("0.16.0-beta.12", "", new DateTimeOffset(2026, 11, 5, 0, 0, 0, TimeSpan.Zero), 90_000_000, "http://127.0.0.1/", true);
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            var card = new UpdateCard(release, new UpdateNotice(folder));
+            card.SetThemeForVerification(theme);
+            card.Host.AppWindow.Move(new PointInt32(-12000, -12000));
+            card.Host.AppWindow.Show(false);
+            await Task.Delay(400);
+            await VisualVerifier.Capture(card.CaptureElement, Path.Combine(output, $"update-card-{theme.ToString().ToLowerInvariant()}.png"));
+        }
+    }
+
     public static async Task Run(string output)
     {
         string invalidNotes=Path.Combine(Path.GetTempPath(),"shanjie-notes-"+Guid.NewGuid().ToString("N")+".json");
@@ -103,6 +145,8 @@ internal static class SetupVerifier
         var running = UpdateService.RunningVersion();
         Check(System.Text.RegularExpressions.Regex.IsMatch(running, @"^\d+\.\d+\.\d+(-beta\.\d+)?$"), $"Running version has an unexpected format: {running}");
         await CheckUpdateChannels();
+        CheckUpdateNotice();
+        await CaptureUpdateCard(output);
 
         // The update button must keep the themed style in every state; a null style falls back to the native button.
         var themed = Application.Current.Resources;

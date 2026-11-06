@@ -1,0 +1,20 @@
+<UserControl x:Class="Shanjie_UI.UpdateCard" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls">
+    <!-- Update notice: logo and title, version line, actions. Uses the same glass window as the settings. -->
+    <Grid x:Name="Root" Background="Transparent" Padding="18,14,12,16" RowSpacing="10">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid ColumnSpacing="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="28" Height="28"/>
+            <TextBlock Grid.Column="1" Text="善解有新版本" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SjText1Brush}"/>
+            <Button Grid.Column="2" Style="{StaticResource SjIconButton}" Click="Dismiss" ToolTipService.ToolTip="這一版不再通知" AutomationProperties.Name="這一版不再通知"><controls:Icon Glyph="close" Width="16" Height="16" Foreground="{ThemeResource SjText1Brush}"/></Button>
+        </Grid>
+        <StackPanel Grid.Row="1" Spacing="3" Padding="0,0,6,0">
+            <TextBlock x:Name="VersionText" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="DetailText" FontSize="12" Foreground="{ThemeResource SjText2Brush}" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Padding="0,0,6,0">
+            <Button Content="稍後" Style="{StaticResource SjTextButton}" Click="Later"/>
+            <Button Content="查看更新" Style="{StaticResource SjAccentButton}" Click="Open"/>
+        </StackPanel>
+    </Grid>
+</UserControl>
