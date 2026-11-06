@@ -3,6 +3,12 @@
   "loader_profile": "windows-bundle-v1",
   "pending": [
     {
+      "filename": "tinylm.sjtl",
+      "reason": "No complete paired dependency set found",
+      "release": "sj-sr-7-15m",
+      "state": "unsupported"
+    },
+    {
       "filename": "colloquial.sjlm",
       "reason": "No complete paired dependency set found",
       "release": "sj-cl-1-68k",
@@ -37,10 +43,22 @@
       "reason": "No complete paired dependency set found",
       "release": "tinylm-v1",
       "state": "unsupported"
+    },
+    {
+      "reason": "Baseline unavailable; technical availability is independent of advisory evaluation",
+      "state": "unverified"
     }
   ],
-  "source_snapshot": "cb05b5053aa60f1de09aa497dffe947e461edc10eab4d7b1d263f2f552dca0cc",
+  "source_snapshot": "eccea8615df1cc6e5288f9379400f71b7e8d4de7d1d52e66fd6b8b9e44a85ca0",
   "sources": [
+    {
+      "asset_id": 715184488,
+      "digest": "sha256:356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de",
+      "filename": "tinylm.sjtl",
+      "release": "sj-sr-8-15m",
+      "release_id": 435872900,
+      "size": 14886880
+    },
     {
       "asset_id": 684859823,
       "digest": "sha256:4c1071f2d6fb609c47724ddb1aace69f9b458c2cc69026ea9fe4d4b749a8ff43",
