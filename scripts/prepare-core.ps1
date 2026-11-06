@@ -39,3 +39,4 @@ Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-keys.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-smart-input.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-resident.ps1" -CorePath $output
+& "$PSScriptRoot/prepare-memory.ps1" -CorePath $output
