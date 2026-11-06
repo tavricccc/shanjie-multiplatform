@@ -100,3 +100,23 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
         }
     }
 }
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
+fn sessions_on_one_model_share_the_digit_tables() {
+    let data=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let model=data.join("models/builtin/bigram.winmap");
+    let open=|packs:u32|{
+        let mut e=Engine::new_with_personal(&data,Layout::Standard,None,packs).unwrap();
+        e.load_lm(&model).unwrap();
+        e
+    };
+    let (mut first,mut second)=(open(0),open(0));
+    assert!(first.windows_shares_digit_cache(&second),"a session on the same lexicon and model reuses the tables");
+    assert!(!first.windows_shares_digit_cache(&open(shanjie_core::engine::PACK_IT)),"another lexicon builds its own");
+    for e in [&mut first,&mut second] {e.set_mixed_input(true);e.set_upstream_english(true,true,true,true).unwrap();}
+    for ch in "2026su3".chars() {
+        let (a,b)=(first.key(Key::ch(ch,0)).unwrap(),second.key(Key::ch(ch,0)).unwrap());
+        assert_eq!((a.preedit,a.candidates),(b.preedit,b.candidates),"after {ch}");
+    }
+}
