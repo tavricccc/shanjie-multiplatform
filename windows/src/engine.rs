@@ -250,12 +250,12 @@ impl Engine {
         self.last = out.clone();
         out
     }
-    fn begin(&mut self) -> bool {
+    fn begin(&mut self, timeout: u32) -> bool {
         unsafe {
             let Some(m) = self.mutex else {
                 return true;
             };
-            let result = WaitForSingleObject(m, 250);
+            let result = WaitForSingleObject(m, timeout);
             if result != WAIT_OBJECT_0 && result != WAIT_ABANDONED {
                 self.failure = Some(if result == windows::Win32::Foundation::WAIT_TIMEOUT {
                     Failure::Busy
@@ -313,7 +313,7 @@ impl Engine {
         &mut self,
         f: impl FnOnce(*mut ShanjieEngine, *mut *mut ShanjieOutput) -> i32,
     ) -> Option<Snapshot> {
-        if self.handle.is_null() || !self.begin() {
+        if self.handle.is_null() || !self.begin(250) {
             return None;
         }
         let out = self.invoke(f);
@@ -469,8 +469,19 @@ impl Engine {
             Op::Reset(discard) => {
                 if discard {
                     self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) })
+                } else if self.begin(0) {
+                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+                    self.end();
+                    out
+                } else if self.failure == Some(Failure::Busy) {
+                    // Focus loss must send its text without waiting for another learning writer.
+                    self.failure = None;
+                    unsafe { shanjie_engine_set_learning(self.handle, 0); }
+                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+                    unsafe { shanjie_engine_set_learning(self.handle, 1); }
+                    out
                 } else {
-                    self.operation(|h, o| unsafe { shanjie_engine_reset(h, 0, o) })
+                    None
                 }
             }
             Op::Pick(index) => self.operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
