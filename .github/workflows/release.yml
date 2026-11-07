@@ -95,7 +95,7 @@ jobs:
       - name: Unit tests
         run: cargo test --manifest-path windows/Cargo.toml --lib
       - name: Mixed-input regression against the built data
-        run: cargo test --manifest-path windows/Cargo.toml --lib -- --ignored digit_runs_hand_back_complete_readings sessions_on_one_model_share_the_digit_tables
+        run: cargo test --manifest-path windows/Cargo.toml --lib -- --ignored mixed_regression
       - name: Upload to the release
         if: needs.release.outputs.publish == 'true'
         env:
