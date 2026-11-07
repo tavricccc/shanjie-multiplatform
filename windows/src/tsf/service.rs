@@ -829,9 +829,6 @@ impl Data {
                     .size
                     .set(current.number("appearance", "font_size", 18));
                 c.data
-                    .vertical
-                    .set(current.get("candidates", "layout", "horizontal") == "vertical");
-                c.data
                     .anchor_right
                     .set(current.get("candidates", "anchor", "right") == "right");
                 c.data.reading_panel.set(current.reading_panel());
@@ -1042,10 +1039,6 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 preferences.number("appearance", "theme", 0),
                 preferences.number("appearance", "font_size", 18),
             )?;
-            candidates
-                .data
-                .vertical
-                .set(preferences.get("candidates", "layout", "horizontal") == "vertical");
             candidates
                 .data
                 .anchor_right

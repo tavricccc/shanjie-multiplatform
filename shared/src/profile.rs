@@ -92,6 +92,13 @@ impl Document {
             }
             out.set(&section, key.trim(), value.trim());
         }
+        // The candidate window is vertical only on Windows: a line left in an old profile is dropped unread.
+        // The Linux frontends still read `layout`.
+        if cfg!(windows) {
+            if let Some(candidates) = out.0.get_mut("candidates") {
+                candidates.remove("layout");
+            }
+        }
         Ok(out)
     }
     pub fn get<'a>(&'a self, section: &str, key: &str, default: &'a str) -> &'a str {
@@ -245,7 +252,7 @@ impl Document {
             }
         }
         self.set("profile", "schema", SCHEMA);
-        if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
+        if cfg!(not(windows)) && !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
             self.set("candidates", "layout", "horizontal");
         }
         // `reading` is an old switch from before the panel merged with the candidates; `reading_panel` is not it.
@@ -516,12 +523,12 @@ mod tests {
     #[test]
     fn windows_template_follows_microsoft_for_the_candidate_list_and_keeps_explicit_values() {
         let doc = template(true);
-        assert_eq!((doc.get("candidates", "layout", ""), doc.get("candidates", "right_action", "")), ("vertical", "expand"));
+        assert_eq!(doc.get("candidates", "right_action", ""), "expand");
         let shanjie = template(false);
-        assert_eq!((shanjie.get("candidates", "layout", ""), shanjie.get("candidates", "right_action", "")), ("horizontal", "none"));
-        let mut mine = Document::parse("[profile]\nschema=9\ninteraction=windows\n[candidates]\nlayout=horizontal\nright_action=none\n").unwrap();
+        assert_eq!(shanjie.get("candidates", "right_action", ""), "none");
+        let mut mine = Document::parse("[profile]\nschema=9\ninteraction=windows\n[candidates]\nright_action=none\n").unwrap();
         mine.migrate();
-        assert_eq!((mine.get("candidates", "layout", ""), mine.get("candidates", "right_action", "")), ("horizontal", "none"));
+        assert_eq!(mine.get("candidates", "right_action", ""), "none");
         // A profile from before right_action keeps its old → (the legacy mapping, not the template).
         let mut legacy = Document::parse("[profile]\nschema=5\ninteraction=windows\n").unwrap();
         legacy.migrate();
@@ -529,13 +536,31 @@ mod tests {
     }
     #[test]
     fn stale_big5_values_load_harmlessly() {
-        let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nlayout=horizontal\n";
+        let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nanchor=left\n";
         let mut doc = Document::parse(stale).unwrap();
         doc.migrate();
         assert!(!doc.0["candidates"].contains_key("big5"));
-        assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
+        assert_eq!(doc.get("candidates", "anchor", ""), "left");
         assert!(!preset(stale, true).unwrap().contains("big5"));
         assert!(!import_preset(stale, stale).unwrap().contains("big5"));
+    }
+    #[test]
+    fn stale_layout_lines_load_harmlessly_on_windows() {
+        // Any old value, even one that is not valid, goes without touching the keys around it.
+        for value in ["horizontal", "vertical", "sideways"] {
+            let stale = format!("[profile]\nschema=9\ninteraction=windows\n[candidates]\nlayout={value}\nanchor=left\n[appearance]\nglass_tint=70\n");
+            let mut doc = Document::parse(&stale).unwrap();
+            doc.migrate();
+            assert_eq!(doc.get("candidates", "anchor", ""), "left");
+            assert_eq!(doc.number("appearance", "glass_tint", 0), 70);
+            if cfg!(windows) {
+                assert!(!doc.0["candidates"].contains_key("layout"));
+                assert!(!template(true).0["candidates"].contains_key("layout"));
+                assert!(!template(false).0["candidates"].contains_key("layout"));
+                assert!(!import_preset(&stale, &stale).unwrap().contains("layout"));
+                assert!(!preset(&stale, false).unwrap().contains("layout"));
+            }
+        }
     }
     #[test]
     fn raw_key_mixing_forces_the_reading_panel_without_rewriting_it() {
@@ -635,7 +660,7 @@ mod tests {
     #[test]
     fn shared_presets_keep_personal_choices_and_reject_bad_values() {
         let mine = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=mine.tsv\nkeyboard=2\n[appearance]\nfont_size=24\n";
-        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nlayout=vertical\n";
+        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nanchor=left\n";
         let shared = export_preset(source, "朋友\n").unwrap();
         assert!(!shared.contains("dictionary") && !shared.contains("\nkeyboard=") && !shared.contains("[appearance]"));
         let merged = Document::parse(&import_preset(mine, &shared).unwrap()).unwrap();
@@ -643,7 +668,7 @@ mod tests {
         assert_eq!(merged.number("input", "keyboard", 0), 2);
         assert_eq!(merged.number("appearance", "font_size", 0), 24);
         assert!(merged.flag("punctuation", "plain_lbracket", false));
-        assert_eq!(merged.get("candidates", "layout", ""), "vertical");
+        assert_eq!(merged.get("candidates", "anchor", ""), "left");
         assert_eq!(merged.get("preset", "name", ""), "朋友");
         for bad in [
             // Legacy values (e.g. layout=grid) are migrated first; unknown ones are refused.
@@ -693,7 +718,6 @@ mod tests {
         doc.migrate();
         assert!(!doc.0["input"].contains_key("smart_zhuyin"));
         assert!(!doc.0["engine"].contains_key("model"));
-        assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
         assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");
         assert!(doc.flag("input", "learning", false));
         assert_eq!(doc.number("appearance", "font_size", 0), 22);

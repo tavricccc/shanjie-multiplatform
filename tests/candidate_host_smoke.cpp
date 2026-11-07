@@ -33,29 +33,24 @@ int wmain(int argc,wchar_t** argv) {
         RECT bounds{},client{}; GetWindowRect(presenter.window(),&bounds); GetClientRect(presenter.window(),&client);
         assert(bounds.right < -10000 && bounds.bottom < -10000); assert(client.right == bounds.right-bounds.left && client.bottom == bounds.bottom-bounds.top);
         std::printf("Native click geometry: dpi=%u client=%ldx%ld\n",GetDpiForWindow(presenter.window()),client.right,client.bottom);
-        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,client.bottom/2)); MSG message; while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
-        assert(picks == 1 && pickedSequence == presenter.sequence());
-        // Vertical layout: nine rows, narrower than the pill, and a click on row three picks index 2.
-        presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
-        RECT tall{}; GetClientRect(presenter.window(),&tall);
+        // Nine rows, and a click on row three picks index 2 under the current sequence.
         // The window carries a shadow margin around the panel (candidate.rs TOP and BOTTOM: 34 DIPs).
         LONG margin = MulDiv(34,GetDpiForWindow(presenter.window()),96);
-        assert(tall.bottom-margin > (client.bottom-margin)*5 && tall.right < client.right);
-        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(tall.right/2,(LONG)(tall.bottom*(2.5/9.0))));
+        assert(client.bottom-margin > MulDiv(9*24,GetDpiForWindow(presenter.window()),96));
+        SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(client.right/2,(LONG)(client.bottom*(2.5/9.0)))); MSG message;
         while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
-        assert(picks == 2 && pickedIndex == 2);
-        std::printf("Vertical candidates: client=%ldx%ld\n",tall.right,tall.bottom);
+        assert(picks == 1 && pickedIndex == 2 && pickedSequence == presenter.sequence());
         // Three visual columns retain the core indices, including clicks in later rows.
-        presenter.vertical(false); frame.columns = 9; frame.total = 27;
+        frame.columns = 9; frame.total = 27;
         for(int i=9;i<27;i++)frame.candidates.push_back(L"候選"+std::to_wstring(i+1));
         frame.selected = 10; presenter.publish(frame,preferences,caret,96,true);
         RECT grid{}; GetClientRect(presenter.window(),&grid);
-        assert(grid.bottom-margin > (client.bottom-margin)*2);
+        assert(grid.right > client.right);
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(MulDiv(35,GetDpiForWindow(presenter.window()),96),grid.bottom/2));
         while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
-        assert(picks == 3 && pickedIndex == 12);
+        assert(picks == 2 && pickedIndex == 12);
         frame.candidates.resize(9); frame.columns = 0; frame.total = 9; frame.selected = 1;
-        presenter.vertical(false); presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
+        presenter.hide(); assert(!presenter.shown()); assert(pickedSequence != presenter.sequence());
         for (auto notification : {WM_SETTINGCHANGE,WM_THEMECHANGED,WM_DWMCOLORIZATIONCOLORCHANGED}) {
             SendMessageW(presenter.window(),notification,0,0);
             assert(!presenter.shown());
@@ -70,9 +65,7 @@ int wmain(int argc,wchar_t** argv) {
                 frame.candidates = {L"你",L"妳",L"擬",L"禰",L"妮",L"尼",L"倪",L"泥",L"逆"};
                 preferences.theme = theme; preferences.fontSize = 16;
                 frame.columns = 0; presenter.publish(frame,preferences,caret,96,true);
-                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal.bmp"));
-                presenter.vertical(true); presenter.publish(frame,preferences,caret,96,true);
-                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-vertical.bmp")); presenter.vertical(false);
+                captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-vertical.bmp"));
                 for(int i=9;i<36;i++)frame.candidates.push_back(L"候選"+std::to_wstring(i+1));
                 frame.columns = 9; frame.total = 36; frame.selected = 10;
                 presenter.publish(frame,preferences,caret,96,true);
@@ -88,7 +81,7 @@ int wmain(int argc,wchar_t** argv) {
                 frame.candidates = {L"輸入法",L"候選視窗",L"善解注音",L"微軟注音",L"個人詞庫",L"全形標點",L"倚天鍵盤",L"使用者",L"設定"};
                 for (auto size : {14u,32u}) {
                     preferences.fontSize = size; presenter.publish(frame,preferences,caret,96,true);
-                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-horizontal-"+std::to_wstring(size)+L".bmp"));
+                    captureNative(presenter.window(),output/(L"candidates-"+std::to_wstring(theme)+L"-vertical-"+std::to_wstring(size)+L".bmp"));
                 }
                 SetEnvironmentVariableW(L"SHANJIE_VERIFY_WORK_WIDTH",L"720");
                 presenter.publish(frame,preferences,caret,96,true);
