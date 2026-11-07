@@ -158,6 +158,9 @@ internal static class SetupVerifier
             var install = Open(false, theme);
             await Task.Delay(400);
             Check(!install.PrimaryEnabledForVerification, "Next was enabled before the install status loaded");
+            install.ShowStatusErrorForVerification("找不到安裝程式的資料檔。");
+            await Task.Delay(300);
+            await VisualVerifier.Capture(install.CaptureElement, Path.Combine(output, $"setup-status-error-{suffix}.png"));
             install.ShowStatus(upgrade);
             Check(install.PrimaryEnabledForVerification && install.PrimaryForVerification == "下一步", "Welcome page actions failed");
             await VisualVerifier.Capture(install.CaptureElement, Path.Combine(output, $"setup-welcome-{suffix}.png"));

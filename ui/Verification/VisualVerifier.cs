@@ -186,6 +186,16 @@ internal static class VisualVerifier
             }
             settings.ShowSection(0); settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-saved.png"));
+            // The status bar in each severity; the app has no warning message yet, so that one is sample text.
+            foreach (var (severity, name, text) in new[] {
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success, "success", "快速設定已套用。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational, "info", "已載入「Windows／微軟注音按鍵」操作預設，按儲存後才套用。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning, "warning", "驗證用的警告訊息：這一行測試換行時圖示、文字與關閉按鈕的對齊，所以刻意寫得比較長一些，好讓它在設定視窗裡折成兩行。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error, "error", "無法儲存設定：存取被拒。") })
+            {
+                settings.ShowFeedbackForVerification(severity, text); await Task.Delay(350);
+                await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-status-{name}.png"));
+            }
             settings.ShowSection(MainWindow.Pages.Dictionary); settings.Vm.DictionaryText = "invalid"; settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error.png"));
             settings.Vm.DictionaryText = ""; settings.LoadProfile(false); settings.ShowSection(MainWindow.Pages.Candidates); await Task.Delay(350);

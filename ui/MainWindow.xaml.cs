@@ -74,6 +74,7 @@ public sealed partial class MainWindow : UserControl
     internal string DictionaryForVerification => PersonalDictionaryEditor.Text;
     internal (bool standard, bool eten) InstalledOptionsForVerification => (StandardKeyboardOption.IsEnabled, EtenKeyboardOption.IsEnabled);
     internal InfoBarSeverity FeedbackForVerification => StatusBar.Severity;
+    internal void ShowFeedbackForVerification(InfoBarSeverity severity, string text) { Vm.Status = text; StatusBar.Severity = severity; StatusBar.IsOpen = true; }
     internal void SetInstalledForVerification(uint mask) { Vm.ApplyInstalledKeyboards(mask); ShowLoadFeedback(); }
     private void ShowLoadFeedback() { StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = !string.IsNullOrWhiteSpace(Vm.Status); }
     private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);

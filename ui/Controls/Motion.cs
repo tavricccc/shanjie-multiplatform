@@ -2,6 +2,7 @@ using System.Numerics;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI.ViewManagement;
 namespace Shanjie_UI.Controls;
@@ -17,6 +18,33 @@ internal static class Motion
     /// <summary>Default accent (霧藍); only control states and focus use it.</summary>
     internal static SolidColorBrush Accent => (SolidColorBrush)Application.Current.Resources["SjAccentBrush"];
     internal static Brush Resource(string key) => (Brush)Application.Current.Resources[key];
+}
+
+/// <summary>
+/// Appear / dismiss motion for an element whose Visibility toggles (the status bar's template root): it rises 6 px and
+/// fades in over Normal with the Smooth curve, and fades out over Fast. Windows animations off makes both instant.
+/// </summary>
+public static class StatusMotion
+{
+    public static readonly DependencyProperty IsAnimatedProperty = DependencyProperty.RegisterAttached("IsAnimated", typeof(bool), typeof(StatusMotion), new PropertyMetadata(false, (d, e) => { if (d is UIElement element && (bool)e.NewValue) Attach(element); }));
+    public static bool GetIsAnimated(UIElement element) => (bool)element.GetValue(IsAnimatedProperty);
+    public static void SetIsAnimated(UIElement element, bool value) => element.SetValue(IsAnimatedProperty, value);
+
+    static void Attach(UIElement element)
+    {
+        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
+        var c = ElementCompositionPreview.GetElementVisual(element).Compositor;
+        var ease = Motion.Ease(c, Motion.Smooth);
+        var rise = c.CreateVector3KeyFrameAnimation();
+        rise.Target = "Translation"; rise.InsertKeyFrame(0, new Vector3(0, 6, 0)); rise.InsertKeyFrame(1, Vector3.Zero, ease); rise.Duration = Motion.Duration(Motion.Normal);
+        var fadeIn = c.CreateScalarKeyFrameAnimation();
+        fadeIn.Target = "Opacity"; fadeIn.InsertKeyFrame(0, 0); fadeIn.InsertKeyFrame(1, 1, ease); fadeIn.Duration = Motion.Duration(Motion.Normal);
+        var show = c.CreateAnimationGroup(); show.Add(rise); show.Add(fadeIn);
+        var fadeOut = c.CreateScalarKeyFrameAnimation();
+        fadeOut.Target = "Opacity"; fadeOut.InsertKeyFrame(0, 1); fadeOut.InsertKeyFrame(1, 0, ease); fadeOut.Duration = Motion.Duration(Motion.Fast);
+        ElementCompositionPreview.SetImplicitShowAnimation(element, show);
+        ElementCompositionPreview.SetImplicitHideAnimation(element, fadeOut);
+    }
 }
 
 /// <summary>Keyboard focus ring: 2 px accent at 45 % outside the control, only for Tab / arrow focus.</summary>
