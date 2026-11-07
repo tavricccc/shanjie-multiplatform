@@ -43,9 +43,6 @@ pub const REBUILD: [(&str, &str); 25] = [
     ("input", "space_inputs_zhuyin"),
 ];
 
-/// `[input]` keys of the mixing mode: raw-key mixing, then upstream English; both on is 兩者並用.
-const MIXING: [&str; 2] = ["mixed_input", "upstream_english"];
-
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
@@ -243,17 +240,6 @@ impl Document {
         if schema < 9 && windows {
             self.set("shortcuts", "backquote_symbols", 1);
         }
-        // The two mixing keys are one choice (中英混打方式). A profile that turns one on but lacks the other predates it
-        // (upstream English came after raw-key mixing) or was edited by hand: the missing one is off, not the template's
-        // default, which would turn that single mode into both. A missing key beside an off one still takes the template.
-        let stated = MIXING.map(|k| self.0.get("input").and_then(|s| s.get(k)).map(|v| v == "1"));
-        if let [Some(true), None] | [None, Some(true)] = stated {
-            for (key, value) in MIXING.into_iter().zip(stated) {
-                if value.is_none() {
-                    self.set("input", key, 0);
-                }
-            }
-        }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
         } else {
@@ -264,6 +250,12 @@ impl Document {
             for (k, v) in fields {
                 self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
+        }
+        // The two mixing keys are one choice (中英混打方式): off, upstream English or raw-key mixing. Raw-key mixing wins:
+        // both on (兩者並用, 0.9.0 to 0.15.x) is no longer offered and raw-key mixing judged first there, and a profile
+        // without the upstream key (older than it, or edited by hand) must not take the template's 1 beside it.
+        if self.flag("input", "mixed_input", false) {
+            self.set("input", "upstream_english", 0);
         }
         self.set("profile", "schema", SCHEMA);
         if cfg!(not(windows)) && !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
@@ -525,7 +517,7 @@ mod tests {
         }
     }
     #[test]
-    fn a_single_mixing_mode_never_gains_the_other_from_the_template() {
+    fn the_mixing_mode_is_one_choice_and_both_become_raw_key_mixing() {
         let mode = |doc: &Document| (doc.flag("input", "mixed_input", false), doc.flag("input", "upstream_english", false));
         for interaction in ["windows", "shanjie"] {
             // Raw-key mixing from before upstream English existed (schema 6, v0.8), or a hand-edited newer file.
@@ -542,10 +534,19 @@ mod tests {
             let mut upstream = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nupstream_english=1\n")).unwrap();
             upstream.migrate();
             assert_eq!(mode(&upstream), (false, true));
-            // Both stated stays both; an off key beside a missing one still takes the template's default.
-            let mut both = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nmixed_input=1\nupstream_english=1\n")).unwrap();
-            both.migrate();
-            assert_eq!(mode(&both), (true, true));
+            // Both on (兩者並用, no longer offered) becomes raw-key mixing, which judged first, whatever the schema; it stays so,
+            // and a shared preset or a template merge written with both comes in the same way.
+            for schema in [6, 9] {
+                let old = format!("[profile]\nschema={schema}\ninteraction={interaction}\n[input]\nmixed_input=1\nupstream_english=1\n");
+                let mut both = Document::parse(&old).unwrap();
+                both.migrate();
+                assert_eq!(mode(&both), (true, false), "{interaction} schema {schema} both");
+                both.migrate();
+                assert_eq!(mode(&both), (true, false), "both stays raw-key mixing");
+                assert_eq!(mode(&Document::parse(&import_preset("", &old).unwrap()).unwrap()), (true, false));
+                assert_eq!(mode(&Document::parse(&merge_preset(&Document::default(), Document::parse(&old).unwrap())).unwrap()), (true, false));
+            }
+            // An off key beside a missing one still takes the template's default.
             let mut off = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nmixed_input=0\n")).unwrap();
             off.migrate();
             assert_eq!(mode(&off), mode(&template(interaction == "windows")));
@@ -613,7 +614,7 @@ mod tests {
         // Off, upstream only, then the user's own choice.
         assert!(!doc(0, 0, 0, 0).reading_panel() && !doc(0, 0, 1, 0).reading_panel());
         assert!(doc(0, 0, 1, 1).reading_panel());
-        // Raw-key mixing alone and together with upstream's, on both Zhuyin layouts; the stored value stays 0.
+        // Raw-key mixing on every Zhuyin layout, also from a profile that had upstream's on beside it; the stored value stays 0.
         for (keyboard, upstream) in [(0, 0), (0, 1), (1, 0), (2, 0)] {
             let forced = doc(keyboard, 1, upstream, 0);
             assert!(forced.reading_panel() && !forced.flag("candidates", "reading_panel", true));
