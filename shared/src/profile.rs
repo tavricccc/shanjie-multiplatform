@@ -43,6 +43,9 @@ pub const REBUILD: [(&str, &str); 25] = [
     ("input", "space_inputs_zhuyin"),
 ];
 
+/// `[input]` keys of the mixing mode: raw-key mixing, then upstream English; both on is 兩者並用.
+const MIXING: [&str; 2] = ["mixed_input", "upstream_english"];
+
 #[derive(Clone, Default)]
 pub struct Document(pub BTreeMap<String, BTreeMap<String, String>>);
 impl Document {
@@ -239,6 +242,17 @@ impl Document {
         // Align Windows once; an explicit opt-out in schema 9 and later is retained.
         if schema < 9 && windows {
             self.set("shortcuts", "backquote_symbols", 1);
+        }
+        // The two mixing keys are one choice (中英混打方式). A profile that turns one on but lacks the other predates it
+        // (upstream English came after raw-key mixing) or was edited by hand: the missing one is off, not the template's
+        // default, which would turn that single mode into both. A missing key beside an off one still takes the template.
+        let stated = MIXING.map(|k| self.0.get("input").and_then(|s| s.get(k)).map(|v| v == "1"));
+        if let [Some(true), None] | [None, Some(true)] = stated {
+            for (key, value) in MIXING.into_iter().zip(stated) {
+                if value.is_none() {
+                    self.set("input", key, 0);
+                }
+            }
         }
         let defaults = Self::parse(if windows {
             include_str!("../../profiles/windows.ini")
@@ -508,6 +522,33 @@ mod tests {
             let doc = template(windows);
             assert!(doc.flag("input", "upstream_english", false) && !doc.flag("input", "mixed_input", true));
             assert!(!doc.flag("candidates", "reading_panel", true) && !doc.reading_panel());
+        }
+    }
+    #[test]
+    fn a_single_mixing_mode_never_gains_the_other_from_the_template() {
+        let mode = |doc: &Document| (doc.flag("input", "mixed_input", false), doc.flag("input", "upstream_english", false));
+        for interaction in ["windows", "shanjie"] {
+            // Raw-key mixing from before upstream English existed (schema 6, v0.8), or a hand-edited newer file.
+            for schema in [6, 9] {
+                let old = format!("[profile]\nschema={schema}\ninteraction={interaction}\n[input]\nmixed_input=1\n");
+                let mut doc = Document::parse(&old).unwrap();
+                doc.migrate();
+                assert_eq!(mode(&doc), (true, false), "{interaction} schema {schema}");
+                doc.migrate();
+                assert_eq!(mode(&doc), (true, false), "stays after another migration");
+                // A shared preset written that way keeps its single mode too.
+                assert_eq!(mode(&Document::parse(&import_preset("", &old).unwrap()).unwrap()), (true, false));
+            }
+            let mut upstream = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nupstream_english=1\n")).unwrap();
+            upstream.migrate();
+            assert_eq!(mode(&upstream), (false, true));
+            // Both stated stays both; an off key beside a missing one still takes the template's default.
+            let mut both = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nmixed_input=1\nupstream_english=1\n")).unwrap();
+            both.migrate();
+            assert_eq!(mode(&both), (true, true));
+            let mut off = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nmixed_input=0\n")).unwrap();
+            off.migrate();
+            assert_eq!(mode(&off), mode(&template(interaction == "windows")));
         }
     }
     #[test]
