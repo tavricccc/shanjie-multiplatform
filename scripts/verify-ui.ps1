@@ -64,6 +64,15 @@ foreach ($phase in 'first-open','reopen','after-upgrade') {
 Stop-CoresOnProfile "$quickOutput/profile"
 Remove-Item -LiteralPath $quickOutput -Recurse -Force
 Write-Host 'Quick Setup showed once across reopening and upgrading.'
+# Quick Setup's decisions, saved files, keys, demos and screenshots (each step, mid-transition and the finish), on its own profile.
+$quickReview = Join-Path $root 'build/ui-review-quick-setup'
+if (Test-Path $quickReview) { Remove-Item -LiteralPath $quickReview -Recurse -Force }
+$process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickReview + '"'),'flow' -WindowStyle Hidden -PassThru
+$process.WaitForExit()
+$result = Get-Content "$quickReview/result-flow.txt" -Raw
+Stop-CoresOnProfile "$quickReview/profile"
+if ($result -ne 'PASS') { throw "Quick Setup flow: $result" }
+Write-Host "Quick Setup flow checks passed: $quickReview/quick-setup"
 $output = Join-Path $root 'build/ui-review-final'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
 $process.WaitForExit()

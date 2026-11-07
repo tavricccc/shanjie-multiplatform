@@ -151,6 +151,9 @@ public sealed partial class MainWindow : UserControl
         QuickSetupLayer.Children.Clear(); QuickSetupLayer.Visibility = Visibility.Collapsed; QuickSetup = null;
         NavPane.Visibility = MainPane.Visibility = Visibility.Visible;
         Host.SetCaption(AppTitleBar, Head);
+        // The settings come up under the departing flow: navigation first, then the page.
+        var settle = new Controls.Choreography(Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(Root).Compositor, 520);
+        settle.Enter(NavPane, new System.Numerics.Vector3(-12, 0, 0), 0, 420).Enter(MainPane, new System.Numerics.Vector3(0, 12, 0), 70, 440).Then(() => { });
         if (!applied) return;
         Vm.Load(); RefreshPresets(); Vm.Status = "快速設定已套用。"; StatusBar.Severity = InfoBarSeverity.Success; StatusBar.IsOpen = true;
     }

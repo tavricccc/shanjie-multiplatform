@@ -94,7 +94,7 @@ public partial class App : Application
             Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
             Environment.SetEnvironmentVariable("SHANJIE_TEST_PROFILE", "1");
             string result = Path.Combine(output, $"result-{arguments[3]}.txt");
-            try { window = new MainWindow(); await Verification.QuickSetupVerifier.RunPhase((MainWindow)window, arguments[3]); File.WriteAllText(result, "PASS"); }
+            try { window = new MainWindow(); await Verification.QuickSetupVerifier.RunPhase((MainWindow)window, arguments[3], output); File.WriteAllText(result, "PASS"); }
             catch (Exception error) { File.WriteAllText(result, error.ToString()); }
             Environment.Exit(0);
         }

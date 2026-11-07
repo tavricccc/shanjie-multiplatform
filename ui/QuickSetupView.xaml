@@ -1,32 +1,28 @@
 <UserControl x:Class="Shanjie_UI.QuickSetupView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:Shanjie_UI.Controls">
-    <!-- Quick Setup inside the settings window's glass: a head with the step dots, three pages, and back / skip / next at the bottom. -->
-    <Grid x:Name="Root" Background="Transparent">
+    <!-- Quick Setup inside the settings window's glass: a head with the progress, one step at a time in the middle
+         (built in code, one question per screen) and skip / back / continue at the bottom. -->
+    <Grid x:Name="Root" Background="Transparent" KeyDown="RootKeyDown">
         <Grid.Resources>
-            <Style x:Key="QuickTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="26"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource SjText1Brush}"/></Style>
-            <Style x:Key="QuickLead" TargetType="TextBlock"><Setter Property="FontSize" Value="13"/><Setter Property="LineHeight" Value="20"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource SjText2Brush}"/></Style>
-            <Style x:Key="FactName" TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{ThemeResource SjText3Brush}"/></Style>
-            <Style x:Key="FactValue" TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{ThemeResource SjText1Brush}"/></Style>
-            <!-- A template or keep choice: a card that takes the accent edge and a check when chosen. -->
-            <Style x:Key="ChoiceCard" TargetType="RadioButton">
-                <Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Stretch"/><Setter Property="CornerRadius" Value="12"/><Setter Property="MinWidth" Value="0"/><Setter Property="UseSystemFocusVisuals" Value="True"/>
+            <!-- An answer card: the glass card of the settings pages, a touch of hover; the chosen outline and check are drawn by ChoiceCards. -->
+            <Style x:Key="QuickChoice" TargetType="RadioButton">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="MinWidth" Value="0"/><Setter Property="MinHeight" Value="56"/>
+                <Setter Property="CornerRadius" Value="14"/><Setter Property="UseSystemFocusVisuals" Value="True"/><Setter Property="FocusVisualMargin" Value="-3"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Grid>
-                                <Border x:Name="Bg" Background="{ThemeResource SjFillControlBrush}" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}"/>
+                            <Grid x:Name="Root">
+                                <Border Background="{ThemeResource SjFillControlBrush}" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}"/>
                                 <Border x:Name="Hover" Background="{ThemeResource SjFillHoverBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-                                <Border x:Name="Chosen" BorderBrush="{StaticResource SjAccentBrush}" BorderThickness="2" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-                                <ContentPresenter HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Padding="14,12,14,14"/>
-                                <Border x:Name="Check" Width="20" Height="20" CornerRadius="10" Margin="0,12,12,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{StaticResource SjAccentBrush}" Opacity="0"><controls:Icon Glyph="check" Width="12" Height="12" Foreground="White"/></Border>
+                                <ContentPresenter x:Name="Presenter" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" Padding="16,12,16,12"/>
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal"/>
                                         <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
                                         <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                                        <VisualState x:Name="Disabled"/>
+                                        <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Presenter.Opacity" Value="0.55"/></VisualState.Setters></VisualState>
                                     </VisualStateGroup>
                                     <VisualStateGroup x:Name="CheckStates">
-                                        <VisualState x:Name="Checked"><VisualState.Setters><Setter Target="Chosen.Opacity" Value="1"/><Setter Target="Check.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                                        <VisualState x:Name="Checked"/>
                                         <VisualState x:Name="Unchecked"/>
                                         <VisualState x:Name="Indeterminate"/>
                                     </VisualStateGroup>
@@ -36,21 +32,21 @@
                     </Setter.Value>
                 </Setter>
             </Style>
-            <!-- The clickable head of a detail row: title on the left, current choice on the right. -->
-            <Style x:Key="RowHead" TargetType="Button">
-                <Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="MinHeight" Value="40"/><Setter Property="Padding" Value="14,0,14,0"/><Setter Property="CornerRadius" Value="10"/><Setter Property="UseSystemFocusVisuals" Value="True"/>
+            <!-- Skip: text only until hovered, so the way forward stays the one strong button. -->
+            <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource SjTextButton}">
+                <Setter Property="Foreground" Value="{ThemeResource SjText2Brush}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Background="Transparent">
+                            <Grid x:Name="Root">
                                 <Border x:Name="Hover" Background="{ThemeResource SjFillHoverBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-                                <ContentPresenter HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" Padding="{TemplateBinding Padding}"/>
+                                <ContentPresenter x:Name="Presenter" Padding="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="{TemplateBinding FontSize}" Foreground="{TemplateBinding Foreground}"/>
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal"/>
-                                        <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                                        <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                                        <VisualState x:Name="Disabled"/>
+                                        <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/><Setter Target="Presenter.Foreground" Value="{ThemeResource SjText1Brush}"/></VisualState.Setters></VisualState>
+                                        <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hover.Opacity" Value="1"/><Setter Target="Presenter.Foreground" Value="{ThemeResource SjText1Brush}"/></VisualState.Setters></VisualState>
+                                        <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Root.Opacity" Value="0.4"/></VisualState.Setters></VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
                             </Grid>
@@ -60,109 +56,29 @@
             </Style>
         </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <Grid x:Name="CaptionArea" Height="48" Padding="20,0,14,0" Background="Transparent">
+        <Grid x:Name="CaptionArea" Height="52" Padding="20,0,14,0" Background="Transparent">
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Image Source="ms-appx:///Assets/Square44x44Logo.targetsize-48_altform-lightunplated.png" Width="22" Height="22"/>
                 <TextBlock Text="快速設定" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SjText1Brush}"/>
             </StackPanel>
-            <StackPanel x:Name="Dots" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"/>
+            <StackPanel x:Name="ProgressArea" Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <controls:StepProgress x:Name="Progress"/>
+                <TextBlock x:Name="StepText" FontSize="12" MinWidth="30" VerticalAlignment="Center" Foreground="{ThemeResource SjText3Brush}"/>
+            </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <Button Style="{StaticResource SjIconButton}" Click="MinimizeWindow" ToolTipService.ToolTip="最小化" AutomationProperties.Name="最小化"><controls:Icon Glyph="minus" Width="16" Height="16" Foreground="{ThemeResource SjText2Brush}"/></Button>
                 <Button Style="{StaticResource SjIconButton}" Click="CloseWindow" ToolTipService.ToolTip="關閉" AutomationProperties.Name="關閉"><controls:Icon Glyph="close" Width="16" Height="16" Foreground="{ThemeResource SjText2Brush}"/></Button>
             </StackPanel>
         </Grid>
-        <Grid x:Name="Pages" Grid.Row="1">
-            <ScrollViewer x:Name="TemplatePage" Padding="32,4,32,12" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Spacing="10">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="讓我們來制定你的體驗吧" Style="{StaticResource QuickTitle}"/>
-                        <TextBlock x:Name="TemplateLead" Style="{StaticResource QuickLead}"/>
-                    </StackPanel>
-                    <Grid ColumnSpacing="14">
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <RadioButton x:Name="ShanjieCard" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="善解：和原版善解一樣。按空白打開選字，選好字可以繼續打，打字時會預測下一個詞。" Checked="TemplateChecked" KeyDown="CardKeyDown">
-                            <StackPanel Spacing="8">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="善解" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}"/>
-                                    <TextBlock Text="和原版善解一樣，按空白就能選字" Style="{StaticResource FactName}"/>
-                                </StackPanel>
-                                <controls:TypingDemo x:Name="ShanjieDemo" Height="192"/>
-                                <Grid ColumnSpacing="10" RowSpacing="4">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                    <TextBlock Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="打開選字，再按換頁" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="1" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="選好字繼續打，再按才送出" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="2" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="會預測下一個詞，按 Tab 選用" Style="{StaticResource FactValue}"/>
-                                </Grid>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton x:Name="WindowsCard" Grid.Column="1" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="微軟注音風格：按鍵跟 Windows 內建注音差不多。按向下鍵打開選字，選好字直接送出，打字時不預測。" Checked="TemplateChecked" KeyDown="CardKeyDown">
-                            <StackPanel Spacing="8">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="微軟注音風格" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}"/>
-                                    <TextBlock Text="按鍵跟 Windows 內建注音差不多" Style="{StaticResource FactName}"/>
-                                </StackPanel>
-                                <controls:TypingDemo x:Name="WindowsDemo" Height="192"/>
-                                <Grid ColumnSpacing="10" RowSpacing="4">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                    <TextBlock Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="插入空格；按 ↓ 打開選字" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="1" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="選好字直接送出" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="2" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="不預測，畫面比較乾淨" Style="{StaticResource FactValue}"/>
-                                </Grid>
-                            </StackPanel>
-                        </RadioButton>
-                    </Grid>
-                    <RadioButton x:Name="KeepCard" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="保留我現在的設定：不套用範本，只改下一步你動到的項目。" Checked="TemplateChecked" KeyDown="CardKeyDown" Visibility="Collapsed">
-                        <StackPanel Spacing="2" Margin="0,0,28,0">
-                            <TextBlock Text="保留我現在的設定" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}"/>
-                            <TextBlock Text="不套用範本，只改下一步你動到的項目。" Style="{StaticResource FactName}"/>
-                        </StackPanel>
-                    </RadioButton>
-                    <TextBlock Style="{StaticResource SjNote}" Margin="2,0,2,0" Text="不論選哪一種，你的詞庫、選字學習、鍵盤配置和外觀都不會變。動畫是示意，實際的字依你的詞庫而定。"/>
-                </StackPanel>
-            </ScrollViewer>
-            <Grid x:Name="DetailsPage" Padding="32,4,32,12" RowSpacing="14" ColumnSpacing="20" Visibility="Collapsed">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="340"/></Grid.ColumnDefinitions>
-                <StackPanel Grid.ColumnSpan="2" Spacing="4">
-                    <TextBlock Text="再調整幾個細節" Style="{StaticResource QuickTitle}"/>
-                    <TextBlock x:Name="DetailsLead" Style="{StaticResource QuickLead}"/>
-                </StackPanel>
-                <ScrollViewer x:Name="RowsScroll" Grid.Row="1" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="Rows" Spacing="2"/>
-                </ScrollViewer>
-                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8">
-                    <controls:TypingDemo x:Name="DetailDemo" Height="280"/>
-                    <TextBlock Style="{StaticResource SjNote}" Margin="2,0,2,0" Text="動畫是示意，實際的字依你的詞庫而定。"/>
-                </StackPanel>
-            </Grid>
-            <ScrollViewer x:Name="TryPage" Padding="32,4,32,12" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-                <StackPanel Spacing="14">
-                    <StackPanel Spacing="4">
-                        <TextBlock x:Name="TryTitle" Style="{StaticResource QuickTitle}"/>
-                        <TextBlock x:Name="TryLead" Style="{StaticResource QuickLead}"/>
-                    </StackPanel>
-                    <TextBox x:Name="TryBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" FontSize="15" PlaceholderText="在這裡打打看，例如「今天天氣很好」" AutomationProperties.Name="試打區，這裡的字不會被儲存"/>
-                    <TextBlock Style="{StaticResource SjNote}" Margin="2,0,2,0" Text="這裡打的字不會被儲存。沒看到注音的話，按 Win＋空白鍵切換到善解。"/>
-                    <Border Background="{ThemeResource SjFillControlBrush}" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="1" CornerRadius="12" Padding="14,12">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="你的選擇" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource SjText2Brush}"/>
-                            <Grid x:Name="Summary" ColumnSpacing="14" RowSpacing="4"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions></Grid>
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Style="{StaticResource SjNote}" Margin="2,0,2,0" Text="之後想改，到設定的「一般」按「重新開啟快速設定」，或在各分頁逐項調整。"/>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
-        <Grid Grid.Row="2" Padding="32,12,32,18" ColumnSpacing="8" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="0,1,0,0">
+        <Grid x:Name="Pages" Grid.Row="1"/>
+        <Grid x:Name="Footer" Grid.Row="2" Padding="36,10,36,22" ColumnSpacing="10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Button x:Name="SkipButton" MinHeight="32" Click="Skip"/>
+            <Button x:Name="SkipButton" Style="{StaticResource QuietButton}" MinHeight="36" FontSize="13" Click="Skip"/>
             <TextBlock x:Name="ErrorText" Grid.Column="1" Margin="8,0,8,0" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource SjDangerBrush}" Visibility="Collapsed"/>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                <Button x:Name="BackButton" Content="上一步" MinHeight="32" Click="Back"/>
-                <Button x:Name="NextButton" MinHeight="32" MinWidth="88" Style="{StaticResource SjAccentButton}" Click="Next"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+                <Button x:Name="BackButton" Content="上一步" MinHeight="36" MinWidth="84" FontSize="13" Click="Back" ToolTipService.ToolTip="上一步（Esc）"/>
+                <Button x:Name="NextButton" MinHeight="36" MinWidth="112" FontSize="13" Style="{StaticResource SjAccentButton}" Click="Next"/>
             </StackPanel>
         </Grid>
     </Grid>

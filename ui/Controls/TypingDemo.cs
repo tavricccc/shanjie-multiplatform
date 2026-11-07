@@ -11,20 +11,18 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Shanjie_UI.Setup;
 using Windows.UI;
-using Windows.UI.ViewManagement;
 namespace Shanjie_UI.Controls;
 
 /// <summary>
 /// A small looping scene of typing: an App's text field with its composition and caret, the candidate window in the
-/// palette and proportions of `windows/src/candidate.rs`, and the key just pressed. Plain XAML elements on a timer.
+/// palette and proportions of `windows/src/candidate.rs`, and the key just pressed. Plain XAML elements on a timer;
+/// the movement between frames is composition animation: the window opens from the caret side as the real one does,
+/// the selection glides, a new page settles in, the 中／A indicator pops and a commit lands in the text.
 /// With Windows animations off it holds the script's key frame and does not tick.
 /// </summary>
 public sealed partial class TypingDemo : UserControl
 {
-    static readonly UISettings system = new();
-    /// Lets the harness check both states without changing the Windows setting.
-    internal static bool? AnimationsForVerification { get; set; }
-    internal static bool Animated => AnimationsForVerification ?? system.AnimationsEnabled;
+    internal static bool Animated => Motion.Animated;
     const double ItemHeight = 24, WordSize = 14, LabelSize = 9;
     readonly TextBlock done = Text(), before = Text(true), after = Text(true), keyText = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock caption = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -38,6 +36,7 @@ public sealed partial class TypingDemo : UserControl
     readonly TextBlock modeText = new() { FontSize = 13, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Microsoft.UI.Dispatching.DispatcherQueueTimer timer;
     DemoScript? script;
+    DemoFrame? previous;
     int index;
     string shownKey = "";
 
@@ -74,9 +73,12 @@ public sealed partial class TypingDemo : UserControl
 
     internal void Play(DemoScript next)
     {
+        bool replacing = script is not null && script != next;
         script = next;
         AutomationProperties.SetName(this, "示範動畫：" + next.Frames[next.Keyframe].Caption);
         Start();
+        // Another choice: the scene settles in again rather than cutting.
+        if (replacing && IsLoaded && Animated) Settle(stage, 10, Motion.Slow);
     }
     internal void Stop() => timer.Stop();
     void Start()
@@ -84,7 +86,7 @@ public sealed partial class TypingDemo : UserControl
         if (script is null || !IsLoaded) return;
         timer.Stop();
         index = Animated ? 0 : script.Keyframe;
-        shownKey = "";
+        shownKey = ""; previous = null;
         Blink();
         Render();
         if (Animated) { timer.Interval = TimeSpan.FromMilliseconds(script.Frames[index].Ms); timer.Start(); }
@@ -104,7 +106,7 @@ public sealed partial class TypingDemo : UserControl
     internal bool RunningForVerification => timer.IsRunning;
     internal string CaptionForVerification => caption.Text;
     /// Shows one frame and holds it, for a screenshot.
-    internal void HoldForVerification(int frame) { timer.Stop(); index = frame; Render(); }
+    internal void HoldForVerification(int frame) { timer.Stop(); index = frame; previous = null; Render(); }
     internal void RestartForVerification() => Start();
     /// The floating window stays inside the scene, above the key bar.
     internal bool FitsForVerification
@@ -152,6 +154,61 @@ public sealed partial class TypingDemo : UserControl
         modeText.Text = frame.Mode ?? "";
         mode.Visibility = frame.Mode is null ? Visibility.Collapsed : Visibility.Visible;
         Place();
+        Animate(previous, frame, content);
+        previous = frame;
+    }
+    /// What changed since the last frame decides the movement; the first frame of a loop just appears.
+    void Animate(DemoFrame? last, DemoFrame frame, StackPanel content)
+    {
+        if (!Animated || last is null) return;
+        bool open = frame.List is not null || frame.Panel is not null, wasOpen = last.List is not null || last.Panel is not null;
+        if (open && !wasOpen) Open();
+        else if (open && frame.List is { } list && last.List is { } before)
+        {
+            if (list.Items.SequenceEqual(before.Items) && list.Layout == before.Layout && list.Selected != before.Selected && list.Layout == DemoLayout.Rows)
+                Glide(content, list.Selected, before.Selected);
+            else if (!list.Items.SequenceEqual(before.Items) || list.Layout != before.Layout) Settle(surface, 6, Motion.Normal);
+        }
+        if (frame.Mode is not null && frame.Mode != last.Mode) Pop(mode);
+        // A commit: the text drops into the field.
+        if (frame.Done.Length > last.Done.Length) Settle(done, -5, Motion.Normal);
+    }
+    /// Fades in and grows from the caret side over Fast, as `candidate.rs` opens the real window.
+    void Open()
+    {
+        var v = ElementCompositionPreview.GetElementVisual(surface); var c = v.Compositor;
+        v.CenterPoint = new Vector3(8, 0, 0);
+        var grow = c.CreateVector3KeyFrameAnimation(); grow.InsertKeyFrame(0, new Vector3(0.92f, 0.92f, 1)); grow.InsertKeyFrame(1, Vector3.One, Motion.Ease(c, Motion.Smooth)); grow.Duration = Motion.Duration(Motion.Normal);
+        var fade = c.CreateScalarKeyFrameAnimation(); fade.InsertKeyFrame(0, 0); fade.InsertKeyFrame(1, 1, Motion.Ease(c, Motion.Smooth)); fade.Duration = Motion.Duration(Motion.Fast);
+        v.StartAnimation("Scale", grow); v.StartAnimation("Opacity", fade);
+    }
+    /// The selected pill slides from the previous item to the new one.
+    static void Glide(StackPanel content, int selected, int before)
+    {
+        if (content.Children[^1] is not StackPanel rows || selected >= rows.Children.Count) return;
+        var pill = rows.Children[selected];
+        ElementCompositionPreview.SetIsTranslationEnabled(pill, true);
+        var v = ElementCompositionPreview.GetElementVisual(pill); var c = v.Compositor;
+        var move = c.CreateVector3KeyFrameAnimation();
+        move.InsertKeyFrame(0, new Vector3(0, (float)((before - selected) * (ItemHeight + 2)), 0)); move.InsertKeyFrame(1, Vector3.Zero, Motion.Ease(c, Motion.Glide));
+        move.Duration = Motion.Duration(Motion.Normal);
+        v.StartAnimation("Translation", move);
+    }
+    static void Settle(UIElement element, float rise, double ms)
+    {
+        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
+        var v = ElementCompositionPreview.GetElementVisual(element); var c = v.Compositor;
+        var move = c.CreateVector3KeyFrameAnimation(); move.InsertKeyFrame(0, new Vector3(0, rise, 0)); move.InsertKeyFrame(1, Vector3.Zero, Motion.Ease(c, Motion.Smooth)); move.Duration = Motion.Duration(ms);
+        var fade = c.CreateScalarKeyFrameAnimation(); fade.InsertKeyFrame(0, 0.2f); fade.InsertKeyFrame(1, 1, Motion.Ease(c, Motion.Smooth)); fade.Duration = Motion.Duration(ms);
+        v.StartAnimation("Translation", move); v.StartAnimation("Opacity", fade);
+    }
+    static void Pop(FrameworkElement element)
+    {
+        var v = ElementCompositionPreview.GetElementVisual(element); var c = v.Compositor;
+        v.CenterPoint = new Vector3((float)element.Width / 2, (float)element.Height / 2, 0);
+        var grow = c.CreateVector3KeyFrameAnimation(); grow.InsertKeyFrame(0, new Vector3(0.6f, 0.6f, 1)); grow.InsertKeyFrame(1, Vector3.One, Motion.Ease(c, Motion.Spring)); grow.Duration = Motion.Duration(Motion.Slow);
+        var fade = c.CreateScalarKeyFrameAnimation(); fade.InsertKeyFrame(0, 0); fade.InsertKeyFrame(1, 1); fade.Duration = Motion.Duration(Motion.Fast);
+        v.StartAnimation("Scale", grow); v.StartAnimation("Opacity", fade);
     }
     /// The real window's item height and label size, at a slightly smaller word size so nine fit.
     UIElement ListView(DemoList list, Color text, Color number)

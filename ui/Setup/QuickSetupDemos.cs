@@ -114,6 +114,11 @@ internal static class QuickSetupDemos
         new("j", "再打一段", 1000) { Done = "你", Composing = "gj", Panel = "ㄕㄨ", MarkStart = 0, MarkLength = 2 },
         new("Enter", "按 Enter 就留下英文", 1800) { Done = "你gj" } }, 1);
     internal static DemoScript MixUnchanged() => new([new("", "維持你現在的混打設定", 2000)], 0);
+    /// Keeping the settings: nothing to show but the person's own way of typing.
+    internal static DemoScript Keep() => new(new DemoFrame[] {
+        new("ㄋ", "照你現在的設定打字", 500) { Composing = "ㄋ" },
+        new("ㄧ", "照你現在的設定打字", 500) { Composing = "ㄋㄧ" },
+        new("ˇ", "照你現在的設定打字", 1800) { Composing = "你" } }, 2);
     internal static DemoScript Shift(bool on) => on
         ? new(new DemoFrame[] {
             new("Shift", "單按一下，切到英文") { Mode = "A" },
