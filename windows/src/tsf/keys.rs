@@ -452,7 +452,11 @@ impl Data {
                     } else {
                         Snapshot::default()
                     };
+                    let backquote = s.special.mode == 1;
                     let mut out = s.special.key(key, &p);
+                    if backquote && s.special.mode == 0 && !out.preedit.is_empty() {
+                        out = output(s.engine.perform(crate::broker::Op::Punctuation(out.preedit)))?;
+                    }
                     out.commit = pending.commit + &out.commit;
                     out
                 };
