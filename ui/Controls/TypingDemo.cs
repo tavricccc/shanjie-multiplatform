@@ -147,7 +147,7 @@ public sealed partial class TypingDemo : UserControl
         if (frame.Panel is not null && frame.List is not null) content.Children.Add(new Border { Height = 1, Margin = new Thickness(9, 1, 9, 1), Background = Brush(palette.Divider) });
         if (frame.List is { } list) content.Children.Add(ListView(list, palette.Text, palette.Number));
         surface.Child = content;
-        surface.CornerRadius = new CornerRadius(frame.List?.Layout == DemoLayout.Horizontal ? 12 : 14);
+        surface.CornerRadius = new CornerRadius(14);
         surface.Visibility = frame.List is null && frame.Panel is null ? Visibility.Collapsed : Visibility.Visible;
         modeText.Text = frame.Mode ?? "";
         mode.Visibility = frame.Mode is null ? Visibility.Collapsed : Visibility.Visible;
@@ -173,7 +173,7 @@ public sealed partial class TypingDemo : UserControl
             for (int i = 0; i < list.Items.Length; i++) { var item = Item(i); Grid.SetColumn(item, i % 3); Grid.SetRow(item, i / 3); grid.Children.Add(item); }
             return grid;
         }
-        var stack = new StackPanel { Spacing = 2, Orientation = list.Layout == DemoLayout.Horizontal ? Orientation.Horizontal : Orientation.Vertical };
+        var stack = new StackPanel { Spacing = 2 };
         for (int i = 0; i < list.Items.Length; i++) stack.Children.Add(Item(i));
         return stack;
     }

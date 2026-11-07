@@ -1,6 +1,6 @@
 namespace Shanjie_UI.Setup;
 
-internal enum DemoLayout { Horizontal, Vertical, Grid }
+internal enum DemoLayout { Rows, Grid }
 internal sealed record DemoList(string[] Items, int Selected, DemoLayout Layout);
 /// <summary>One moment of a demo: what the App and the candidate window show after a key.</summary>
 internal sealed record DemoFrame(string Key, string Caption, int Ms = 1100)
@@ -34,14 +34,13 @@ internal static class QuickSetupDemos
     static DemoFrame Stroke(string key, string composing) => new(key, "打注音", 240) { Composing = composing };
     static List<DemoFrame> TypeNihao() => [Stroke("ㄋ", "ㄋ"), Stroke("ㄧ", "ㄋㄧ"), Stroke("ˇ", "你"), Stroke("ㄏ", "你ㄏ"), Stroke("ㄠ", "你ㄏㄠ"), Stroke("ˇ", "你好")];
     static List<DemoFrame> TypeShi() => [Stroke("ㄕ", "ㄕ"), Stroke("ˋ", "是")];
-    static DemoLayout Layout(bool vertical) => vertical ? DemoLayout.Vertical : DemoLayout.Horizontal;
-    static string[] Fit(string[] items, bool vertical) => vertical ? items[..5] : items[..7];
+    static string[] Fit(string[] items) => items[..5];
 
     /// 善解: Space opens, → steps, Enter keeps composing. 微軟注音風格: ↓ opens and steps, Enter sends.
     internal static DemoScript Template(bool windows)
     {
         var frames = TypeNihao(); int key = frames.Count;
-        DemoList List(int selected) => new(Nihao, selected, Layout(windows));
+        DemoList List(int selected) => new(Nihao, selected, DemoLayout.Rows);
         if (windows) frames.AddRange([
             new("↓", "按 ↓ 打開選字") { Composing = "你好", List = List(0) },
             new("↓", "往下選") { Composing = "你好", List = List(1) },
@@ -53,15 +52,15 @@ internal static class QuickSetupDemos
             new("Enter", "再按一次才送出", 1800) { Done = "妳好" }]);
         return new(frames, key);
     }
-    internal static DemoScript Space(SpaceChoice choice, bool vertical, bool spaceAfterCommit)
+    internal static DemoScript Space(SpaceChoice choice, bool spaceAfterCommit)
     {
         switch (choice)
         {
             case SpaceChoice.OpenList:
             {
                 var frames = TypeShi(); int key = frames.Count;
-                frames.Add(new("空白", "按空白打開選字") { Composing = "是", List = new(Fit(Shi1, vertical), 0, Layout(vertical)) });
-                frames.Add(new("空白", "再按一次換下一頁", 1800) { Composing = "是", List = new(Fit(Shi2, vertical), 0, Layout(vertical)) });
+                frames.Add(new("空白", "按空白打開選字") { Composing = "是", List = new(Fit(Shi1), 0, DemoLayout.Rows) });
+                frames.Add(new("空白", "再按一次換下一頁", 1800) { Composing = "是", List = new(Fit(Shi2), 0, DemoLayout.Rows) });
                 return new(frames, key);
             }
             case SpaceChoice.Commit:
@@ -79,27 +78,20 @@ internal static class QuickSetupDemos
             }
         }
     }
-    internal static DemoScript Direction(bool vertical)
-    {
-        var frames = TypeShi(); int key = frames.Count;
-        frames.Add(new("↓", vertical ? "清單直著排" : "清單橫著排") { Composing = "是", List = new(Fit(Shi1, vertical), 0, Layout(vertical)) });
-        frames.Add(new("↓", "往下一個", 1800) { Composing = "是", List = new(Fit(Shi1, vertical), 1, Layout(vertical)) });
-        return new(frames, key);
-    }
     /// The action's key: Tab shares it in the Windows interaction only (`input::right_action_key`).
-    internal static DemoScript Right(int action, bool windows, bool vertical)
+    internal static DemoScript Right(int action, bool windows)
     {
         string key = windows ? "Tab" : "→";
         var frames = TypeShi();
-        frames.Add(new("↓", "打開選字") { Composing = "是", List = new(Fit(Shi1, vertical), 0, Layout(vertical)) });
+        frames.Add(new("↓", "打開選字") { Composing = "是", List = new(Fit(Shi1), 0, DemoLayout.Rows) });
         int first = frames.Count;
         switch (action)
         {
-            case 1: frames.Add(new(key, "翻到下一頁", 2000) { Composing = "是", List = new(Fit(Shi2, vertical), 0, Layout(vertical)) }); break;
+            case 1: frames.Add(new(key, "翻到下一頁", 2000) { Composing = "是", List = new(Fit(Shi2), 0, DemoLayout.Rows) }); break;
             case 2: frames.Add(new(key, "展開三欄，一次看更多", 2200) { Composing = "是", List = new(Shi1, 0, DemoLayout.Grid) }); break;
             default:
-                frames.Add(new(key, "移到下一個") { Composing = "是", List = new(Fit(Shi1, vertical), 1, Layout(vertical)) });
-                frames.Add(new(key, "再下一個", 1600) { Composing = "是", List = new(Fit(Shi1, vertical), 2, Layout(vertical)) });
+                frames.Add(new(key, "移到下一個") { Composing = "是", List = new(Fit(Shi1), 1, DemoLayout.Rows) });
+                frames.Add(new(key, "再下一個", 1600) { Composing = "是", List = new(Fit(Shi1), 2, DemoLayout.Rows) });
                 break;
         }
         return new(frames, first);
@@ -133,11 +125,11 @@ internal static class QuickSetupDemos
             new("Shift", "單按沒有反應，還是中文", 1600),
             new("ㄋ", "繼續打注音", 1600) { Composing = "ㄋ" } }, 0);
     /// `enter_commits` decides whether one Enter or two send it. The word chosen before comes back under the same context (upstream S4 learning).
-    internal static DemoScript Learning(bool on, bool enterCommits, bool vertical)
+    internal static DemoScript Learning(bool on, bool enterCommits)
     {
         var frames = TypeNihao();
-        frames.Add(new("↓", "打開選字") { Composing = "你好", List = new(Nihao, 0, Layout(vertical)) });
-        frames.Add(new("↓", "改選「妳好」") { Composing = "你好", List = new(Nihao, 1, Layout(vertical)) });
+        frames.Add(new("↓", "打開選字") { Composing = "你好", List = new(Nihao, 0, DemoLayout.Rows) });
+        frames.Add(new("↓", "改選「妳好」") { Composing = "你好", List = new(Nihao, 1, DemoLayout.Rows) });
         if (!enterCommits) frames.Add(new("Enter", "選好了", 700) { Composing = "妳好" });
         frames.Add(new("Enter", "送出", 900) { Done = "妳好" });
         frames.Add(new("", "下次打同樣的字…", 800));

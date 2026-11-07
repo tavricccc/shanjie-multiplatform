@@ -85,7 +85,7 @@ internal static class VisualVerifier
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
-        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=vertical")) throw new InvalidDataException("Latest model/Windows vertical template failed");
+        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");
@@ -129,18 +129,18 @@ internal static class VisualVerifier
             await Capture(settings.CaptureElement, Path.Combine(output, $"candidate-right-action-{(windowsMode ? "windows" : "shanjie")}.png"));
         }
         File.WriteAllText(Models.ProfileStore.Path, beforeRight); settings.Vm.Load();
-        // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
-        settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");
+        // 0.6.0: per-key punctuation and a shared preset round-trip that keeps personal data.
+        settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.Save(); settings.Vm.Load();
+        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn) throw new InvalidDataException("Per-key punctuation persistence failed");
         string shared = settings.Vm.ExportPreset("驗證預設");
         if (shared.Contains("font_size") || shared.Contains("dictionary")) throw new InvalidDataException("Exported preset carries personal data");
         settings.LoadProfile(true); settings.Vm.ImportPreset(shared, "fallback"); settings.RefreshPresets();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1 || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
+        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
             throw new InvalidDataException("Shared preset import failed");
         bool rejected = false;
         try { settings.Vm.ImportPreset("[candidates]\nanchor=middle\n", "bad"); } catch (InvalidDataException) { rejected = true; }
         if (!rejected) throw new InvalidDataException("Invalid preset was accepted");
-        settings.LoadProfile(true); settings.Vm.CandidateLayout = 0; settings.Vm.Save(); settings.Vm.Load();
+        settings.LoadProfile(true); settings.Vm.Save(); settings.Vm.Load();
         settings.ShowSection(MainWindow.Pages.Dictionary); settings.SetPredictionForVerification(true); await Task.Delay(60);
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);

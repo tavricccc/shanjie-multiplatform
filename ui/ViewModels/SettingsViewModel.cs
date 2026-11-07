@@ -7,7 +7,6 @@ public partial class SettingsViewModel : ObservableObject
     public string RightActionLabel => Interaction == 0 ? "Tab 與 → 右方向鍵" : "→ 右方向鍵";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
-    [ObservableProperty] public partial int CandidateLayout { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(RankingByApp))] public partial int Ranking { get; set; }
     public bool RankingByApp => Ranking == 0;
     /// `[engine] chat_apps`, one executable name per line.

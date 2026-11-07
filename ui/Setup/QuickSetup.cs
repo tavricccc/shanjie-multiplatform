@@ -115,7 +115,6 @@ internal sealed class QuickSetupDraft
             if (Current.Read("candidates", "open", "down") == "down") Set("candidates", "open", "both");
         }
     }
-    internal bool Vertical { get => Current.Read("candidates", "layout", "horizontal") == "vertical"; set => Set("candidates", "layout", value ? "vertical" : "horizontal"); }
     static readonly string[] RightActions = ["none", "page", "expand"];
     internal int RightAction { get => Math.Max(0, Array.IndexOf(RightActions, Current.Read("candidates", "right_action", "none"))); set => Set("candidates", "right_action", RightActions[value]); }
     internal MixChoice Mix

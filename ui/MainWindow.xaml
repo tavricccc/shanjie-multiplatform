@@ -177,10 +177,7 @@
                     </StackPanel>
                     <StackPanel x:Name="Appearance" Visibility="Collapsed">
                         <TextBlock x:Name="AppearanceOptions" Text="候選視窗" Style="{StaticResource SjGroupTitle}"/>
-                        <controls:SettingCard>
-                            <controls:SettingRow Label="候選排列"><controls:Segmented Options="橫向（善解膠囊列）|直式（微軟注音）" SelectedIndex="{x:Bind Vm.CandidateLayout, Mode=TwoWay}" MinWidth="180"/></controls:SettingRow>
-                        </controls:SettingCard>
-                        <TextBlock Style="{StaticResource SjNote}" Text="每頁最多九項；直式一列一個候選，與微軟注音相同。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="每頁最多九項，一列一個候選，與微軟注音相同。"/>
                         <controls:SettingCard>
                             <controls:SettingRow Label="候選文字大小"><NumberBox Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/></controls:SettingRow>
                         </controls:SettingCard>

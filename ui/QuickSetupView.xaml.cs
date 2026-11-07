@@ -178,16 +178,7 @@ public sealed partial class QuickSetupView : UserControl
                 SpaceChoice.Commit => draft.SpaceAfterCommit ? "字直接送到 App，再補一個空格。" : "字直接送到 App。",
                 _ => "你現在的空白鍵是自訂組合，這裡不會改動。",
             }) + "注音還沒打完時，空白鍵都是第一聲。",
-            Script = () => QuickSetupDemos.Space(draft.Space, draft.Vertical, draft.SpaceAfterCommit),
-        };
-        yield return new DetailRow
-        {
-            Key = "direction", Title = "選字清單的方向",
-            Options = () => ["橫向", "直向"],
-            Read = () => draft.Vertical ? 1 : 0,
-            Write = index => draft.Vertical = index == 1,
-            Help = () => draft.Vertical ? "一項一行，容易一眼掃過，和微軟注音一樣。" : "排成一排，占的高度少，比較不會遮到文字。",
-            Script = () => QuickSetupDemos.Direction(draft.Vertical),
+            Script = () => QuickSetupDemos.Space(draft.Space, draft.SpaceAfterCommit),
         };
         yield return new DetailRow
         {
@@ -201,7 +192,7 @@ public sealed partial class QuickSetupView : UserControl
                 2 => "展開成三欄，一次看更多字。",
                 _ => "往下一個字移動。",
             } + (windows ? "" : "Tab 在這個打字方式會送出字，再把 Tab 交給 App。"),
-            Script = () => QuickSetupDemos.Right(draft.RightAction, windows, draft.Vertical),
+            Script = () => QuickSetupDemos.Right(draft.RightAction, windows),
         };
         if (draft.IsZhuyin)
         {
@@ -242,7 +233,7 @@ public sealed partial class QuickSetupView : UserControl
             Read = () => draft.Learning ? 0 : 1,
             Write = index => draft.Learning = index == 0,
             Help = () => draft.Learning ? "你改選過的字，下次遇到同樣的前文會優先出現。只存在這台電腦。" : "每次都照內建的順序，不記你選過什麼。",
-            Script = () => QuickSetupDemos.Learning(draft.Learning, draft.EnterCommits, draft.Vertical),
+            Script = () => QuickSetupDemos.Learning(draft.Learning, draft.EnterCommits),
         };
         yield return new DetailRow
         {

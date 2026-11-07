@@ -39,7 +39,6 @@ public partial class SettingsViewModel
             Interaction = profile.Read("profile", "interaction", "windows") == "windows" ? 0 : 1;
             Trigger = Array.IndexOf(new[] { "down", "space", "both" }, profile.Read("candidates", "open", "down"));
             Anchor = profile.Read("candidates", "anchor", "right") == "right" ? 0 : 1;
-            CandidateLayout = profile.Read("candidates", "layout", "horizontal") == "vertical" ? 1 : 0;
             Ranking = Math.Max(0, Array.IndexOf(Rankings, profile.Read("engine", "ranking", "auto")));
             ChatApps = string.Join("\r", profile.Read("engine", "chat_apps", DefaultChatApps).Split([';', ',', ' ', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
             ModelId=profile.Read("engine","model_id",ModelCatalog.Builtin);
@@ -166,7 +165,6 @@ public partial class SettingsViewModel
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
         profile.Set("engine", "rerank_level", RerankLevels[RerankLevel]);
-        profile.Set("candidates", "layout", CandidateLayout == 1 ? "vertical" : "horizontal");
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }

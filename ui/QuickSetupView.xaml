@@ -81,7 +81,7 @@
                     </StackPanel>
                     <Grid ColumnSpacing="14">
                         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <RadioButton x:Name="ShanjieCard" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="善解：和原版善解一樣。選字清單橫向，按空白打開選字，選好字可以繼續打，打字時會預測下一個詞。" Checked="TemplateChecked" KeyDown="CardKeyDown">
+                        <RadioButton x:Name="ShanjieCard" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="善解：和原版善解一樣。按空白打開選字，選好字可以繼續打，打字時會預測下一個詞。" Checked="TemplateChecked" KeyDown="CardKeyDown">
                             <StackPanel Spacing="8">
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="善解" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}"/>
@@ -90,15 +90,14 @@
                                 <controls:TypingDemo x:Name="ShanjieDemo" Height="192"/>
                                 <Grid ColumnSpacing="10" RowSpacing="4">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                    <TextBlock Text="選字清單" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="橫向一排" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="1" Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="打開選字，再按換頁" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="2" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="選好字繼續打，再按才送出" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="3" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="3" Grid.Column="1" Text="會預測下一個詞，按 Tab 選用" Style="{StaticResource FactValue}"/>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <TextBlock Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="打開選字，再按換頁" Style="{StaticResource FactValue}"/>
+                                    <TextBlock Grid.Row="1" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="選好字繼續打，再按才送出" Style="{StaticResource FactValue}"/>
+                                    <TextBlock Grid.Row="2" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="會預測下一個詞，按 Tab 選用" Style="{StaticResource FactValue}"/>
                                 </Grid>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton x:Name="WindowsCard" Grid.Column="1" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="微軟注音風格：按鍵跟 Windows 內建注音差不多。選字清單直向，按向下鍵打開選字，選好字直接送出，打字時不預測。" Checked="TemplateChecked" KeyDown="CardKeyDown">
+                        <RadioButton x:Name="WindowsCard" Grid.Column="1" GroupName="QuickTemplate" Style="{StaticResource ChoiceCard}" AutomationProperties.Name="微軟注音風格：按鍵跟 Windows 內建注音差不多。按向下鍵打開選字，選好字直接送出，打字時不預測。" Checked="TemplateChecked" KeyDown="CardKeyDown">
                             <StackPanel Spacing="8">
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="微軟注音風格" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}"/>
@@ -107,11 +106,10 @@
                                 <controls:TypingDemo x:Name="WindowsDemo" Height="192"/>
                                 <Grid ColumnSpacing="10" RowSpacing="4">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                    <TextBlock Text="選字清單" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="直向一列" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="1" Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="插入空格；按 ↓ 打開選字" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="2" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="選好字直接送出" Style="{StaticResource FactValue}"/>
-                                    <TextBlock Grid.Row="3" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="3" Grid.Column="1" Text="不預測，畫面比較乾淨" Style="{StaticResource FactValue}"/>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <TextBlock Text="空白鍵" Style="{StaticResource FactName}"/><TextBlock Grid.Column="1" Text="插入空格；按 ↓ 打開選字" Style="{StaticResource FactValue}"/>
+                                    <TextBlock Grid.Row="1" Text="Enter" Style="{StaticResource FactName}"/><TextBlock Grid.Row="1" Grid.Column="1" Text="選好字直接送出" Style="{StaticResource FactValue}"/>
+                                    <TextBlock Grid.Row="2" Text="打字時" Style="{StaticResource FactName}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="不預測，畫面比較乾淨" Style="{StaticResource FactValue}"/>
                                 </Grid>
                             </StackPanel>
                         </RadioButton>

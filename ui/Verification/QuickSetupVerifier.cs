@@ -77,30 +77,32 @@ internal static class QuickSetupVerifier
         Check(keep.HadSettings && keep.Template == QuickTemplate.Keep, "existing settings should start from keeping them");
         Check(!keep.Changed && !keep.Apply() && Saved() == Tuned, "keeping everything rewrote the file");
         // One detail on top of keeping: only that key differs from the tuned file.
-        keep.Vertical = true;
+        keep.RightAction = 2;
         Check(keep.Apply(), "a detail was not saved");
         var one = ProfileStore.Load();
         Personal(one);
-        Check(one.Read("candidates", "layout", "") == "vertical" && one.Read("candidates", "anchor", "") == "left" && one.Read("candidates", "right_action", "") == "page" && one.Read("shortcuts", "shift_toggle", "") == "0" && one.Read("input", "learning", "") == "0", "one detail changed other values");
+        // The fixture's old layout line loads harmlessly and is gone once the file is saved.
+        Check(!Saved().Contains("layout"), "a stale layout line survived the save");
+        Check(one.Read("candidates", "right_action", "") == "expand" && one.Read("candidates", "anchor", "") == "left" && one.Read("shortcuts", "shift_toggle", "") == "0" && one.Read("input", "learning", "") == "0", "one detail changed other values");
         // Going back and undoing it restores the starting point.
-        keep.Vertical = false;
-        Check(!keep.Apply() && ProfileStore.Load().Read("candidates", "layout", "") == "horizontal", "undoing a detail did not restore the file");
+        keep.RightAction = 1;
+        Check(!keep.Apply() && ProfileStore.Load().Read("candidates", "right_action", "") == "page", "undoing a detail did not restore the file");
         // A template replaces operation keys and keeps personal ones, and a detail wins over it.
         Fixture(Tuned);
         var shanjie = new QuickSetupDraft();
         shanjie.Choose(QuickTemplate.Shanjie);
-        Check(shanjie.Space == SpaceChoice.OpenList && !shanjie.Vertical && shanjie.RightAction == 0 && shanjie.Mix == MixChoice.Automatic && !shanjie.PanelShown && shanjie.ShiftToggle, "the 善解 template values");
+        Check(shanjie.Space == SpaceChoice.OpenList && shanjie.RightAction == 0 && shanjie.Mix == MixChoice.Automatic && !shanjie.PanelShown && shanjie.ShiftToggle, "the 善解 template values");
         Check(!shanjie.Learning, "a template changed learning");
-        shanjie.Vertical = true; shanjie.Apply();
+        shanjie.RightAction = 1; shanjie.Apply();
         var saved = ProfileStore.Load();
         Personal(saved);
-        Check(saved.Read("input", "learning", "") == "0" && saved.Read("profile", "interaction", "") == "shanjie" && saved.Read("candidates", "layout", "") == "vertical" && saved.Read("candidates", "space_operates", "") == "1", "template plus detail was not saved");
+        Check(saved.Read("input", "learning", "") == "0" && saved.Read("profile", "interaction", "") == "shanjie" && saved.Read("candidates", "right_action", "") == "page" && saved.Read("candidates", "space_operates", "") == "1", "template plus detail was not saved");
         var windows = new QuickSetupDraft();
         windows.Choose(QuickTemplate.Windows);
-        Check(windows.Space == SpaceChoice.Insert && windows.Vertical && windows.RightAction == 2 && windows.Mix == MixChoice.Automatic && !windows.PanelShown && windows.ShiftToggle, "the 微軟注音風格 template values");
+        Check(windows.Space == SpaceChoice.Insert && windows.RightAction == 2 && windows.Mix == MixChoice.Automatic && !windows.PanelShown && windows.ShiftToggle, "the 微軟注音風格 template values");
         // Another template drops earlier details, but not learning, which no template changes.
-        windows.Vertical = false; windows.Learning = true; windows.Choose(QuickTemplate.Shanjie);
-        Check(!windows.Vertical && windows.Learning, "changing template should reset details except learning");
+        windows.RightAction = 1; windows.Learning = true; windows.Choose(QuickTemplate.Shanjie);
+        Check(windows.RightAction == 0 && windows.Learning, "changing template should reset details except learning");
         // Space choices reach the keys the TSF reads.
         Fixture(Tuned);
         var space = new QuickSetupDraft();
@@ -135,7 +137,7 @@ internal static class QuickSetupVerifier
         Check(view.KeepOfferedForVerification && view.SkipTextForVerification.Contains("保留"), "an upgrader should be offered keeping");
         Check(view.TemplateOverflowForVerification <= 0.5, $"the upgrader's first step overflows the smallest window by {view.TemplateOverflowForVerification}");
         view.NextForVerification(); await Task.Delay(60);
-        Check(view.StepForVerification == 1 && view.RowKeysForVerification.SequenceEqual(["space", "direction", "right", "mix", "shift", "learning", "panel"]), "the detail rows");
+        Check(view.StepForVerification == 1 && view.RowKeysForVerification.SequenceEqual(["space", "right", "mix", "shift", "learning", "panel"]), "the detail rows");
         view.SkipForVerification();
         Check(settings.QuickSetup is null && File.ReadAllText(ProfileStore.Path) == Tuned, "skipping changed the settings");
         settings.OpenQuickSetup(true); view = settings.QuickSetup!; await Task.Delay(60);
@@ -161,12 +163,11 @@ internal static class QuickSetupVerifier
     {
         foreach (var (name, script) in new (string, DemoScript)[] {
             ("template", QuickSetupDemos.Template(false)), ("template", QuickSetupDemos.Template(true)),
-            ("space", QuickSetupDemos.Space(SpaceChoice.Insert, true, false)), ("space", QuickSetupDemos.Space(SpaceChoice.OpenList, false, true)), ("space", QuickSetupDemos.Space(SpaceChoice.Commit, false, true)), ("space", QuickSetupDemos.Space(SpaceChoice.Custom, false, true)),
-            ("direction", QuickSetupDemos.Direction(false)), ("direction", QuickSetupDemos.Direction(true)),
-            ("right", QuickSetupDemos.Right(0, false, false)), ("right", QuickSetupDemos.Right(1, true, true)), ("right", QuickSetupDemos.Right(2, true, true)),
+            ("space", QuickSetupDemos.Space(SpaceChoice.Insert, false)), ("space", QuickSetupDemos.Space(SpaceChoice.OpenList, true)), ("space", QuickSetupDemos.Space(SpaceChoice.Commit, true)), ("space", QuickSetupDemos.Space(SpaceChoice.Custom, true)),
+            ("right", QuickSetupDemos.Right(0, false)), ("right", QuickSetupDemos.Right(1, true)), ("right", QuickSetupDemos.Right(2, true)),
             ("mix", QuickSetupDemos.MixAutomatic()), ("mix", QuickSetupDemos.MixRawKeys()), ("mix", QuickSetupDemos.MixUnchanged()),
             ("shift", QuickSetupDemos.Shift(true)), ("shift", QuickSetupDemos.Shift(false)),
-            ("learning", QuickSetupDemos.Learning(true, true, true)), ("learning", QuickSetupDemos.Learning(false, false, false)),
+            ("learning", QuickSetupDemos.Learning(true, true)), ("learning", QuickSetupDemos.Learning(false, false)),
             ("panel", QuickSetupDemos.Panel(true, true)), ("panel", QuickSetupDemos.Panel(true, false)), ("panel", QuickSetupDemos.Panel(false, true)) })
         {
             Check(script.Keyframe >= 0 && script.Keyframe < script.Frames.Count && script.Frames.All(f => f.Ms > 0), name + " demo frames");
@@ -181,8 +182,8 @@ internal static class QuickSetupVerifier
         var right = QuickSetupDemos.Panel(true, true).Frames; var left = QuickSetupDemos.Panel(true, false).Frames;
         Check(right[0].MarkStart == -1 && right[1].MarkStart == right[1].Caret && left[1].MarkStart == left[1].Caret - 1, "the panel's mark");
         Check(QuickSetupDemos.Panel(false, true).Frames.All(f => f.Panel is null), "the panel showed while off");
-        Check(QuickSetupDemos.Right(2, true, false).Frames.Any(f => f is { Key: "Tab", List.Layout: DemoLayout.Grid }) && QuickSetupDemos.Right(2, false, false).Frames.All(f => f.Key != "Tab"), "Tab belongs to the Windows interaction");
-        Check(QuickSetupDemos.Space(SpaceChoice.Commit, false, true).Frames[^1].Done == "你好 " && QuickSetupDemos.Space(SpaceChoice.Commit, false, false).Frames[^1].Done == "你好", "the space after a commit");
+        Check(QuickSetupDemos.Right(2, true).Frames.Any(f => f is { Key: "Tab", List.Layout: DemoLayout.Grid }) && QuickSetupDemos.Right(2, false).Frames.All(f => f.Key != "Tab"), "Tab belongs to the Windows interaction");
+        Check(QuickSetupDemos.Space(SpaceChoice.Commit, true).Frames[^1].Done == "你好 " && QuickSetupDemos.Space(SpaceChoice.Commit, false).Frames[^1].Done == "你好", "the space after a commit");
         // It loops while animations are on and holds its key frame, with no timer, while they are off.
         settings.OpenQuickSetup(true); var view = settings.QuickSetup!;
         var demo = view.TemplateDemoForVerification(false);
@@ -232,7 +233,7 @@ internal static class QuickSetupVerifier
             await VisualVerifier.Capture(settings.CaptureElement, Path.Combine(folder, $"1-template-new-{name}.png"));
             view.NextForVerification(); await Task.Delay(200);
             var details = new (string Key, int Choice, string File, int Frame)[] {
-                ("space", 1, "space-open", -1), ("direction", 0, "direction-horizontal", -1), ("right", 2, "right-expand", -1), ("mix", 1, "mix-raw", -1), ("shift", 0, "shift", -1), ("learning", 0, "learning", -1), ("panel", 1, "panel-on", -1) };
+                ("space", 1, "space-open", -1), ("right", 2, "right-expand", -1), ("mix", 1, "mix-raw", -1), ("shift", 0, "shift", -1), ("learning", 0, "learning", -1), ("panel", 1, "panel-on", -1) };
             foreach (var (key, choice, file, frame) in details)
             {
                 if (theme == 2 && file is not ("right-expand" or "mix-raw" or "panel-on")) continue;
