@@ -199,6 +199,27 @@ fn sessions_on_one_model_share_the_digit_tables() {
 
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
+fn shifted_caps_tail_refreshes_predictions_in_upstream_english_mode() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let mut e = Engine::new(&data, Layout::Standard).unwrap();
+    e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+    e.set_windows_input_options(0);
+    e.set_upstream_english(true, true, true, true).unwrap();
+    e.set_prediction(true).unwrap();
+    for ch in "gemini".chars() {
+        e.key_with_latin(Key::ch(ch, shanjie_core::engine::MOD_SHIFT), Some(ch)).unwrap();
+    }
+    let mut out = None;
+    for ch in "CL3".chars() {
+        out = Some(e.key_with_latin(Key::ch(ch.to_ascii_lowercase(), 0), ch.is_ascii_alphabetic().then_some(ch)).unwrap());
+    }
+    let out = out.unwrap();
+    assert_eq!(out.preedit, "gemini好");
+    assert!(!out.candidates.is_empty(), "the restored Chinese syllable must refresh its prediction row");
+}
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn mixed_sentences_recover_reordered_syllables() {
     let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
     let mut e = Engine::new(&data, Layout::Standard).unwrap();

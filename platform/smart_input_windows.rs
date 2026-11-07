@@ -584,6 +584,7 @@ impl Engine {
                     self.typed_literals.insert(index, format!("{raw_tail}{c}"));
                 }
             }
+            self.recompute_pred();
             return Ok(self.mixed_view(self.view(true, commit)));
         }
         if self.mixed_input && chars.len() >= 2 {
@@ -623,6 +624,7 @@ impl Engine {
                     if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
                         self.typed_literals.insert(index, format!("{raw_tail}{c}"));
                     }
+                    self.recompute_pred();
                     return Ok(self.mixed_view(self.view(true, commit)));
                 }
             }
