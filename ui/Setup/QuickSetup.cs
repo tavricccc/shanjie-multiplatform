@@ -32,7 +32,7 @@ internal static class QuickSetupGate
 
 internal enum QuickTemplate { Keep, Shanjie, Windows }
 internal enum SpaceChoice { Insert, OpenList, Commit, Custom }
-internal enum MixChoice { Automatic, RawKeys, Off, Both }
+internal enum MixChoice { Automatic, RawKeys, Off }
 
 /// <summary>
 /// What Quick Setup would save. With a template it is a fresh profile: that template file as it ships, then the few
@@ -137,9 +137,9 @@ internal sealed class QuickSetupDraft
     {
         get
         {
+            // One choice; raw-key mixing wins over upstream English, as Document::migrate stores it.
             var d = Current;
-            bool raw = d.Flag("input", "mixed_input", false), automatic = d.Flag("input", "upstream_english", false);
-            return raw ? automatic ? MixChoice.Both : MixChoice.RawKeys : automatic ? MixChoice.Automatic : MixChoice.Off;
+            return d.Flag("input", "mixed_input", false) ? MixChoice.RawKeys : d.Flag("input", "upstream_english", false) ? MixChoice.Automatic : MixChoice.Off;
         }
         set
         {

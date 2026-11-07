@@ -81,7 +81,7 @@
                         </controls:SettingCard>
                         <TextBlock Text="中英混打" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}"><ComboBox x:Name="MixedModeSelector" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="{x:Bind Vm.RawKeyMixingLabel}"/><ComboBoxItem Content="上游判斷（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/><ComboBoxItem Content="兩者並用（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/></ComboBox></controls:SettingRow>
+                            <controls:SettingRow Label="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}"><ComboBox x:Name="MixedModeSelector" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="{x:Bind Vm.RawKeyMixingLabel}"/><ComboBoxItem Content="上游判斷（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/></ComboBox></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="{x:Bind Vm.MixedModeNote}"/>
                         <controls:SettingCard>

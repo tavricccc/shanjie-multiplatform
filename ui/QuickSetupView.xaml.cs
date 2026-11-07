@@ -369,11 +369,10 @@ public sealed partial class QuickSetupView : UserControl
         };
         if (draft.IsZhuyin)
         {
-            // Off is only ever the person's own earlier choice; it stays until another option is picked. Both modes at
-            // once is shown as 原鍵混打, which decides first, and is left as it is unless another option is picked.
+            // Off is only ever the person's own earlier choice; it stays until another option is picked.
             MixChoice[] mixes = draft.SupportsAutomatic ? [MixChoice.Automatic, MixChoice.RawKeys] : [MixChoice.Off, MixChoice.RawKeys];
             // Without the automatic judgement the stored upstream flag does nothing, so it reads as off.
-            MixChoice Shown() => draft.Mix switch { MixChoice.Both => MixChoice.RawKeys, MixChoice.Automatic when !draft.SupportsAutomatic => MixChoice.Off, var mix => mix };
+            MixChoice Shown() => draft.Mix switch { MixChoice.Automatic when !draft.SupportsAutomatic => MixChoice.Off, var mix => mix };
             if (!mixes.Contains(Shown())) mixes = [.. mixes, Shown()];
             yield return new Question
             {

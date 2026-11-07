@@ -70,7 +70,8 @@ public partial class SettingsViewModel
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
             AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
-            MixedMode = (profile.Flag("input", "mixed_input", false) ? 1 : 0) + (profile.Flag("input", "upstream_english", false) ? 2 : 0); EnglishOverwrite = profile.Flag("input", "english_overwrite", true); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
+            // One choice; raw-key mixing wins over upstream English, as Document::migrate stores it.
+            MixedMode = profile.Flag("input", "mixed_input", false) ? 1 : profile.Flag("input", "upstream_english", false) ? 2 : 0; EnglishOverwrite = profile.Flag("input", "english_overwrite", true); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
             UseContext = profile.Flag("input", "context", true);
@@ -150,7 +151,7 @@ public partial class SettingsViewModel
             ("input","mixed_tolerance",MixedTolerance), ("candidates","reading_panel",ReadingPanel),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
-            ("input","mixed_input",(MixedMode & 1) != 0), ("input","upstream_english",(MixedMode & 2) != 0), ("input","english_overwrite",EnglishOverwrite), ("input","english_key_order",EnglishKeyOrder), ("input","english_reversal_guard",EnglishReversalGuard), ("input","cjk_spacing",CjkSpacing),
+            ("input","mixed_input",MixedMode == 1), ("input","upstream_english",MixedMode == 2), ("input","english_overwrite",EnglishOverwrite), ("input","english_key_order",EnglishKeyOrder), ("input","english_reversal_guard",EnglishReversalGuard), ("input","cjk_spacing",CjkSpacing),
             ("input","punctuation_keeps_reading",PunctuationKeepsReading),
             ("input","learning",Learning), ("input","associations",Associations), ("input","alphanumeric",Alphanumeric), ("input","keyboard",Keyboard), ("input","context",UseContext),
             ("input","standalone_tones",StandaloneTones),
@@ -171,7 +172,7 @@ public partial class SettingsViewModel
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {
-        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 3 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || RerankLevel is < 0 or > 2 || Ranking is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
+        if (Keyboard is < 0 or > 4 || MixedMode is < 0 or > 2 || Trigger is < 0 or > 2 || Escape is < 0 or > 2 || RerankLevel is < 0 or > 2 || Ranking is < 0 or > 2 || !double.IsFinite(FontSize) || FontSize is < 14 or > 32)
             throw new InvalidDataException("請選擇有效的操作選項與 14–32 的候選文字大小。");
         if (Keyboard == 1 && !StandardInstalled || Keyboard == 2 && !EtenInstalled)
             throw new InvalidDataException("此鍵盤配置尚未安裝，請選擇可用配置。");

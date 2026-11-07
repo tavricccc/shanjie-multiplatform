@@ -154,13 +154,15 @@ internal static class VisualVerifier
         settings.Vm.BackquoteSymbols = false; settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.BackquoteSymbols) throw new InvalidDataException("Saving reset an explicit backquote opt-out");
         settings.Vm.BackquoteSymbols = backquote; settings.Vm.Save(); settings.Vm.Load();
-        foreach (var mode in new[] { 1, 2, 3, 0 })
+        // One choice: off, raw-key mixing, upstream English; 兩者並用 is gone.
+        if (settings.MixedModeCountForVerification != 3) throw new InvalidDataException("The mixing mode should offer exactly off, raw-key mixing and upstream English");
+        foreach (var mode in new[] { 1, 2, 0 })
         {
             settings.SetMixedModeForVerification(mode); await Task.Delay(60);
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");
             settings.Vm.Save(); settings.Vm.Load();
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} persistence failed");
-            bool forced = (mode & 1) != 0;
+            bool forced = mode == 1;
             if (settings.Vm.ReadingPanelShown != forced || settings.Vm.CanChooseReadingPanel == forced || settings.Vm.ReadingPanel) throw new InvalidDataException($"Mixed mode {mode} reading panel rule failed");
         }
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");

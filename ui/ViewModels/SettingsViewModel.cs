@@ -66,15 +66,15 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool EnglishReversalGuard { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterToCursor { get; set; }
     public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
-    public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode >= 2;
+    public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode == 2;
     partial void OnMixedModeChanged(int value) { OnPropertyChanged(nameof(UsesUpstreamEnglish)); NotifyReadingPanel(); }
     /// Display name of the mode stored as `[input] mixed_input`; change it here and every settings text follows.
     public const string RawKeyMixingName = "原鍵混打";
     public string RawKeyMixingLabel => RawKeyMixingName;
-    public string MixedModeNote => $"{RawKeyMixingName}：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文；一定會開啟組字面板。上游判斷：注音不可能是想打的字時（重打同一個位置、按空白或聲調後音節不存在）整段變回原本的按鍵當英文，馬上按 Esc 可變回注音；ai、up 這類也是注音的字，按 ↓ 從候選最後兩項選英文。兩者並用時，{RawKeyMixingName}先判斷，其餘交給上游。上游模式下 Shift＋字母可開始英文組字段；上游判斷僅支援標準注音。倚天可使用{RawKeyMixingName}；跟隨配置時依實際鍵盤生效。使用上游判斷（含兩者並用）時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。";
+    public string MixedModeNote => $"{RawKeyMixingName}：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文；一定會開啟組字面板。上游判斷：注音不可能是想打的字時（重打同一個位置、按空白或聲調後音節不存在）整段變回原本的按鍵當英文，馬上按 Esc 可變回注音；ai、up 這類也是注音的字，按 ↓ 從候選最後兩項選英文。上游模式下 Shift＋字母可開始英文組字段；上游判斷僅支援標準注音。倚天可使用{RawKeyMixingName}；跟隨配置時依實際鍵盤生效。使用上游判斷時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。";
     public string MixedToleranceHelp => $"只修正{RawKeyMixingName}的相鄰重複鍵；上游英文段保持原樣。預設關閉，原始按鍵可由候選選回。";
     /// The mode needs the panel for its Zhuyin hint (`Document::reading_panel`). The stored choice survives, so leaving the mode restores it.
-    public bool UsesRawKeyMixing => IsZhuyin && (MixedMode & 1) != 0;
+    public bool UsesRawKeyMixing => IsZhuyin && MixedMode == 1;
     public bool CanChooseReadingPanel => !UsesRawKeyMixing;
     public bool ReadingPanelShown { get => ReadingPanel || UsesRawKeyMixing; set { if (!UsesRawKeyMixing) ReadingPanel = value; } }
     public string ReadingPanelHelp => (UsesRawKeyMixing ? $"「{RawKeyMixingName}」要靠這個面板顯示注音提示，選用時固定開啟。" : "預設關閉，組字只顯示在 App 內，沒有候選時不顯示面板；可依需要開啟。")

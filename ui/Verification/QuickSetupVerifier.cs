@@ -205,12 +205,12 @@ internal static class QuickSetupVerifier
         view.NextForVerification(); await Closed(settings);
         Check(!settings.Vm.HasChanges && settings.Vm.ReadingPanel && !settings.Vm.ShiftToggle && settings.Vm.Learning, "the settings page did not pick up the result");
 
-        // Both mixing modes at once read as 原鍵混打, which decides first; nothing offers keeping both, and untouched it stays.
+        // A profile saved with both mixing modes (兩者並用, no longer offered) loads as 原鍵混打 among the two single modes; untouched, the file stays.
         string both = Tuned.Replace("mixed_input=0", "mixed_input=1");
         File.WriteAllText(ProfileStore.Path, both); settings.Vm.Load(); File.Delete(QuickSetupDraft.BackupPath);
         settings.OpenQuickSetup(true); view = settings.QuickSetup!; await Task.Delay(60);
         view.NextForVerification(); view.NextForVerification(); await Task.Delay(60);
-        Check(view.RowShownForVerification("mix") == ViewModels.SettingsViewModel.RawKeyMixingName && view.RowOptionsForVerification("mix").SequenceEqual(["自動判斷", ViewModels.SettingsViewModel.RawKeyMixingName]), "both modes should show as 原鍵混打 among the two single modes");
+        Check(view.RowShownForVerification("mix") == ViewModels.SettingsViewModel.RawKeyMixingName && view.RowOptionsForVerification("mix").SequenceEqual(["自動判斷", ViewModels.SettingsViewModel.RawKeyMixingName]), "both modes should load as 原鍵混打 among the two single modes");
         view.ActivateForVerification("panel"); view.NextForVerification(); await Task.Delay(60);
         Check(File.ReadAllText(ProfileStore.Path) == both && !File.Exists(QuickSetupDraft.BackupPath), "keeping both modes untouched wrote the file");
         view.NextForVerification(); await Closed(settings);
