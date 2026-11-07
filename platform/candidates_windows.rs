@@ -1,5 +1,29 @@
 // Appended inside engine.rs in the generated Windows build only.
 impl Engine {
+    fn windows_punctuation_alternatives(&self, typed: &str) -> Vec<String> {
+        let mut chars = typed.chars();
+        let Some(mark) = chars.next() else { return Vec::new() };
+        if chars.next().is_some() { return Vec::new(); }
+        let mut alternatives = self.punct.get(&mark).cloned().unwrap_or_default();
+        if !self.windows_punctuation_candidates { return alternatives; }
+        // Include width variants and related marks even when the upstream table
+        // has no entry for the typed glyph (notably the Windows ［／］ keys).
+        for family in ["［「『【《〈〔〖（｛[({", "］」』】》〉〕〗）｝])}",
+            "，,、", "。．.⋯…", "；：;:", "／＼/\\、÷", "‘’＇'", "“”＂\"",
+            "！!", "？?", "％%‰", "＋+±", "－-—–", "＊*×", "＝=≠≈≒",
+            "＄$€£¥", "＠@", "＃#", "＆&", "＿_", "～~〜", "＾^"] {
+            if family.contains(mark) {
+                for symbol in family.chars() {
+                    alternatives.push(symbol.to_string());
+                    if let Some(upstream) = self.punct.get(&symbol) {
+                        alternatives.extend(upstream.iter().cloned());
+                    }
+                }
+            }
+        }
+        alternatives
+    }
+
     pub fn set_candidate_anchor(&mut self, right: bool) {
         self.candidate_from_right = right;
         self.cands = None;
@@ -28,7 +52,7 @@ impl Engine {
         let start = self.cursor;
         if self.is_punct(start) {
             let typed = self.syls[start][PUNCT_PREFIX.len()..].to_string();
-            let alternatives = typed.chars().next().and_then(|c| self.punct.get(&c)).cloned().unwrap_or_default();
+            let alternatives = self.windows_punctuation_alternatives(&typed);
             let mut seen = HashSet::new();
             let list = std::iter::once(typed).chain(alternatives)
                 .filter(|word| seen.insert(word.clone())).map(|word| (word, 1)).collect();
@@ -97,5 +121,35 @@ mod windows_candidates {
         let mut original = sample(false);
         original.key(Key::new(KeyKind::Left)).unwrap();
         assert_eq!(original.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["你", "妳"]);
+    }
+
+    #[test]
+    fn punctuation_families_are_editable_from_both_candidate_anchors() {
+        for right in [false, true] {
+            let mut e = sample(right);
+            e.set_windows_input_options(0);
+            for (typed, replacement) in [("[", "「"), ("]", "」"), ("［", "「"), ("］", "」"),
+                ("（", "『"), ("）", "』"), ("「", "［"), ("／", "＼"), ("；", "："),
+                ("％", "%"), ("！", "!"), ("＂", "“")] {
+                e.reset(ResetMode::Discard);
+                let out = e.insert_windows_punctuation(typed).unwrap();
+                assert!(out.commit.is_empty());
+                let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+                assert_eq!(out.candidates[0], typed);
+                let mut unique = HashSet::new();
+                for (word, _) in &e.cands.as_ref().unwrap().list { assert!(unique.insert(word.clone())); }
+                while !out.candidates.iter().any(|word| word == replacement) {
+                    assert!((out.first as usize + out.candidates.len()) < out.total as usize);
+                    out = e.key(Key::new(KeyKind::Space)).unwrap();
+                }
+                let index = out.candidates.iter().position(|word| word == replacement).unwrap();
+                let out = e.pick(index).unwrap().unwrap();
+                assert_eq!(out.preedit, replacement);
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, replacement);
+            }
+            assert!(e.set_punctuation("，\t、"));
+            e.insert_windows_punctuation("，").unwrap();
+            assert_eq!(e.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["，", "、"]);
+        }
     }
 }

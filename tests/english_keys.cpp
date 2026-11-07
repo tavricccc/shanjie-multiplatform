@@ -50,6 +50,12 @@ int wmain(int argc,wchar_t** argv) {
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
         press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
         require(store->text==before+L"，一",945);
+        auto committed=store->text;
+        press(VK_OEM_3);press(VK_OEM_4);press(VK_DOWN);press('2');
+        require(store->text==committed+L"『",955);
+        press(VK_RETURN);committed=store->text;
+        press(VK_OEM_3);press(VK_OEM_4);press(VK_ESCAPE);
+        require(store->text==committed,956); // Mapped marks remain editable; codes above commit directly.
     }else if(scenario==L"numpad"){
         for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
         for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
