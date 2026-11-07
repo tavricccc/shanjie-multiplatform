@@ -67,6 +67,12 @@ fn first_tones_recover_whole_reordered_syllables_and_keep_mixed_boundaries() {
                 ("r3us3", "r3你"),
                 ("callsu3", "call你"),
                 ("callus3", "call你"),
+                ("the ", "the "),
+                ("and ", "and "),
+                ("not ", "not "),
+                ("too ", "too "),
+                ("see ", "see "),
+                ("kanji ", "kanji "),
                 ("input ", "input "),
                 ("thorium ", "thorium "),
                 ("ubuntu ", "ubuntu "),
@@ -74,6 +80,128 @@ fn first_tones_recover_whole_reordered_syllables_and_keep_mixed_boundaries() {
                 assert_eq!(press(&mut e, keys).preedit, want, "english={english} symbols={symbols} {keys}");
                 e.reset(ResetMode::Discard);
             }
+        }
+    }
+}
+
+#[test]
+fn unshifted_reordered_first_tones_beat_english_words_and_keep_literal_candidates() {
+    let std_lex = Arc::new(
+        Lexicon::parse(
+            "ㄕㄨㄛ 說 -0.1\nㄔㄨㄟ 吹 -0.1\nㄑㄧㄠ 敲 -0.1\nㄐㄧㄠ 教 -0.1\nㄐㄩㄣ 軍 -0.1\nㄨㄛ 窩 -0.1\n",
+        )
+        .unwrap(),
+    );
+    let press_latin = |e: &mut Engine, keys: &str, caps: bool, shift_first: bool, shift_all: bool| {
+        let mut out = None;
+        for (idx, ch) in keys.chars().enumerate() {
+            if ch == ' ' {
+                out = Some(e.key(Key::new(KeyKind::Space)).unwrap());
+                continue;
+            }
+            let shifted = shift_all || (shift_first && idx == 0);
+            let mods = if shifted { MOD_SHIFT } else { 0 };
+            let lower = ch.to_ascii_lowercase();
+            let display = if caps ^ shifted {
+                lower.to_ascii_uppercase()
+            } else {
+                lower
+            };
+            out = Some(e.key_with_latin(Key::ch(lower, mods), Some(display)).unwrap());
+        }
+        out.unwrap()
+    };
+
+    for english in [false, true] {
+        for right_anchor in [false, true] {
+            let mut e = Engine::with_lexicon(std_lex.clone(), Layout::Standard);
+            e.set_mixed_input(true);
+            e.set_mixed_tolerance(true);
+            e.set_upstream_english(english, true, true, true).unwrap();
+            e.set_candidate_anchor(right_anchor);
+
+            for perm in ["gji ", "gij ", "jgi ", "jig ", "igj ", "ijg "] {
+                let out = press_latin(&mut e, perm, false, false, false);
+                assert_eq!(out.preedit, "說", "english={english} right={right_anchor} {perm}");
+                let down = e.key(Key::new(KeyKind::Down)).unwrap();
+                let idx = down
+                    .candidates
+                    .iter()
+                    .position(|c| c == perm)
+                    .unwrap_or_else(|| panic!("missing literal {perm:?} in {:?}", down.candidates));
+                assert_eq!(e.pick(idx).unwrap().unwrap().preedit, perm);
+                e.reset(ResetMode::Discard);
+            }
+
+            for (keys, want) in [
+                ("jot ", "吹"),
+                ("flu ", "敲"),
+                ("lur ", "教"),
+                ("rpm ", "軍"),
+            ] {
+                let out = press_latin(&mut e, keys, false, false, false);
+                assert_eq!(out.preedit, want, "english={english} right={right_anchor} {keys}");
+                let down = e.key(Key::new(KeyKind::Down)).unwrap();
+                let idx = down.candidates.iter().position(|c| c == keys).expect("literal candidate");
+                assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
+                e.reset(ResetMode::Discard);
+            }
+
+            // Caps Lock without Shift still converts to Chinese while preserving uppercase literal candidate.
+            let caps_out = press_latin(&mut e, "jig ", true, false, false);
+            assert_eq!(caps_out.preedit, "說", "Caps Lock unshifted english={english} right={right_anchor}");
+            let caps_down = e.key(Key::new(KeyKind::Down)).unwrap();
+            let caps_idx = caps_down
+                .candidates
+                .iter()
+                .position(|c| c == "JIG ")
+                .unwrap_or_else(|| panic!("missing uppercase literal in {:?}", caps_down.candidates));
+            assert_eq!(e.pick(caps_idx).unwrap().unwrap().preedit, "JIG ");
+            e.reset(ResetMode::Discard);
+
+            // Explicit Shift keeps English (both normal Shift and Shift-lowercase under Caps Lock).
+            let expected_space = if english { "" } else { " " };
+            press_latin(&mut e, "jig ", false, true, false);
+            assert_eq!(
+                e.reset(ResetMode::Commit).commit,
+                format!("Jig{expected_space}"),
+                "Shift-first english={english}"
+            );
+            press_latin(&mut e, "jig ", false, false, true);
+            assert_eq!(
+                e.reset(ResetMode::Commit).commit,
+                format!("JIG{expected_space}"),
+                "Shift-all english={english}"
+            );
+            press_latin(&mut e, "jig ", true, false, true);
+            assert_eq!(
+                e.reset(ResetMode::Commit).commit,
+                format!("jig{expected_space}"),
+                "Caps+Shift lowercase english={english}"
+            );
+
+            // Repeated-letter and suffix-trap English words stay English even with tolerance on.
+            for word in ["too ", "see ", "kanji "] {
+                let out = press_latin(&mut e, word, false, false, false);
+                assert_eq!(out.preedit, word, "english={english} right={right_anchor} {word}");
+                e.reset(ResetMode::Discard);
+            }
+        }
+    }
+
+    // Eten layout reordered first-tone words also convert and keep English literal candidates.
+    let eten_lex = Arc::new(Lexicon::parse("ㄐㄧㄚ 家 -0.1\nㄊㄨㄛ 脫 -0.1\n").unwrap());
+    for right_anchor in [false, true] {
+        let mut e = Engine::with_lexicon(eten_lex.clone(), Layout::Eten);
+        e.set_mixed_input(true);
+        e.set_candidate_anchor(right_anchor);
+        for (keys, want) in [("age ", "家"), ("tox ", "脫")] {
+            let out = press_latin(&mut e, keys, false, false, false);
+            assert_eq!(out.preedit, want, "eten right={right_anchor} {keys}");
+            let down = e.key(Key::new(KeyKind::Down)).unwrap();
+            let idx = down.candidates.iter().position(|c| c == keys).expect("eten literal candidate");
+            assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
+            e.reset(ResetMode::Discard);
         }
     }
 }
@@ -266,6 +394,11 @@ fn mixed_sentences_recover_reordered_syllables() {
                     ("xu06vm4823n0 h4", "連續打三次"),
                     ("w4u0r3", "w4簡"),
                     ("ur/ ", "經"),
+                    ("jig ", "說"),
+                    ("su3jig kg6ka7", "你說什麼"),
+                    ("ji3urp wu0 jig 8jc4", "我今天說話"),
+                    ("flu ap6", "敲門"),
+                    ("jot z/ ", "吹風"),
                     ("ul41j4ul4jt fm4y.3y.3u8 ", "要不要出去走走呀"),
                     ("ul41j4ul4jt fm4.y3.y3u8 ", "要不要出去走走呀"),
                     (

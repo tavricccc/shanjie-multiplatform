@@ -387,10 +387,7 @@ impl Engine {
         } else {
             None
         };
-        if let Some(tone) = tone.filter(|_| {
-            key.kind != KeyKind::Space
-                || (!explicit_english && !english_word(&raw.to_ascii_lowercase()))
-        }) {
+        if let Some(tone) = tone.filter(|_| key.kind != KeyKind::Space || !explicit_english) {
             if shifted_end == 0 {
                 if let Some(reading) = self.corrected_mixed_keys(&raw, tone) {
                     let out = self.replay_mixed_reading(&reading, key)?;
@@ -400,8 +397,8 @@ impl Engine {
                     }
                     return Ok(out);
                 }
-                // A tone (including first-tone Space when not an English word or Shift-started run)
-                // confirms a complete reordered syllable before the suffix heuristic.
+                // A tone (including first-tone Space on an unshifted run) confirms a complete
+                // reordered syllable before checking English-word literals or suffix splits.
                 if let Some(reading) = self
                     .mixed_reading_order(&raw, false)
                     .filter(|r| self.has_mixed_han_entry(r, tone))
@@ -414,7 +411,9 @@ impl Engine {
                     return Ok(out);
                 }
             }
-            if !raw.bytes().all(|c| c.is_ascii_digit() || c == b'.') {
+            if (key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
+                && !raw.bytes().all(|c| c.is_ascii_digit() || c == b'.')
+            {
                 // Hard boundary: after an incomplete literal+tone fragment (e.g. w4 + u0r3) or an
                 // explicit Shift-typed English prefix (e.g. Shift+"gemini" + CL3 under Caps Lock),
                 // the trailing unshifted keys form an isolated syllable without consuming the prefix.
