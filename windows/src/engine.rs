@@ -397,8 +397,7 @@ impl Engine {
         )
     }
     pub fn reset(&mut self, discard: bool) -> Option<Snapshot> {
-        // Upstream reset clears composition without learning or persistence.
-        // Focus loss must not wait for another App's learning writer.
+        // Commit confirms pending Windows selection learning; discard only drops it.
         self.perform(crate::broker::Op::Reset(discard))
     }
     pub fn perform(&mut self, op: crate::broker::Op) -> Option<Snapshot> {
@@ -468,7 +467,11 @@ impl Engine {
                 )
             }),
             Op::Reset(discard) => {
-                self.invoke(|h, o| unsafe { shanjie_engine_reset(h, discard as u32, o) })
+                if discard {
+                    self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) })
+                } else {
+                    self.operation(|h, o| unsafe { shanjie_engine_reset(h, 0, o) })
+                }
             }
             Op::Pick(index) => self.operation(|h, o| unsafe { shanjie_engine_pick(h, index, o) }),
             Op::Associate(s) => {
