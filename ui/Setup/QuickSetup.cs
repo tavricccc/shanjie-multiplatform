@@ -35,25 +35,36 @@ internal enum SpaceChoice { Insert, OpenList, Commit, Custom }
 internal enum MixChoice { Automatic, RawKeys, Off, Both }
 
 /// <summary>
-/// What Quick Setup would save: the saved profile, the chosen template through the same merge as the settings page
-/// (`sj_profile_preset` keeps the personal keys), then only the keys the person changed. Nothing is written until
-/// <see cref="Apply"/>, and a run that changes nothing writes nothing.
+/// What Quick Setup would save. With a template it is a fresh profile: that template file as it ships, then the few
+/// <see cref="Carried"/> keys from the saved profile, then the person's choices; nothing else from the old file comes
+/// along. "Keep my settings" is the saved profile plus only the keys the person changed. Nothing is written until
+/// <see cref="Apply"/>; the file it replaces is copied once to <see cref="BackupPath"/> first, and keeping without a
+/// change writes nothing. Dictionary and learning files are separate and never touched.
 /// </summary>
 internal sealed class QuickSetupDraft
 {
+    /// Carried into a template: what a template never decides and what would hurt to lose — the chosen language
+    /// model, the word packs, the chat-app list, the personal dictionary file and the keyboard layout (a person on
+    /// 倚天 could not type on the standard one). A subset of `PERSONAL` in shared/src/profile.rs.
+    internal static readonly (string Section, string Key)[] Carried = [
+        ("engine", "model_id"), ("engine", "model_revision"), ("engine", "acg_pack"), ("engine", "it_pack"), ("engine", "quote_pack"),
+        ("engine", "chat_apps"), ("input", "dictionary"), ("input", "keyboard")];
+    internal static string BackupPath => ProfileStore.Path + ".before-quick-setup.bak";
     readonly string baseline;
+    readonly ProfileDocument saved;
     readonly Dictionary<(string Section, string Key), object> choices = [];
     bool wrote;
     internal QuickSetupDraft()
     {
         HadSettings = File.Exists(ProfileStore.Path);
         baseline = ProfileStore.Load().ToString();
+        saved = ProfileDocument.Parse(baseline);
         Template = HadSettings ? QuickTemplate.Keep : QuickTemplate.Windows;
     }
     /// A settings file exists: the person may have tuned it, so the flow starts from keeping it.
     internal bool HadSettings { get; }
     internal QuickTemplate Template { get; private set; }
-    /// Another template means other starting values, so earlier detail choices go, except learning, which no template changes.
+    /// Another template means other starting values, so earlier detail choices go, except learning, which is asked the same way under each.
     internal void Choose(QuickTemplate template)
     {
         if (template == Template) return;
@@ -64,23 +75,28 @@ internal sealed class QuickSetupDraft
     {
         get
         {
-            var document = ProfileDocument.Parse(Template == QuickTemplate.Keep ? baseline : Native.Take(Native.sj_profile_preset(baseline, Template == QuickTemplate.Windows)));
+            ProfileDocument document;
+            if (Template == QuickTemplate.Keep) document = ProfileDocument.Parse(baseline);
+            else { document = ProfileStore.Defaults(Template == QuickTemplate.Windows); document.PreserveFrom(saved, Carried); }
             foreach (var (place, value) in choices) document.Set(place.Section, place.Key, value);
             return document;
         }
     }
     internal bool Changed => !Lines(Current.ToString()).SequenceEqual(Lines(baseline));
     static IEnumerable<string> Lines(string text) => text.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).Order(StringComparer.Ordinal);
-    /// Saves the result; going back and changing it rewrites it from the same starting point. Returns whether the file now differs from where the flow began.
+    /// Saves the result; going back and changing it rewrites it from the same starting point. Returns whether the file
+    /// now holds the flow's result rather than what was there before.
     internal bool Apply()
     {
-        bool changed = Changed;
+        bool changed = Template != QuickTemplate.Keep || Changed;
         if (!changed && !wrote) return false;
         var document = Current;
         // The settings page makes the same correction when it loads a keyboard that is no longer installed.
         uint installed = Native.sj_installed_keyboards();
         int keyboard = document.Number("input", "keyboard", 0);
         if ((keyboard == 1 && (installed & 1) == 0) || (keyboard == 2 && (installed & 2) == 0)) document.Set("input", "keyboard", 0);
+        // One copy of the file as it was before this run; a second save in the same run must not overwrite it with the first.
+        if (!wrote && File.Exists(ProfileStore.Path)) File.Copy(ProfileStore.Path, BackupPath, overwrite: true);
         ProfileStore.Save(document.ToString());
         wrote = true;
         return changed;
