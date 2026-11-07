@@ -115,6 +115,10 @@ components:
 
 九頁共用一份草稿，按「儲存」才套用並通知已啟用的實例。開關共用 `SettingToggle`；ComboBox、NumberBox、TextBox 都對應真實設定；InfoBar 顯示儲存結果與格式錯誤，清除學習用 ContentDialog。操作預設只改按鍵、選字與預測，不動詞庫、學習、外觀與模型。「重新啟動輸入法」先保存草稿，再通知各實例提交組字並重載核心，不終止 App。來源：`ui/MainWindow.xaml`、`shared/src/profile.rs`。
 
+### 狀態列
+
+設定與安裝程式的 InfoBar 共用 `ui/Themes/Sj.xaml` 的隱含樣式：卡片同款玻璃底（`SjFillControlBrush`）、12 圓角、1 點邊線，疊一層很淡的嚴重度色（`SjStatus*TintBrush`）並把邊線染成同色（`SjStatus*StrokeBrush`）。左邊是 18 點 Lucide 線條圖示，形狀分辨嚴重度：成功圓勾、資訊 i（霧藍）、警告三角、錯誤圓叉；文字 13 點 `SjText1Brush`，關閉鍵用 `SjIconButton`。深淺色各有一組較亮／較深的圖示色以維持對比；高對比時只在狀態列內改用 `SystemColorWindow*`／`SystemColorHighlight`，不加底色。出現時上移 6 點並淡入（`Motion.Normal`、Smooth），關閉時淡出（`Motion.Fast`），由 `StatusMotion` 的隱含動畫負責，Windows 動畫效果關閉時立即切換。
+
 ### 快速設定
 
 與設定共用一張玻璃，蓋住導覽與內容；頂部是標題、步驟點與視窗按鈕，底部固定略過／上一步／下一步。範本與「保留現況」是卡片，選中時加 2 點藍色邊框與勾選；細節是一次展開一項的清單，收合時顯示目前選擇，右邊的示範跟著展開的那一項與選擇變動。文字用一般人看得懂的話，描述結果，不用設定鍵名。
