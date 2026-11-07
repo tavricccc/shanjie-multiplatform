@@ -235,6 +235,7 @@ impl Engine {
         }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
+        self.mixed_explicit_english = false;
         let mut commit = String::new();
         for ch in raw.chars().chain(text.chars()) {
             let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
@@ -329,6 +330,7 @@ impl Engine {
         self.clear_pend();
         self.mixed_raw.clear();
         self.mixed_latin = false;
+        self.mixed_explicit_english = false;
         for index in (candidate.start..candidate.end).rev() { self.remove_syllable(index)?; }
         self.cursor = candidate.start;
         // One literal word replaces its original span. Expanding it into several
