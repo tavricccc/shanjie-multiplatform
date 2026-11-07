@@ -69,7 +69,7 @@ try {
     Initialize-TestModels $profile
     Copy-Item "$root/profiles/windows.ini" "$profile/Shanjie/profile.ini" -Force
     $content = Get-Content "$profile/Shanjie/profile.ini" -Raw
-    $content = $content -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^keyboard=.*','keyboard=1'
+    $content = $content -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^keyboard=.*','keyboard=1'
     Set-Content "$profile/Shanjie/profile.ini" $content -Encoding utf8NoBOM
     $brokerLog = Invoke-Check "$root/windows/target/x86_64-pc-windows-msvc/release/shanjie-core-check.exe" @("$payload/data")
     Set-Content "$ResultRoot/resident.log" $brokerLog -Encoding utf8NoBOM

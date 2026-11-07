@@ -32,16 +32,16 @@ foreach($item in @(@('OX3','我'),@('XO3↓1','ㄨㄛˇ'),@('B ','b '))) {
  $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=1;symbols=0;keyboard=2;space=0}
 }
 $cases += [pscustomobject]@{keys='1 ';expected='1 ';mixed=1;symbols=0;keyboard=1;space=1}
-foreach($upstream in 0,1){foreach($tones in 0,1){
+# Raw-key mixing keeps literal digits; the mixing mode is one choice, so upstream English is off beside it.
+foreach($tones in 0,1){
  foreach($digits in @('13','14','16','17','13467','1234567890','R3','R4','R6','R7','R3467','R3A','Q3','W3','E3','S3','D3','F3','A3','Z3','X3','C3','V3')) {
-  # Upstream's digit scoring reads 5 6 as ㄓˊ (its core gives the same for these keys); the raw-key mode alone keeps the digits.
-  $expected=if($digits -eq '1234567890' -and $upstream){'1234值7890'}else{$digits.ToLowerInvariant()}
-  $cases += [pscustomobject]@{keys=$digits;expected=$expected;mixed=1;symbols=1;keyboard=1;space=0;upstream=$upstream;standalone=$tones}
+  $cases += [pscustomobject]@{keys=$digits;expected=$digits.ToLowerInvariant();mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
  }
- $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;upstream=$upstream;standalone=$tones}
- $cases += [pscustomobject]@{keys='R3SU3';expected='r3你';mixed=1;symbols=1;keyboard=1;space=0;upstream=$upstream;standalone=$tones}
-}}
-# Upstream's mode alone, as the templates default.
+ $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
+ $cases += [pscustomobject]@{keys='R3SU3';expected='r3你';mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
+}
+# Upstream's mode alone, as the templates default. Its digit scoring reads 5 6 as ㄓˊ (its core gives the same for these
+# keys); raw-key mixing keeps the digits.
 $cases += [pscustomobject]@{keys='1234567890';expected='1234值7890';mixed=0;symbols=1;keyboard=1;space=0;upstream=1;standalone=0}
 $cases += [pscustomobject]@{keys='2026';expected='2026';mixed=0;symbols=1;keyboard=1;space=0;upstream=1;standalone=0}
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
