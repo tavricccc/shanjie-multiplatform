@@ -710,7 +710,8 @@ impl Engine {
         // policy runs first and upstream English only sees what it leaves.
         if self.english && self.upstream_english_busy() {
             self.sync_run_shifted();
-            if !self.run.is_empty() && key.kind == KeyKind::Char && key.modifiers == 0 {
+            if (self.mixed_input || self.windows_shifted_boundaries)
+                && !self.run.is_empty() && key.kind == KeyKind::Char && key.modifiers == 0 {
                 if let Some(tone) = Layout::Standard.tone_of(key.ch) {
                     return self.windows_run_tone(key.ch, tone);
                 }
