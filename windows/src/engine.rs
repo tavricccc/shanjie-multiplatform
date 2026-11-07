@@ -185,7 +185,7 @@ impl Engine {
                 e.mutex =
                     Some(CreateMutexW(None, false, PCWSTR(crate::wide(&name).as_ptr())).ok()?);
                 e.folder = folder;
-                if !e.begin() {
+                if !e.begin(250) {
                     return None;
                 }
                 let result = shanjie_engine_set_learning(e.handle, 1);
