@@ -7,6 +7,7 @@ impl Engine {
         self.windows_punctuation_candidates = true;
         self.candidate_grid_columns = 3;
         self.windows_selection_learning = true;
+        self.windows_shifted_boundaries = true;
         self.standalone_tones = flags & 1 != 0;
         self.shift_punctuation = (flags >> 1) & 0x1fff;
         self.plain_punctuation = (flags >> 14) & 0x3f;

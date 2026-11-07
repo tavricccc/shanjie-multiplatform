@@ -17,7 +17,7 @@ try {
     & "$PSScriptRoot/verify-upstream-data.ps1" -Dist
     # The unit tests that read the built data and model (dist/data); plain `cargo test --lib` ignores them.
     & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored mixed_regression
-    if ($LASTEXITCODE) { throw 'The digit regressions failed against the built data.' }
+    if ($LASTEXITCODE) { throw 'The mixed-input and digit regressions failed against the built data.' }
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
 @echo off
