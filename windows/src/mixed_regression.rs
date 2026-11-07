@@ -153,3 +153,42 @@ fn sessions_on_one_model_share_the_digit_tables() {
         assert_eq!((a.preedit,a.candidates),(b.preedit,b.candidates),"after {ch}");
     }
 }
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
+fn selected_maple_story_is_remembered_across_partial_enters() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    for profile in [shanjie_core::lm::Profile::Chat, shanjie_core::lm::Profile::Formal] {
+        let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
+        e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+        e.set_profile(profile).unwrap();
+        e.set_prediction(false).unwrap();
+        e.set_windows_input_options(1 << 21);
+        e.set_candidate_anchor(true);
+        e.set_learning(true);
+        let type_word = |e: &mut Engine| {
+            let mut text = String::new();
+            for ch in "z/ 5 ej3".chars() {
+                text = e.key(if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) }).unwrap().preedit;
+            }
+            text
+        };
+        assert_eq!(type_word(&mut e), "風之谷");
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+        loop {
+            if let Some(index) = out.candidates.iter().position(|w| w == "楓") {
+                e.pick(index).unwrap().unwrap();
+                break;
+            }
+            assert!(out.first as usize + out.candidates.len() < out.total as usize, "楓 must be selectable");
+            out = e.key(Key::new(KeyKind::Space)).unwrap();
+        }
+        let reading = ["ㄈㄥ".into(), "ㄓ".into(), "ㄍㄨˇ".into()];
+        assert!(e.learner().new_word_day(&reading, "楓之谷").is_some());
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "楓");
+        e.key(Key::new(KeyKind::End)).unwrap();
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "之谷");
+        assert_eq!(type_word(&mut e), "楓之谷");
+    }
+}

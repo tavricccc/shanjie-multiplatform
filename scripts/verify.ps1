@@ -16,7 +16,7 @@ try {
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
     & "$PSScriptRoot/verify-upstream-data.ps1" -Dist
     # The unit tests that read the built data and model (dist/data); plain `cargo test --lib` ignores them.
-    & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored digit_runs_hand_back_complete_readings sessions_on_one_model_share_the_digit_tables
+    & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored mixed_regression
     if ($LASTEXITCODE) { throw 'The digit regressions failed against the built data.' }
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
