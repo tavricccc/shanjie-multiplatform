@@ -61,7 +61,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
         }
         '9' => "（",
         '0' => "）",
-        '\\' => "、",
+        '\\' => if shift { "｜" } else { "、" },
         '\'' => {
             if shift {
                 "＂"
@@ -699,7 +699,7 @@ mod special_tests {
     #[test]
     fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {
         let prefs = Document::default();
-        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～")] {
+        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～"), ('\\', 0, "、"), ('\\', 1, "｜")] {
             let mut special = Special::default();
             special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
             let out = special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers }, &prefs);
@@ -707,6 +707,9 @@ mod special_tests {
             assert!(out.commit.is_empty());
             assert_eq!(special.mode, 0);
         }
+        let ctrl_shift_bar = ShanjieKey { kind: 1, ch: '\\' as u32, modifiers: 3 };
+        assert!(is_punctuation(ctrl_shift_bar));
+        assert_eq!(punctuation(ctrl_shift_bar), "｜");
         let mut special = Special::default();
         for ch in "`uFF0C".chars() { special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs); }
         assert_eq!(special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit, "，");

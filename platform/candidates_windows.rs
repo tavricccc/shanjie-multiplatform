@@ -10,8 +10,10 @@ impl Engine {
         // has no entry for the typed glyph (notably the Windows ［／］ keys).
         for family in ["［「『【《〈〔〖（｛[({", "］」』】》〉〕〗）｝])}",
             "，,、", "。．.⋯…", "；：;:", "／＼/\\、÷", "‘’＇'", "“”＂\"",
-            "！!", "？?", "％%‰", "＋+±", "－-—–", "＊*×", "＝=≠≈≒",
-            "＄$€£¥", "＠@", "＃#", "＆&", "＿_", "～~〜", "＾^"] {
+            "！!", "？?", "％%‰", "＋+±", "－-—–―─→←", "＊*×", "＝=≠≈≒",
+            "＄$€£¥￥", "＠@", "＃#", "＆&", "＿_﹏￣", "～~〜", "＾^︿︽↑",
+            "｜|︱↑↓↕←→↔↖↗↘↙‖¦", "＜<〈《‹«←≤", "＞>〉》›»→≥",
+            "｀`ˋˊ´", "·‧・•"] {
             if family.contains(mark) {
                 for symbol in family.chars() {
                     alternatives.push(symbol.to_string());
@@ -130,7 +132,9 @@ mod windows_candidates {
             e.set_windows_input_options(0);
             for (typed, replacement) in [("[", "「"), ("]", "」"), ("［", "「"), ("］", "」"),
                 ("（", "『"), ("）", "』"), ("「", "［"), ("／", "＼"), ("；", "："),
-                ("％", "%"), ("！", "!"), ("＂", "“")] {
+                ("％", "%"), ("！", "!"), ("＂", "“"), ("|", "↑"), ("｜", "↓"),
+                ("｜", "↕"), ("<", "≤"), (">", "≥"), ("＾", "↑"), ("－", "→"),
+                ("＿", "﹏"), ("｀", "`"), ("·", "・")] {
                 e.reset(ResetMode::Discard);
                 let out = e.insert_windows_punctuation(typed).unwrap();
                 assert!(out.commit.is_empty());
