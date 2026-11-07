@@ -50,14 +50,22 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 ### 快速設定
 
-全新安裝或從舊版升級後，第一次以一般方式開啟設定程式時，主視窗會先蓋上快速設定（`QuickSetupView`）：選範本、調幾個細節、試打。
+全新安裝或從舊版升級後，第一次以一般方式開啟設定程式時，主視窗會先蓋上快速設定（`QuickSetupView`）：歡迎、選範本、一個畫面一題調整細節、完成後試打。
 
 - **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
 - **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
-- **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿。內容是已存的 profile、範本（與設定頁相同的 `sj_profile_preset`，保留個人鍵）、再加上使用者實際改動的鍵；按「套用」才經 `ProfileStore.Save` 寫入並通知實例。沒有差異就不寫，所以略過與保留現況都不會碰檔案。升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
+- **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿；在最後一題按「套用」才經 `ProfileStore.Save` 寫入（暫存檔再整檔取代）並通知實例。
+  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
+  - 保留我現在的設定：已存的 profile 加上實際改動的鍵；沒有差異就不寫。
+  - 第一次寫入前把舊檔複製成 `profile.ini.before-quick-setup.bak`（只留一份，同一次流程再寫不覆蓋）；解除安裝時隨設定一起刪除。略過或關閉不碰檔案；個人詞典與學習資料是另外的檔案，不受影響。
+  - 升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
+- **混打**：只提供自動判斷與原鍵混打兩種；兩者同時開著的 profile 顯示為原鍵混打（它先判斷），沒改就原樣保留。原鍵混打會固定開啟組字面板，該題變灰並說明。
+- **按鍵**：Enter 繼續、Esc 上一步（試打框裡兩者都屬於文字），方向鍵在答案間移動；焦點進每一頁時落在目前的答案上。
 - **試打區**：是設定程式裡一般的 TextBox，和個人詞典、聊天 App 清單的欄位一樣由目前的輸入法處理，不另外載入核心；內容不保存。
 
-動畫（`TypingDemo`）是原生 XAML 元素加計時器，沒有影片也沒有新相依。每一格的內容來自真實核心與 `tests/windows_interaction.cpp` 的結果（`QuickSetupDemos`）；Windows 關閉動畫時停在該腳本的關鍵畫面，不跑計時器。
+示範（`TypingDemo`）是原生 XAML 元素加計時器，格與格之間的動作是 composition 動畫，沒有影片也沒有新相依。每一格的內容來自真實核心與 `tests/windows_interaction.cpp` 的結果（`QuickSetupDemos`）；Windows 關閉動畫時停在該腳本的關鍵畫面，不跑計時器。換頁、選擇、進度與完成（`Choreography`、`ChoiceCards`、`StepProgress`、`FinishMark`）都在 composition 執行緒上跑，不改版面。
+
+`verify-ui.ps1` 的 `--verify-quick-setup <資料夾> flow` 階段在獨立 profile 上檢查上述保存與按鍵、每個示範影格與最小視窗的溢出，並把每一步、換頁中途與完成動畫的影格存成 PNG（`build/ui-review-quick-setup/quick-setup`）。RenderTargetBitmap 看不到執行中的 composition 動畫，所以中途影格是把動畫停下，依同一組關鍵影格與曲線算出該時間點的值後直接設上去再擷取。
 
 ## 安裝與版本目錄
 
