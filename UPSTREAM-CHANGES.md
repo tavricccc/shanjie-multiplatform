@@ -69,7 +69,7 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 - 原鍵混打（`[input] mixed_input`，鍵名不變）是 Windows 專屬的混打方式：按鍵排不成合法注音就當英文，原始按鍵留在組字區，面板提示注音，聲調完成後轉中文，Enter 保留原文。選用（含兩者並用）時組字面板固定開啟，不改寫 `reading_panel` 的值，離開這個模式就回到原值。
 - 候選中 Tab：上游是關閉候選並繼續處理這個鍵（`core` 的兜底分支）。Windows 操作預設的 Tab 與 → 共用 `[candidates] right_action`，範本預設 `expand`，對齊微軟注音；善解操作預設的 Tab 與上游相同。
 - 候選窗方向：上游預設橫排，可在設定改直排（`shanjie_engine_set_candidate_vertical`），Linux 前端也可選；Windows 所有範本一律直式，沒有設定也沒有橫向繪製，候選的直式畫法是 Windows 自己的，沒有接上游這個函式。舊設定的 `[candidates] layout` 讀入時丟棄（任何值都無害），下次儲存就消失。`profiles/*.ini` 保留這一行並加註解，因為 Linux 前端會讀。
-- 範本預設：兩個範本的混打方式都是上游判斷（`upstream_english=1`、`mixed_input=0`），上游判斷不支援的配置（倚天、拼音）沒有作用。善解範本改成與上游相同：`space_operates=1`（空白開候選、候選中換頁）、`shift_toggle=1`、`learning=1`、`caps_lock_english=1`、`forget_candidate=1`（上游 ⌘⌫，Windows 是 Ctrl＋Shift＋Backspace）。只影響新設定檔與缺少的鍵，已存的值不改。
+- 範本預設：兩個範本的混打方式都是上游判斷（`upstream_english=1`、`mixed_input=0`），上游判斷不支援的配置（倚天、拼音）沒有作用。善解範本改成與上游相同：`space_operates=1`（空白開候選、候選中換頁）、`shift_toggle=1`、`learning=1`、`caps_lock_english=1`、`forget_candidate=1`（上游 ⌘⌫，Windows 是 Ctrl＋Shift＋Backspace）。只影響新設定檔與缺少的鍵，已存的值不改；混打的兩個鍵只有一個開啟、另一個缺少時（例如 0.8 版開了原鍵混打的設定檔），缺少的那個補 0，不會因範本預設變成兩者並用。
 - 善解範本仍與上游不同：`add_word=1`（雙 Ctrl 加詞，上游沒有）；`glass_tint=42`（上游 0，Windows 玻璃視窗有最低濃度，候選窗不讀它）；上游「瀏覽器第一個字不顯示預測」與英文段提示「空白：英文斷開」Windows 沒有。
 - 「自動檢查更新」是 Windows 設定頁「關於」的選項，預設開，存在 `%LOCALAPPDATA%\Shanjie\update-auto.txt`，不在 `profile.ini`，上游沒有對應。開啟時由隱藏排程 `ShanjieUpdateCheck` 在登入與之後每 24 小時向 GitHub 查詢，排程同一版一天最多通知一次，開啟設定程式時只要有新版就通知；都不自動下載。
 - Windows 的玻璃視窗（設定、安裝、更新卡片）有最低濃度，任何背景最多透出 20%，「玻璃濃度」從這個下限調到不透明，避免深色背景蓋過文字；次要文字也加深。
