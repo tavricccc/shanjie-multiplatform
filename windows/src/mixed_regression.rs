@@ -33,6 +33,39 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
     e.set_windows_input_options((1<<20)|(1<<21)|(1<<22)|(1<<23));
     for (mixed,english) in [(true,true),(false,true),(true,false),(false,false)] {
         e.set_mixed_input(mixed);e.set_upstream_english(english,true,true,true).unwrap();
+        // Shift+5 and the other TSF symbol paths call the direct punctuation API.
+        for keep_reading in [false, true] {
+            if mixed || english {
+                e.set_windows_input_options((1<<20)|(1<<23)|if keep_reading {1<<22} else {0});
+                for prefix in ["", "su3"] {
+                    for mark in ["%", "％", "，", "［"] {
+                        let before = {
+                            let mut out = e.key(Key::new(KeyKind::Esc)).unwrap();
+                            for ch in format!("{prefix}99.9").chars() {
+                                out = e.key(Key::ch(ch, 0)).unwrap();
+                            }
+                            out
+                        };
+                        if english { assert!(e.digits_typed().is_some()); }
+                        let want = format!("{}99.9{mark}", if prefix.is_empty() {""} else {"你"});
+                        let out = e.insert_windows_punctuation(mark).unwrap();
+                        assert!(out.commit.is_empty(), "{mixed}/{english} {want}: remains editable");
+                        assert_eq!(out.preedit, want, "mixed={mixed}, english={english}, keep_reading={keep_reading}, before={}", before.preedit);
+                        assert!(e.digits_typed().is_none());
+                        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want);
+                    }
+                    for ch in format!("{prefix}99.9").chars() {
+                        e.key(Key::ch(ch, 0)).unwrap();
+                    }
+                    let want_space = format!("{}99.9 ", if prefix.is_empty() {""} else {"你"});
+                    let out = e.insert_literal_space().unwrap();
+                    assert!(out.commit.is_empty());
+                    assert_eq!(out.preedit, want_space);
+                    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want_space);
+                }
+            }
+        }
+        e.set_windows_input_options((1<<20)|(1<<21)|(1<<22)|(1<<23));
         if english {
             let out=e.key(Key::ch('9',0)).unwrap();
             assert!(e.digits_typed().is_some(),"the real digit table and model must be active");

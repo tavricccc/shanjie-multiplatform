@@ -220,13 +220,16 @@ impl Engine {
     }
 
     pub fn insert_windows_literal(&mut self, text: &str) -> Result<Output, EngineError> {
+        // The direct Windows insertion entry bypasses key_original's digit boundary.
+        // Materialize earlier digits before adding the later literal at the cursor.
+        let mut commit = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
         self.cands = None;
         self.clear_pred();
         if self.windows_phonetic_pending() && !self.mixed_latin {
             if self.punctuation_keeps_reading {
                 // Symbols typed during a reading follow it until that reading is completed.
                 self.pending_literal.push_str(text);
-                return self.handled();
+                return Ok(self.view(true, commit));
             }
             // Upstream: the unfinished reading is dropped and the mark goes in.
             self.clear_pend();
@@ -235,7 +238,6 @@ impl Engine {
         }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
-        let mut commit = String::new();
         for ch in raw.chars().chain(text.chars()) {
             let out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
             commit.push_str(&out.commit);
