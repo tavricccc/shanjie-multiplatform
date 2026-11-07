@@ -28,6 +28,35 @@ mod windows_composition_tests {
         out
     }
     #[test]
+    fn shifted_english_stays_before_later_literals_and_spaces() {
+        for layout in [Layout::Standard, Layout::Eten] {
+            for (mixed, english) in [(false, true), (true, true), (true, false)] {
+                // Upstream English is Standard-only; Eten uses Windows mixing.
+                if layout == Layout::Eten && !mixed { continue; }
+                for prefix in ["", "你"] {
+                    for mark in ["+", "＋", "%", "［", "，", " "] {
+                        let mut e = engine(mixed, false);
+                        e.layout = layout;
+                        e.set_upstream_english(english, true, true, true).unwrap();
+                        if !prefix.is_empty() {
+                            for ch in "ㄋㄧˇ".chars() {
+                                let key = layout.key_of_symbol(ch).or_else(|| layout.key_of_tone(ch)).unwrap();
+                                e.key(Key::ch(key, 0)).unwrap();
+                            }
+                        }
+                        for ch in "ABC".chars() { e.key(Key::ch(ch, MOD_SHIFT)).unwrap(); }
+                        assert_eq!(e.view(true, String::new()).preedit, format!("{prefix}ABC"));
+                        let out = if mark == " " { e.insert_literal_space() } else { e.insert_windows_literal(mark) }.unwrap();
+                        assert_eq!(out.preedit, format!("{prefix}ABC{mark}"), "mixed={mixed} english={english} mark={mark}");
+                        assert!(out.commit.is_empty());
+                        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, out.preedit);
+                        assert!(e.reset(ResetMode::Commit).commit.is_empty());
+                    }
+                }
+            }
+        }
+    }
+    #[test]
     fn windows_punctuation_contract_across_layouts_and_mixed_modes() {
         for layout in [Layout::Standard,Layout::Eten] { for mixed in [false,true] {
             for key in [Key::ch(',',MOD_SHIFT),Key::ch('\\',MOD_CONTROL),Key::ch('(',0)] {
@@ -221,8 +250,9 @@ impl Engine {
 
     pub fn insert_windows_literal(&mut self, text: &str) -> Result<Output, EngineError> {
         // The direct Windows insertion entry bypasses key_original's digit boundary.
-        // Materialize earlier digits before adding the later literal at the cursor.
+        // Materialize earlier digits and Shift-English before the later literal.
         let mut commit = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
+        if !self.run.is_empty() { commit.push_str(&self.end_run()?); }
         self.cands = None;
         self.clear_pred();
         if self.windows_phonetic_pending() && !self.mixed_latin {

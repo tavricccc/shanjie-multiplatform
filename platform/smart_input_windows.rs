@@ -197,7 +197,8 @@ mod windows_smart_tests {
 
 impl Engine {
     pub fn insert_literal_space(&mut self) -> Result<Output, EngineError> {
-        let flushed = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
+        let mut flushed = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
+        if !self.run.is_empty() { flushed.push_str(&self.end_run()?); }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
         let prefix = self.mixed_text(&raw)?.commit;

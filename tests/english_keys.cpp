@@ -30,7 +30,16 @@ int wmain(int argc,wchar_t** argv) {
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"standalone-tones"){
+    if(scenario==L"english-symbol-order"){
+        std::wstring expected;
+        for(auto mark:{std::pair{VK_ADD,L"+"},std::pair{VK_SPACE,L" "}}){
+            for(auto ch:std::wstring(L"ABC"))press(ch,true);
+            require(store->text==expected+L"ABC",960);
+            press(mark.first);expected+=std::wstring(L"ABC")+mark.second;
+            require(store->text==expected,961);
+            press(VK_RETURN,false,false,false);require(store->text==expected,962);
+        }
+    }else if(scenario==L"standalone-tones"){
         for(int key:{'3','4','6','7'}){press(key);press(VK_RETURN,false,false,false);}
         require(store->text==L"ˇˋˊ˙",948);
     }else if(scenario==L"standalone-tones-off"||scenario==L"standalone-tones-shanjie"){
