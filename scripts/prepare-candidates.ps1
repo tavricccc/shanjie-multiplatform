@@ -10,8 +10,12 @@ function Replace-Contract([string]$old, [string]$replacement, [int]$count = 1) {
     }
     $script:content = $script:content.Replace($old,$replacement)
 }
-Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,`n    candidate_big5: bool,"
-Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,`n            candidate_big5: false,"
+Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,`n    candidate_big5: bool,`n    candidate_grid_columns: usize,"
+Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,`n            candidate_big5: false,`n            candidate_grid_columns: PAGE_SIZE,"
+Replace-Contract 'let (len, sel, cols) = (c.list.len(), c.sel, PAGE_SIZE);' 'let (len, sel, cols) = (c.list.len(), c.sel, self.candidate_grid_columns);'
+Replace-Contract 'let columns = if c.expanded { PAGE_SIZE as u32 } else { 0 };' 'let columns = if c.expanded { self.candidate_grid_columns as u32 } else { 0 };'
+# The viewport and number labels retain nine-item groups, independently of the visual row width.
+Replace-Contract 'let idx = row * cols + d;' 'let idx = sel / PAGE_SIZE * PAGE_SIZE + d;'
 Replace-Contract '    fn open_candidates(&mut self, rows: Vec<Pred>) {' '    fn open_candidates_left(&mut self, rows: Vec<Pred>) {'
 Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l);' 2
 Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"

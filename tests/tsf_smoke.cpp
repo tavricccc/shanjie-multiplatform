@@ -315,21 +315,22 @@ int wmain(int argc, wchar_t** argv) {
             auto beforeGrid=store->text; auto gridCaret=store->selection.acpStart;
             press('G',986);press('4',988);press(VK_DOWN,990);press(VK_RIGHT,992);
             UINT gridCount=0;candidates->GetCount(&gridCount);require(gridCount>9&&gridCount<=45,994);
-            press(VK_DOWN,995);require(selected()==1,997);
-            press(VK_TAB,998);require(selected()==2,1000);
-            press(VK_DOWN,1001);require(selected()==3,1003);
-            press(VK_UP,1004);require(selected()==2,1006);
+            press(VK_DOWN,995);require(selected()==3,997);
+            press(VK_TAB,998);require(selected()==4,1000);
+            press(VK_DOWN,1001);require(selected()==7,1003);
+            press(VK_UP,1004);require(selected()==4,1006);
+            press(VK_UP,1007);require(selected()==1,1008);
             press(VK_UP,1007);candidates->GetCount(&gridCount);require(gridCount<=9,1009);
             press(VK_RIGHT,1010);candidates->GetCount(&gridCount);require(gridCount>9,1012);
-            for(int i=0;i<7;i++)press(VK_DOWN,1013);
-            require(selected()==9,1015);
+            for(int i=0;i<3;i++)press(VK_DOWN,1013);
+            require(selected()==10,1015);
             BSTR gridWord=nullptr;require(SUCCEEDED(candidates->GetString(9,&gridWord)),1016);
             std::wstring chosen(gridWord);SysFreeString(gridWord);
             press('1',1017);beforeGrid.insert(gridCaret,chosen);require(store->text==beforeGrid,1019);
             press(VK_RETURN,1020);
             require(WritePrivateProfileStringW(L"candidates",L"right_action",L"none",profile.c_str()),1022);
             localNotify(L"Shanjie.ProfileChanged.v2");
-            std::puts("Right arrow expand: one-item vertical navigation, top-row collapse and numeric selection passed");
+            std::puts("Right arrow expand: same-column navigation, top-row collapse and numeric selection passed");
         }
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"1",profile.c_str()),510);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"1",profile.c_str()),511);
@@ -479,7 +480,7 @@ int wmain(int argc, wchar_t** argv) {
             std::wstring before(first);SysFreeString(first);
             press(VK_RIGHT,1032);UINT count=0;candidates->GetCount(&count);
             if(std::wstring(action)==L"expand") {
-                require(count>9,1034);press(VK_DOWN,1035);candidates->GetSelection(&selection);require(selection==1,1037);
+                require(count>9,1034);press(VK_DOWN,1035);candidates->GetSelection(&selection);require(selection==3,1037);
             } else if(std::wstring(action)==L"page") {
                 BSTR next=nullptr;require(SUCCEEDED(candidates->GetString(0,&next)),1038);
                 require(std::wstring(next)!=before,1039);SysFreeString(next);

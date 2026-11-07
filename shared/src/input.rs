@@ -111,11 +111,10 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
     }
-    // Up/Down step one candidate. Up in the first visual grid row collapses the table.
+    // Expanded arrows follow the core's visual rows. Collapsed arrows step one item.
     k.kind = match k.kind {
-        10 => 8,
-        9 if s.columns > 0 && s.first == 0 && s.selected.is_some_and(|i| i < GRID_COLUMNS) && !s.prediction => 9,
-        9 => 7,
+        10 if s.columns == 0 => 8,
+        9 if s.columns == 0 => 7,
         13 => 8,
         kind => kind,
     };
@@ -126,15 +125,15 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
 mod candidate_tests {
     use super::*;
     #[test]
-    fn both_interactions_step_and_collapse_the_first_visual_grid_row() {
+    fn both_interactions_preserve_expanded_arrows_and_step_collapsed_items() {
         let mut state = Snapshot { candidates: vec!["字".into(); 18], selected: Some(0), ..Default::default() };
         for windows in [true, false] {
             for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13,8)] {
                 assert_eq!(candidate_key(ShanjieKey { kind, ch: 0, modifiers: 0 }, &state, windows).kind, expected);
             }
-            state.columns = 9; state.selected = Some(3);
-            assert_eq!(candidate_key(ShanjieKey { kind: 9, ch: 0, modifiers: 0 }, &state, windows).kind, 7);
-            assert_eq!(candidate_key(ShanjieKey { kind: 10, ch: 0, modifiers: 0 }, &state, windows).kind, 8);
+            state.columns = 3; state.selected = Some(3);
+            assert_eq!(candidate_key(ShanjieKey { kind: 9, ch: 0, modifiers: 0 }, &state, windows).kind, 9);
+            assert_eq!(candidate_key(ShanjieKey { kind: 10, ch: 0, modifiers: 0 }, &state, windows).kind, 10);
             state.selected = Some(2);
             assert_eq!(candidate_key(ShanjieKey { kind: 9, ch: 0, modifiers: 0 }, &state, windows).kind, 9);
             state.prediction = true; state.selected = None;
