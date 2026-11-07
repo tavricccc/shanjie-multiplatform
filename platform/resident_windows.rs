@@ -3,11 +3,39 @@
 use std::sync::{Mutex, OnceLock};
 static WINDOWS_LEX_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(test)]
+mod windows_pack_cache_tests {
+    use super::*;
+
+    #[test]
+    fn personal_and_cached_lexicons_keep_the_pack_oov_prefix() {
+        let dir = std::env::temp_dir().join(format!("shanjie-pack-cache-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(dir.join("packs")).unwrap();
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄋㄧˇ 你 -1\n").unwrap();
+        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄠ-ㄆㄠ-ㄇㄠ\t貓泡貓\t-7\tacg\n").unwrap();
+        let personal = dir.join("personal.tsv");
+        std::fs::write(&personal, "ㄋㄧˇ 妳 -2\n").unwrap();
+        for personal in [None, Some(personal.as_path())] {
+            let first = Engine::new_with_personal(&dir, Layout::Standard, personal, PACK_ACG).unwrap();
+            let cached = Engine::new_with_personal(&dir, Layout::Standard, personal, PACK_ACG).unwrap();
+            assert!(Arc::ptr_eq(&first.lex, &cached.lex));
+            assert!(first.pack_oov_len > 0);
+            assert_eq!(cached.pack_oov_len, first.pack_oov_len);
+            assert_eq!(cached.pack_text.as_deref(), first.pack_text.as_deref());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
 type LexCache = Vec<(
     (u32, Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>),
     Arc<Lexicon>,
     // Pack rows are part of the capped lexicon later built from this lexicon, so they travel with it.
-    Option<String>,
+    (Option<String>, usize),
     // The optional digit count table read from the same data folder (upstream shares it across engines).
     Option<Arc<DigitTable>>,
 )>;
@@ -70,7 +98,8 @@ impl Engine {
             let entry = cache.remove(index);
             let mut engine = Engine::with_lexicon(entry.1.clone(), layout);
             engine.data_dir = Some(data.to_owned());
-            engine.pack_text = entry.2.clone();
+            engine.pack_text = entry.2.0.clone();
+            engine.pack_oov_len = entry.2.1;
             engine.digit_table = entry.3.clone();
             cache.push(entry);
             return Ok(engine);
@@ -80,7 +109,7 @@ impl Engine {
         if cache.len() == 4 {
             cache.remove(0);
         }
-        cache.push((stamp, engine.lex.clone(), engine.pack_text.clone(), engine.digit_table.clone()));
+        cache.push((stamp, engine.lex.clone(), (engine.pack_text.clone(), engine.pack_oov_len), engine.digit_table.clone()));
         Ok(engine)
     }
     pub fn load_lm(&mut self, path: &Path) -> Result<(), EngineError> {
