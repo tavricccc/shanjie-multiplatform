@@ -183,7 +183,11 @@ fn progress(start: Option<Instant>, ms: f32, curve: [f32; 4]) -> Option<f32> {
     (t < 1.0).then(|| ease(curve, t.max(0.0)))
 }
 /// Whether Windows' animation effects are on (and this is not a capture run, which needs the final frame).
+/// `SHANJIE_VERIFY_MOTION` is the harness asking to time a glide whatever the desktop's setting is.
 fn animated() -> bool {
+    if std::env::var_os("SHANJIE_VERIFY_MOTION").is_some() {
+        return true;
+    }
     let mut on = BOOL(1);
     unsafe {
         let _ = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, Some((&mut on as *mut BOOL).cast()),
@@ -573,6 +577,10 @@ impl Host {
         // A page holds at most nine candidates, so every row is shown; rows share one width.
         self.start = 0;
         self.end = count;
+        // The reading row alone has no rows to keep wide: the panel is exactly its text (`measure` adds the insets).
+        if count == 0 {
+            return 0.0;
+        }
         // Rows keep a minimum width so a list of single characters is not a thin strip.
         let widest = self.items.iter().map(|i| i.natural).fold(112.0 * ratio, f32::max);
         let width = widest.min((self.work_width - 10.0 * ratio).max(1.0));
