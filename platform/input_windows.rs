@@ -48,7 +48,7 @@ impl Engine {
         // Same fixed order as upstream load_lexicon: overlay, sandhi, then the always-on names layer.
         let names = std::fs::read_to_string(data.join(NAMES_FILE)).map_err(|_| EngineError::LoadFailed)?;
         let mut overlay = join_overlays(join_overlays(overlay,&sandhi),&names);
-        let pack_text = if packs != 0 { read_packs_detailed(&pack_dir,packs).map_err(|_| EngineError::LoadFailed)? } else { String::new() };
+        let (pack_text, pack_oov_len) = if packs != 0 { read_packs_split(&pack_dir,packs).map_err(|_| EngineError::LoadFailed)? } else { (String::new(), 0) };
         if !pack_text.is_empty() { overlay = join_overlays(overlay,&pack_text); }
         // Keep the original manual protection, including a manual row replaced by a personal score.
         // Keep pack_text unchanged too: upstream uses its tags to identify pack OOV words.
@@ -65,6 +65,7 @@ impl Engine {
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
+        engine.pack_oov_len = pack_oov_len;
         engine.digit_table = windows_digit_table(data); Ok(engine)
     }
     pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; self.clear_pred(); }
