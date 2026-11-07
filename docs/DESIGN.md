@@ -93,9 +93,9 @@ components:
 
 設定程式初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動，InfoBar 與儲存列固定在內容外。開關為同列左標籤、右 ToggleSwitch，MinHeight 40 DIP，並提供 AutomationProperties.Name。
 
-候選窗每頁最多九項，可選橫向或直式。預設字級下選取膠囊 24 DIP、外框至少 30 DIP，字體需要時加高。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
+候選窗一律直式，每頁最多九項，一列一個候選。預設字級下選取膠囊 24 DIP、外框至少 30 DIP，字體需要時加高。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
 
-**The Natural Width Rule.** 橫向排列時字詞依自然寬度量測，窄工作區只顯示放得下的項目，兩端箭頭翻動，目前選取項保持可見。只有單項超過可用寬度才用 character ellipsis 省略。
+**The Natural Width Rule.** 字詞依自然寬度量測，各列共用最寬一項的寬度，有候選時至少 112 DIP（字級 16），單字清單才不會變成細條。只有組字面板時沒有下限，寬度就是文字加內距，打字時隨內容伸縮。只有單項超過可用寬度才用 character ellipsis 省略。
 
 中英模式提示用 `mode-indicator`，透明視窗、零內距，與 caret 間距為 `mode-caret-gap`，依所在螢幕 DPI 繪製，1400 ms、下一次輸入或失焦時隱藏。
 
@@ -103,7 +103,7 @@ components:
 
 設定與安裝視窗是毛玻璃風格（內容視窗＋Rust 玻璃視窗）。候選窗是單一 Win32 layered popup，以 Direct2D software DC render target 繪製，`UpdateLayeredWindow` 用 premultiplied alpha 合成；陰影與上緣亮邊畫在 bitmap 裡，沒有 blur 或背景視窗。
 
-**The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏與翻頁立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
+**The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
 
 ## Shapes
 

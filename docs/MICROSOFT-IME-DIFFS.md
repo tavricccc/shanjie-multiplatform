@@ -2,7 +2,7 @@
 
 對照 [Microsoft Support 繁體中文 IME](https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime) 與 [Microsoft Learn 繁體中文輸入指南](https://learn.microsoft.com/en-us/globalization/input/traditional-chinese-ime)（核對於 2026-11-06），列出兩份操作範本的鍵位與每個設定。
 
-Windows 範本採微軟公開的常用鍵位，候選預設直式，候選中 Tab 與 → 預設展開表格。即時讀音預測、選字後聯想與善解額外的標點／聲調操作預設關閉；Caps Lock、學習、空白提交、拼音空白與反引號標點用專案自訂的值；候選中 Esc 只關候選不刪字；讀音候選預設不列出，開啟時排在第一項而非最後；語意校正、ACG／IT 詞包、依 App 排名、雙 Ctrl 加詞與混打（預設上游判斷）預設開啟，明顯改變體驗。這些是本專案的選擇，不是微軟的出廠值。候選排序、整句解碼與學習仍是善解的，沒有重製微軟的私有引擎。
+Windows 範本採微軟公開的常用鍵位，候選中 Tab 與 → 預設展開表格（候選窗在所有範本都是直式）。即時讀音預測、選字後聯想與善解額外的標點／聲調操作預設關閉；Caps Lock、學習、空白提交、拼音空白與反引號標點用專案自訂的值；候選中 Esc 只關候選不刪字；讀音候選預設不列出，開啟時排在第一項而非最後；語意校正、ACG／IT 詞包、依 App 排名、雙 Ctrl 加詞與混打（預設上游判斷）預設開啟，明顯改變體驗。這些是本專案的選擇，不是微軟的出廠值。候選排序、整句解碼與學習仍是善解的，沒有重製微軟的私有引擎。
 
 ## 模型
 
@@ -79,7 +79,6 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `input.dictionary` | 設定頁編輯、原子保存的個人詞庫 | 保留內容／路徑 |
 | `candidates.open` | 完整組字後 down／space／both | down／both |
 | `candidates.anchor` | 游標右側／左側候選範圍 | right／left |
-| `candidates.layout` | 橫向／直式；表格由 `right_action=expand` 進入 | vertical／horizontal |
 | `candidates.enter_commits` | 候選 Enter 是否同時提交 | 1／0 |
 | `candidates.enter_to_cursor` | Enter 只提交游標前；固定詞不拆開 | 1／0；舊設定缺值為 0 |
 | `candidates.up_cycles` | 未開候選的 ↑ 循環換字 | 1／0 |
@@ -123,7 +122,7 @@ Ctrl 標點不再靠改成上游 Shift 標點來模擬，避免 Ctrl＋[ 變成�
 
 ## 遷移與通知
 
-設定讀取只在記憶體中遷移舊 schema；明確儲存時才備份舊檔並寫回，遇到未知的新版 schema 不覆寫。遷移保留個人偏好、詞庫與學習，即時預測不會自己打開；退役的舊 key（如免聲調／簡拼、`layout=grid`、`tab_expands`、`right_expands`）會移除或改寫；表格本身由 `right_action=expand` 提供。命令列與設定程式共用 `profiles/` 範本與同一套 Rust 邏輯。
+設定讀取只在記憶體中遷移舊 schema；明確儲存時才備份舊檔並寫回，遇到未知的新版 schema 不覆寫。遷移保留個人偏好、詞庫與學習，即時預測不會自己打開；退役的舊 key（如免聲調／簡拼、`layout`、`tab_expands`、`right_expands`）會移除或改寫；表格本身由 `right_action=expand` 提供。命令列與設定程式共用 `profiles/` 範本與同一套 Rust 邏輯。
 
 儲存時以 v2 非同步通知新版實例，舊版 DLL 保留原本設定，避免共存時互相改寫。沒有 INI 監控或逐鍵查檔：直接改 INI 後，按「重新啟動輸入法」或重新啟用善解才會讀取。這個按鈕不終止 App，也換不掉 App 已載入的舊版 DLL。
 
