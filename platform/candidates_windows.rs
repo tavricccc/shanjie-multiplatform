@@ -91,6 +91,56 @@ impl Engine {
 }
 
 #[cfg(test)]
+mod windows_grid_tests {
+    use super::*;
+
+    fn expanded() -> Engine {
+        let data: String = (0..53).map(|i| format!("ㄋㄧˇ {} -{}\n", char::from_u32(0x4e00 + i).unwrap(), i + 1)).collect();
+        let mut e = Engine::with_lexicon(Arc::new(Lexicon::parse(&data).unwrap()), Layout::Standard);
+        e.set_windows_input_options(0);
+        for ch in "su3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let out = e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(out.columns, 3);
+        e
+    }
+
+    #[test]
+    fn arrows_stay_in_the_visual_column_and_collapse_only_at_the_top() {
+        let mut e = expanded();
+        for (kind, expected) in [(KeyKind::Right, 1), (KeyKind::Down, 4), (KeyKind::Down, 7),
+            (KeyKind::Up, 4), (KeyKind::Up, 1)] {
+            e.key(Key::new(kind)).unwrap();
+            assert_eq!(e.cands.as_ref().unwrap().sel, expected);
+        }
+        assert_eq!(e.key(Key::new(KeyKind::Up)).unwrap().columns, 0);
+        let mut e = expanded();
+        let c = e.cands.as_mut().unwrap();
+        c.sel = c.list.len() - 1;
+        let last = c.sel;
+        c.scroll();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().sel, last);
+    }
+
+    #[test]
+    fn scrolled_grid_keeps_number_keys_in_nine_item_groups() {
+        for (selected, digit, target) in [(10, '1', 9), (10, '9', 17), (47, '2', 46)] {
+            let mut e = expanded();
+            let c = e.cands.as_mut().unwrap();
+            c.sel = selected;
+            let expected = c.list[target].0.clone();
+            c.scroll();
+            let out = e.view(true, String::new());
+            assert_eq!(out.first % 9, 0);
+            assert_eq!(out.first as usize + out.selected.unwrap(), selected);
+            let out = e.key(Key::ch(digit, 0)).unwrap();
+            assert_eq!(out.preedit, expected);
+        }
+    }
+}
+
+#[cfg(test)]
 mod windows_candidates {
     use super::*;
     fn sample(right: bool) -> Engine {
