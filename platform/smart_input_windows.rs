@@ -191,15 +191,75 @@ mod windows_smart_tests {
         assert_eq!(type_keys(&mut e, "5j/ jp6").preedit, "你english  中文");
         assert_eq!(e.reset(ResetMode::Commit).commit, "你english  中文");
     }
+
+    #[test]
+    fn caps_lock_shifted_english_allows_following_chinese_without_breaking_models() {
+        let lex = Arc::new(
+            Lexicon::parse(
+                "ㄏㄠˇ 好 -0.1\nㄩㄥˋ 用 -0.1\nㄇㄚ˙ 嗎 -0.1\nㄏㄠˇ-ㄩㄥˋ 好用 -0.05\nㄅㄚˋ 爸 -0.1\nㄚˋ 亞 -0.1\nㄋㄧˇ 你 -0.1\n",
+            )
+            .unwrap(),
+        );
+        for english in [false, true] {
+            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            e.set_mixed_input(!english);
+            e.set_windows_input_options(0);
+            e.set_upstream_english(english, true, true, true).unwrap();
+
+            // Reordered readings belong to raw-key mixing; upstream mode keeps its ordered contract.
+            let tails: &[&str] = if english { &["CL3M/4A87"] } else { &["CL3M/4A87", "LC3M/4A87"] };
+            for tail in tails {
+                for ch in "gemini".chars() {
+                    e.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
+                }
+                for ch in tail.chars() {
+                    let lower = ch.to_ascii_lowercase();
+                    let display = ch.is_ascii_alphabetic().then_some(ch);
+                    e.key_with_latin(Key::ch(lower, 0), display).unwrap();
+                }
+                assert_eq!(
+                    e.reset(ResetMode::Commit).commit,
+                    "gemini好用嗎",
+                    "english={english} tail={tail}"
+                );
+            }
+
+            // Shifted prefix boundary never lets a trailing reading steal the last shifted letter
+            // (e.g. Shift+"windows" ends in 's'=ㄋ, so following 'u'+'3' stays literal "windowsU3").
+            for ch in "windows".chars() {
+                e.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
+            }
+            e.key_with_latin(Key::ch('u', 0), Some('U')).unwrap();
+            e.key(Key::ch('3', 0)).unwrap();
+            assert_eq!(
+                e.reset(ResetMode::Commit).commit,
+                "windowsU3",
+                "english={english}"
+            );
+
+            // Model strings such as A84 keep digits literal after a shifted letter.
+            e.key_with_latin(Key::ch('a', MOD_SHIFT), Some('A')).unwrap();
+            e.key(Key::ch('8', 0)).unwrap();
+            e.key(Key::ch('4', 0)).unwrap();
+            assert_eq!(
+                e.reset(ResetMode::Commit).commit,
+                "A84",
+                "english={english}"
+            );
+        }
+    }
 }
 
 impl Engine {
     pub fn insert_literal_space(&mut self) -> Result<Output, EngineError> {
+        let mut flushed = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
+        if !self.run.is_empty() { flushed.push_str(&self.end_run()?); }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
+        self.mixed_explicit_english = false;
         let prefix = self.mixed_text(&raw)?.commit;
         let mut out = self.mixed_text(" ")?;
-        out.commit = prefix + &out.commit;
+        out.commit = flushed + &prefix + &out.commit;
         Ok(out)
     }
     pub fn is_mixed_pending(&self) -> bool {
@@ -209,6 +269,31 @@ impl Engine {
         self.mixed_input = mixed;
     }
     pub fn set_mixed_tolerance(&mut self, enabled: bool) { self.mixed_tolerance = enabled; }
+
+    fn has_mixed_han_entry(&self, reading: &str, tone: usize) -> bool {
+        let mut syllable = reading.to_string();
+        syllable.push_str(TONE_MARKS[tone]);
+        self.lex.entries(&[syllable]).iter().any(|(word, _)| !windows_reading_text(word))
+    }
+
+    fn replay_mixed_reading(&mut self, reading: &str, key: Key) -> Result<Output, EngineError> {
+        self.drun = None;
+        self.clear_pend();
+        self.clear_pred();
+        self.cands = None;
+        for (i, symbol) in reading.chars().enumerate() {
+            let ch = self.layout.key_of_symbol(symbol).expect("reading symbol belongs to active layout");
+            let (col, sym) = self.layout.symbol_of(ch).expect("layout key maps back to symbol");
+            if i == 0 {
+                self.start_syllable(ch, col, sym);
+            } else {
+                self.shadow_push(ch, col);
+                self.pend[col] = Some(sym);
+                self.pred_dirty = true;
+            }
+        }
+        self.key_original(key)
+    }
 
     // Conservative first stage: one adjacent repeated key, a complete syllable,
     // an explicit tone, and one unambiguous dictionary reading. Never touch host text.
@@ -220,9 +305,8 @@ impl Engine {
         for index in 1..raw.len() {
             if raw.as_bytes()[index] != raw.as_bytes()[index-1] { continue; }
             let keys = format!("{}{}", &raw[..index], &raw[index+1..]);
-            if let Some(mut reading) = self.mixed_reading_order(&keys, false) {
-                reading.push_str(TONE_MARKS[tone]);
-                if !self.lex.entries(&[reading]).is_empty() { choices.insert(keys); }
+            if let Some(reading) = self.mixed_reading_order(&keys, false) {
+                if self.has_mixed_han_entry(&reading, tone) { choices.insert(reading); }
             }
         }
         if choices.len() == 1 { choices.into_iter().next() } else { None }
@@ -286,11 +370,15 @@ impl Engine {
 
     fn finish_latin(&mut self, key: Key) -> Result<Output, EngineError> {
         let raw = std::mem::take(&mut self.mixed_raw);
+        let explicit_english = std::mem::take(&mut self.mixed_explicit_english);
+        let shifted_end = std::mem::take(&mut self.mixed_shifted_end).min(raw.len());
         self.mixed_latin = false;
         // Once a run is literal digits, later tone-number keys remain digits.
         if !raw.is_empty() && raw.bytes().all(|c| c.is_ascii_digit())
             && key.kind==KeyKind::Char && key.modifiers==0 && key.ch.is_ascii_digit() {
             self.mixed_raw=raw;self.mixed_raw.push(key.ch);self.mixed_latin=true;
+            self.mixed_explicit_english = explicit_english;
+            self.mixed_shifted_end = shifted_end;
             return self.handled();
         }
         // Keep every literal prefix, including names absent from the English
@@ -302,58 +390,110 @@ impl Engine {
         } else {
             None
         };
-        if let Some(tone) =
-            tone.filter(|_| key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
-        {
-            if let Some(corrected) = self.corrected_mixed_keys(&raw, tone) {
-                self.clear_pend(); self.clear_pred();
-                for ch in corrected.chars() { self.key_original(Key::ch(ch, 0))?; }
-                let out = self.key_original(key)?;
-                let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
-                if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
-                    self.typed_literals.insert(index, format!("{raw}{ending}"));
+        if let Some(tone) = tone.filter(|_| key.kind != KeyKind::Space || !explicit_english) {
+            if shifted_end == 0 {
+                if let Some(reading) = self.corrected_mixed_keys(&raw, tone) {
+                    let out = self.replay_mixed_reading(&reading, key)?;
+                    let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                        self.typed_literals.insert(index, format!("{raw}{ending}"));
+                    }
+                    return Ok(out);
                 }
-                return Ok(out);
+                // A tone (including first-tone Space on an unshifted run) confirms a complete
+                // reordered syllable before checking English-word literals or suffix splits.
+                if let Some(reading) = self
+                    .mixed_reading_order(&raw, false)
+                    .filter(|r| self.has_mixed_han_entry(r, tone))
+                {
+                    let out = self.replay_mixed_reading(&reading, key)?;
+                    let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                        self.typed_literals.insert(index, format!("{raw}{ending}"));
+                    }
+                    return Ok(out);
+                }
             }
-            // A tone explicitly confirms a complete syllable before the suffix heuristic.
-            if key.kind != KeyKind::Space {
-                if let Some(mut reading) = self.mixed_reading_order(&raw, false) {
-                    reading.push_str(TONE_MARKS[tone]);
-                    if !self.lex.entries(&[reading]).is_empty() {
-                        self.clear_pend();
-                        for ch in raw.chars() { self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?; }
-                        let out = self.key_original(key)?;
-                        if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
-                            self.typed_literals.insert(index, format!("{raw}{}", key.ch));
+            if (key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
+                && !raw.bytes().all(|c| c.is_ascii_digit() || c == b'.')
+            {
+                // Hard boundary: after an incomplete literal+tone fragment (e.g. w4 + u0r3) or an
+                // explicit Shift-typed English prefix (e.g. Shift+"gemini" + CL3 under Caps Lock),
+                // the trailing unshifted keys form an isolated syllable without consuming the prefix.
+                let non_phonetic_end = raw
+                    .char_indices()
+                    .rfind(|(_, ch)| self.layout.symbol_of(ch.to_ascii_lowercase()).is_none())
+                    .map_or(0, |(idx, ch)| idx + ch.len_utf8());
+                let boundary = non_phonetic_end.max(shifted_end);
+                if boundary > 0 && boundary < raw.len() {
+                    let (word, tail) = raw.split_at(boundary);
+                    let tail_chars = tail.chars().count();
+                    let min_tail = if boundary == shifted_end && non_phonetic_end < shifted_end { 2 } else { 1 };
+                    if (min_tail..=3).contains(&tail_chars)
+                        && !(key.kind == KeyKind::Space && explicit_english)
+                        && !tail.bytes().all(|c| c.is_ascii_digit())
+                    {
+                        if let Some(reading) = self
+                            .mixed_reading_order(tail, false)
+                            .filter(|r| self.has_mixed_han_entry(r, tone))
+                        {
+                            let prefix = self.mixed_text(word)?.commit;
+                            let mut out = self.replay_mixed_reading(&reading, key)?;
+                            let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                            if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                                self.typed_literals.insert(index, format!("{tail}{ending}"));
+                            }
+                            out.commit = prefix + &out.commit;
+                            return Ok(out);
                         }
+                    }
+                }
+                let start_split = raw.len().saturating_sub(3).max(shifted_end).max(1);
+                for split in start_split..raw.len() {
+                    let (word, tail) = raw.split_at(split);
+                    if shifted_end > 0 && split == shifted_end && tail.chars().count() < 2 {
+                        continue;
+                    }
+                    if key.kind == KeyKind::Space
+                        && (explicit_english
+                            || (!english_word(&word.to_ascii_lowercase())
+                                && tail.chars().all(|ch| ch.is_ascii_alphabetic())))
+                    {
+                        continue;
+                    }
+                    if let Some(reading) = self
+                        .mixed_reading(tail)
+                        .filter(|r| self.has_mixed_han_entry(r, tone))
+                    {
+                        let prefix = self.mixed_text(word)?.commit;
+                        let mut out = self.replay_mixed_reading(&reading, key)?;
+                        let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                        if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                            self.typed_literals.insert(index, format!("{tail}{ending}"));
+                        }
+                        out.commit = prefix + &out.commit;
                         return Ok(out);
                     }
                 }
-            }
-            for split in raw.len().saturating_sub(3).max(1)..raw.len() {
-                let (word, tail) = raw.split_at(split);
-                if key.kind == KeyKind::Space
-                    && !english_word(&word.to_ascii_lowercase())
-                    && tail.chars().all(|ch| ch.is_ascii_alphabetic())
-                {
-                    continue;
-                }
-                if let Some(mut reading) = self.mixed_reading(tail) {
-                    reading.push_str(TONE_MARKS[tone]);
-                    if self.lex.entries(&[reading]).is_empty() {
-                        continue;
+                if key.kind != KeyKind::Space {
+                    for split in (start_split..raw.len()).rev() {
+                        let (word, tail) = raw.split_at(split);
+                        if tail.chars().count() < 2 || !english_word(&word.to_ascii_lowercase()) {
+                            continue;
+                        }
+                        if let Some(reading) = self
+                            .mixed_reading_order(tail, false)
+                            .filter(|r| self.has_mixed_han_entry(r, tone))
+                        {
+                            let prefix = self.mixed_text(word)?.commit;
+                            let mut out = self.replay_mixed_reading(&reading, key)?;
+                            if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                                self.typed_literals.insert(index, format!("{tail}{}", key.ch));
+                            }
+                            out.commit = prefix + &out.commit;
+                            return Ok(out);
+                        }
                     }
-                    let prefix = self.mixed_text(word)?.commit;
-                    for ch in tail.chars() {
-                        self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?;
-                    }
-                    let mut out = self.key_original(key)?;
-                    let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
-                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
-                        self.typed_literals.insert(index, format!("{tail}{ending}"));
-                    }
-                    out.commit = prefix + &out.commit;
-                    return Ok(out);
                 }
             }
         }
@@ -361,6 +501,8 @@ impl Engine {
             self.mixed_raw = raw;
             self.mixed_raw.push(key.ch);
             self.mixed_latin = true;
+            self.mixed_explicit_english = explicit_english;
+            self.mixed_shifted_end = shifted_end;
             return self.handled();
         }
         let mut out = self.mixed_text(&raw)?;
@@ -389,6 +531,115 @@ impl Engine {
             .then(|| run.buf[0])
     }
 
+    fn sync_run_shifted(&mut self) {
+        let len = self.run.chars().count();
+        if len == 0 {
+            self.run_shifted.clear();
+        } else if self.run_shifted.len() > len {
+            self.run_shifted.truncate(len);
+        } else if self.run_shifted.len() < len {
+            self.run_shifted.resize(len, false);
+        }
+    }
+
+    fn windows_run_tone(&mut self, c: char, tone: usize) -> Result<Output, EngineError> {
+        self.sync_run_shifted();
+        let chars: Vec<char> = self.run.chars().collect();
+        let mut tail: Vec<(usize, char)> = Vec::new();
+        let mut above = 3;
+        for (i, ch) in chars.iter().enumerate().rev() {
+            if self.run_shifted[i] {
+                break;
+            }
+            match Layout::Standard.symbol_of(ch.to_ascii_lowercase()) {
+                Some((col, sym)) if col < above && tail.len() < 3 => {
+                    tail.push((col, sym));
+                    above = col;
+                }
+                _ => break,
+            }
+        }
+        let syl: String = tail
+            .iter()
+            .rev()
+            .map(|&(_, sym)| sym)
+            .chain(TONE_MARKS[tone].chars())
+            .collect();
+        if tail.len() >= 2 && !self.lex.entries(std::slice::from_ref(&syl)).is_empty() {
+            let split_at = chars.len() - tail.len();
+            let head: String = chars[..split_at].iter().collect();
+            let raw_tail: String = chars[split_at..].iter().collect();
+            self.run.clear();
+            self.run_shifted.clear();
+            self.run_zh = None;
+            self.revert_point = None;
+            self.split = true;
+            let mut commit = if head.is_empty() {
+                String::new()
+            } else {
+                self.insert_english(head)?
+            };
+            self.pred_dirty = true;
+            commit.push_str(&self.insert_token(syl, None, None)?.commit);
+            if self.mixed_input && raw_tail.chars().any(|ch| ch.is_ascii_uppercase()) {
+                if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                    self.typed_literals.insert(index, format!("{raw_tail}{c}"));
+                }
+            }
+            self.recompute_pred();
+            return Ok(self.mixed_view(self.view(true, commit)));
+        }
+        if self.mixed_input && chars.len() >= 2 {
+            let unshifted_start = self
+                .run_shifted
+                .iter()
+                .rposition(|&shifted| shifted)
+                .map_or(0, |idx| idx + 1);
+            let min_split = chars.len().saturating_sub(3).max(unshifted_start);
+            let max_split = chars.len() - 2;
+            for split_at in min_split..=max_split {
+                let head: String = chars[..split_at].iter().collect();
+                if split_at > 0
+                    && split_at != unshifted_start
+                    && !english_word(&head.to_ascii_lowercase())
+                {
+                    continue;
+                }
+                let raw_tail: String = chars[split_at..].iter().collect();
+                if let Some(reading) = self
+                    .mixed_reading_order(&raw_tail, false)
+                    .filter(|r| self.has_mixed_han_entry(r, tone))
+                {
+                    let full_syl = format!("{reading}{}", TONE_MARKS[tone]);
+                    self.run.clear();
+                    self.run_shifted.clear();
+                    self.run_zh = None;
+                    self.revert_point = None;
+                    self.split = true;
+                    let mut commit = if head.is_empty() {
+                        String::new()
+                    } else {
+                        self.insert_english(head)?
+                    };
+                    self.pred_dirty = true;
+                    commit.push_str(&self.insert_token(full_syl, None, None)?.commit);
+                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                        self.typed_literals.insert(index, format!("{raw_tail}{c}"));
+                    }
+                    self.recompute_pred();
+                    return Ok(self.mixed_view(self.view(true, commit)));
+                }
+            }
+        }
+        let was_max = self.run.len() == ENGLISH_RUN_MAX;
+        let commit = self.run_push(c)?;
+        if was_max {
+            self.run_shifted.clear();
+        }
+        self.run_shifted.push(false);
+        Ok(self.mixed_view(self.view(true, commit)))
+    }
+
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
         // An open digit run (upstream digits.md A.3.4) sees every key first, as in upstream's dispatch.
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
@@ -399,15 +650,29 @@ impl Engine {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
             }
+            let before_syls = self.syls.len();
             let out = self.key_original(key)?;
+            // A closed syllable from the digit buffer (including reordered keys such as 823 = 打)
+            // keeps its raw keys selectable from both candidate anchors when mixed input is on.
+            if self.mixed_input && self.drun.is_none() && self.syls.len() > before_syls {
+                if let (Some(keys), Some(index)) = (
+                    self.last_digits.clone(),
+                    self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()),
+                ) {
+                    self.typed_literals.entry(index).or_insert(keys);
+                }
+            }
             // A non-digit Zhuyin key can end the digit run with a whole unfinished
-            // reading (2 then u = ㄉㄧ). Hand all its keys back, in typed order;
+            // reading (2 then u = ㄉㄧ, or 8 then w = ㄊㄚ). Hand all its keys back, in typed order;
             // tracking only the next key loses the initial at the following tone.
             if self.drun.is_none() && self.windows_phonetic_pending()
                 && self.cands.is_none() && !self.upstream_english_busy()
             {
                 self.windows_raw = self.shadow_text();
-                if self.mixed_input { self.mixed_raw = self.windows_raw.clone(); }
+                if self.mixed_input {
+                    self.mixed_raw = self.windows_raw.clone();
+                    self.mixed_shifted_end = 0;
+                }
             }
             return Ok(self.view(out.handled, out.commit));
         }
@@ -435,6 +700,12 @@ impl Engine {
                 commit=self.insert_windows_literal(&text)?.commit;
             }
             let mut out=self.start_run(self.latin_character(key))?;
+            let run_len = self.run.chars().count();
+            self.run_shifted.clear();
+            if run_len > 0 {
+                self.run_shifted.resize(run_len - 1, false);
+                self.run_shifted.push(true);
+            }
             out.commit=commit+&out.commit;
             return Ok(self.mixed_view(out));
         }
@@ -442,12 +713,43 @@ impl Engine {
         // (punctuation ends a run, Backspace takes a letter); otherwise the Windows punctuation and
         // literal policy runs first and upstream English only sees what it leaves.
         if self.english && self.upstream_english_busy() {
+            self.sync_run_shifted();
+            if (self.mixed_input || self.windows_shifted_boundaries)
+                && !self.run.is_empty() && key.kind == KeyKind::Char && key.modifiers == 0 {
+                if let Some(tone) = Layout::Standard.tone_of(key.ch) {
+                    return self.windows_run_tone(key.ch, tone);
+                }
+            }
             if key.kind==KeyKind::Char && key.ch.is_ascii_alphabetic() {
+                let was_shifted = key.modifiers == MOD_SHIFT;
+                let accept_letter = !self.run.is_empty() && (key.modifiers == 0 || key.modifiers == MOD_SHIFT);
+                let was_max = !self.run.is_empty() && self.run.len() == ENGLISH_RUN_MAX;
                 let actual=self.latin_character(key);
                 let mut key=key;key.modifiers=if actual.is_ascii_uppercase(){MOD_SHIFT}else{0};
-                return self.key_original(key);
+                let out = self.key_original(key)?;
+                if accept_letter && !self.run.is_empty() {
+                    if was_max {
+                        self.run_shifted.clear();
+                    }
+                    self.run_shifted.push(was_shifted);
+                }
+                self.sync_run_shifted();
+                return Ok(out);
             }
-            return self.key_original(key);
+            let was_max = !self.run.is_empty() && self.run.len() == ENGLISH_RUN_MAX;
+            let append_unshifted = !self.run.is_empty()
+                && key.kind == KeyKind::Char
+                && key.modifiers == 0
+                && Layout::Standard.symbol_of(key.ch).is_some();
+            let out = self.key_original(key)?;
+            if append_unshifted && !self.run.is_empty() {
+                if was_max {
+                    self.run_shifted.clear();
+                }
+                self.run_shifted.push(false);
+            }
+            self.sync_run_shifted();
+            return Ok(out);
         }
         if key.kind == KeyKind::Enter && key.modifiers == 0 {
             if let Some(out) = self.commit_through_cursor()? { return Ok(self.mixed_view(out)); }
@@ -457,6 +759,8 @@ impl Engine {
             // The key upstream let through opened a digit run: the run owns these keys now.
             self.mixed_raw.clear();
             self.mixed_latin = false;
+            self.mixed_explicit_english = false;
+            self.mixed_shifted_end = 0;
             self.windows_raw.clear();
             // windows_key built its output while the raw key still overlapped the
             // new digit buffer. Rebuild after transferring ownership, exactly once.
@@ -496,15 +800,19 @@ impl Engine {
             }
             if key.kind == KeyKind::Char && key.ch.is_ascii_alphabetic() {
                 self.mixed_raw.push(self.latin_character(key));
+                if key.modifiers == MOD_SHIFT {
+                    self.mixed_explicit_english = true;
+                    self.mixed_shifted_end = self.mixed_raw.len();
+                }
                 return self.handled();
             }
             if key.kind == KeyKind::Char && key.modifiers == 0
                 && self.layout.symbol_of(key.ch).is_some()
             {
                 let next = format!("{}{}", self.mixed_raw, key.ch);
-                // Zhuyin also uses digits and punctuation (e.g. 5j/ = ㄓㄨㄥ).
-                // Retain a possible suffix until its tone arrives.
-                if (1..next.len()).any(|split| self.mixed_reading(&next[split..]).is_some()) {
+                // Zhuyin also uses digits and punctuation (e.g. 5j/ = ㄓㄨㄥ, u0r = ㄐㄧㄢ).
+                // Retain a possible whole or trailing reading until its tone arrives.
+                if (0..next.len()).any(|split| self.mixed_reading_order(&next[split..], false).is_some()) {
                     self.mixed_raw = next;
                     return self.handled();
                 }
@@ -512,19 +820,25 @@ impl Engine {
             match key.kind {
                 KeyKind::Backspace => {
                     self.mixed_raw.pop();
+                    self.mixed_shifted_end = self.mixed_shifted_end.min(self.mixed_raw.len());
                     if self.mixed_raw.is_empty() {
                         self.mixed_latin = false;
+                        self.mixed_explicit_english = false;
                     }
                     return self.handled();
                 }
                 KeyKind::Esc => {
                     self.mixed_raw.clear();
                     self.mixed_latin = false;
+                    self.mixed_explicit_english = false;
+                    self.mixed_shifted_end = 0;
                     return self.handled();
                 }
                 KeyKind::Down | KeyKind::Tab => {
                     let raw = std::mem::take(&mut self.mixed_raw);
                     self.mixed_latin = false;
+                    self.mixed_explicit_english = false;
+                    self.mixed_shifted_end = 0;
                     for ch in raw.chars() {
                         self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?;
                     }
@@ -542,6 +856,8 @@ impl Engine {
         {
             self.mixed_raw.push(self.latin_character(key));
             self.mixed_latin = true;
+            self.mixed_explicit_english = true;
+            self.mixed_shifted_end = self.mixed_raw.len();
             self.clear_pend();
             self.clear_pred();
             return self.handled();
@@ -550,6 +866,7 @@ impl Engine {
             match key.kind {
                 KeyKind::Enter => {
                     let raw = std::mem::take(&mut self.mixed_raw);
+                    self.mixed_shifted_end = 0;
                     let prefix = self.mixed_text(&raw)?.commit;
                     let mut out = self.key_original(key)?;
                     out.commit = prefix + &out.commit;
@@ -557,6 +874,7 @@ impl Engine {
                 }
                 KeyKind::Backspace => {
                     self.mixed_raw.pop();
+                    self.mixed_shifted_end = self.mixed_shifted_end.min(self.mixed_raw.len());
                     self.clear_pend();
                     self.clear_pred();
                     for ch in self.mixed_raw.clone().chars() { self.key_original(Key::ch(ch.to_ascii_lowercase(), 0))?; }
@@ -564,6 +882,7 @@ impl Engine {
                 }
                 KeyKind::Down | KeyKind::Tab => {
                     self.mixed_raw.clear();
+                    self.mixed_shifted_end = 0;
                     return self.key_original(key);
                 }
                 _ => {}
@@ -578,6 +897,7 @@ impl Engine {
         if tracking {
             if self.pend.iter().all(Option::is_none) {
                 self.mixed_raw.clear();
+                self.mixed_shifted_end = 0;
             }
             self.mixed_raw.push(self.latin_character(key));
             if self.mixed_reading(&self.mixed_raw).is_none() {
@@ -588,8 +908,10 @@ impl Engine {
             }
         } else if key.kind == KeyKind::Backspace {
             self.mixed_raw.pop();
+            self.mixed_shifted_end = self.mixed_shifted_end.min(self.mixed_raw.len());
         } else {
             let previous = std::mem::take(&mut self.mixed_raw);
+            self.mixed_shifted_end = 0;
             // Incomplete readings such as 1 (ㄅ) and r (ㄐ) cannot take a tone.
             // Keep the entire literal run and digit instead of losing the tone key.
             if !previous.is_empty() && key.kind==KeyKind::Char
@@ -612,6 +934,12 @@ impl Engine {
             }
             return Ok(out);
         }
-        self.key_original(key)
+        let prev_guard = self.english_reversal_guard;
+        if tracking {
+            self.english_reversal_guard = true;
+        }
+        let res = self.key_original(key);
+        self.english_reversal_guard = prev_guard;
+        res
     }
 }

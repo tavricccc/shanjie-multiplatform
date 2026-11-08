@@ -38,6 +38,7 @@ Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-candidates.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-keys.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-smart-input.ps1" -CorePath $output
+& "$PSScriptRoot/prepare-selection-learning.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-resident.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-memory.ps1" -CorePath $output
 # Keep the registered chat cells for SR7 bundles and the separately shipped SR8 model.

@@ -170,7 +170,8 @@ pub struct Data {
     ITfThreadMgrEventSink,
     ITfTextLayoutSink,
     ITfTextEditSink,
-    ITfThreadFocusSink
+    ITfThreadFocusSink,
+    Agile = false
 )]
 pub(super) struct Service {
     pub(super) data: Rc<Data>,

@@ -384,7 +384,7 @@ impl Host {
                 let tag = if self.state.selected.is_none() {
                     String::new()
                 } else {
-                    let number = if self.state.columns > 0 { i % self.state.columns as usize + 1 } else { i + 1 };
+                    let number = if self.state.columns > 0 { (self.state.first as usize + i) % 9 + 1 } else { i + 1 };
                     format!("{}{}", if self.state.associated { "⇧" } else { "" }, number)
                 };
                 let word = self.text_factory.CreateTextLayout(

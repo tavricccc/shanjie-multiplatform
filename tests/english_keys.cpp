@@ -30,7 +30,16 @@ int wmain(int argc,wchar_t** argv) {
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"standalone-tones"){
+    if(scenario==L"english-symbol-order"){
+        std::wstring expected;
+        for(auto mark:{std::pair{VK_ADD,L"+"},std::pair{VK_SPACE,L" "}}){
+            for(auto ch:std::wstring(L"ABC"))press(ch,true);
+            require(store->text==expected+L"ABC",960);
+            press(mark.first);expected+=std::wstring(L"ABC")+mark.second;
+            require(store->text==expected,961);
+            press(VK_RETURN,false,false,false);require(store->text==expected,962);
+        }
+    }else if(scenario==L"standalone-tones"){
         for(int key:{'3','4','6','7'}){press(key);press(VK_RETURN,false,false,false);}
         require(store->text==L"ˇˋˊ˙",948);
     }else if(scenario==L"standalone-tones-off"||scenario==L"standalone-tones-shanjie"){
@@ -48,6 +57,21 @@ int wmain(int argc,wchar_t** argv) {
         auto code=store->text;store->externalCaret((LONG)before.size());
         MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
+        auto committed=store->text;
+        press(VK_OEM_3);press(VK_OEM_4);press(VK_DOWN);press('2');
+        require(store->text==committed+L"『",955);
+        press(VK_RETURN);committed=store->text;
+        press(VK_OEM_3);press(VK_OEM_4);press(VK_ESCAPE);
+        require(store->text==committed,956); // Mapped marks remain editable; codes above commit directly.
+        press(VK_OEM_3);press(VK_OEM_5,true);press(VK_DOWN);
+        ComPtr<ITfUIElementMgr> ui;thread.As(&ui);ComPtr<IEnumTfUIElements> items;ui->EnumUIElements(&items);
+        ComPtr<ITfUIElement> item;ULONG found=0;require(items->Next(1,&item,&found)==S_OK&&found,957);
+        ComPtr<ITfCandidateListUIElement> list;require(SUCCEEDED(item.As(&list)),958);
+        UINT count=0,target=UINT_MAX,current=0;list->GetCount(&count);list->GetSelection(&current);
+        for(UINT i=0;i<count;i++){BSTR text=nullptr;require(SUCCEEDED(list->GetString(i,&text)),959);if(std::wstring(text)==L"↑")target=i;SysFreeString(text);}
+        require(target!=UINT_MAX,960);
+        while(current<target){press(VK_RIGHT);UINT next=0;list->GetSelection(&next);require(next>current,961);current=next;}
+        press(VK_RETURN);require(store->text==committed+L"↑",962);
     }else if(scenario==L"numpad"){
         for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
         for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
@@ -88,6 +112,11 @@ int wmain(int argc,wchar_t** argv) {
         require(store->text==L"你",919);
     }else if(scenario==L"shift"){
         press('R',true);press('U');press('S');press('T');press(VK_RETURN);require(store->text==L"Rust",920);
+    }else if(scenario==L"shift-caps-zh"){
+        for(auto ch:std::wstring(L"GEMINI"))press(ch,true,true);
+        for(auto ch:std::wstring(L"CL3M/4A87"))press(ch==L'/'?VK_OEM_2:ch,false,true);
+        require(store->text==L"gemini好用嗎",963);
+        press(VK_RETURN);require(store->text==L"gemini好用嗎",964);
     }else if(scenario==L"shift-caps"){
         press('R',true,true);press('U',false,true);press(VK_RETURN);require(store->text==L"rU",921);
     }else if(scenario==L"eten"){

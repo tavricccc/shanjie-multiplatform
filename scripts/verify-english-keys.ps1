@@ -10,7 +10,8 @@ foreach($name in 'data','tools'){New-Item -ItemType Junction -Path "$payload/$na
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
 # Mode bits: 1 raw-key mixing, 2 upstream English; the mixing mode is one choice, so never both.
-$cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh'){$cases+=,@($mode,$scenario,1,1)}}
+$cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order'){$cases+=,@($mode,$scenario,1,1)}}
+foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
 foreach($scenario in 'shift','shift-caps'){$cases+=,@(2,$scenario,1,1)}
 $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
 foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
