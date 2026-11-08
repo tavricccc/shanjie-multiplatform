@@ -13,15 +13,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string ChatApps { get; set; } = "";
     public int Model => 5;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int ModelVariant { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(LeftShiftToggle)), NotifyPropertyChangedFor(nameof(RightShiftToggle))] public partial bool ShiftToggle { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(LeftShiftToggle)), NotifyPropertyChangedFor(nameof(RightShiftToggle))] public partial int ShiftSide { get; set; }
-    public bool LeftShiftToggle { get => ShiftToggle && ShiftSide != 2; set { if (value != LeftShiftToggle) SetShiftSides(value, RightShiftToggle); } }
-    public bool RightShiftToggle { get => ShiftToggle && ShiftSide != 1; set { if (value != RightShiftToggle) SetShiftSides(LeftShiftToggle, value); } }
-    private void SetShiftSides(bool left, bool right)
-    {
-        ShiftToggle = left || right;
-        ShiftSide = left == right ? 0 : left ? 1 : 2;
-    }
+    [ObservableProperty] public partial bool ShiftToggle { get; set; }
+    [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
     [ObservableProperty] public partial bool WidthToggle { get; set; }
     [ObservableProperty] public partial bool CtrlPunctuation { get; set; }

@@ -74,8 +74,8 @@
                     <StackPanel x:Name="English" Visibility="Collapsed">
                         <TextBlock Text="中英切換" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingToggle x:Name="LeftShiftToggle" Label="單按左 Shift 切換中英" Description="可單獨關閉，避免遊戲等 App 使用左 Shift 時切換中英。" IsOn="{x:Bind Vm.LeftShiftToggle, Mode=TwoWay}"/>
-                            <controls:SettingToggle x:Name="RightShiftToggle" Label="單按右 Shift 切換中英" IsOn="{x:Bind Vm.RightShiftToggle, Mode=TwoWay}"/>
+                            <controls:SettingToggle Label="單按 Shift 切換中英" IsOn="{x:Bind Vm.ShiftToggle, Mode=TwoWay}"/>
+                            <controls:SettingRow Label="切換用的 Shift 鍵" IsEnabled="{x:Bind Vm.ShiftToggle, Mode=OneWay}"><controls:Segmented Options="左右 Shift 都可|僅左 Shift|僅右 Shift" SelectedIndex="{x:Bind Vm.ShiftSide, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
                             <controls:SettingToggle Label="Ctrl＋空白切換中英" Description="額外快捷鍵，Windows 預設關閉，保留給 App 的補全等操作。" IsOn="{x:Bind Vm.CtrlSpaceToggle, Mode=TwoWay}"/>
                             <controls:SettingToggle x:Name="CapsLockToggle" Label="Caps Lock 輸入英文" Description="關閉後，Caps Lock 不會讓注音按鍵變成英文。" IsOn="{x:Bind Vm.CapsLockEnglish, Mode=TwoWay}"/>
                         </controls:SettingCard>
