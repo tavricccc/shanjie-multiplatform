@@ -1,7 +1,12 @@
 {
   "format": 1,
   "loader_profile": "windows-bundle-v1",
-  "pending": [],
+  "pending": [
+    {
+      "reason": "Baseline unavailable; technical availability is independent of advisory evaluation",
+      "state": "unverified"
+    }
+  ],
   "source_snapshot": "05f11b255d7c0800e4b1f28e6c0e0e57c9f5b5f5707c376bda0a43af7c0542db",
   "sources": [
     {
