@@ -62,7 +62,9 @@ $leftDigitNew = @'
             }
 '@
 Replace-Contract $leftDigitOld $leftDigitNew
+Replace-Contract '        if c.sel < c.rows.len() {' "        if c.sel < c.rows.len() {`n            // Prediction rows belong to the end of the composition, before the right anchor moved left.`n            let cursor = self.cursor;`n            if self.candidate_from_right { self.cursor = self.syls.len(); }"
 Replace-Contract '_ if after_digit_token => c.list[c.rows.len()..].to_vec(),' '_ if after_digit_token || c.digit_zhuyin.is_some() => c.list[c.rows.len()..].to_vec(),'
+Replace-Contract '            c.rows = std::mem::take(&mut self.pred);' "            self.cursor = cursor;`n            c.rows = std::mem::take(&mut self.pred);"
 $chooseOld = @'
         if let Some(alt) = c.dalt.take().filter(|_| idx + 1 == c.list.len() && idx >= c.rows.len()) {
             let word = c.list[idx].0.clone();
@@ -89,6 +91,9 @@ $chooseNew = @'
                 self.commit_out = Some(commit);
             }
             return Ok(());
+        }
+        if self.candidate_from_right && idx < c.rows.len() {
+            self.cursor = self.syls.len();
         }
 '@
 Replace-Contract $chooseOld $chooseNew

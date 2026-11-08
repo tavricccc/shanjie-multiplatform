@@ -54,21 +54,22 @@ impl Engine {
         let start = self.cursor;
         if self.is_punct(start) {
             if is_space_unit(&self.syls[start]) { return; }
-            if let Some(d) = digit_of(&self.syls[start]) {
-                let mut list = vec![
+            if let Some((d, sym)) = digit_of(&self.syls[start])
+                .and_then(|d| self.digit_zhuyin_symbol(d).map(|sym| (d, sym))) {
+                let mut list: Vec<(String, usize)> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
+                list.extend([
                     (d.to_string(), 1),
                     (digit_layer::full_width(d).to_string(), 1),
-                ];
+                    (sym.to_string(), 1),
+                ]);
                 let mut c = Cands::new(Vec::new(), self.cand_vertical);
-                if let Some(sym) = self.digit_zhuyin_symbol(d) {
-                    list.push((sym.to_string(), 1));
-                    c.digit_zhuyin = Some((start, sym));
-                }
+                c.digit_zhuyin = Some((start, sym));
                 if let Some((n, syl, word)) = self.digit_syllable_alt(start + 1) {
                     list.push((word, 1));
                     c.dalt = Some(DigitAlt::Syllable { start: start + 1 - n, n, syl });
                 }
                 c.list = list;
+                c.rows = rows;
                 self.cands = Some(c);
                 return;
             }
@@ -430,11 +431,19 @@ mod windows_candidates {
         upstream.set_upstream_english(true, true, true, true).unwrap();
         for ch in "21".chars() { upstream.key(Key::ch(ch, 0)).unwrap(); }
         assert_eq!(upstream.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["1", "１"]);
+        upstream.reset(ResetMode::Discard);
+        upstream.set_candidate_anchor(true);
+        upstream.insert_windows_literal("1").unwrap();
+        assert_eq!(upstream.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["1"]);
 
         let mut eten = Engine::with_lexicon(l, Layout::Eten);
         eten.set_lm(lm, capped);
         eten.set_windows_input_options(1 << 23);
         assert!(eten.digit_zhuyin_symbol('1').is_none());
+        eten.set_candidate_anchor(true);
+        assert!(eten.set_punctuation("1\t①\n"));
+        eten.insert_windows_literal("1").unwrap();
+        assert_eq!(eten.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["1", "①"]);
     }
 
     #[test]
@@ -446,26 +455,34 @@ mod windows_candidates {
         assert_eq!(out.preedit, "ㄅ");
         assert!(missing.is_punct(0));
 
-        let mut e = setup_digit_engine("ㄋㄧㄢˊ 年 -0.1\nㄖˋ 日 -0.1\n", false, false, true, 1 << 23);
-        e.key(Key::ch('1', 0)).unwrap();
-        e.key(Key::new(KeyKind::Down)).unwrap();
-        let before_rows = e.cands.as_ref().unwrap().rows.len();
-        assert!(before_rows >= 1);
-        assert_eq!(&e.cands.as_ref().unwrap().list[before_rows..], &[
-            ("1".into(), 1), ("１".into(), 1), ("ㄅ".into(), 1)
-        ]);
-        e.key(Key { kind: KeyKind::Backspace, ch: '\0', modifiers: MOD_COMMAND }).unwrap();
-        let after_rows = e.cands.as_ref().unwrap().rows.len();
-        assert_eq!(after_rows, before_rows - 1);
-        assert_eq!(&e.cands.as_ref().unwrap().list[after_rows..], &[
-            ("1".into(), 1), ("１".into(), 1), ("ㄅ".into(), 1)
-        ]);
-        e.cands.as_mut().unwrap().sel = after_rows + 2;
-        e.key(Key { kind: KeyKind::Backspace, ch: '\0', modifiers: MOD_COMMAND }).unwrap();
-        let zhuyin_idx = e.cands.as_ref().unwrap().list.len() - 1;
-        e.cands.as_mut().unwrap().sel = zhuyin_idx;
-        let out = e.key(Key::new(KeyKind::Enter)).unwrap();
-        assert_eq!(out.preedit, "ㄅ");
+        for right in [false, true] {
+            let mut e = setup_digit_engine("ㄋㄧㄢˊ 年 -0.1\nㄖˋ 日 -0.1\n", right, false, true, 1 << 23);
+            e.key(Key::ch('1', 0)).unwrap();
+            e.key(Key::new(KeyKind::Down)).unwrap();
+            let before_rows = e.cands.as_ref().unwrap().rows.len();
+            assert!(before_rows >= 1, "right={right}: digit-context predictions must remain selectable");
+            assert_eq!(&e.cands.as_ref().unwrap().list[before_rows..], &[
+                ("1".into(), 1), ("１".into(), 1), ("ㄅ".into(), 1)
+            ]);
+            e.key(Key { kind: KeyKind::Backspace, ch: '\0', modifiers: MOD_COMMAND }).unwrap();
+            let after_rows = e.cands.as_ref().unwrap().rows.len();
+            assert_eq!(after_rows, before_rows - 1);
+            assert_eq!(&e.cands.as_ref().unwrap().list[after_rows..], &[
+                ("1".into(), 1), ("１".into(), 1), ("ㄅ".into(), 1)
+            ]);
+            e.cands.as_mut().unwrap().sel = after_rows + 2;
+            e.key(Key { kind: KeyKind::Backspace, ch: '\0', modifiers: MOD_COMMAND }).unwrap();
+            let zhuyin_idx = e.cands.as_ref().unwrap().list.len() - 1;
+            e.cands.as_mut().unwrap().sel = zhuyin_idx;
+            let out = e.key(Key::new(KeyKind::Enter)).unwrap();
+            assert_eq!(out.preedit, "ㄅ");
+
+            let mut selected = setup_digit_engine("ㄋㄧㄢˊ 年 -0.1\nㄖˋ 日 -0.1\n", right, false, true, 1 << 23);
+            selected.key(Key::ch('1', 0)).unwrap();
+            selected.key(Key::new(KeyKind::Down)).unwrap();
+            let word = selected.cands.as_ref().unwrap().rows[0].word.clone();
+            assert_eq!(selected.pick(0).unwrap().unwrap().preedit, format!("1{word}"));
+        }
     }
 
     #[test]
