@@ -12,7 +12,7 @@ function Initialize-TestModels([string]$ProfileRoot) {
         foreach($part in @(@($spec.model_release,'bigram.sjlm','bigram-v6.sjlm',$spec.model_size,$spec.model_sha256),@($spec.classes_release,'classes.sjc','classes-v4.sjc',$spec.classes_size,$spec.classes_sha256))) {
             $cache="$project/build/model/$($part[2])"
             if(!(Test-Path $cache) -or (Get-FileHash -LiteralPath $cache -Algorithm SHA256).Hash.ToLowerInvariant() -ne $part[4]) {
-                & "$project/scripts/download-asset.ps1" -Url "https://github.com/Nanako0129/shanjie/releases/download/$($part[0])/$($part[1])" -Destination $cache -Size $part[3] -Sha256 $part[4]
+                & "$project/scripts/download-asset.ps1" -Url "https://github.com/tavricccc/shanjie-upstream-backup/releases/download/$($part[0])/$($part[1])" -Destination $cache -Size $part[3] -Sha256 $part[4]
             }
         }
         $temporary="$project/build/model-variants/fixture-profile"

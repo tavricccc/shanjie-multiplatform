@@ -1,6 +1,6 @@
 # 上游差異
 
-使用 [善解](https://github.com/Nanako0129/shanjie) v0.6.1 Release，實際 commit 以 `UPSTREAM.json` 為準；內建模型組與上游 App 相同，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
+使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129；原 repo 已無法存取，現由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供子模組與模型 Release）v0.6.1 Release，實際 commit 以 `UPSTREAM.json` 為準；內建模型組與上游 App 相同，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。
 

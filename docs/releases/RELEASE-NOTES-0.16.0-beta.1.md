@@ -8,6 +8,7 @@ Windows 測試版（pre-release）。正式版使用者預設不會收到這版�
 - **快速設定改為從頭重寫設定檔**：快速設定完成時以全新的設定檔取代原有的，舊設定檔先備份為 `profile.ini.before-quick-setup.bak`；需要舊設定時可從備份取回。
 - 快速設定逐步引導、含轉場動畫；閱讀面板預設關閉。
 - 移除 Big5 相關選項。
+- 上游 repo 已無法存取，原始碼子模組與模型下載改由鏡像 `tavricccc/shanjie-upstream-backup` 提供；模型檔名與 SHA-256 不變。
 
 ## 個人資料與回報
 

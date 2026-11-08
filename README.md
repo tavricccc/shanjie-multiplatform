@@ -89,7 +89,7 @@ pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 
 ## 致謝
 
-- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。
+- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。原 repo 已無法存取，程式碼與模型 Release 改由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供（內容與原作者發布者相同，著作權與授權仍屬原作者）。
 - [Pane](https://github.com/LBEILC/Pane)（LBEILC）：介面的視覺風格參考了它。
 - [Lucide](https://lucide.dev)：圖示。其他詞庫與演算法的授權見 `LICENSES/`。
 

@@ -22,7 +22,7 @@ main 的 `MODEL-CATALOG.json` 保留給 0.12.2 等舊版。新 receipt 使用舊
 
 流程是 `discover → probe → advisory evaluation → assemble → publish`，實作在 `scripts/model_catalog/catalog.py`、`probe.ps1` 與 `windows/src/bin/shanjie-model-check.rs`。
 
-1. 完整分頁查詢 `Nanako0129/shanjie` 公開 Releases；固定來源與合法附件名稱，核對 GitHub 記錄及實體內容的大小／SHA-256。不執行上游附件中的指令。
+1. 完整分頁查詢 `tavricccc/shanjie-upstream-backup` 公開 Releases；固定來源與合法附件名稱，核對 GitHub 記錄及實體內容的大小／SHA-256。不執行上游附件中的指令。
 2. 依實際 magic 與內嵌雜湊配對。目前能力含 SJLM0001、SJCL0001、SJKN0002、SJT30001、SJTL0001–0004、SJWM0002 映射及無詞類模型。口語模型作獨立主模型，保留來源／授權附件，不混入一般模型。
 3. 同一 source commit 的 x64、x86 原生核心在隔離資料、停用學習及正式核心連線的子程序驗證完整配套、映射等價、載入、輸入與一次提交。語意配套另確認實際重排。架構證據遺失／重複時停止組裝；只對通過的架構宣稱可用。
 4. 同一 runner、核心配置及公開資料比較基準與候選。資料為 pinned upstream `eval/bench/suite-v1/dev302.txt` 前 20 句，收錄於 `evaluation.txt`；記錄資料 SHA-256、配置、分母與雙方分數。聊天／正式模式分開，不挪用歷史 302 句或 macOS 成績；小集合只提供有限參考。

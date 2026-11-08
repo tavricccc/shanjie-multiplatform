@@ -1,6 +1,6 @@
 """Source-verified discovery, native probes, advisory evaluation and atomic catalog publication.
 
-Only release assets from Nanako0129/shanjie are data inputs. No upstream script is executed.
+Only release assets from tavricccc/shanjie-upstream-backup are data inputs. No upstream script is executed.
 All native parsers run in disposable child processes with a private LOCALAPPDATA.
 """
 from __future__ import annotations
@@ -9,7 +9,7 @@ import urllib.request, urllib.error
 if hasattr(sys.stdout,"reconfigure"):sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = "tavricccc/shanjie-multiplatform"
-UPSTREAM = "Nanako0129/shanjie"
+UPSTREAM = "tavricccc/shanjie-upstream-backup"
 PROFILE = "windows-bundle-v1"
 BRANCH = "model-catalog"
 ROOT = pathlib.Path(__file__).resolve().parents[2]

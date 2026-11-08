@@ -80,7 +80,7 @@ pub fn validate(m:&Model)->Result<()> {
     let mut names=BTreeSet::new();let mut roles=BTreeSet::new();let mut caps=BTreeSet::from(["map.sjwm2"]);
     let hashes:BTreeSet<_>=m.assets.iter().map(|a|a.sha256.as_str()).collect();
     for a in &m.assets {
-        if a.repository!="Nanako0129/shanjie"||!safe_name(&a.release,96)||!safe_name(&a.filename,120)
+        if a.repository!="tavricccc/shanjie-upstream-backup"||!safe_name(&a.release,96)||!safe_name(&a.filename,120)
             ||!crate::models::digest_ok(&a.sha256)||a.sha256!=a.sha256.to_ascii_lowercase()
             ||a.size==0||a.size>1073741824||!names.insert(a.filename.as_str())
             ||!roles.insert(a.role.as_str())||a.requires_assets.len()>16 {return fail("模型附件來源或身份無效。");}
@@ -137,7 +137,7 @@ pub fn parse(bytes:&[u8])->Result<Catalog>{
     // The list as a whole is signed by its revision; one entry this build cannot check only drops that entry.
     c.models.retain(|m|if m.required_capabilities.iter().all(|x|CAPABILITIES.contains(&x.as_str())){validate(m).is_ok()}
         else {m.id==identity(m)&&m.advisory_revision==advisory_revision(m)
-            &&m.assets.iter().all(|a|a.repository=="Nanako0129/shanjie"&&safe_name(&a.filename,120)&&safe_name(&a.release,96))});
+            &&m.assets.iter().all(|a|a.repository=="tavricccc/shanjie-upstream-backup"&&safe_name(&a.filename,120)&&safe_name(&a.release,96))});
     Ok(c)
 }
 #[cfg(test)]
@@ -145,7 +145,7 @@ mod tests {
     use super::*;
     fn signed(mut v:Value)->Vec<u8>{v["revision"]=Value::String(digest(&semantic(v.clone())));serde_json::to_vec(&v).unwrap()}
     fn model(id:&str,role:&str,file:&str)->Value{serde_json::json!({"id":id,"name":"n","required_capabilities":["lm.sjlm1","lm.classless","map.sjwm2"],
-        "assets":[{"role":role,"repository":"Nanako0129/shanjie","release":"r","filename":file,"format_magic":"SJLM0001","size":1,"sha256":"a".repeat(64),"requires_assets":[]}],
+        "assets":[{"role":role,"repository":"tavricccc/shanjie-upstream-backup","release":"r","filename":file,"format_magic":"SJLM0001","size":1,"sha256":"a".repeat(64),"requires_assets":[]}],
         "compatibility":[],"advisory_revision":"","advisories":[]})}
     #[test]
     fn an_entry_that_fails_validation_is_dropped_not_the_list(){
