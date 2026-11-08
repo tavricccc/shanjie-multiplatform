@@ -66,12 +66,47 @@ internal static class VisualVerifier
             if (item.DesiredSize.Width > width + 0.5 || item.DesiredSize.Height < 80) throw new InvalidDataException($"Catalog row does not wrap at {width}: {item.DesiredSize}");
         }
     }
-    public static async Task Run(MainWindow settings, string output)
+    private static async Task VerifyShiftToggles(MainWindow settings, string output)
     {
+        settings.ShowSection(MainWindow.Pages.English);
+        var left = (Controls.SettingToggle)settings.FindName("LeftShiftToggle");
+        var right = (Controls.SettingToggle)settings.FindName("RightShiftToggle");
+        foreach (bool windowsMode in new[] { true, false })
+        {
+            // Existing master/side settings must load without changing either stored value.
+            foreach (bool enabled in new[] { false, true }) foreach (int side in new[] { 0, 1, 2 })
+            {
+                File.WriteAllText(Models.ProfileStore.Path, $"[profile]\nschema=8\ninteraction={(windowsMode ? "windows" : "shanjie")}\n[shortcuts]\nshift_toggle={(enabled ? 1 : 0)}\nshift_side={side}\n");
+                settings.Vm.Load(); await Task.Delay(60);
+                if (settings.Vm.ShiftToggle != enabled || settings.Vm.ShiftSide != side || left.IsOn != (enabled && side != 2) || right.IsOn != (enabled && side != 1))
+                    throw new InvalidDataException($"Legacy Shift settings changed on load: {windowsMode}/{enabled}/{side}");
+            }
+            // Exercise the actual switches, including enabling either side from both off.
+            foreach (var state in new[] { (false, true, 2), (false, false, 0), (true, false, 1), (true, true, 0), (true, false, 1), (false, false, 0), (false, true, 2), (true, true, 0) })
+            {
+                left.SetToggleForVerification(state.Item1); right.SetToggleForVerification(state.Item2); await Task.Delay(60);
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+                var saved = Models.ProfileStore.Load();
+                if (left.IsOn != state.Item1 || right.IsOn != state.Item2 || settings.Vm.LeftShiftToggle != state.Item1 || settings.Vm.RightShiftToggle != state.Item2
+                    || saved.Flag("shortcuts", "shift_toggle", false) != (state.Item1 || state.Item2) || saved.Number("shortcuts", "shift_side", -1) != state.Item3)
+                    throw new InvalidDataException($"Independent Shift switches did not round-trip: {windowsMode}/{state}");
+            }
+        }
+        left.SetToggleForVerification(false); await Task.Delay(60);
+        settings.CaptureElement.UpdateLayout();
+        if (left.ActualWidth <= 0 || right.ActualWidth <= 0 || left.ActualHeight <= 0 || right.ActualHeight <= 0)
+            throw new InvalidDataException("Independent Shift switches are not laid out");
+        await Capture(settings.CaptureElement, Path.Combine(output, "shift-toggles.png"));
+    }
+    public static async Task Run(MainWindow settings, string output, string? only = null)
+    {
+        if (only is not null and not "shift-toggles") throw new ArgumentException("Unknown UI verification: " + only);
         // Keep verification away from the user's windows and never activate the test surfaces.
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false);
         await Task.Delay(500);
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
+        await VerifyShiftToggles(settings, output);
+        if (only == "shift-toggles") return;
         string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
         File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
         if (settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path) != legacy)
