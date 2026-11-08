@@ -250,12 +250,14 @@ mod windows_smart_tests {
 
 impl Engine {
     pub fn insert_literal_space(&mut self) -> Result<Output, EngineError> {
+        let mut flushed = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
+        if !self.run.is_empty() { flushed.push_str(&self.end_run()?); }
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
         self.mixed_explicit_english = false;
         let prefix = self.mixed_text(&raw)?.commit;
         let mut out = self.mixed_text(" ")?;
-        out.commit = prefix + &out.commit;
+        out.commit = flushed + &prefix + &out.commit;
         Ok(out)
     }
     pub fn is_mixed_pending(&self) -> bool {
