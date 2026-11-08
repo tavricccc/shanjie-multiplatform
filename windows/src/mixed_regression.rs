@@ -551,4 +551,40 @@ fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
         sentence_preedit = out.preedit;
     }
     assert_eq!(sentence_preedit, "是否需要來杯咖啡提神", "fast typing whole sentence");
+
+    // A stored guard setting must not change digit candidates while mixing is off.
+    e.set_prediction(false).unwrap();
+    for (upstream, guard) in [(false, false), (false, true), (true, false), (true, true)] {
+        e.reset(shanjie_core::engine::ResetMode::Discard);
+        e.set_upstream_english(upstream, true, true, guard).unwrap();
+        e.set_mixed_input(false);
+        e.insert_windows_literal("823").unwrap();
+        let out = e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(out.candidates.iter().any(|word| word == "打"), upstream && guard,
+            "upstream={upstream} guard={guard}: {:?}", out.candidates);
+    }
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.set_upstream_english(false, true, true, false).unwrap();
+    e.set_mixed_input(true);
+    e.insert_windows_literal("823").unwrap();
+    assert!(e.key(Key::new(KeyKind::Down)).unwrap().candidates.iter().any(|word| word == "打"));
+
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.set_mixed_input(false);
+    e.set_upstream_english(true, true, true, true).unwrap();
+    for digits in ["1234567890", "3.14", "2026/11/08", "2026-11-08"] {
+        let commits = [false, true].map(|guard| {
+            e.reset(shanjie_core::engine::ResetMode::Discard);
+            e.set_upstream_english(true, true, true, guard).unwrap();
+            for ch in digits.chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            e.key(Key::new(KeyKind::Enter)).unwrap().commit
+        });
+        assert_eq!(commits[1], commits[0], "digit scoring must stay consistent: {digits}");
+    }
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    for ch in "RTX4090".chars() {
+        let modifiers = if ch.is_ascii_uppercase() { MOD_SHIFT } else { 0 };
+        e.key(Key::ch(ch, modifiers)).unwrap();
+    }
+    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "RTX4090");
 }
