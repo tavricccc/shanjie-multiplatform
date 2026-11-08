@@ -347,7 +347,7 @@ impl Data {
             })?;
             return Ok(true);
         }
-        let space_candidates = p.flag("candidates", "space_operates", false);
+        let space_candidates = !p.zhuyin_only() && p.flag("candidates", "space_operates", false);
         let trigger = if space_candidates {
             p.get("candidates", "open", "down")
         } else {
@@ -369,7 +369,7 @@ impl Data {
                     s.associated.clear();
                     s.association_caret = None;
                     s.raw_reading.clear();
-                    if p.flag("input", "space_commits", false) {
+                    if !p.zhuyin_only() && p.flag("input", "space_commits", false) {
                         let mut out = output(s.engine.reset(false))?;
                         out.handled = true;
                         if p.flag("input", "space_after_commit", false) {
@@ -580,7 +580,7 @@ impl Data {
             && !mixed_pending
             && key.kind == 10
             && trigger == "space";
-        let cycle = p.flag("candidates", "up_cycles", true)
+        let cycle = !p.zhuyin_only() && p.flag("candidates", "up_cycles", true)
             && key.kind == 9
             && key.modifiers == 0
             && closed
@@ -687,7 +687,7 @@ impl Data {
                     if delete {
                         out = output(s.engine.key(key))?;
                     }
-                    if key.kind == 2 && key.modifiers == 0
+                    if !p.zhuyin_only() && key.kind == 2 && key.modifiers == 0
                         && !p.flag("input", "space_inputs_zhuyin", true)
                         && p.flag("input", "space_commits", false)
                         && !input::pending(&out) && out.preedit.ends_with(' ') {

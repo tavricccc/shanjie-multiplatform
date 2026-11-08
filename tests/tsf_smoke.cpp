@@ -96,10 +96,11 @@ LRESULT CALLBACK testProcedure(HWND window, UINT message, WPARAM key, LPARAM fla
 }
 void require(bool condition, int check) { if (!condition) { std::printf("TSF check %d failed\n",check); std::fflush(stdout); ExitProcess(check); } }
 int wmain(int argc, wchar_t** argv) {
-    require(argc == 2 || (argc == 3 && (std::wstring(argv[2]) == L"--visual" || std::wstring(argv[2]) == L"--shanjie" || std::wstring(argv[2]) == L"--cold-start")),1);
+    require(argc == 2 || (argc == 3 && (std::wstring(argv[2]) == L"--visual" || std::wstring(argv[2]) == L"--shanjie" || std::wstring(argv[2]) == L"--cold-start" || std::wstring(argv[2]) == L"--zhuyin-only")),1);
     bool visual = argc == 3 && std::wstring(argv[2]) == L"--visual";
     bool original = argc == 3 && std::wstring(argv[2]) == L"--shanjie";
     bool cold = argc == 3 && std::wstring(argv[2]) == L"--cold-start";
+    bool zhuyinOnly = argc == 3 && std::wstring(argv[2]) == L"--zhuyin-only";
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
     HMODULE dll = LoadLibraryW(argv[1]); require(dll != nullptr,3);
     auto factoryFn = (HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(factoryFn != nullptr,4);
@@ -154,7 +155,7 @@ int wmain(int argc, wchar_t** argv) {
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
         std::printf("Harness memory after TSF activation: private %.1f MiB, working set %.1f MiB\n",memory.PrivateUsage/1048576.0,memory.WorkingSetSize/1048576.0);
     ComPtr<ITfKeyEventSink> keys; require(SUCCEEDED(service.As(&keys)),14);
-    if (!visual) {
+    if (!visual && !zhuyinOnly) {
         started = Clock::now();
         for (int i=0;i<100;++i) require(SUCCEEDED(keys->OnSetFocus(FALSE)),360);
         std::printf("Idle focus loss (100 calls): %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-started).count());
@@ -192,6 +193,53 @@ int wmain(int argc, wchar_t** argv) {
         if(!visual) { BYTE keyboard[256]{}; keyboard[VK_NUMLOCK]=1; require(SetKeyboardState(keyboard),1045); }
         BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1);
     };
+    ComPtr<ITfUIElementMgr> ui;
+    ComPtr<IEnumTfUIElements> elements;
+    ComPtr<ITfUIElement> element;
+    ComPtr<ITfCandidateListUIElement> candidates;
+    if (zhuyinOnly) {
+        wchar_t isolated[8]{}, local[MAX_PATH]{};
+        require(GetEnvironmentVariableW(L"SHANJIE_TEST_PROFILE",isolated,8) && std::wstring(isolated)==L"1",1200);
+        require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,MAX_PATH),1201);
+        auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
+        require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"1",profile.c_str()),1202);
+        require(WritePrivateProfileStringW(L"candidates",L"up_cycles",L"1",profile.c_str()),1203);
+        require(WritePrivateProfileStringW(L"input",L"space_commits",L"1",profile.c_str()),1204);
+        require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),1205);
+        for (auto interaction : {L"windows",L"shanjie"}) {
+            require(WritePrivateProfileStringW(L"profile",L"interaction",interaction,profile.c_str()),1206);
+            require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),1207);
+            require(WritePrivateProfileStringW(L"input",L"zhuyin_only",L"1",profile.c_str()),1208);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            waitPreload();
+            auto prefix=store->text;
+            for (wchar_t key : std::wstring(L"SU3")) press(key,1210);
+            press(VK_SPACE,1212);
+            for (wchar_t key : std::wstring(L"CL3")) press(key,1214);
+            require(store->text==prefix+L"ㄋㄧˇ ㄏㄠˇ",1216);
+            press(VK_UP,1217); press(VK_DOWN,1219);
+            require(store->text==prefix+L"ㄋㄧˇ ㄏㄠˇ",1221);
+            // Switching mode commits the existing composition before rebuilding the engine.
+            require(WritePrivateProfileStringW(L"input",L"zhuyin_only",L"0",profile.c_str()),1222);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            waitPreload();
+            prefix+=L"ㄋㄧˇ ㄏㄠˇ";
+            require(store->text==prefix,1223);
+            for (wchar_t key : std::wstring(L"SU3")) press(key,1224);
+            require(store->text==prefix+L"你",1226); press(VK_RETURN,1227);
+            require(WritePrivateProfileStringW(L"input",L"keyboard",L"2",profile.c_str()),1229);
+            require(WritePrivateProfileStringW(L"input",L"zhuyin_only",L"1",profile.c_str()),1230);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            waitPreload();
+            prefix+=L"你";
+            for (wchar_t key : std::wstring(L"NE3HZ3")) press(key,1231);
+            require(store->text==prefix+L"ㄋㄧˇㄏㄠˇ",1233);
+            press(VK_BACK,1234); require(store->text==prefix+L"ㄋㄧˇㄏㄠ",1236);
+            press('3',1237); press(VK_RETURN,1239);
+            require(store->text==prefix+L"ㄋㄧˇㄏㄠˇ",1241);
+        }
+        std::puts("PASS: pure Zhuyin, literal Space, both layouts, both interactions and mode reload");
+    } else {
     // Release a service while its background job may still be running; the next
     // service must acquire that job, not launch a second model load.
     require(SUCCEEDED(service->Deactivate()),464); keys.Reset(); service.Reset();
@@ -228,10 +276,10 @@ int wmain(int argc, wchar_t** argv) {
     require((residentStatus() & 0xffffffffULL)==residentLoads && store->text==L"你好",477);
     press('S',35); press(VK_ESCAPE,37); require(store->text == L"你好",39);
     press('S',40); press('U',42); press('3',44); press(VK_DOWN,46);
-    ComPtr<ITfUIElementMgr> ui; require(SUCCEEDED(thread.As(&ui)),48);
-    ComPtr<IEnumTfUIElements> elements; require(SUCCEEDED(ui->EnumUIElements(&elements)),49);
-    ComPtr<ITfUIElement> element; ULONG fetched = 0; require(elements->Next(1,&element,&fetched) == S_OK && fetched,50);
-    ComPtr<ITfCandidateListUIElement> candidates; require(SUCCEEDED(element.As(&candidates)),51);
+    require(SUCCEEDED(thread.As(&ui)),48);
+    require(SUCCEEDED(ui->EnumUIElements(&elements)),49);
+    ULONG fetched = 0; require(elements->Next(1,&element,&fetched) == S_OK && fetched,50);
+    require(SUCCEEDED(element.As(&candidates)),51);
     UINT count = 0; candidates->GetCount(&count); require(count > 0 && count <= 9,52);
     if (!visual && !original) {
         press(VK_DOWN,70); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,72);
@@ -516,6 +564,7 @@ int wmain(int argc, wchar_t** argv) {
         visibleKeys = keys.Get(); visibleContext = context.Get();
         while (GetMessageW(&msg,nullptr,0,0) > 0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
         visibleKeys = nullptr; visibleContext = nullptr;
+    }
     }
     service->Deactivate(); keys.Reset(); service.Reset(); candidates.Reset(); element.Reset(); elements.Reset(); ui.Reset();
     thread->SetFocus(nullptr); document->Pop(TF_POPF_ALL); context.Reset(); document.Reset();

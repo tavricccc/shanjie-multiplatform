@@ -129,6 +129,10 @@
                     <StackPanel x:Name="Composition" Visibility="Collapsed">
                         <TextBlock Text="組字操作" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
+                            <controls:SettingToggle x:Name="ZhuyinOnlyToggle" Label="純注音輸出" Description="直接輸入注音符號與聲調，不轉成漢字、不開候選；空白輸入空格、Enter 提交。啟用時優先於混打及空白鍵設定，關閉後恢復。僅適用標準／倚天注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.ZhuyinOnly, Mode=TwoWay}"/>
+                        </controls:SettingCard>
+                        <TextBlock Text="組字面板與讀音" Style="{StaticResource SjGroupTitle}"/>
+                        <controls:SettingCard>
                             <controls:SettingToggle x:Name="ReadingPanelToggle" Label="組字面板" Description="{x:Bind Vm.ReadingPanelHelp, Mode=OneWay}" IsEnabled="{x:Bind Vm.CanChooseReadingPanel, Mode=OneWay}" IsOn="{x:Bind Vm.ReadingPanelShown, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="標點保留未完成的注音" Description="關閉時與上游相同：讀音還沒打完就按標點，未完成的注音會丟掉，標點直接進組字。開啟時注音留著，標點排在後面，補完聲調才一起轉換。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.PunctuationKeepsReading, Mode=TwoWay}"/>

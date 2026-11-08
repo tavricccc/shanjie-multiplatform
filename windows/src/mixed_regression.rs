@@ -1,6 +1,73 @@
 //! Public fixtures only; no installed data or user settings.
 use shanjie_core::{engine::{Engine,Layout,Key,KeyKind,ResetMode,MOD_SHIFT},lm::Profile,Lexicon};
 use std::sync::Arc;
+
+#[test]
+fn zhuyin_only_keeps_every_symbol_and_tone_in_typed_order() {
+    for (layout, keys) in [
+        (Layout::Standard, "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347"),
+        (Layout::Eten, "bpmfdtnlvkhg7c,./j;'sexuaorwiqzy890-=2341"),
+    ] {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\n").unwrap());
+        let mut e = Engine::with_lexicon(lex, layout);
+        e.set_learning(true);
+        e.set_windows_input_options(1 << 25 | 1 << 23 | 1 << 24);
+        e.set_upstream_english(true, true, true, true).unwrap();
+        for ch in keys.chars() {
+            let out = e.key(Key::ch(ch, 0)).unwrap();
+            assert!(out.candidates.is_empty() && !e.windows_phonetic_pending());
+        }
+        e.key(Key::new(KeyKind::Space)).unwrap();
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,
+            "ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦˊˇˋ˙ ");
+        assert!(e.learner().records().is_empty());
+    }
+}
+
+#[test]
+fn zhuyin_only_edits_symbols_and_restores_normal_conversion_when_disabled() {
+    let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\n").unwrap());
+    let mut e = Engine::with_lexicon(lex, Layout::Standard);
+    e.set_mixed_input(true);
+    e.set_windows_input_options(1 << 25 | 1 << 21);
+    for ch in "su3cl3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+    for kind in [KeyKind::Up, KeyKind::Down] {
+        let out = e.key(Key::new(kind)).unwrap();
+        assert_eq!(out.preedit, "ㄋㄧˇㄏㄠˇ");
+        assert!(out.candidates.is_empty());
+    }
+    e.key(Key::new(KeyKind::Home)).unwrap();
+    e.key(Key::new(KeyKind::Right)).unwrap();
+    assert_eq!(e.key(Key::new(KeyKind::Delete)).unwrap().preedit, "ㄋˇㄏㄠˇ");
+    assert_eq!(e.key(Key::ch('u', 0)).unwrap().preedit, "ㄋㄧˇㄏㄠˇ");
+    assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "ㄋˇㄏㄠˇ");
+    e.key(Key::new(KeyKind::Right)).unwrap();
+    let out = e.key(Key::new(KeyKind::Enter)).unwrap();
+    assert_eq!((out.commit.as_str(), out.preedit.as_str()), ("ㄋˇ", "ㄏㄠˇ"));
+    e.reset(ResetMode::Discard);
+    e.set_windows_input_options(0);
+    for ch in "su3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "你");
+}
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data"]
+fn zhuyin_only_never_opens_predictions_with_builtin_data() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    for mixed in [false, true] {
+        let mut e = Engine::new(&data, Layout::Standard).unwrap();
+        e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+        e.set_prediction(true).unwrap();
+        e.set_upstream_english(!mixed, true, true, true).unwrap();
+        e.set_mixed_input(mixed);
+        e.set_windows_input_options(1 << 25 | 1 << 23 | 1 << 24);
+        for ch in "su3cl312347".chars() {
+            let out = e.key(Key::ch(ch, 0)).unwrap();
+            assert!(out.candidates.is_empty());
+        }
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "ㄋㄧˇㄏㄠˇㄅㄉˇˋ˙");
+    }
+}
 #[test]fn incomplete_initial_digits_preserve_literals_and_valid_zhuyin(){
     let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄐㄧˇ 己 -0.1\nㄅㄚˋ 爸 -0.1\nㄨㄛˇ 我 -0.1\nㄎㄢˋ 看 -0.1\n").unwrap());
     {

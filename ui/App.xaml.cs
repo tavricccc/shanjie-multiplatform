@@ -76,7 +76,7 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString()); }
             Exit();
         }
-        else if (arguments.Length == 3 && arguments[1] == "--verify-ui")
+        else if (arguments.Length is 3 or 4 && arguments[1] == "--verify-ui")
         {
             string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
             Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
@@ -84,7 +84,7 @@ public partial class App : Application
             DebugSettings.IsXamlResourceReferenceTracingEnabled = true;
             File.WriteAllText(Path.Combine(output, "result.txt"), "RUNNING");
             DebugSettings.XamlResourceReferenceFailed += (_, e) => File.AppendAllText(Path.Combine(output, "resources.txt"), e.Message + "\n");
-            try { window = new MainWindow(); await Verification.VisualVerifier.Run((MainWindow)window, output); File.WriteAllText(Path.Combine(output, "result.txt"), "PASS"); }
+            try { window = new MainWindow(); await Verification.VisualVerifier.Run((MainWindow)window, output, arguments.Length == 4 ? arguments[3] : null); File.WriteAllText(Path.Combine(output, "result.txt"), "PASS"); }
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString() + "\n" + string.Join("\n", error.Data.Keys.Cast<object>().Select(key => key + ": " + error.Data[key]))); }
             Exit();
         }

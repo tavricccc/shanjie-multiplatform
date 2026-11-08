@@ -599,7 +599,7 @@ impl Data {
                 let mut s = self.state.borrow_mut();
                 s.context = Some(context.clone());
                 s.snapshot = out.clone();
-                if s.prefs.flag("input", "associations", false)
+                if !s.prefs.zhuyin_only() && s.prefs.flag("input", "associations", false)
                     && selected
                     && out.candidates.is_empty()
                     && out.cursor != 0
