@@ -64,12 +64,31 @@ impl Engine {
         let available = (start..self.syls.len()).take_while(|&i| !self.is_punct(i)).count();
         let mut seen = HashSet::new();
         let mut list = Vec::new();
-        for length in (1..=self.lex.max_len.min(available)).rev() {
-            for (word, _) in self.lex.entries(&self.syls[start..start + length]) {
+        let today = if self.learner.has_new_words() { self.today() } else { 0 };
+        for length in (1..=self.lex.max_len.max(NEWWORD_MAX).min(available)).rev() {
+            let key = &self.syls[start..start + length];
+            let lexicon = self.lex.entries(key);
+            if (NEWWORD_MIN..=NEWWORD_MAX).contains(&length) {
+                for word in self.learner.new_words_all(key, today) {
+                    if !lexicon.iter().any(|(w, _)| *w == word) && seen.insert(word) {
+                        list.push((word.to_string(), length));
+                    }
+                }
+            }
+            for (word, _) in lexicon {
                 if seen.insert(word) { list.push((word.to_string(), length)); }
             }
         }
-        self.cands = self.make_candidates(list);
+        let mut alt = HashMap::new();
+        for length in (1..=self.lex.max_len.min(available)).rev() {
+            for (word, reading) in self.lex.tolerant_words(&self.syls[start..start + length], self.fuzzy) {
+                if seen.insert(word) {
+                    alt.insert(list.len(), reading);
+                    list.push((word.to_string(), length));
+                }
+            }
+        }
+        self.cands = self.make_candidates_with(list, alt);
     }
 
     pub fn cycle_windows_candidate(&mut self) -> Result<Output,EngineError> {
@@ -205,5 +224,39 @@ mod windows_candidates {
             e.insert_windows_punctuation("，").unwrap();
             assert_eq!(e.key(Key::new(KeyKind::Down)).unwrap().candidates, vec!["，", "、"]);
         }
+    }
+
+    #[test]
+    fn right_anchor_lists_faded_new_words_and_forgets_them() {
+        let mut e = sample(true);
+        e.set_today(Some(20_000));
+        let reading = e.syls.clone();
+        e.learner.learn_new(&reading, "擬郝", 19_900);
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().list[0], ("擬郝".into(), 2));
+        let out = e.pick(0).unwrap().unwrap();
+        assert_eq!(out.preedit, "擬郝");
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        e.key(Key { kind: KeyKind::Backspace, ch: '\0', modifiers: MOD_COMMAND }).unwrap();
+        assert!(e.learner.new_word_day(&reading, "擬郝").is_none());
+        assert!(!e.cands.as_ref().unwrap().list.iter().any(|(w, _)| w == "擬郝"));
+    }
+
+    #[test]
+    fn right_anchor_tolerant_choices_keep_their_lexicon_reading() {
+        let lex = Lexicon::parse("ㄍㄨㄥ 公 -1\nㄍㄨㄣ 棍 -2\n").unwrap();
+        let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
+        e.set_candidate_anchor(true);
+        e.set_fuzzy(1).unwrap(); // ㄣ／ㄥ
+        for ch in "ej/ ".chars() {
+            e.key(if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) }).unwrap();
+        }
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let idx = e.cands.as_ref().unwrap().list.iter().position(|(w, _)| w == "棍").unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().alt[&idx], vec!["ㄍㄨㄣ"]);
+        assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "棍");
+        assert_eq!(e.syls, vec!["ㄍㄨㄣ"]);
     }
 }
