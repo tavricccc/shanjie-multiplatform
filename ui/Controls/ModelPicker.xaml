@@ -1,0 +1,20 @@
+<UserControl x:Class="Shanjie_UI.Controls.ModelPicker" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="using:Shanjie_UI.Models">
+    <DropDownButton x:Name="PickerButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MinHeight="36" Padding="12,8" CornerRadius="10" FontSize="12" AutomationProperties.Name="模型配置">
+        <TextBlock x:Name="SelectedName" Text="選擇模型配置" TextWrapping="Wrap"/>
+        <DropDownButton.Flyout>
+            <Flyout x:Name="PickerFlyout" Opening="Opening" Placement="Bottom" ShouldConstrainToRootBounds="False" FlyoutPresenterStyle="{StaticResource SjFlyoutPresenter}">
+                <Flyout.SystemBackdrop><DesktopAcrylicBackdrop/></Flyout.SystemBackdrop>
+                <StackPanel x:Name="Options" Spacing="8">
+                    <TextBlock Text="本機模型配置" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource SjText2Brush}"/>
+                    <ListView x:Name="Choices" MaxHeight="320" SelectionMode="Single" IsItemClickEnabled="True" SelectionChanged="Changed" ItemClick="Picked"
+                              HorizontalAlignment="Stretch" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="0,2"/><Setter Property="CornerRadius" Value="8"/></Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate><DataTemplate x:DataType="models:ModelChoice"><TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontSize="12" LineHeight="19"/></DataTemplate></ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Flyout>
+        </DropDownButton.Flyout>
+    </DropDownButton>
+</UserControl>
