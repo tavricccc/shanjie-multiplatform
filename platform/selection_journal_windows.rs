@@ -69,20 +69,22 @@ mod windows_selection_journal_tests {
 
     #[test]
     fn rollback_restores_evicted_new_words_and_their_index_positions() {
-        let records = (0..NEWWORD_CAP).map(|i| Record {
-            context: NEWWORD.into(), reading: vec![format!("reading{i}")],
-            word: format!("word{i}"), weight: 1.0, day: 20_000,
-        }).collect();
-        let mut learner = Learner::from_records(records);
-        let before = learner.records.clone();
-        learner.windows_begin_preview();
-        learner.learn_new(&["new".into()], "new", 20_000);
-        learner.halve_new(&["reading0".into()], "word0", 20_000);
-        learner.windows_rollback_preview();
-        assert!(learner.records == before);
-        assert_eq!(learner.new_count, NEWWORD_CAP);
-        for (i, record) in learner.records.iter().enumerate() {
-            assert_eq!(learner.find(&record.context, &record.reading, &record.word), Some(i));
+        for initial_weight in [0.5, 1.0] {
+            let records = (0..NEWWORD_CAP).map(|i| Record {
+                context: NEWWORD.into(), reading: vec![format!("reading{i}")],
+                word: format!("word{i}"), weight: initial_weight, day: 20_000,
+            }).collect();
+            let mut learner = Learner::from_records(records);
+            let before = learner.records.clone();
+            learner.windows_begin_preview();
+            learner.learn_new(&["new".into()], "new", 20_000);
+            learner.halve_new(&["reading0".into()], "word0", 20_000);
+            learner.windows_rollback_preview();
+            assert!(learner.records == before);
+            assert_eq!(learner.new_count, NEWWORD_CAP);
+            for (i, record) in learner.records.iter().enumerate() {
+                assert_eq!(learner.find(&record.context, &record.reading, &record.word), Some(i));
+            }
         }
     }
 }
