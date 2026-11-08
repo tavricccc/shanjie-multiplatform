@@ -61,7 +61,7 @@ pub fn punctuation(key: ShanjieKey) -> &'static str {
         }
         '9' => "（",
         '0' => "）",
-        '\\' => "、",
+        '\\' => if shift { "｜" } else { "、" },
         '\'' => {
             if shift {
                 "＂"
@@ -293,7 +293,10 @@ impl Special {
                     self.clear();
                     return Snapshot {
                         handled: true,
-                        commit: text.into(),
+                        // A mapped backquote mark returns to normal composition;
+                        // Unicode, Big5 and the symbol grid still commit directly.
+                        preedit: text.into(),
+                        cursor: text.encode_utf16().count() as u32,
                         ..Default::default()
                     };
                 }
@@ -658,7 +661,9 @@ mod special_tests {
             let mut special = Special::default();
             special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
             let result = special.key(ShanjieKey { kind: 1, ch: 44, modifiers: 0 }, &prefs);
-            assert_eq!(result.commit, if expected { "，" } else { "" });
+            assert!(result.commit.is_empty());
+            assert_eq!(result.preedit, if expected { "，" } else { "`" });
+            assert_eq!(special.mode, if expected { 0 } else { 1 });
         }
     }
     #[test]
@@ -673,11 +678,17 @@ mod special_tests {
     #[test]
     fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {
         let prefs = Document::default();
-        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～")] {
+        for (ch, modifiers, expected) in [('2', 1, "＠"), ('3', 1, "＃"), ('4', 1, "＄"), ('5', 1, "％"), ('6', 1, "＾"), ('7', 1, "＆"), ('8', 1, "＊"), ('-', 0, "－"), ('-', 1, "＿"), ('`', 1, "～"), ('\\', 0, "、"), ('\\', 1, "｜")] {
             let mut special = Special::default();
             special.key(ShanjieKey { kind: 1, ch: 96, modifiers: 0 }, &prefs);
-            assert_eq!(special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers }, &prefs).commit, expected);
+            let out = special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers }, &prefs);
+            assert_eq!(out.preedit, expected);
+            assert!(out.commit.is_empty());
+            assert_eq!(special.mode, 0);
         }
+        let ctrl_shift_bar = ShanjieKey { kind: 1, ch: '\\' as u32, modifiers: 3 };
+        assert!(is_punctuation(ctrl_shift_bar));
+        assert_eq!(punctuation(ctrl_shift_bar), "｜");
         let mut special = Special::default();
         for ch in "`uFF0C".chars() { special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs); }
         assert_eq!(special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit, "，");
