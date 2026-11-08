@@ -512,3 +512,131 @@ fn selected_maple_story_is_remembered_across_partial_enters() {
         assert_eq!(type_word(&mut e), "楓之谷");
     }
 }
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
+fn upstream_english_digit_candidates_include_zhuyin_and_tones_with_builtin_data() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let model = data.join("models/builtin/bigram.winmap");
+    for right in [false, true] {
+        for prediction in [false, true] {
+            let mut e = Engine::new(&data, Layout::Standard).unwrap();
+            e.load_lm(&model).unwrap();
+            e.set_windows_input_options(1 << 23);
+            e.set_candidate_anchor(right);
+            e.set_prediction(prediction).unwrap();
+            e.set_mixed_input(false);
+            e.set_upstream_english(true, true, true, true).unwrap();
+
+            // A lone digit key (1 -> ㄅ, 5 -> ㄓ) opens digit candidates via Down, chooses the Zhuyin
+            // symbol as a real reading, and keeps later kanji reselection and composition working.
+            assert_eq!(e.key(Key::ch('1', 0)).unwrap().preedit, "1");
+            let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+            while !out.candidates.iter().any(|w| w == "ㄅ") {
+                assert!((out.first as usize + out.candidates.len()) < out.total as usize, "ㄅ must appear in digit list");
+                out = e.key(Key::new(KeyKind::Space)).unwrap();
+            }
+            let full = out.candidates.iter().position(|w| w == "１").unwrap();
+            let zhuyin = out.candidates.iter().position(|w| w == "ㄅ").unwrap();
+            assert_eq!(zhuyin, full + 1, "right={right} prediction={prediction} cands={:?}", out.candidates);
+            let picked = e.pick(zhuyin).unwrap().unwrap();
+            assert_eq!(picked.preedit, "ㄅ");
+            for ch in "cl3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "ㄅ好");
+
+            // Reselecting ㄅ opens its reading window and allows picking a homophone kanji after ㄓ.
+            assert_eq!(e.key(Key::ch('1', 0)).unwrap().preedit, "1");
+            let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+            while !out.candidates.iter().any(|w| w == "ㄅ") {
+                out = e.key(Key::new(KeyKind::Space)).unwrap();
+            }
+            let zhuyin = out.candidates.iter().position(|w| w == "ㄅ").unwrap();
+            e.pick(zhuyin).unwrap().unwrap();
+            let down_reading = e.key(Key::new(KeyKind::Down)).unwrap();
+            assert!(down_reading.candidates.iter().any(|w| w == "ㄅ"));
+            assert_eq!(e.candidate_reading(), "ㄅ");
+            e.reset(ResetMode::Discard);
+
+            assert_eq!(e.key(Key::ch('5', 0)).unwrap().preedit, "5");
+            let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+            while !out.candidates.iter().any(|w| w == "ㄓ") {
+                assert!((out.first as usize + out.candidates.len()) < out.total as usize, "ㄓ must appear in digit list");
+                out = e.key(Key::new(KeyKind::Space)).unwrap();
+            }
+            let zhi = out.candidates.iter().position(|w| w == "ㄓ").unwrap();
+            assert_eq!(e.pick(zhi).unwrap().unwrap().preedit, "ㄓ");
+            let mut kanji = e.key(Key::new(KeyKind::Down)).unwrap();
+            while !kanji.candidates.iter().any(|w| w == "之") {
+                assert!((kanji.first as usize + kanji.candidates.len()) < kanji.total as usize, "之 must be selectable from ㄓ");
+                kanji = e.key(Key::new(KeyKind::Space)).unwrap();
+            }
+            let zhi_han = kanji.candidates.iter().position(|w| w == "之").unwrap();
+            assert_eq!(e.pick(zhi_han).unwrap().unwrap().preedit, "之");
+            for ch in "cl3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "之好");
+
+            // Every key of digits::ALPHABET exposes its Standard layout Zhuyin symbol in both anchors.
+            let cases: [(&str, usize, &str, &str); 13] = [
+                ("1", 0, "1", "ㄅ"),
+                ("2", 0, "2", "ㄉ"),
+                ("5", 0, "5", "ㄓ"),
+                ("8", 0, "8", "ㄚ"),
+                ("9", 0, "9", "ㄞ"),
+                ("0", 0, "0", "ㄢ"),
+                ("13", 1, "3", "ˇ"),
+                ("14", 1, "4", "ˋ"),
+                ("16", 1, "6", "ˊ"),
+                ("17", 1, "7", "˙"),
+                ("3.14", 1, ".", "ㄡ"),
+                ("2026-10", 4, "-", "ㄦ"),
+                ("2026/10", 4, "/", "ㄥ"),
+            ];
+            for (keys, pos, raw, sym) in cases {
+                e.reset(ResetMode::Discard);
+                let mut last_out = None;
+                for ch in keys.chars() {
+                    last_out = Some(e.key(Key::ch(ch, 0)).unwrap());
+                }
+                let mut out = last_out.unwrap();
+                assert_eq!(out.preedit, keys, "digit sequence stayed literal: {keys}");
+                let target_cursor = if right { pos } else { pos + 1 };
+                while out.cursor_utf16 as usize > target_cursor {
+                    out = e.key(Key::new(KeyKind::Left)).unwrap();
+                }
+                let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+                while !out.candidates.iter().any(|w| w == sym) {
+                    assert!((out.first as usize + out.candidates.len()) < out.total as usize, "{keys} missing {sym}");
+                    out = e.key(Key::new(KeyKind::Space)).unwrap();
+                }
+                let raw_pos = out.candidates.iter().position(|w| w == raw).unwrap();
+                let sym_pos = out.candidates.iter().position(|w| w == sym).unwrap();
+                assert_eq!(sym_pos, raw_pos + 2, "{keys} order around {raw}/{sym}: {:?}", out.candidates);
+                let chosen = e.pick(sym_pos).unwrap().unwrap().preedit;
+                let expected: String = keys.chars().enumerate().map(|(i, ch)| if i == pos { sym.chars().next().unwrap() } else { ch }).collect();
+                assert_eq!(chosen, expected, "right={right} prediction={prediction} keys={keys}");
+            }
+
+            // Up-cycling on a materialized digit steps 1 -> １ -> ㄅ without moving the cursor.
+            if !prediction {
+                e.reset(ResetMode::Discard);
+                for ch in "12".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+                e.key(Key::new(KeyKind::Home)).unwrap();
+                let first_cycle = e.cycle_windows_candidate().unwrap();
+                assert_eq!((first_cycle.preedit.as_str(), first_cycle.cursor_utf16), ("１2", 0));
+                let second_cycle = e.cycle_windows_candidate().unwrap();
+                assert_eq!((second_cycle.preedit.as_str(), second_cycle.cursor_utf16), ("ㄅ2", 0));
+            }
+
+            // 1 + Space, 1 + Enter and 184 keep their existing upstream-English behavior.
+            e.reset(ResetMode::Discard);
+            e.key(Key::ch('1', 0)).unwrap();
+            assert_eq!(e.key(Key::new(KeyKind::Space)).unwrap().preedit, "1 ");
+            e.reset(ResetMode::Discard);
+            e.key(Key::ch('1', 0)).unwrap();
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "1");
+            e.reset(ResetMode::Discard);
+            for ch in "184".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "爸");
+        }
+    }
+}

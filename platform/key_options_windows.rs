@@ -6,6 +6,7 @@ impl Engine {
     pub fn set_windows_input_options(&mut self, flags: u32) {
         self.windows_shifted_boundaries = true;
         self.windows_punctuation_candidates = true;
+        self.windows_digit_zhuyin = true;
         self.candidate_grid_columns = 3;
         self.windows_selection_learning = true;
         self.standalone_tones = flags & 1 != 0;

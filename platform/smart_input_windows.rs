@@ -645,8 +645,9 @@ impl Engine {
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
         // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
         if self.drun.is_some() {
-            // Enter sends what the screen shows (upstream A.12), and a lone key shows as its digit here.
-            if key.kind == KeyKind::Enter && self.lone_digit().is_some() {
+            // Enter and Down treat a lone key shown as its digit as that digit token, leaving
+            // its Zhuyin symbol selectable in the opened candidate list.
+            if matches!(key.kind, KeyKind::Enter | KeyKind::Down) && self.lone_digit().is_some() {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
             }

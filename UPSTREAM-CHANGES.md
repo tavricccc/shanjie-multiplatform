@@ -12,7 +12,7 @@
 | `core/src/learn_store.rs` | 紀錄格式、欄位驗證沿用上游；檔案處理改用 Windows 原子替換與同步。忘記詞時 flush 失敗仍替換檔案，寫入失敗刪除暫存檔 | `platform/learning_windows.rs` |
 | `core/src/learn.rs` | 日期改用 Win32 API；選字預覽以異動日誌撤回更新、新增與淘汰的紀錄；計分與衰減不變 | `platform/clock_windows.rs`、`platform/selection_journal_windows.rs`、`prepare-selection-learning.ps1` |
 | `core/src/lm.rs` | 9 個模型陣列與 3 個詞類陣列改為唯讀映射；`.winmap`（SJWM0002）專用讀取與來源雜湊核對 | `prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
-| `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、聯想、預測列種類查詢；相關標點與全半形符號候選擴充；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
+| `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、聯想、預測列種類查詢；相關標點與全半形符號候選擴充；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動；僅在 Windows 輸入選項啟用的標準配置下，數字單元在全形項目後補入對應注音或聲調符號，並以起始範圍修正右側數字轉國字候選的取代區間 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字 | `prepare-keys.ps1`、`platform/key_options_windows.rs` |
 | `core/src/engine.rs` 選字學習 | 數字鍵、Enter、滑鼠及預測選字先建立可回復的學習；提交時保存一次，分段 Enter 保留前綴的讀音與選字標記，取消／刪改回復暫存學習 | `prepare-selection-learning.ps1`、`platform/selection_learning_windows.rs`、`platform/selection_journal_windows.rs` |
 | `core/src/engine.rs`、`core/src/engine/digit_layer.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、原鍵混打與容錯、Enter 只提交游標前。上游英文段追蹤實際 `Shift` 按鍵邊界（`run_shifted`），`Caps Lock` 下 `Shift+英文` 後放開 `Shift` 仍可切分正／逆序中文音節；數字層在開啟混打時將 `mixed_input` 傳入評分與音節還原候選。原鍵混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
@@ -68,7 +68,7 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 - Windows 的全／半形切換立即更新組字顯示，提交與失焦送出採相同轉換；ASCII `!`–`~` 對應 `U+FF01`–`U+FF5E`，空白對應 `U+3000`，中文標點不變。核心保留原字元，切回半形可還原組字中的 ASCII。
 
 - 善解範本（`profiles/shanjie.ini`）與上游 App 一樣開啟上游英文詞表；Windows 範本（微軟注音風格）不開。
-- 上游判斷單按數字鍵：上游顯示未完成注音（`1` 是 ㄅ，Enter 送出 ㄅ，digits.md A.12）；Windows 顯示並送出數字本身，按鍵仍保留，後續可組成注音（`184` 是 爸）。↓ 與上游相同，開該注音的清單。沒有設定開關。
+- 上游判斷單按數字鍵：上游顯示未完成注音（`1` 是 ㄅ，Enter 與 ↓ 送出／展開 ㄅ，digits.md A.12）；Windows 顯示並送出數字本身，按鍵仍保留，後續可組成注音（`184` 是 爸）。套用 Windows 輸入選項的標準（大千）配置下，單按 `0`–`9` 按 ↓ 與各數字／符號單元（`0`–`9`、`.`、`/`、`-`）的左右候選與 ↑ 循環，皆會在全形數字後附上對應的大千注音或聲調符號；聲韻母若詞庫與模型有條目即轉成可再改選漢字的真實讀音單元，聲調或缺乏條目者則以符號單元插入，原有的漢字轉換候選（`DigitAlt::Syllable`）與左右數字候選的預測列維持可用（選取或忘記預測項時保留原數字與候選錨點），同時修正右側候選使用漢字轉換項的取代區間。未套用 Windows 選項的核心與倚天配置維持上游行為。沒有設定開關。
 - Windows 單獨聲調關閉（`standalone_tones=0`）時，閒置按聲調鍵仍輸入字面數字，不開上游數字串。Windows 互動模式開啟時，空組字按聲調鍵一律輸入聲調符號，所以 `3`、`4`、`6`、`7` 不能作為數字串開頭；善解互動模式照上游，開啟英文時由數字串取代。
 - Windows 的「→ 右方向鍵」為 `[candidates] right_action=none|page|expand`：預設「無」保留原方向鍵，「下一頁」沿用舊開關，「展開」開啟三欄多列候選。舊 `right_pages=0/1` 分別遷移為 `none/page`；已有新選項時優先保留。兩種互動模式收合時 ↑↓ 逐項移動；展開時沿同一直排 ±3 移動，最上列 ↑ 收回，末列向下停在原位。核心未套用 Windows 選項時保留上游九欄；輸出視窗與數字仍依反白所在的九項群組選字。預測與聯想不展開。
 - 數字鍵盤的 0–9 與 `+ - * / .` 走字面插入，不當注音；組字仍可編輯，候選開啟時 1–9 保留選字。有未完成讀音時先提交讀音再輸入字面字元；內碼輸入中的九宮格數字視為內碼。全形模式下字面字元一併轉為全形。
