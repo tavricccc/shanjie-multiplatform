@@ -20,34 +20,44 @@ fn run(){
     let args:Vec<_>=std::env::args().collect();assert!(args.len()>=5);
     let root=Path::new(&args[2]);let id=&args[3];let data=Path::new(&args[4]);
     assert_eq!(root,std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join("Shanjie/Models"));
-    if args[1]=="prepare" {
-        let item=if root.join(".staging").join(id).join("model.json").is_file(){
-            shanjie_shell::models::prepare(root,id)
-        }else{shanjie_shell::models::checked(&root.join(id))}.expect("source, dependency and mapping validation");
-        assert_eq!(item.spec.id,*id);
-        let mut e=engine(data,id,0);
-        for ch in "su3cl3".chars(){key(&mut e,1,ch);}
-        let out=key(&mut e,3,'\0');assert!(!out.commit.is_empty()&&out.preedit.is_empty());
-        assert!(key(&mut e,3,'\0').commit.is_empty(),"commit must occur once");
-        let semantic=item.spec.catalog.as_ref().is_some_and(|m|m.assets.iter().any(|a|a.role=="semantic"));
-        if semantic{assert!(e.rerank_jobs_run>0,"semantic model must actually run");}
-        // The resident core reranks after replying: Op::Rerank must then show what the synchronous rerank shows. Every
-        // other job is left unasked, so a newer key replaces it before it is applied.
-        let mut sync=engine(data,id,0);let mut background=engine(data,id,0);background.rerank_in_background();
-        let mut applied=0;
-        for (index,(kind,ch)) in "su3cl3".chars().map(|c|(1,c)).chain([(3,'\0')]).enumerate(){
-            let want=key(&mut sync,kind,ch);let mut got=key(&mut background,kind,ch);
-            assert_eq!(got.commit,want.commit,"background rerank keeps the commit");
-            if got.rerank{
-                if index%2==1{continue;}
-                let ranked=background.perform(Op::Rerank).expect("rerank");
-                assert!(ranked.commit.is_empty()&&!ranked.rerank,"a rerank commits nothing and leaves nothing running");
-                got=shanjie_shell::protocol::Snapshot{commit:got.commit,..ranked};applied+=1;
+    let builtin=args[1]=="builtin";
+    if args[1]=="prepare"||builtin {
+        let semantic=if builtin {
+            assert_eq!(id,"builtin");
+            true
+        }else{
+            let item=if root.join(".staging").join(id).join("model.json").is_file(){
+                shanjie_shell::models::prepare(root,id)
+            }else{shanjie_shell::models::checked(&root.join(id))}.expect("source, dependency and mapping validation");
+            assert_eq!(item.spec.id,*id);
+            item.spec.catalog.as_ref().is_some_and(|m|m.assets.iter().any(|a|a.role=="semantic"))
+        };
+        for ranking in 0..(if builtin{2}else{1}) {
+            let mut e=engine(data,id,ranking);
+            for ch in "su3cl3".chars(){key(&mut e,1,ch);}
+            let out=key(&mut e,3,'\0');assert!(!out.commit.is_empty()&&out.preedit.is_empty());
+            assert!(key(&mut e,3,'\0').commit.is_empty(),"commit must occur once");
+            if semantic{assert!(e.rerank_jobs_run>0,"semantic model must actually run");}
+            // The resident core reranks after replying: Op::Rerank must then show what the synchronous rerank shows. Every
+            // other job is left unasked, so a newer key replaces it before it is applied.
+            let mut sync=engine(data,id,ranking);let mut background=engine(data,id,ranking);background.rerank_in_background();
+            let mut applied=0;
+            for (index,(kind,ch)) in "su3cl3".chars().map(|c|(1,c)).chain([(3,'\0')]).enumerate(){
+                let want=key(&mut sync,kind,ch);let mut got=key(&mut background,kind,ch);
+                assert_eq!(got.commit,want.commit,"background rerank keeps the commit");
+                if got.rerank{
+                    if index%2==1{continue;}
+                    let ranked=background.perform(Op::Rerank).expect("rerank");
+                    assert!(ranked.commit.is_empty()&&!ranked.rerank,"a rerank commits nothing and leaves nothing running");
+                    got=shanjie_shell::protocol::Snapshot{commit:got.commit,..ranked};applied+=1;
+                }
+                assert_eq!((got.preedit,got.cursor,got.candidates,got.selected),(want.preedit,want.cursor,want.candidates,want.selected),"background rerank");
             }
-            assert_eq!((got.preedit,got.cursor,got.candidates,got.selected),(want.preedit,want.cursor,want.candidates,want.selected),"background rerank");
+            if semantic{assert!(applied>0,"background rerank must actually apply");}
+            let mut result=json!({"usable":true,"native_input_and_commit":true,"ranking":ranking,"semantic_jobs_run":e.rerank_jobs_run,"background_reranks_applied":applied});
+            if !builtin {result["mapped_equivalent"]=true.into();result["source_and_side_pairs_checked"]=true.into();}
+            println!("{}",result);
         }
-        if semantic{assert!(applied>0,"background rerank must actually apply");}
-        println!("{}",json!({"usable":true,"mapped_equivalent":true,"source_and_side_pairs_checked":true,"native_input_and_commit":true,"semantic_jobs_run":e.rerank_jobs_run,"background_reranks_applied":applied}));
     } else {
         assert_eq!(args[1],"evaluate");let text=fs::read_to_string(&args[5]).unwrap();
         let rows:Vec<_>=text.lines().filter(|l|!l.is_empty()&&!l.starts_with('#')).map(|l|{

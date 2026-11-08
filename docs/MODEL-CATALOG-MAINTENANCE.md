@@ -1,6 +1,6 @@
 # 模型清單自動維護
 
-Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄、與上游 App 相同的整組模型（id `builtin`）；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
+Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄的整組模型（id `builtin`）：會意更新為 SJ-SR-8-15M，其餘維持上游 v0.6.1 配套；核心 pin 維持 `UPSTREAM.json`。`source` 指向隨版本庫保存的原始附件，`pinned_sha256` 記錄核心 pin 的原有模型雜湊。
 
 ## 上線與日常操作
 
@@ -40,6 +40,8 @@ Actions 的 `model-catalog-publication` artifact 保留 30 天，含清單、狀
 - 用戶端離線：用成功快取與本機 receipt 備註；故障不自動切換使用中的模型。
 
 本機契約測試：`python -m unittest discover -s scripts/model_catalog -p "test_*.py" -v`。`probe.ps1` 需要 Windows、兩架構 MSVC 與 Rust；原生檢查使用公開資料，不讀個人字典或學習檔。
+
+內建模型可在獨立的 `LOCALAPPDATA`、`SHANJIE_TEST_PROFILE=1` 與 `SHANJIE_CORE_LOCAL=1` 下，以 `shanjie-model-check builtin <LOCALAPPDATA>/Shanjie/Models builtin dist/data` 驗證聊天與書面模式的輸入、單次提交及同步／背景重排，不依賴線上配套的來源識別。
 
 ## Actions 執行環境
 

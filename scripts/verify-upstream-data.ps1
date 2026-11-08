@@ -9,10 +9,10 @@ $upstream = Join-Path $root 'upstream/shanjie/data'
 $failures = [Collections.Generic.List[string]]::new()
 function Fail([string]$message) { $failures.Add($message) }
 
-# --- Models: every upstream model and checksum file is in the built-in set with the same hash. ---
+# --- Models: keep every pinned model; separately updated releases record their pinned checksum. ---
 $sources = Get-Content (Join-Path $root 'MODEL-SOURCES.json') -Raw | ConvertFrom-Json
 $assets = @{}
-foreach ($asset in $sources.builtin.assets) { $assets[$asset.filename] = $asset.sha256.ToLowerInvariant() }
+foreach ($asset in $sources.builtin.assets) { $assets[$asset.filename] = ($asset.pinned_sha256 ?? $asset.sha256).ToLowerInvariant() }
 $expected = @{}
 foreach ($row in Get-Content (Join-Path $upstream 'models.tsv') | Where-Object { $_.Trim() }) {
     $columns = $row -split "`t"

@@ -640,3 +640,79 @@ fn upstream_english_digit_candidates_include_zhuyin_and_tones_with_builtin_data(
         }
     }
 }
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
+fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
+    e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+    e.set_profile(shanjie_core::lm::Profile::Chat).unwrap();
+    e.set_prediction(true).unwrap();
+    e.set_windows_input_options(1 << 21);
+    e.set_upstream_english(true, true, true, true).unwrap();
+    e.set_mixed_input(false);
+
+    for (keys, want) in [
+        ("9x6", "來"),
+        ("o1 ", "杯"),
+        ("8d ", "咖"),
+        ("8e ", "嘎"),
+        ("8w ", "他"),
+        ("9w4", "太"),
+    ] {
+        e.reset(shanjie_core::engine::ResetMode::Discard);
+        let mut preedit = String::new();
+        for ch in keys.chars() {
+            let out = if ch == ' ' { e.key(Key::new(KeyKind::Space)).unwrap() } else { e.key(Key::ch(ch, 0)).unwrap() };
+            preedit = out.preedit;
+        }
+        assert_eq!(preedit, want, "keys={keys}");
+    }
+
+    // 連續快打整句測試：倒序按鍵流是否能正確辨識為中文，而非退化為英數字串
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    let mut sentence_preedit = String::new();
+    let sentence_keys = "g4z.3vm ul49x6o1 8d zo wu6gp6";
+    for ch in sentence_keys.chars() {
+        let out = if ch == ' ' { e.key(Key::new(KeyKind::Space)).unwrap() } else { e.key(Key::ch(ch, 0)).unwrap() };
+        sentence_preedit = out.preedit;
+    }
+    assert_eq!(sentence_preedit, "是否需要來杯咖啡提神", "fast typing whole sentence");
+
+    // A stored guard setting must not change digit candidates while mixing is off.
+    e.set_prediction(false).unwrap();
+    for (upstream, guard) in [(false, false), (false, true), (true, false), (true, true)] {
+        e.reset(shanjie_core::engine::ResetMode::Discard);
+        e.set_upstream_english(upstream, true, true, guard).unwrap();
+        e.set_mixed_input(false);
+        e.insert_windows_literal("823").unwrap();
+        let out = e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(out.candidates.iter().any(|word| word == "打"), upstream && guard,
+            "upstream={upstream} guard={guard}: {:?}", out.candidates);
+    }
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.set_upstream_english(false, true, true, false).unwrap();
+    e.set_mixed_input(true);
+    e.insert_windows_literal("823").unwrap();
+    assert!(e.key(Key::new(KeyKind::Down)).unwrap().candidates.iter().any(|word| word == "打"));
+
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.set_mixed_input(false);
+    e.set_upstream_english(true, true, true, true).unwrap();
+    for digits in ["1234567890", "3.14", "2026/11/08", "2026-11-08"] {
+        let commits = [false, true].map(|guard| {
+            e.reset(shanjie_core::engine::ResetMode::Discard);
+            e.set_upstream_english(true, true, true, guard).unwrap();
+            for ch in digits.chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            e.key(Key::new(KeyKind::Enter)).unwrap().commit
+        });
+        assert_eq!(commits[1], commits[0], "digit scoring must stay consistent: {digits}");
+    }
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    for ch in "RTX4090".chars() {
+        let modifiers = if ch.is_ascii_uppercase() { MOD_SHIFT } else { 0 };
+        e.key(Key::ch(ch, modifiers)).unwrap();
+    }
+    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "RTX4090");
+}
