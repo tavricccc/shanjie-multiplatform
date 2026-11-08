@@ -39,17 +39,18 @@ int wmain(int argc,wchar_t**argv) {
     auto chinese=[&]{VARIANT v{};require(SUCCEEDED(mode->GetValue(&v)),915);bool on=v.vt==VT_I4&&v.lVal;VariantClear(&v);return on;};
     auto keyboard=[&](int key,int extra=0){BYTE state[256]{};if(key)state[key]=0x80;if(key==VK_RSHIFT||key==VK_LSHIFT)state[VK_SHIFT]=0x80;if(key==VK_LCONTROL)state[VK_CONTROL]=0x80;if(extra)state[extra]=0x80;require(SetKeyboardState(state),916);};
     auto flags=[](int key,bool up){return LPARAM(1)|(LPARAM(MapVirtualKeyW(key,MAPVK_VK_TO_VSC))<<16)|(up?(LPARAM(3)<<30):0);};
-    auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
+    auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);return test!=FALSE;};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
     if(scenario.starts_with(L"shift-")) {
-        int side=scenario==L"shift-left"?VK_LSHIFT:VK_RSHIFT;
-        keyboard(side);down(side);
+        int side=scenario==L"shift-left"||scenario.ends_with(L"-left")?VK_LSHIFT:VK_RSHIFT;
+        bool disabled=scenario==L"shift-left-only-right"||scenario==L"shift-right-only-left"||scenario.starts_with(L"shift-neither-");
+        keyboard(side);require(down(side)==!disabled,924);
         if(scenario==L"shift-enter"){keyboard(side,VK_RETURN);down(VK_RETURN);keyboard(side);up(VK_RETURN);}
         int proxyKey=scenario==L"shift-unknown"?0:scenario==L"shift-proxy-enter"?VK_RETURN:side;
         for(int i=0;i<3;i++){auto f=proxyKey?flags(proxyKey,i==2):0;require(PostMessageW(store->window,i==2?WM_KEYUP:WM_KEYDOWN,VK_PROCESSKEY,f),921);pump();}
         keyboard(0);up(side);
-        bool blocked=scenario==L"shift-unknown"||scenario==L"shift-proxy-enter"||scenario==L"shift-enter";
+        bool blocked=disabled||scenario==L"shift-unknown"||scenario==L"shift-proxy-enter"||scenario==L"shift-enter";
         require(chinese()==blocked,922);require(store->text.empty(),923);
     } else if(scenario.starts_with(L"handoff-")) {
         keyboard(0);down('1');require(store->text==L"1"&&compositions()==1,930);

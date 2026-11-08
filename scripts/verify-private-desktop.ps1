@@ -1,5 +1,6 @@
 #Requires -Version 7
 param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
+ 'shift-left-only-left','shift-left-only-right','shift-right-only-left','shift-right-only-right','shift-neither-left','shift-neither-right',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'word-deferred','word-natural','word-stale','word-readonly','word-password','word-invalid','word-empty'),[switch]$ExplicitCore)
 $ErrorActionPreference='Stop'
@@ -38,6 +39,9 @@ try {
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
   $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
   $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
+  if($scenario -like 'shift-left-only-*'){$profile=$profile -replace '(?m)^shift_side=0','shift_side=1'}
+  if($scenario -like 'shift-right-only-*'){$profile=$profile -replace '(?m)^shift_side=0','shift_side=2'}
+  if($scenario -like 'shift-neither-*'){$profile=$profile -replace '(?m)^shift_toggle=1','shift_toggle=0'}
   if($scenario -eq 'cancel-theme-dark'){$profile=$profile -replace '(?m)^theme=0','theme=2'}
   if($scenario -eq 'cancel-theme-light'){$profile=$profile -replace '(?m)^theme=0','theme=1'}
   Set-Content -LiteralPath "$fixture/Shanjie/profile.ini" -Value $profile -Encoding utf8NoBOM
