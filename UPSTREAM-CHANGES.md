@@ -13,7 +13,7 @@
 | `core/src/learn.rs` | 日期改用 Win32 API；選字預覽以異動日誌撤回更新、新增與淘汰的紀錄；計分與衰減不變 | `platform/clock_windows.rs`、`platform/selection_journal_windows.rs`、`prepare-selection-learning.ps1` |
 | `core/src/lm.rs` | 9 個模型陣列與 3 個詞類陣列改為唯讀映射；`.winmap`（SJWM0002）專用讀取與來源雜湊核對 | `prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、聯想、預測列種類查詢；相關標點與全半形符號候選擴充；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
-| `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字 | `prepare-keys.ps1`、`platform/key_options_windows.rs` |
+| `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字。純注音輸出模式在英文／數字判斷前將按鍵映射為不可轉換的注音字面單元，沿用編輯與提交路徑，不建立預測或選字學習 | `prepare-keys.ps1`、`prepare-smart-input.ps1`、`platform/key_options_windows.rs`、`platform/smart_input_windows.rs` |
 | `core/src/engine.rs` 選字學習 | 數字鍵、Enter、滑鼠及預測選字先建立可回復的學習；提交時保存一次，分段 Enter 保留前綴的讀音與選字標記，取消／刪改回復暫存學習 | `prepare-selection-learning.ps1`、`platform/selection_learning_windows.rs`、`platform/selection_journal_windows.rs` |
 | `core/src/engine.rs`、`core/src/engine/digit_layer.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、原鍵混打與容錯、Enter 只提交游標前。上游英文段追蹤實際 `Shift` 按鍵邊界（`run_shifted`），`Caps Lock` 下 `Shift+英文` 後放開 `Shift` 仍可切分正／逆序中文音節；數字層在開啟原鍵混打或 Windows 上游判斷已啟用且「快打時鍵序顛倒不當英文」（`english_reversal_guard`）時將逆序音節判定傳入評分與還原候選（原生上游測試環境維持關閉）。原鍵混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
 | `core/src/engine.rs` 資源 | 常駐快取共用不可變詞庫、詞包、數字表、模型、會意與常談；詞庫快取鍵含所選詞包與 `names-add.tsv`、`digits.tsv`、`acg-add.tsv`、`quotes-add.tsv`、`it-add.tsv`，模型快取鍵含詞類表、KN 與兩個 trigram 表。命中快取時照上游 `load_lm`／`load_tinylm` 重設小模型與英文快取；上游每個引擎各建一份的數字表快取（合法讀音與字詞讀音）改由同一詞庫與模型的引擎共用 | `prepare-resident.ps1`、`platform/resident_windows.rs` |
@@ -57,6 +57,8 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 學習預覽只記錄本次更新、新增與淘汰紀錄的撤回資訊，不複製整份學習庫或重建其索引。分段 Enter 最多保留 128 音節的已提交前綴與必要左文脈；累計超過時先結算已提交部分，再開始下一段，取消仍只撤回尚未結算的學習。
 
 ## 與上游行為仍不同之處
+
+- 「純注音輸出」（`[input] zhuyin_only`）為 Windows 專屬模式，兩個範本預設關閉，既有設定缺省亦關閉；不改核心 pin 或模型。啟用後，標準／倚天配置的 37 個注音符號與 4 個聲調逐鍵以字面輸出，空白固定輸入空格，不開候選、預測或聯想，也不記憶為選字。原有混打、聲調與空白鍵設定保留，關閉後恢復；拼音配置下保留設定值但不啟用。切換模式與鍵盤配置一樣，先提交現有組字，再建立引擎。
 
 - 內建會意採用上游另行發布的 SJ-SR-8-15M，權重與檔頭係數原樣保留，核心仍固定 v0.6.1。未修改的上游公開附件從使用者提供的模型備份取回，納入 `models/sj-sr-8-15m/`；`MODEL-SOURCES.json` 的 `source` 指向本機來源、`sha256` 核對實際附件、`pinned_sha256` 核對核心 pin 原有的第 7 版記錄。常談對第 7、8 版皆生效，沿用原有聊天係數；未宣稱重現上游第 8 版的完整核心或準確率評測。
 
