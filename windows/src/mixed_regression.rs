@@ -512,3 +512,43 @@ fn selected_maple_story_is_remembered_across_partial_enters() {
         assert_eq!(type_word(&mut e), "楓之谷");
     }
 }
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
+fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
+    e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+    e.set_profile(shanjie_core::lm::Profile::Chat).unwrap();
+    e.set_prediction(true).unwrap();
+    e.set_windows_input_options(1 << 21);
+    e.set_upstream_english(true, true, true, true).unwrap();
+    e.set_mixed_input(false);
+
+    for (keys, want) in [
+        ("9x6", "來"),
+        ("o1 ", "杯"),
+        ("8d ", "咖"),
+        ("8e ", "嘎"),
+        ("8w ", "他"),
+        ("9w4", "太"),
+    ] {
+        e.reset(shanjie_core::engine::ResetMode::Discard);
+        let mut preedit = String::new();
+        for ch in keys.chars() {
+            let out = if ch == ' ' { e.key(Key::new(KeyKind::Space)).unwrap() } else { e.key(Key::ch(ch, 0)).unwrap() };
+            preedit = out.preedit;
+        }
+        assert_eq!(preedit, want, "keys={keys}");
+    }
+
+    // 連續快打整句測試：倒序按鍵流是否能正確辨識為中文，而非退化為英數字串
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    let mut sentence_preedit = String::new();
+    let sentence_keys = "g4z.3vm ul49x6o1 8d zo wu6gp6";
+    for ch in sentence_keys.chars() {
+        let out = if ch == ' ' { e.key(Key::new(KeyKind::Space)).unwrap() } else { e.key(Key::ch(ch, 0)).unwrap() };
+        sentence_preedit = out.preedit;
+    }
+    assert_eq!(sentence_preedit, "是否需要來杯咖啡提神", "fast typing whole sentence");
+}
