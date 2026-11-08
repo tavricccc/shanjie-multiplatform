@@ -103,10 +103,10 @@ function Replace-DigitLayerContract([string]$old,[string]$new,[int]$expected=1) 
 }
 Replace-DigitLayerContract "    pub profile: Profile,`n}" "    pub profile: Profile,`n    pub mixed_order: bool,`n}"
 Replace-DigitLayerContract "    pub fn scorer(&self) -> Scorer<'_> {`n        Scorer { table: &self.table, lm: &self.st.lm, idx: self.st.capped.predict_index(&self.st.lm), legal: &self.cache.legal, cfg: self.st.lm.scoring(self.profile) }`n    }" "    pub fn scorer(&self) -> Scorer<'_> {`n        Scorer { table: &self.table, lm: &self.st.lm, idx: self.st.capped.predict_index(&self.st.lm), legal: &self.cache.legal, cfg: self.st.lm.scoring(self.profile) }`n    }`n    #[allow(clippy::too_many_arguments)]`n    pub fn decide(&self, c: &str, emitted: &[char], buf: &[char], extra: Option<char>, prev_d: Option<usize>, closing: bool, complete: bool) -> Decision {`n        self.scorer().decide_mixed(c, emitted, buf, extra, prev_d, closing, complete, self.mixed_order)`n    }"
-Replace-DigitLayerContract 'return Some(DigitEnv { st, table, cache: c, profile: self.profile });' 'return Some(DigitEnv { st, table, cache: c, profile: self.profile, mixed_order: self.mixed_input });'
-Replace-DigitLayerContract 'Some(DigitEnv { st, table, cache, profile: self.profile })' 'Some(DigitEnv { st, table, cache, profile: self.profile, mixed_order: self.mixed_input })'
+Replace-DigitLayerContract 'return Some(DigitEnv { st, table, cache: c, profile: self.profile });' 'return Some(DigitEnv { st, table, cache: c, profile: self.profile, mixed_order: self.mixed_order_active() });'
+Replace-DigitLayerContract 'Some(DigitEnv { st, table, cache, profile: self.profile })' 'Some(DigitEnv { st, table, cache, profile: self.profile, mixed_order: self.mixed_order_active() })'
 Replace-DigitLayerContract 'env.scorer().decide(' 'env.decide(' 5
-Replace-DigitLayerContract 'let Some(mut syl) = body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() else { continue };' 'let Some(mut syl) = (if self.mixed_input { self.mixed_reading_order(&body.iter().collect::<String>(), false) } else { body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() }) else { continue };'
+Replace-DigitLayerContract 'let Some(mut syl) = body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() else { continue };' 'let Some(mut syl) = (if self.mixed_order_active() { self.mixed_reading_order(&body.iter().collect::<String>(), false) } else { body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() }) else { continue };'
 Set-Content $digitLayerFile $digitLayerContent -Encoding utf8NoBOM
 
 & "$PSScriptRoot/prepare-english.ps1" | Out-Null
