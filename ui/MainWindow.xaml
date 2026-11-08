@@ -127,6 +127,7 @@
                         </controls:SettingCard>
                     </StackPanel>
                     <StackPanel x:Name="Composition" Visibility="Collapsed">
+                        <TextBlock Text="組字操作" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="ReadingPanelToggle" Label="組字面板" Description="{x:Bind Vm.ReadingPanelHelp, Mode=OneWay}" IsEnabled="{x:Bind Vm.CanChooseReadingPanel, Mode=OneWay}" IsOn="{x:Bind Vm.ReadingPanelShown, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
