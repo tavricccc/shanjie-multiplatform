@@ -10,11 +10,11 @@
 | --- | --- | --- |
 | `core/src/lib.rs` | 改用 Windows 學習儲存模組，加入唯讀映射模組 | `prepare-core.ps1`、`platform/learning_windows.rs` |
 | `core/src/learn_store.rs` | 紀錄格式、欄位驗證沿用上游；檔案處理改用 Windows 原子替換與同步。忘記詞時 flush 失敗仍替換檔案，寫入失敗刪除暫存檔 | `platform/learning_windows.rs` |
-| `core/src/learn.rs` | 日期改用 Win32 API；計分與衰減不變 | `platform/clock_windows.rs` |
+| `core/src/learn.rs` | 日期改用 Win32 API；選字預覽以異動日誌撤回更新、新增與淘汰的紀錄；計分與衰減不變 | `platform/clock_windows.rs`、`platform/selection_journal_windows.rs`、`prepare-selection-learning.ps1` |
 | `core/src/lm.rs` | 9 個模型陣列與 3 個詞類陣列改為唯讀映射；`.winmap`（SJWM0002）專用讀取與來源雜湊核對 | `prepare-lm.ps1`、`platform/mapped_array.rs`、`platform/mapped_lm.rs` |
 | `core/src/engine.rs` 候選 | 右側候選範圍；↑ 循環換字並保留游標；個人詞庫、聯想、預測列種類查詢；相關標點與全半形符號候選擴充；預測關閉時不因預測建索引（數字串載入模型時仍會建）。篩選或插入候選時，上游記錄容錯讀音的位置對照（`Cands::alt`）跟著項目移動 | `prepare-candidates.ps1`、`platform/candidates_windows.rs`、`platform/input_windows.rs` |
 | `core/src/engine.rs` 按鍵 | 逐鍵中文標點遮罩、可關閉的單獨聲調；標點插入既有組字 | `prepare-keys.ps1`、`platform/key_options_windows.rs` |
-| `core/src/engine.rs` 選字學習 | 數字鍵、Enter、滑鼠及預測選字先建立可回復的學習；提交時保存一次，分段 Enter 保留前綴的讀音與選字標記，取消／刪改回復暫存學習 | `prepare-selection-learning.ps1`、`platform/selection_learning_windows.rs` |
+| `core/src/engine.rs` 選字學習 | 數字鍵、Enter、滑鼠及預測選字先建立可回復的學習；提交時保存一次，分段 Enter 保留前綴的讀音與選字標記，取消／刪改回復暫存學習 | `prepare-selection-learning.ps1`、`platform/selection_learning_windows.rs`、`platform/selection_journal_windows.rs` |
 | `core/src/engine.rs`、`core/src/engine/digit_layer.rs` 組字 | `key` 改為 Windows 入口（上游原函式改名 `key_original`）：字面數字與標點、可選的「標點保留未完成讀音」（預設照上游丟掉）、原鍵混打與容錯、Enter 只提交游標前。上游英文段追蹤實際 `Shift` 按鍵邊界（`run_shifted`），`Caps Lock` 下 `Shift+英文` 後放開 `Shift` 仍可切分正／逆序中文音節；數字層在開啟混打時將 `mixed_input` 傳入評分與音節還原候選。原鍵混打用的英文詞表上游 0.6.1 已移除，改由 Windows 以上游工具產生、核對 v0.6.0 記錄的雜湊後編進核心，授權檔放在本 repo `LICENSES/` | `prepare-smart-input.ps1`、`platform/smart_input_windows.rs`、`platform/composition_windows.rs` |
 | `core/src/engine.rs` 資源 | 常駐快取共用不可變詞庫、詞包、數字表、模型、會意與常談；詞庫快取鍵含所選詞包與 `names-add.tsv`、`digits.tsv`、`acg-add.tsv`、`quotes-add.tsv`、`it-add.tsv`，模型快取鍵含詞類表、KN 與兩個 trigram 表。命中快取時照上游 `load_lm`／`load_tinylm` 重設小模型與英文快取；上游每個引擎各建一份的數字表快取（合法讀音與字詞讀音）改由同一詞庫與模型的引擎共用 | `prepare-resident.ps1`、`platform/resident_windows.rs` |
 | `core/src/trigram.rs` | Windows 的 `Mapped` 改用與模型陣列相同的唯讀映射；`.winmap` 旁的 `trigram.sjt3`（書面）與 `trigram-chat.sjt3`（聊天）各自存在才載入，壞檔拒絕 | `prepare-trigram.ps1`、`platform/mapped_windows.rs` |
@@ -48,13 +48,17 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 
 個人詞典按「讀音＋字詞」替換相同的內建列，其他讀音保留；保留被替換列原有的 `manual` 保護與詞包標記，不把合法重複詞條當成整個詞庫載入失敗。出貨的詞庫／詞包與測試用 `data`、`eval` 由固定 Git commit 匯出，強制停用該次匯出的換行轉換，避免 Windows checkout 的 CRLF 使數字表失效或參考結果比對失敗；不修改上游子模組。
 
-上游數字串開啟時，Windows 的待處理查詢會包含它，讓 Space 仍交給核心決定數字或第一聲；Windows 直接字面、標點與空白插入入口在寫入前先依上游邊界收整未決數字串，維持先輸入數字在前、後輸入符號在後的順序。開啟原鍵混打時，數字層以欄位正規化（`Legal::tail_units_mixed`）與介音橋接評估所有含數字／符號之逆序音節（包含全在數字表內的 `823` = `ㄉㄚˇ`、`813` = `ㄅㄚˇ`，以及跨字母的 `8w ` = `ㄊㄚ`、`9w4` = `ㄊㄞˋ`、`u0r3` = `ㄐㄧㄢˇ`），第一聲與二至輕聲的整段逆序音節（含與英文詞表重疊之無 `Shift` 三鍵第一聲，如 `jig ` = `ㄕㄨㄛ`、`flu ` = `ㄑㄧㄠ`）、未完成字面片段或 `Shift` 明確英文前綴後的尾綴正／逆序音節皆依鍵盤配置欄位順序還原，並在兩側候選保留原始按鍵字面（`Shift+字母` 明確英文與非完整音節之英文詞表單字在空白鍵維持字面英文且不被拆字尾，也不跨過最後一個 `Shift` 字元吞食英文前綴）。數字串結束並留下未完成注音時，以上游記錄的完整按鍵順序恢復 Windows 混打與原始讀音紀錄；當次顯示字元只套用到同一英文字母的大小寫，不覆蓋回放的數字。新數字串接手後重建輸出，避免同一按鍵同時顯示在原始字串與數字緩衝區。不關閉上游數字判斷，也不改變混打預設。
+上游數字串開啟時，Windows 的待處理查詢會包含它，讓 Space 仍交給核心決定數字或第一聲。開啟原鍵混打時，數字層以欄位正規化（`Legal::tail_units_mixed`）與介音橋接評估所有含數字／符號之逆序音節（包含全在數字表內的 `823` = `ㄉㄚˇ`、`813` = `ㄅㄚˇ`，以及跨字母的 `8w ` = `ㄊㄚ`、`9w4` = `ㄊㄞˋ`、`u0r3` = `ㄐㄧㄢˇ`），第一聲與二至輕聲的整段逆序音節（含與英文詞表重疊之無 `Shift` 三鍵第一聲，如 `jig ` = `ㄕㄨㄛ`、`flu ` = `ㄑㄧㄠ`）、未完成字面片段或 `Shift` 明確英文前綴後的尾綴正／逆序音節皆依鍵盤配置欄位順序還原，並在兩側候選保留原始按鍵字面（`Shift+字母` 明確英文與非完整音節之英文詞表單字在空白鍵維持字面英文且不被拆字尾，也不跨過最後一個 `Shift` 字元吞食英文前綴）。數字串結束並留下未完成注音時，以上游記錄的完整按鍵順序恢復原鍵混打與原始讀音紀錄；當次顯示字元只套用到同一英文字母的大小寫，不覆蓋回放的數字。新數字串接手後重建輸出，避免同一按鍵同時顯示在原始字串與數字緩衝區。不關閉上游數字判斷，也不改變混打預設。
+
+Windows 直接字面、標點與空白插入前先收整未決數字串，維持數字與後續符號的輸入順序。
+
+Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫存，維持 `ABC+` 的輸入順序。
+
+學習預覽只記錄本次更新、新增與淘汰紀錄的撤回資訊，不複製整份學習庫或重建其索引。分段 Enter 最多保留 128 音節的已提交前綴與必要左文脈；累計超過時先結算已提交部分，再開始下一段，取消仍只撤回尚未結算的學習。
 
 ## 與上游行為仍不同之處
 
 - 內建會意採用上游另行發布的 SJ-SR-8-15M，權重與檔頭係數原樣保留，核心仍固定 v0.6.1。未修改的上游公開附件從使用者提供的模型備份取回，納入 `models/sj-sr-8-15m/`；`MODEL-SOURCES.json` 的 `source` 指向本機來源、`sha256` 核對實際附件、`pinned_sha256` 核對核心 pin 原有的第 7 版記錄。常談對第 7、8 版皆生效，沿用原有聊天係數；未宣稱重現上游第 8 版的完整核心或準確率評測。
-
-Windows 直接字面、標點與空白插入會先結束較早的 Shift 英文暫存，避免 `ABC+` 顯示或提交為 `+ABC`；原鍵混打與上游判斷各自保留既有功能。
 
 - 啟用「記憶選字」時，Windows 候選確認立即建立暫存記憶；改選、刪字或取消會撤回尚未確認的記憶，提交時寫入一次。Enter 只提交游標前時，已送出前綴的讀音與選字標記保留到剩餘組字確認，讓「楓之谷」可整詞記憶，不需先按 End。失焦提交只在立即取得學習鎖時保存，其他會話正在寫入時先送出文字、略過該次記憶，避免切換視窗等待。學習關閉時不記憶，未套用 Windows 選項的核心維持上游只在提交學習的政策。
 - 右側候選沿用上游的自學新詞與模糊音清單政策：同長度的新詞排在詞庫詞條前，低於啟用權重的新詞仍可列出並忘記；選取模糊音項目時改用其詞庫讀音。私人詞典載入與共用詞庫快取都保留詞包的 OOV 前綴範圍，供後續模型載入使用。

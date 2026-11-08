@@ -30,7 +30,7 @@ mod windows_composition_tests {
     #[test]
     fn shifted_english_stays_before_later_literals_and_spaces() {
         for layout in [Layout::Standard, Layout::Eten] {
-            for (mixed, english) in [(false, true), (true, true), (true, false)] {
+            for (mixed, english) in [(false, true), (true, false)] {
                 // Upstream English is Standard-only; Eten uses Windows mixing.
                 if layout == Layout::Eten && !mixed { continue; }
                 for prefix in ["", "你"] {

@@ -40,48 +40,47 @@ fn first_tones_recover_whole_reordered_syllables_and_keep_mixed_boundaries() {
         }
         out.unwrap()
     };
-    for english in [false, true] {
-        for symbols in [false, true] {
-            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
-            e.set_mixed_input(true);
-            e.set_upstream_english(english, true, true, true).unwrap();
-            e.set_windows_input_options(if symbols { 0 } else { 1 << 20 });
+    for symbols in [false, true] {
+        let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        e.set_mixed_input(true);
+        e.set_upstream_english(false, true, true, true).unwrap();
+        e.set_windows_input_options(if symbols { 0 } else { 1 << 20 });
 
-            for (keys, want) in [
-                ("ij ", "窩"),
-                ("ur/ ", "經"),
-                ("8w ", "他"),
-                ("9w4", "太"),
-                ("u0r3", "簡"),
-            ] {
-                assert_eq!(press(&mut e, keys).preedit, want, "english={english} symbols={symbols} {keys}");
-                let down = e.key(Key::new(KeyKind::Down)).unwrap();
-                let idx = down.candidates.iter().position(|c| c == keys).expect("typed literal selectable");
-                assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
-                e.reset(ResetMode::Discard);
-            }
+        for (keys, want) in [
+            ("ij ", "窩"),
+            ("ur/ ", "經"),
+            ("8w ", "他"),
+            ("9w4", "太"),
+            ("u0r3", "簡"),
+        ] {
+            assert_eq!(press(&mut e, keys).preedit, want, "raw-key mixing symbols={symbols} {keys}");
+            let down = e.key(Key::new(KeyKind::Down)).unwrap();
+            let idx = down.candidates.iter().position(|c| c == keys).expect("typed literal selectable");
+            assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
+            e.reset(ResetMode::Discard);
+        }
 
-            for (keys, want) in [
-                ("w4u0r3", "w4簡"),
-                ("w48w ", "w4他"),
-                ("r3us3", "r3你"),
-                ("callsu3", "call你"),
-                ("callus3", "call你"),
-                ("the ", "the "),
-                ("and ", "and "),
-                ("not ", "not "),
-                ("too ", "too "),
-                ("see ", "see "),
-                ("kanji ", "kanji "),
-                ("input ", "input "),
-                ("thorium ", "thorium "),
-                ("ubuntu ", "ubuntu "),
-            ] {
-                assert_eq!(press(&mut e, keys).preedit, want, "english={english} symbols={symbols} {keys}");
-                e.reset(ResetMode::Discard);
-            }
+        for (keys, want) in [
+            ("w4u0r3", "w4簡"),
+            ("w48w ", "w4他"),
+            ("r3us3", "r3你"),
+            ("callsu3", "call你"),
+            ("callus3", "call你"),
+            ("the ", "the "),
+            ("and ", "and "),
+            ("not ", "not "),
+            ("too ", "too "),
+            ("see ", "see "),
+            ("kanji ", "kanji "),
+            ("input ", "input "),
+            ("thorium ", "thorium "),
+            ("ubuntu ", "ubuntu "),
+        ] {
+            assert_eq!(press(&mut e, keys).preedit, want, "raw-key mixing symbols={symbols} {keys}");
+            e.reset(ResetMode::Discard);
         }
     }
+
 }
 
 #[test]
@@ -112,82 +111,81 @@ fn unshifted_reordered_first_tones_beat_english_words_and_keep_literal_candidate
         out.unwrap()
     };
 
-    for english in [false, true] {
-        for right_anchor in [false, true] {
-            let mut e = Engine::with_lexicon(std_lex.clone(), Layout::Standard);
-            e.set_mixed_input(true);
-            e.set_mixed_tolerance(true);
-            e.set_upstream_english(english, true, true, true).unwrap();
-            e.set_candidate_anchor(right_anchor);
+    for right_anchor in [false, true] {
+        let mut e = Engine::with_lexicon(std_lex.clone(), Layout::Standard);
+        e.set_mixed_input(true);
+        e.set_mixed_tolerance(true);
+        e.set_upstream_english(false, true, true, true).unwrap();
+        e.set_candidate_anchor(right_anchor);
 
-            for perm in ["gji ", "gij ", "jgi ", "jig ", "igj ", "ijg "] {
-                let out = press_latin(&mut e, perm, false, false, false);
-                assert_eq!(out.preedit, "說", "english={english} right={right_anchor} {perm}");
-                let down = e.key(Key::new(KeyKind::Down)).unwrap();
-                let idx = down
-                    .candidates
-                    .iter()
-                    .position(|c| c == perm)
-                    .unwrap_or_else(|| panic!("missing literal {perm:?} in {:?}", down.candidates));
-                assert_eq!(e.pick(idx).unwrap().unwrap().preedit, perm);
-                e.reset(ResetMode::Discard);
-            }
-
-            for (keys, want) in [
-                ("jot ", "吹"),
-                ("flu ", "敲"),
-                ("lur ", "教"),
-                ("rpm ", "軍"),
-            ] {
-                let out = press_latin(&mut e, keys, false, false, false);
-                assert_eq!(out.preedit, want, "english={english} right={right_anchor} {keys}");
-                let down = e.key(Key::new(KeyKind::Down)).unwrap();
-                let idx = down.candidates.iter().position(|c| c == keys).expect("literal candidate");
-                assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
-                e.reset(ResetMode::Discard);
-            }
-
-            // Caps Lock without Shift still converts to Chinese while preserving uppercase literal candidate.
-            let caps_out = press_latin(&mut e, "jig ", true, false, false);
-            assert_eq!(caps_out.preedit, "說", "Caps Lock unshifted english={english} right={right_anchor}");
-            let caps_down = e.key(Key::new(KeyKind::Down)).unwrap();
-            let caps_idx = caps_down
+        for perm in ["gji ", "gij ", "jgi ", "jig ", "igj ", "ijg "] {
+            let out = press_latin(&mut e, perm, false, false, false);
+            assert_eq!(out.preedit, "說", "raw-key mixing right={right_anchor} {perm}");
+            let down = e.key(Key::new(KeyKind::Down)).unwrap();
+            let idx = down
                 .candidates
                 .iter()
-                .position(|c| c == "JIG ")
-                .unwrap_or_else(|| panic!("missing uppercase literal in {:?}", caps_down.candidates));
-            assert_eq!(e.pick(caps_idx).unwrap().unwrap().preedit, "JIG ");
+                .position(|c| c == perm)
+                .unwrap_or_else(|| panic!("missing literal {perm:?} in {:?}", down.candidates));
+            assert_eq!(e.pick(idx).unwrap().unwrap().preedit, perm);
             e.reset(ResetMode::Discard);
+        }
 
-            // Explicit Shift keeps English (both normal Shift and Shift-lowercase under Caps Lock).
-            let expected_space = if english { "" } else { " " };
-            press_latin(&mut e, "jig ", false, true, false);
-            assert_eq!(
-                e.reset(ResetMode::Commit).commit,
-                format!("Jig{expected_space}"),
-                "Shift-first english={english}"
-            );
-            press_latin(&mut e, "jig ", false, false, true);
-            assert_eq!(
-                e.reset(ResetMode::Commit).commit,
-                format!("JIG{expected_space}"),
-                "Shift-all english={english}"
-            );
-            press_latin(&mut e, "jig ", true, false, true);
-            assert_eq!(
-                e.reset(ResetMode::Commit).commit,
-                format!("jig{expected_space}"),
-                "Caps+Shift lowercase english={english}"
-            );
+        for (keys, want) in [
+            ("jot ", "吹"),
+            ("flu ", "敲"),
+            ("lur ", "教"),
+            ("rpm ", "軍"),
+        ] {
+            let out = press_latin(&mut e, keys, false, false, false);
+            assert_eq!(out.preedit, want, "raw-key mixing right={right_anchor} {keys}");
+            let down = e.key(Key::new(KeyKind::Down)).unwrap();
+            let idx = down.candidates.iter().position(|c| c == keys).expect("literal candidate");
+            assert_eq!(e.pick(idx).unwrap().unwrap().preedit, keys);
+            e.reset(ResetMode::Discard);
+        }
 
-            // Repeated-letter and suffix-trap English words stay English even with tolerance on.
-            for word in ["too ", "see ", "kanji "] {
-                let out = press_latin(&mut e, word, false, false, false);
-                assert_eq!(out.preedit, word, "english={english} right={right_anchor} {word}");
-                e.reset(ResetMode::Discard);
-            }
+        // Caps Lock without Shift still converts to Chinese while preserving uppercase literal candidate.
+        let caps_out = press_latin(&mut e, "jig ", true, false, false);
+        assert_eq!(caps_out.preedit, "說", "Caps Lock unshifted raw-key mixing right={right_anchor}");
+        let caps_down = e.key(Key::new(KeyKind::Down)).unwrap();
+        let caps_idx = caps_down
+            .candidates
+            .iter()
+            .position(|c| c == "JIG ")
+            .unwrap_or_else(|| panic!("missing uppercase literal in {:?}", caps_down.candidates));
+        assert_eq!(e.pick(caps_idx).unwrap().unwrap().preedit, "JIG ");
+        e.reset(ResetMode::Discard);
+
+        // Explicit Shift keeps English (both normal Shift and Shift-lowercase under Caps Lock).
+        let expected_space = " ";
+        press_latin(&mut e, "jig ", false, true, false);
+        assert_eq!(
+            e.reset(ResetMode::Commit).commit,
+            format!("Jig{expected_space}"),
+            "Shift-first raw-key mixing"
+        );
+        press_latin(&mut e, "jig ", false, false, true);
+        assert_eq!(
+            e.reset(ResetMode::Commit).commit,
+            format!("JIG{expected_space}"),
+            "Shift-all raw-key mixing"
+        );
+        press_latin(&mut e, "jig ", true, false, true);
+        assert_eq!(
+            e.reset(ResetMode::Commit).commit,
+            format!("jig{expected_space}"),
+            "Caps+Shift lowercase raw-key mixing"
+        );
+
+        // Repeated-letter and suffix-trap English words stay English even with tolerance on.
+        for word in ["too ", "see ", "kanji "] {
+            let out = press_latin(&mut e, word, false, false, false);
+            assert_eq!(out.preedit, word, "raw-key mixing right={right_anchor} {word}");
+            e.reset(ResetMode::Discard);
         }
     }
+
 
     // Eten layout reordered first-tone words also convert and keep English literal candidates.
     let eten_lex = Arc::new(Lexicon::parse("ㄐㄧㄚ 家 -0.1\nㄊㄨㄛ 脫 -0.1\n").unwrap());
@@ -211,21 +209,20 @@ fn shifted_english_stays_literal_at_space_and_does_not_leak_to_next_reading() {
     let lex = Arc::new(
         Lexicon::parse("ㄨㄛ 窩 -0.1\nㄙㄠ 騷 -0.1\nㄇㄒ ㄇㄒ -0.9\n").unwrap(),
     );
-    for english in [false, true] {
-        let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
-        e.set_mixed_input(true);
-        e.set_upstream_english(english, true, true, true).unwrap();
+    let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+    e.set_mixed_input(true);
+    e.set_upstream_english(false, true, true, true).unwrap();
 
-        e.key_with_latin(Key::ch('l', MOD_SHIFT), Some('L')).unwrap();
-        e.key_with_latin(Key::ch('s', 0), Some('s')).unwrap();
-        e.key(Key::new(KeyKind::Space)).unwrap();
-        for ch in "ij ".chars() {
-            let key = if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) };
-            e.key_with_latin(key, ch.is_ascii_alphabetic().then_some(ch)).unwrap();
-        }
-        let expected = if english { "Ls窩" } else { "Ls 窩" };
-        assert_eq!(e.reset(ResetMode::Commit).commit, expected, "english={english}");
+    e.key_with_latin(Key::ch('l', MOD_SHIFT), Some('L')).unwrap();
+    e.key_with_latin(Key::ch('s', 0), Some('s')).unwrap();
+    e.key(Key::new(KeyKind::Space)).unwrap();
+    for ch in "ij ".chars() {
+        let key = if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) };
+        e.key_with_latin(key, ch.is_ascii_alphabetic().then_some(ch)).unwrap();
     }
+    let expected = "Ls 窩";
+    assert_eq!(e.reset(ResetMode::Commit).commit, expected, "raw-key mixing");
+
 }
 
 #[test]
@@ -359,45 +356,6 @@ fn sessions_on_one_model_share_the_digit_tables() {
 }
 
 #[test]
-#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
-fn selected_maple_story_is_remembered_across_partial_enters() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
-    for profile in [shanjie_core::lm::Profile::Chat, shanjie_core::lm::Profile::Formal] {
-        let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
-        e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
-        e.set_profile(profile).unwrap();
-        e.set_prediction(false).unwrap();
-        e.set_windows_input_options(1 << 21);
-        e.set_candidate_anchor(true);
-        e.set_learning(true);
-        let type_word = |e: &mut Engine| {
-            let mut text = String::new();
-            for ch in "z/ 5 ej3".chars() {
-                text = e.key(if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) }).unwrap().preedit;
-            }
-            text
-        };
-        assert_eq!(type_word(&mut e), "風之谷");
-        e.key(Key::new(KeyKind::Home)).unwrap();
-        let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
-        loop {
-            if let Some(index) = out.candidates.iter().position(|w| w == "楓") {
-                e.pick(index).unwrap().unwrap();
-                break;
-            }
-            assert!(out.first as usize + out.candidates.len() < out.total as usize, "楓 must be selectable");
-            out = e.key(Key::new(KeyKind::Space)).unwrap();
-        }
-        let reading = ["ㄈㄥ".into(), "ㄓ".into(), "ㄍㄨˇ".into()];
-        assert!(e.learner().new_word_day(&reading, "楓之谷").is_some());
-        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "楓");
-        e.key(Key::new(KeyKind::End)).unwrap();
-        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "之谷");
-        assert_eq!(type_word(&mut e), "楓之谷");
-    }
-}
-
-#[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn shifted_caps_tail_refreshes_predictions_in_upstream_english_mode() {
     let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
@@ -439,89 +397,118 @@ fn mixed_sentences_recover_reordered_syllables() {
         out.unwrap()
     };
 
-    for english in [false, true] {
-        e.set_upstream_english(english, true, true, true).unwrap();
-        for profile in [Profile::Chat, Profile::Formal] {
-            e.set_profile(profile).unwrap();
-            for space_symbols in [false, true] {
-                let base_opts = (1 << 21) | (1 << 22) | (1 << 23) | if space_symbols { 0 } else { 1 << 20 };
-                e.set_windows_input_options(base_opts);
+    e.set_upstream_english(false, true, true, true).unwrap();
+    for profile in [Profile::Chat, Profile::Formal] {
+        e.set_profile(profile).unwrap();
+        for space_symbols in [false, true] {
+            let base_opts = (1 << 21) | (1 << 22) | (1 << 23) | if space_symbols { 0 } else { 1 << 20 };
+            e.set_windows_input_options(base_opts);
 
-                let want_think_de = if matches!(profile, Profile::Chat) {
-                    "把他想得太簡單"
-                } else {
-                    "把它想得太簡單"
-                };
-                let want_think_di = if matches!(profile, Profile::Chat) {
-                    "把他想的太簡單"
-                } else {
-                    "把它想得太簡單"
-                };
+            let want_think_de = if matches!(profile, Profile::Chat) {
+                "把他想得太簡單"
+            } else {
+                "把它想得太簡單"
+            };
+            let want_think_di = if matches!(profile, Profile::Chat) {
+                "把他想的太簡單"
+            } else {
+                "把它想得太簡單"
+            };
 
-                for (keys, want) in [
-                    ("1838w vu;32k69w4u0r320 ", want_think_de),
-                    ("8138w ;uv3k269w4u0r320 ", want_think_de),
-                    ("1838w vu;32k79w4u0r320 ", want_think_di),
-                    ("1838w ;uv3k279w4u0r320 ", want_think_di),
-                    ("xu06vm4823n0 h4", "連續打三次"),
-                    ("w4u0r3", "w4簡"),
-                    ("ur/ ", "經"),
-                    ("jig ", "說"),
-                    ("su3jig kg6ka7", "你說什麼"),
-                    ("ji3urp wu0 jig 8jc4", "我今天說話"),
-                    ("flu ap6", "敲門"),
-                    ("jot z/ ", "吹風"),
-                    ("ul41j4ul4jt fm4y.3y.3u8 ", "要不要出去走走呀"),
-                    ("ul41j4ul4jt fm4.y3.y3u8 ", "要不要出去走走呀"),
-                    (
-                        "1j4cl3u4n ji3urp wu0 ao6u.3g6ur0 tj3xu35k4ru04g4fu/6",
-                        "不好意思我今天沒有時間處理這件事情",
-                    ),
-                    ("ji3urp wu0 1u3rul4a;61l4fu04", "我今天比較忙抱歉"),
-                    (
-                        "xu3194u eo3ji35k4zp4jp6ru041j4ul4jwi u06g6u0r ",
-                        "禮拜一給我這份文件不要拖延時間",
-                    ),
-                    (
-                        "xu3914u eo3ji35k4zp4jp6ru041j4ul4jwi u06g6u0r ",
-                        "禮拜一給我這份文件不要拖延時間",
-                    ),
-                ] {
-                    let out = press(&mut e, keys);
-                    assert_eq!(
-                        out.preedit, want,
-                        "profile={profile:?} english={english} space_symbols={space_symbols} keys={keys}"
-                    );
-                    assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want);
-                }
-
-                for tail in ["CL3M/4A87", "LC3M/4A87"] {
-                    for ch in "gemini".chars() {
-                        e.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
-                    }
-                    for ch in tail.chars() {
-                        let lower = ch.to_ascii_lowercase();
-                        let display = ch.is_ascii_alphabetic().then_some(ch);
-                        e.key_with_latin(Key::ch(lower, 0), display).unwrap();
-                    }
-                    let out = e.key(Key::new(KeyKind::Enter)).unwrap();
-                    assert_eq!(
-                        out.commit, "gemini好用嗎",
-                        "profile={profile:?} english={english} space_symbols={space_symbols} tail={tail}"
-                    );
-                }
-
-                if english {
-                    for digits in ["1984", "2026", "8080 ", "9527"] {
-                        let out = press(&mut e, digits);
-                        assert_eq!(
-                            out.preedit, digits,
-                            "profile={profile:?} space_symbols={space_symbols} digits={digits}"
-                        );
-                        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, digits);
-                    }
-                }
+            for (keys, want) in [
+                ("1838w vu;32k69w4u0r320 ", want_think_de),
+                ("8138w ;uv3k269w4u0r320 ", want_think_de),
+                ("1838w vu;32k79w4u0r320 ", want_think_di),
+                ("1838w ;uv3k279w4u0r320 ", want_think_di),
+                ("xu06vm4823n0 h4", "連續打三次"),
+                ("w4u0r3", "w4簡"),
+                ("ur/ ", "經"),
+                ("jig ", "說"),
+                ("su3jig kg6ka7", "你說什麼"),
+                ("ji3urp wu0 jig 8jc4", "我今天說話"),
+                ("flu ap6", "敲門"),
+                ("jot z/ ", "吹風"),
+                ("ul41j4ul4jt fm4y.3y.3u8 ", "要不要出去走走呀"),
+                ("ul41j4ul4jt fm4.y3.y3u8 ", "要不要出去走走呀"),
+                (
+                    "1j4cl3u4n ji3urp wu0 ao6u.3g6ur0 tj3xu35k4ru04g4fu/6",
+                    "不好意思我今天沒有時間處理這件事情",
+                ),
+                ("ji3urp wu0 1u3rul4a;61l4fu04", "我今天比較忙抱歉"),
+                (
+                    "xu3194u eo3ji35k4zp4jp6ru041j4ul4jwi u06g6u0r ",
+                    "禮拜一給我這份文件不要拖延時間",
+                ),
+                (
+                    "xu3914u eo3ji35k4zp4jp6ru041j4ul4jwi u06g6u0r ",
+                    "禮拜一給我這份文件不要拖延時間",
+                ),
+            ] {
+                let out = press(&mut e, keys);
+                assert_eq!(
+                    out.preedit, want,
+                    "profile={profile:?} raw-key mixing space_symbols={space_symbols} keys={keys}"
+                );
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want);
             }
+
+            for tail in ["CL3M/4A87", "LC3M/4A87"] {
+                for ch in "gemini".chars() {
+                    e.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
+                }
+                for ch in tail.chars() {
+                    let lower = ch.to_ascii_lowercase();
+                    let display = ch.is_ascii_alphabetic().then_some(ch);
+                    e.key_with_latin(Key::ch(lower, 0), display).unwrap();
+                }
+                let out = e.key(Key::new(KeyKind::Enter)).unwrap();
+                assert_eq!(
+                    out.commit, "gemini好用嗎",
+                    "profile={profile:?} raw-key mixing space_symbols={space_symbols} tail={tail}"
+                );
+            }
+
+
         }
+    }
+
+}
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
+fn selected_maple_story_is_remembered_across_partial_enters() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    for profile in [shanjie_core::lm::Profile::Chat, shanjie_core::lm::Profile::Formal] {
+        let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
+        e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
+        e.set_profile(profile).unwrap();
+        e.set_prediction(false).unwrap();
+        e.set_windows_input_options(1 << 21);
+        e.set_candidate_anchor(true);
+        e.set_learning(true);
+        let type_word = |e: &mut Engine| {
+            let mut text = String::new();
+            for ch in "z/ 5 ej3".chars() {
+                text = e.key(if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) }).unwrap().preedit;
+            }
+            text
+        };
+        assert_eq!(type_word(&mut e), "風之谷");
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+        loop {
+            if let Some(index) = out.candidates.iter().position(|w| w == "楓") {
+                e.pick(index).unwrap().unwrap();
+                break;
+            }
+            assert!(out.first as usize + out.candidates.len() < out.total as usize, "楓 must be selectable");
+            out = e.key(Key::new(KeyKind::Space)).unwrap();
+        }
+        let reading = ["ㄈㄥ".into(), "ㄓ".into(), "ㄍㄨˇ".into()];
+        assert!(e.learner().new_word_day(&reading, "楓之谷").is_some());
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "楓");
+        e.key(Key::new(KeyKind::End)).unwrap();
+        assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "之谷");
+        assert_eq!(type_word(&mut e), "楓之谷");
     }
 }

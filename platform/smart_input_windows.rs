@@ -202,10 +202,13 @@ mod windows_smart_tests {
         );
         for english in [false, true] {
             let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
-            e.set_mixed_input(true);
+            e.set_mixed_input(!english);
+            e.set_windows_input_options(0);
             e.set_upstream_english(english, true, true, true).unwrap();
 
-            for tail in ["CL3M/4A87", "LC3M/4A87"] {
+            // Reordered readings belong to raw-key mixing; upstream mode keeps its ordered contract.
+            let tails: &[&str] = if english { &["CL3M/4A87"] } else { &["CL3M/4A87", "LC3M/4A87"] };
+            for tail in tails {
                 for ch in "gemini".chars() {
                     e.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
                 }

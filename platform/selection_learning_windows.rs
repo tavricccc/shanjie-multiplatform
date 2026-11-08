@@ -24,17 +24,13 @@ impl WindowsLearningPrefix {
 
 impl Engine {
     fn restore_windows_selection(&mut self) -> bool {
-        if let Some(records) = self.windows_selection_base.take() {
-            self.learner = Learner::from_records(records);
-            return true;
-        }
-        false
+        self.learner.windows_rollback_preview()
     }
 
     fn preview_windows_selection(&mut self) {
         if !self.windows_selection_learning || !self.learning || self.syls.is_empty() { return; }
         self.restore_windows_selection();
-        self.windows_selection_base = Some(self.learner.records().to_vec());
+        self.learner.windows_begin_preview();
         self.learn_windows_composition(&self.display.clone());
     }
 
@@ -174,6 +170,26 @@ mod windows_selection_learning_tests {
             }
             assert_eq!(weight(&e), None, "action={action}");
         }
+    }
+
+    #[test]
+    fn repeated_partial_commits_bound_the_learning_prefix_and_finalize_old_choices() {
+        let mut e = engine();
+        e.left = "這是".into();
+        type_keys(&mut e, "z/ 5 ej3");
+        let index = open_maple(&mut e);
+        e.pick(index).unwrap();
+        for _ in 0..MAX_SYLLABLES * 2 {
+            e.key(Key::new(KeyKind::Home)).unwrap();
+            e.key(Key::new(KeyKind::Right)).unwrap();
+            e.key(Key::new(KeyKind::Enter)).unwrap();
+            assert!(e.windows_learning_prefix.as_ref().map_or(0, |p| p.syls.len()) <= MAX_SYLLABLES);
+            type_keys(&mut e, "5 ");
+        }
+        assert!(!e.learner.records().is_empty(), "already submitted choices must be finalized at the bound");
+        e.reset(ResetMode::Discard);
+        assert!(e.windows_learning_prefix.is_none());
+        assert!(!e.learner.windows_preview_active());
     }
 
     #[test]

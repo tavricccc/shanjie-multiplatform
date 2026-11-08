@@ -4,10 +4,10 @@ impl Engine {
     /// bit 21: Enter commits only up to the cursor; bit 22: punctuation keeps an unfinished reading;
     /// bit 23: a lone digit shows as the digit; bit 24: standalone tones win over upstream digit runs.
     pub fn set_windows_input_options(&mut self, flags: u32) {
+        self.windows_shifted_boundaries = true;
         self.windows_punctuation_candidates = true;
         self.candidate_grid_columns = 3;
         self.windows_selection_learning = true;
-        self.windows_shifted_boundaries = true;
         self.standalone_tones = flags & 1 != 0;
         self.shift_punctuation = (flags >> 1) & 0x1fff;
         self.plain_punctuation = (flags >> 14) & 0x3f;
