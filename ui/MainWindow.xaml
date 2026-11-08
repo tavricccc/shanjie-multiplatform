@@ -189,6 +189,7 @@
                         </controls:SettingCard>
                     </StackPanel>
                     <StackPanel x:Name="Dictionary" Visibility="Collapsed">
+                        <TextBlock Text="預測與選字" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="PredictionToggle" Label="未完成讀音的即時預測" Description="第一個注音鍵就提示可能的完整詞。Tab 進入，數字／Enter 選詞；Shift＋Tab 或 Esc 退出。Windows 預設關閉。" IsOn="{x:Bind Vm.Prediction, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="選字後的聯想詞" Description="數字或滑鼠選字後提示尚未輸入的後續詞，以 Shift＋數字或滑鼠選取。Windows 預設關閉。" IsOn="{x:Bind Vm.Associations, Mode=TwoWay}"/>
