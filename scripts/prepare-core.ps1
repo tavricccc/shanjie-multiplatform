@@ -41,3 +41,10 @@ Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-selection-learning.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-resident.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-memory.ps1" -CorePath $output
+# Keep the registered chat cells for SR7 bundles and the separately shipped SR8 model.
+$colloquial = Join-Path $output 'src/colloquial.rs'
+$content = Get-Content $colloquial -Raw
+$anchor = 'profile == Profile::Chat && model.file_sha256() == PAIRED_TINYLM_SHA256'
+if (!$content.Contains($anchor)) { throw 'Upstream colloquial model pairing changed.' }
+$content = $content.Replace($anchor, 'profile == Profile::Chat && (model.file_sha256() == PAIRED_TINYLM_SHA256 || model.file_sha256() == "356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de")')
+Set-Content $colloquial $content -Encoding utf8NoBOM

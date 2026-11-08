@@ -1,6 +1,6 @@
 # 上游差異
 
-使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129；原 repo 已無法存取，現由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供子模組與模型 Release）v0.6.1 Release，實際 commit 以 `UPSTREAM.json` 為準；內建模型組與上游 App 相同，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
+使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129；原 repo 已無法存取，現由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供子模組與模型 Release）v0.6.1 核心，實際 commit 以 `UPSTREAM.json` 為準；內建會意單獨更新為 SJ-SR-8-15M，其餘模型保留該版上游配套，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。
 
@@ -20,7 +20,7 @@
 | `core/src/trigram.rs` | Windows 的 `Mapped` 改用與模型陣列相同的唯讀映射；`.winmap` 旁的 `trigram.sjt3`（書面）與 `trigram-chat.sjt3`（聊天）各自存在才載入，壞檔拒絕 | `prepare-trigram.ps1`、`platform/mapped_windows.rs` |
 | `core/src/predict.rs`、`core/src/lib.rs` | 預測索引與詞庫建好後收掉 `Vec` 多配的容量；內容不變 | `prepare-memory.ps1` |
 | `core/src/digits.rs` | `Legal::new` 每個音節只展開一次，產生的集合不變；新增混打專用的欄位正規化查詢 `Legal::tail_units_mixed` 與 `Scorer::decide_mixed`（混打關閉時與上游一致） | `prepare-memory.ps1`、`prepare-smart-input.ps1` |
-| `core/src/colloquial.rs` | `overlay_only` 由 `HashSet<String>` 改為單一排序字串；查詢結果不變 | `prepare-memory.ps1`、`platform/word_set_windows.rs` |
+| `core/src/colloquial.rs` | `overlay_only` 由 `HashSet<String>` 改為單一排序字串；常談配對接受 SJ-SR-7-15M 與 SJ-SR-8-15M 的確切雜湊，保留既有聊天三檔係數 | `prepare-memory.ps1`、`platform/word_set_windows.rs`、`prepare-core.ps1` |
 | `core/src/ffi.rs` | 追加 Windows 專用的候選、輸入選項、標點、預測列查詢 ABI；不改上游既有簽名 | `platform/*_windows_ffi.rs`、`windows/src/engine.rs` |
 | `core/Cargo.toml` | 產生的 core 可獨立建置，加入模型轉換工具 | `prepare-core.ps1`、`platform/map_model.rs` |
 
@@ -58,6 +58,8 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 
 ## 與上游行為仍不同之處
 
+- 內建會意採用上游另行發布的 SJ-SR-8-15M，權重與檔頭係數原樣保留，核心仍固定 v0.6.1。未修改的上游公開附件從使用者提供的模型備份取回，納入 `models/sj-sr-8-15m/`；`MODEL-SOURCES.json` 的 `source` 指向本機來源、`sha256` 核對實際附件、`pinned_sha256` 核對核心 pin 原有的第 7 版記錄。常談對第 7、8 版皆生效，沿用原有聊天係數；未宣稱重現上游第 8 版的完整核心或準確率評測。
+
 - 啟用「記憶選字」時，Windows 候選確認立即建立暫存記憶；改選、刪字或取消會撤回尚未確認的記憶，提交時寫入一次。Enter 只提交游標前時，已送出前綴的讀音與選字標記保留到剩餘組字確認，讓「楓之谷」可整詞記憶，不需先按 End。失焦提交只在立即取得學習鎖時保存，其他會話正在寫入時先送出文字、略過該次記憶，避免切換視窗等待。學習關閉時不記憶，未套用 Windows 選項的核心維持上游只在提交學習的政策。
 - 右側候選沿用上游的自學新詞與模糊音清單政策：同長度的新詞排在詞庫詞條前，低於啟用權重的新詞仍可列出並忘記；選取模糊音項目時改用其詞庫讀音。私人詞典載入與共用詞庫快取都保留詞包的 OOV 前綴範圍，供後續模型載入使用。
 - Windows 範本預設開啟「反引號＋標點」，善解範本仍關閉；缺省判斷依互動模式。schema < 9 的 Windows 設定一次改為開啟，包含舊版手動關閉的值（INI 無法分辨設定來源）；schema 9 後保留關閉。支援 Shift 數字列符號、減號／底線與波浪號；一般 Ctrl 標點的可用按鍵不變。「反引號＋標點」對應出的符號會送入核心可編輯組字，可開候選替換或按 Esc 取消；Unicode 內碼與符號鍵盤仍直接提交。
@@ -90,7 +92,7 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 
 ## 測試
 
-`scripts/test-core.ps1` 在獨立的 `build/test` 樹跑上游 core 的全部單元與整合測試，使用內建模型組。Windows 只做以下調整，其餘斷言照上游：
+`scripts/test-core.ps1` 在獨立的 `build/test` 樹跑上游 core 的全部單元與整合測試，使用核心 pin 的原始模型組（會意第 7 版），保留固定候選結果的斷言；內建第 8 版由模型準備時的載入／常談配對檢查與 `shanjie-model-check builtin` 的原生輸入／重排檢查驗證。Windows 只做以下調整，其餘斷言照上游：
 
 - 符號連結改為複製；不存在的來源以資料夾代替（同樣是「存在但讀不到」）。
 - 唯讀映射中的檔案不能刪除或改寫：`tri_tiny` 先釋放模型再刪檔；`load_lm_refuses_a_bad_trigram_table` 跳過。
