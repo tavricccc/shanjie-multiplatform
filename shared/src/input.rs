@@ -89,6 +89,15 @@ pub fn is_punctuation(k: ShanjieKey) -> bool {
 pub fn pending(s: &Snapshot) -> bool {
     s.reading_hint || s.phonetic_pending
 }
+/// What the candidate panel draws. Without the reading panel it only gets what upstream's panel shows: the composition
+/// stays in the App, so a state with no candidates and no hint closes the panel. Hints always draw.
+pub fn panel_view(mut s: Snapshot, reading_panel: bool) -> Snapshot {
+    if !reading_panel && !s.reading_hint {
+        s.preedit.clear();
+        s.cursor = 0;
+    }
+    s
+}
 /// Display-width conversion only; the core retains its original text for switching back.
 pub fn full_width(text: &str) -> String {
     text.chars().map(|c| match c {
@@ -107,6 +116,11 @@ mod width_tests {
     }
 }
 
+/// Whether this key runs `[candidates] right_action` in an open list: → in both interactions, Tab too in the Windows one,
+/// where the two act together as in Microsoft Bopomofo. The Shanjie interaction leaves Tab to the core, as upstream.
+pub fn right_action_key(k: &ShanjieKey, s: &Snapshot, windows: bool) -> bool {
+    (k.kind == 8 || (windows && k.kind == 13)) && k.modifiers == 0 && !s.prediction && !s.candidates.is_empty()
+}
 pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieKey {
     if s.candidates.is_empty() || k.modifiers != 0 || (s.prediction && s.selected.is_none()) {
         return k;
@@ -115,20 +129,33 @@ pub fn candidate_key(mut k: ShanjieKey, s: &Snapshot, windows: bool) -> ShanjieK
     k.kind = match k.kind {
         10 if s.columns == 0 => 8,
         9 if s.columns == 0 => 7,
-        13 => 8,
+        13 if windows => 8,
         kind => kind,
     };
-    let _ = windows;
     k
 }
 #[cfg(test)]
 mod candidate_tests {
     use super::*;
     #[test]
+    fn tab_shares_the_right_action_in_the_windows_interaction_only() {
+        let key = |kind, modifiers| ShanjieKey { kind, ch: 0, modifiers };
+        let list = Snapshot { candidates: vec!["字".into(); 9], selected: Some(0), ..Default::default() };
+        assert!(right_action_key(&key(13, 0), &list, true) && right_action_key(&key(8, 0), &list, true));
+        assert!(!right_action_key(&key(13, 0), &list, false) && right_action_key(&key(8, 0), &list, false));
+        assert!(!right_action_key(&key(13, 1), &list, true), "Shift+Tab is not the action");
+        let prediction = Snapshot { prediction: true, ..list.clone() };
+        assert!(!right_action_key(&key(13, 0), &prediction, true), "the prediction row keeps its own Tab");
+        assert!(!right_action_key(&key(13, 0), &Snapshot::default(), true), "no list, no action");
+        // Without an action (none) Tab is the next candidate in the Windows interaction; the Shanjie one hands it to the core.
+        assert_eq!(candidate_key(key(13, 0), &list, true).kind, 8);
+        assert_eq!(candidate_key(key(13, 0), &list, false).kind, 13);
+    }
+    #[test]
     fn both_interactions_preserve_expanded_arrows_and_step_collapsed_items() {
         let mut state = Snapshot { candidates: vec!["字".into(); 18], selected: Some(0), ..Default::default() };
         for windows in [true, false] {
-            for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13,8)] {
+            for (kind, expected) in [(7,7), (8,8), (9,7), (10,8), (13, if windows { 8 } else { 13 })] {
                 assert_eq!(candidate_key(ShanjieKey { kind, ch: 0, modifiers: 0 }, &state, windows).kind, expected);
             }
             state.columns = 3; state.selected = Some(3);
@@ -254,8 +281,8 @@ impl Special {
         let ch = char::from_u32(k.ch).unwrap_or('\0');
         if self.mode == 1 && k.kind == 1 && k.modifiers & 30 == 0 {
             let lower = ch.to_ascii_lowercase();
-            if p.flag("shortcuts", "code_input", true) && (lower == 'u' || lower == 'b') {
-                self.mode = if lower == 'u' { 2 } else { 3 };
+            if p.flag("shortcuts", "code_input", true) && lower == 'u' {
+                self.mode = 2;
                 return self.view();
             }
             if p.flag("shortcuts", "backquote_symbols", p.get("profile", "interaction", "windows") == "windows") {
@@ -265,7 +292,7 @@ impl Special {
                     return Snapshot {
                         handled: true,
                         // A mapped backquote mark returns to normal composition;
-                        // Unicode, Big5 and the symbol grid still commit directly.
+                        // Unicode and the symbol grid still commit directly.
                         preedit: text.into(),
                         cursor: text.encode_utf16().count() as u32,
                         ..Default::default()
@@ -273,28 +300,22 @@ impl Special {
                 }
             }
         }
-        if [2, 3].contains(&self.mode)
+        if self.mode == 2
             && k.kind == 1
             && k.modifiers & 30 == 0
             && ch.is_ascii_hexdigit()
         {
-            if self.digits.len() < if self.mode == 2 { 6 } else { 4 } {
+            if self.digits.len() < 6 {
                 self.digits.push(ch);
             }
             return self.view();
         }
         if [2, 3].contains(&k.kind) && !self.digits.is_empty() {
             let code = u32::from_str_radix(&self.digits, 16).unwrap();
-            let text = if self.mode == 2 {
-                char::from_u32(code)
-                    .filter(|c| *c != '\0')
-                    .map(|c| c.to_string())
-                    .unwrap_or_default()
-            } else if self.digits.len() == 4 {
-                big5_text(code)
-            } else {
-                String::new()
-            };
+            let text = char::from_u32(code)
+                .filter(|c| *c != '\0')
+                .map(|c| c.to_string())
+                .unwrap_or_default();
             if !text.is_empty() {
                 self.clear();
                 return Snapshot {
@@ -627,58 +648,6 @@ impl Pinyin {
         Some(s)
     }
 }
-/// Big5 (code page 950) two-byte code to text; an invalid pair yields an empty string.
-#[cfg(windows)]
-fn big5_text(code: u32) -> String {
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn MultiByteToWideChar(page: u32, flags: u32, text: *const u8, length: i32, output: *mut u16, capacity: i32) -> i32;
-    }
-    const MB_ERR_INVALID_CHARS: u32 = 8;
-    let bytes = [(code >> 8) as u8, code as u8];
-    let mut wide = [0u16; 2];
-    let len = unsafe {
-        MultiByteToWideChar(950, MB_ERR_INVALID_CHARS, bytes.as_ptr(), 2, wide.as_mut_ptr(), 2)
-    };
-    String::from_utf16(&wide[..len as usize]).unwrap()
-}
-/// Big5 (CP950) two-byte code to text through glibc iconv; an invalid pair yields an empty string.
-#[cfg(unix)]
-fn big5_text(code: u32) -> String {
-    use std::ffi::{c_char, c_void};
-    extern "C" {
-        fn iconv_open(to: *const c_char, from: *const c_char) -> *mut c_void;
-        fn iconv(
-            cd: *mut c_void,
-            input: *mut *mut c_char,
-            input_left: *mut usize,
-            output: *mut *mut c_char,
-            output_left: *mut usize,
-        ) -> usize;
-        fn iconv_close(cd: *mut c_void) -> i32;
-    }
-    let bytes = [(code >> 8) as u8, code as u8];
-    let mut output = [0u8; 8];
-    unsafe {
-        let cd = iconv_open(c"UTF-8".as_ptr(), c"CP950".as_ptr());
-        if cd as isize == -1 {
-            return String::new();
-        }
-        let mut input = bytes.to_vec();
-        let (mut input_ptr, mut input_left) = (input.as_mut_ptr().cast::<c_char>(), input.len());
-        let (mut output_ptr, mut output_left) =
-            (output.as_mut_ptr().cast::<c_char>(), output.len());
-        let ok = iconv(cd, &mut input_ptr, &mut input_left, &mut output_ptr, &mut output_left)
-            != usize::MAX
-            && input_left == 0;
-        iconv_close(cd);
-        if ok {
-            String::from_utf8_lossy(&output[..output.len() - output_left]).into_owned()
-        } else {
-            String::new()
-        }
-    }
-}
 
 #[cfg(test)]
 mod special_tests {
@@ -694,6 +663,15 @@ mod special_tests {
             assert_eq!(result.preedit, if expected { "，" } else { "`" });
             assert_eq!(special.mode, if expected { 0 } else { 1 });
         }
+    }
+    #[test]
+    fn backquote_b_is_not_a_code_input() {
+        let prefs = Document::default();
+        let mut special = Special::default();
+        let mut commit = String::new();
+        for ch in "`bA440".chars() { commit += &special.key(ShanjieKey { kind: 1, ch: ch as u32, modifiers: 0 }, &prefs).commit; }
+        commit += &special.key(ShanjieKey { kind: 2, ch: 0, modifiers: 0 }, &prefs).commit;
+        assert!(!commit.contains('一'));
     }
     #[test]
     fn shifted_backquote_symbols_and_unicode_codes_remain_distinct() {

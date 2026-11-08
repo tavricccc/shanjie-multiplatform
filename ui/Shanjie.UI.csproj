@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.15.4-beta.5</Version>
+    <Version>0.16.0-beta.1</Version>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
@@ -24,8 +24,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- The settings navigation shows the app logo. -->
+    <!-- The settings navigation shows the app logo; Quick Setup's welcome shows it large. -->
     <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="../MODEL-CATALOG.json" LogicalName="Models.catalog.json" />
     <EmbeddedResource Include="../MODEL-SOURCES.json" LogicalName="Models.sources.json" />
     <EmbeddedResource Include="../profiles/windows.ini" LogicalName="Profiles.windows.ini" />

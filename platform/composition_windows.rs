@@ -157,7 +157,7 @@ mod windows_composition_tests {
         assert_eq!(out.preedit,"ㄋㄧˇㄏㄠˇ ");
     }
     #[test]
-    fn eten_reordering_and_raw_space_and_big5_reading_only() {
+    fn eten_reordering_and_raw_space_and_reading_only() {
         let mut e = engine(true,false);
         e.layout = Layout::Eten;
         assert_eq!(type_keys(&mut e,"ox3").preedit,"我");
@@ -166,11 +166,10 @@ mod windows_composition_tests {
         let lex = Lexicon::parse("ㄐㄧˊ 𠮷 -0.1\n").unwrap();
         let mut e = Engine::with_lexicon(Arc::new(lex),Layout::Standard);
         e.set_windows_input_options(1 << 20);
-        e.set_candidate_charset(true);
         type_keys(&mut e,"ru6");
         let out = e.key(Key::new(KeyKind::Down)).unwrap();
-        assert_eq!(out.candidates,vec!["ㄐㄧˊ"]);
-        assert_eq!(out.selected,Some(0));
+        assert_eq!(out.candidates,vec!["ㄐㄧˊ","𠮷"]);
+        assert_eq!(out.selected,Some(1));
         assert_eq!(e.pick(0).unwrap().unwrap().preedit,"ㄐㄧˊ");
     }
     #[test]

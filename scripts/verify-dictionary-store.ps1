@@ -40,7 +40,6 @@ if($name -ne ('dictionary-'+(Get-FileHash $file -Algorithm SHA256).Hash.ToLowerI
 $left=Start-Probe x64 $folder 100;$right=Start-Probe x86 $folder 100
 $logs=@($first,(Finish-Probe $left),(Finish-Probe $right))
 if($name -ne ('dictionary-'+(Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()+'.tsv')){throw 'Repaired dictionary content hash mismatch'}
-$corrupt=@(Get-ChildItem "$folder/.deleted_files" -File)
-if($corrupt.Count -ne 1 -or [IO.File]::ReadAllText($corrupt[0].FullName) -ne 'partial'){throw 'Damaged dictionary was not preserved'}
+if(Test-Path -LiteralPath "$folder/.deleted_files"){throw 'Repair left a copy of the damaged dictionary behind'}
 $logs | Set-Content "$ResultRoot/results.txt" -Encoding utf8NoBOM
 "Passed first publication, truncated-file repair, SHA-256 and 200 simultaneous x64/x86 ABI saves: $ResultRoot"

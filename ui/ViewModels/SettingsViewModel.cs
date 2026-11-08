@@ -3,10 +3,10 @@ using Shanjie_UI.Models;
 namespace Shanjie_UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial int Interaction { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp)), NotifyPropertyChangedFor(nameof(RightActionLabel))] public partial int Interaction { get; set; }
+    public string RightActionLabel => Interaction == 0 ? "Tab 與 → 右方向鍵" : "→ 右方向鍵";
     [ObservableProperty] public partial int Trigger { get; set; }
     [ObservableProperty] public partial int Anchor { get; set; }
-    [ObservableProperty] public partial int CandidateLayout { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(RankingByApp))] public partial int Ranking { get; set; }
     public bool RankingByApp => Ranking == 0;
     /// `[engine] chat_apps`, one executable name per line.
@@ -66,14 +66,31 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool EnglishReversalGuard { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterToCursor { get; set; }
     public bool SupportsUpstreamEnglish => Keyboard<2 && IsZhuyin;
-    public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode >= 2;
-    partial void OnMixedModeChanged(int value) => OnPropertyChanged(nameof(UsesUpstreamEnglish));
+    public bool UsesUpstreamEnglish => SupportsUpstreamEnglish && MixedMode == 2;
+    partial void OnMixedModeChanged(int value) { OnPropertyChanged(nameof(UsesUpstreamEnglish)); NotifyReadingPanel(); }
+    /// Display name of the mode stored as `[input] mixed_input`; change it here and every settings text follows.
+    public const string RawKeyMixingName = "原鍵混打";
+    public string RawKeyMixingLabel => RawKeyMixingName;
+    public string MixedModeNote => $"{RawKeyMixingName}：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文；一定會開啟組字面板。上游判斷：注音不可能是想打的字時（重打同一個位置、按空白或聲調後音節不存在）整段變回原本的按鍵當英文，馬上按 Esc 可變回注音；ai、up 這類也是注音的字，按 ↓ 從候選最後兩項選英文。上游模式下 Shift＋字母可開始英文組字段；上游判斷僅支援標準注音。倚天可使用{RawKeyMixingName}；跟隨配置時依實際鍵盤生效。使用上游判斷時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。";
+    public string MixedToleranceHelp => $"只修正{RawKeyMixingName}的相鄰重複鍵；上游英文段保持原樣。預設關閉，原始按鍵可由候選選回。";
+    /// The mode needs the panel for its Zhuyin hint (`Document::reading_panel`). The stored choice survives, so leaving the mode restores it.
+    public bool UsesRawKeyMixing => IsZhuyin && MixedMode == 1;
+    public bool CanChooseReadingPanel => !UsesRawKeyMixing;
+    public bool ReadingPanelShown { get => ReadingPanel || UsesRawKeyMixing; set { if (!UsesRawKeyMixing) ReadingPanel = value; } }
+    public string ReadingPanelHelp => (UsesRawKeyMixing ? $"「{RawKeyMixingName}」要靠這個面板顯示注音提示，選用時固定開啟。" : "預設關閉，組字只顯示在 App 內，沒有候選時不顯示面板；可依需要開啟。")
+        + "開啟後在候選窗位置顯示整句組字，游標移進句子時會標出游標所在的字（游標在句尾時不標）。";
+    private void NotifyReadingPanel()
+    {
+        OnPropertyChanged(nameof(UsesRawKeyMixing)); OnPropertyChanged(nameof(CanChooseReadingPanel));
+        OnPropertyChanged(nameof(ReadingPanelShown)); OnPropertyChanged(nameof(ReadingPanelHelp));
+    }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadingPanelShown))] public partial bool ReadingPanel { get; set; }
+    partial void OnKeyboardChanged(int value) => NotifyReadingPanel();
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
     [ObservableProperty] public partial string InstalledKeyboardHelp { get; set; } = "";
-    [ObservableProperty] public partial bool Big5 { get; set; }
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
     public Models.PunctuationKey[] ShiftKeys { get; } = Models.PunctuationKey.ShiftRow();
     public Models.PunctuationKey[] PlainKeys { get; } = Models.PunctuationKey.PlainRow();
@@ -94,11 +111,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DraftHelp))] public partial bool HasChanges { get; set; }
     public string DraftHelp => HasChanges ? "尚未儲存" : "已載入設定";
     public string CandidateHelp => (RightAction switch {
-        1 => Interaction == 0 ? "↑／↓ 或 ← 選字；→ 換下一頁。" : "← 或 ↑／↓ 選字；→ 換下一頁。",
-        2 => Interaction == 0 ? "↑／↓ 逐項選字；→ 展開三欄候選。" : "← 選字、→ 展開三欄候選；↑／↓ 逐項移動。",
-        _ => Interaction == 0 ? "↑／↓ 或 ←／→ 選字。" : "←／→ 或 ↑／↓ 選字。"
+        1 => Interaction == 0 ? "↑／↓ 或 ← 選字；Tab 或 → 換下一頁。" : "← 或 ↑／↓ 選字；→ 換下一頁。Tab 關閉候選並交給 App。",
+        2 => Interaction == 0 ? "↑／↓ 逐項選字；Tab 或 → 展開三欄候選。" : "← 選字、→ 展開三欄候選；↑／↓ 逐項移動。Tab 關閉候選並交給 App。",
+        _ => Interaction == 0 ? "↑／↓ 或 ←／→ 選字，Tab 移到下一候選。" : "←／→ 或 ↑／↓ 選字。Tab 關閉候選並交給 App。"
     })
-        + "Tab 移到下一候選。" + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
+        + (SpaceOperates ? "空白依下方設定操作候選。" : "空白不操作候選。")
         + (EnterCommits ? (EnterToCursor ? "Enter 選字並提交游標前的組字。" : "Enter 選字並提交整句。") : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
         ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"

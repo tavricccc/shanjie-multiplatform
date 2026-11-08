@@ -19,27 +19,31 @@ if($UseCurrentToolchain -and $Architectures.Count -ne 1){throw 'UseCurrentToolch
 $cases=@()
 foreach($mixed in 0,1) {
  foreach($item in @(@('3','3'),@('4','4'),@('\','\'),@('SU3()','你()'),@('SU3\','你\'),@('SU(3','你('))) {
-  $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=$mixed;symbols=1;keyboard=1;space=0;big5=0}
+  $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=$mixed;symbols=1;keyboard=1;space=0}
  }
  foreach($item in @(@('1 ','1 '),@('SU31 ','你1 '),@('JI ','窩'),@('JI3↓1','ㄨㄛˇ'),@('JI3↓1 ','ㄨㄛˇ '),@('SU3CL3⌂↓1','ㄋㄧˇㄏㄠˇ'))) {
-  $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=$mixed;symbols=0;keyboard=1;space=0;big5=0}
+  $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=$mixed;symbols=0;keyboard=1;space=0}
  }
 }
 foreach($item in @(@('IJ3','我'),@('IJ3↓2','ij3'),@('US4↓2','us4'),@('CALLSU3','call你'),@('0D4','看'),@('ABC()\','abc()\'))) {
- $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=1;symbols=1;keyboard=1;space=0;big5=0}
+ $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=1;symbols=1;keyboard=1;space=0}
 }
 foreach($item in @(@('OX3','我'),@('XO3↓1','ㄨㄛˇ'),@('B ','b '))) {
- $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=1;symbols=0;keyboard=2;space=0;big5=0}
+ $cases += [pscustomobject]@{keys=$item[0];expected=$item[1];mixed=1;symbols=0;keyboard=2;space=0}
 }
-$cases += [pscustomobject]@{keys='1 ';expected='1 ';mixed=1;symbols=0;keyboard=1;space=1;big5=0}
-$cases += [pscustomobject]@{keys='JI3↓1';expected='ㄨㄛˇ';mixed=0;symbols=0;keyboard=1;space=0;big5=1}
-foreach($upstream in 0,1){foreach($tones in 0,1){
+$cases += [pscustomobject]@{keys='1 ';expected='1 ';mixed=1;symbols=0;keyboard=1;space=1}
+# Raw-key mixing keeps literal digits; the mixing mode is one choice, so upstream English is off beside it.
+foreach($tones in 0,1){
  foreach($digits in @('13','14','16','17','13467','1234567890','R3','R4','R6','R7','R3467','R3A','Q3','W3','E3','S3','D3','F3','A3','Z3','X3','C3','V3')) {
-  $cases += [pscustomobject]@{keys=$digits;expected=$digits.ToLowerInvariant();mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
+  $cases += [pscustomobject]@{keys=$digits;expected=$digits.ToLowerInvariant();mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
  }
- $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
- $cases += [pscustomobject]@{keys='R3SU3';expected='r3你';mixed=1;symbols=1;keyboard=1;space=0;big5=0;upstream=$upstream;standalone=$tones}
-}}
+ $cases += [pscustomobject]@{keys='13SU3';expected='13你';mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
+ $cases += [pscustomobject]@{keys='R3SU3';expected='r3你';mixed=1;symbols=1;keyboard=1;space=0;upstream=0;standalone=$tones}
+}
+# Upstream's mode alone, as the templates default. Its digit scoring reads 5 6 as ㄓˊ (its core gives the same for these
+# keys); raw-key mixing keeps the digits.
+$cases += [pscustomobject]@{keys='1234567890';expected='1234值7890';mixed=0;symbols=1;keyboard=1;space=0;upstream=1;standalone=0}
+$cases += [pscustomobject]@{keys='2026';expected='2026';mixed=0;symbols=1;keyboard=1;space=0;upstream=1;standalone=0}
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $results=@()
 try {
@@ -62,8 +66,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
    $case=$cases[$index];$fixture=Join-Path $out "case$index"
    $env:SHANJIE_TEST_ETEN=if($case.keyboard -eq 2){'1'}else{$null}
    New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force | Out-Null
-   $text=Get-Content "$root/profiles/windows.ini" -Raw
-   foreach($pair in @(@('keyboard',$case.keyboard),@('mixed_input',$case.mixed),@('space_inputs_zhuyin',$case.symbols),@('space_commits',$case.space),@('big5',$case.big5),@('learning',0),@('upstream_english',[int]$case.upstream),@('standalone_tones',[int]$case.standalone))) {
+   $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^upstream_english=.*','upstream_english=0' -replace '(?m)^punctuation_keeps_reading=.*','punctuation_keeps_reading=1'
+   foreach($pair in @(@('keyboard',$case.keyboard),@('mixed_input',$case.mixed),@('space_inputs_zhuyin',$case.symbols),@('space_commits',$case.space),@('learning',0),@('upstream_english',[int]$case.upstream),@('standalone_tones',[int]$case.standalone))) {
     $text=$text -replace ('(?m)^'+$pair[0]+'=.*'),($pair[0]+'='+$pair[1])
    }
    Set-Content "$fixture/Shanjie/profile.ini" $text -Encoding utf8NoBOM

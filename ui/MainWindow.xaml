@@ -3,7 +3,7 @@
          section title and grouped cards on the right, Shanjie's save bar at the bottom. -->
     <Grid x:Name="Root" Background="Transparent">
         <Grid.ColumnDefinitions><ColumnDefinition Width="216"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,16">
+        <Border x:Name="NavPane" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,16">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <StackPanel x:Name="AppTitleBar" Orientation="Horizontal" Spacing="10" Padding="8,0,8,16" Background="Transparent">
@@ -27,7 +27,7 @@
                 <TextBlock Grid.Row="2" Padding="8,12,8,0" TextWrapping="Wrap" LineHeight="19" FontSize="11" Foreground="{ThemeResource SjText3Brush}" Text="{x:Bind Vm.DraftHelp, Mode=OneWay}"/>
             </Grid>
         </Border>
-        <Grid Grid.Column="1">
+        <Grid x:Name="MainPane" Grid.Column="1">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid x:Name="Head" Padding="24,20,14,12" Background="Transparent">
                 <TextBlock x:Name="SectionTitle" Text="一般" Margin="0,0,72,0" Style="{StaticResource SjSectionTitle}"/>
@@ -41,6 +41,7 @@
                     <StackPanel x:Name="General">
                         <TextBlock Text="操作預設" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
+                            <controls:SettingRow Label="快速設定" Description="用動畫一步步選打字方式和幾個常用選項。"><Button Content="重新開啟快速設定" Click="ReopenQuickSetup"/></controls:SettingRow>
                             <controls:SettingRow Label="載入操作預設"><ComboBox x:Name="Preset" SelectionChanged="LoadPreset"/></controls:SettingRow>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="匯入操作預設…" Click="ImportPreset"/><Button Content="匯出目前操作…" Click="ExportPreset"/></StackPanel></controls:SettingRow>
                         </controls:SettingCard>
@@ -80,14 +81,14 @@
                         </controls:SettingCard>
                         <TextBlock Text="中英混打" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}"><ComboBox x:Name="MixedModeSelector" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="注音順序自動判斷（Windows 版）"/><ComboBoxItem Content="上游判斷（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/><ComboBoxItem Content="兩者並用（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/></ComboBox></controls:SettingRow>
+                            <controls:SettingRow Label="中英混打方式" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}"><ComboBox x:Name="MixedModeSelector" SelectedIndex="{x:Bind Vm.MixedMode, Mode=TwoWay}"><ComboBoxItem Content="關閉"/><ComboBoxItem Content="{x:Bind Vm.RawKeyMixingLabel}"/><ComboBoxItem Content="上游判斷（僅標準注音）" IsEnabled="{x:Bind Vm.SupportsUpstreamEnglish, Mode=OneWay}"/></ComboBox></controls:SettingRow>
                         </controls:SettingCard>
-                        <TextBlock Style="{StaticResource SjNote}" Text="注音順序：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文。上游判斷：注音不可能是想打的字時（重打同一個位置、按空白或聲調後音節不存在）整段變回原本的按鍵當英文，馬上按 Esc 可變回注音；ai、up 這類也是注音的字，按 ↓ 從候選最後兩項選英文。兩者並用時，注音順序先判斷，其餘交給上游。上游模式下 Shift＋字母可開始英文組字段；上游判斷僅支援標準注音。倚天可使用 Windows 注音順序判斷；跟隨配置時依實際鍵盤生效。使用上游判斷（含兩者並用）時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="{x:Bind Vm.MixedModeNote}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle Label="重打同一個位置算英文" Description="只對上游判斷有效：ok、rust、gta6 這類字要靠它。開了之後，用重打同一個位置來改錯的注音也會變成英文（馬上按 Esc 變回注音）。" IsEnabled="{x:Bind Vm.UsesUpstreamEnglish, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishOverwrite, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="依按鍵順序判斷英文" Description="只對上游判斷有效：打了聲調鍵才發現音節不存在時，整段變成英文（馬上按 Esc 變回注音）；「快打時鍵序顛倒不當英文」關著時，注音鍵沒照順序也會變成英文。" IsEnabled="{x:Bind Vm.UsesUpstreamEnglish, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishKeyOrder, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="快打時鍵序顛倒不當英文" Description="只對上游判斷有效：同一個字的注音鍵先後顛倒（例如 ㄍㄜˋ 打成 ㄜㄍˋ）照注音處理。關掉而且「依按鍵順序判斷英文」開著時，ls、mv 這類字不用按 Shift，但快打容易誤觸。" IsEnabled="{x:Bind Vm.UsesUpstreamEnglish, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishReversalGuard, Mode=TwoWay}"/>
-                            <controls:SettingToggle Label="混打相鄰重複鍵容錯" Description="只修正 Windows 注音判斷的相鄰重複鍵；上游英文段保持原樣。預設關閉，原始按鍵可由候選選回。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedTolerance, Mode=TwoWay}"/>
+                            <controls:SettingToggle Label="混打相鄰重複鍵容錯" Description="{x:Bind Vm.MixedToleranceHelp}" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedTolerance, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="中英文之間自動加空格" Description="在漢字和半形英文、數字之間自動加一個空格（俗稱「盤古之白」）。只改善解送出的文字，不受中英混打方式影響；開頭會參考游標前一個字。" IsOn="{x:Bind Vm.CjkSpacing, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         </controls:SettingCard>
@@ -106,7 +107,7 @@
                             <controls:SettingToggle Label="Ctrl＋標點輸入全形標點" Description="例如 Ctrl＋逗號輸入 ，；需要 Shift 的符號，仍要一起按 Shift。" IsOn="{x:Bind Vm.CtrlPunctuation, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋反斜線輸入頓號" Description="善解原有操作；Ctrl 標點開啟時也能輸入頓號。" IsOn="{x:Bind Vm.CtrlBackslash, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="反引號＋標點輸入全形標點" IsOn="{x:Bind Vm.BackquoteSymbols, Mode=TwoWay}"/>
-                            <controls:SettingToggle Label="反引號＋U／B 輸入 Unicode／Big5" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
+                            <controls:SettingToggle Label="反引號＋U 輸入 Unicode" IsOn="{x:Bind Vm.CodeInput, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋Alt＋逗號開啟符號鍵盤" IsOn="{x:Bind Vm.SymbolKeyboard, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="Windows 標誌鍵與一般 App 的 Ctrl／Alt 快捷鍵交由系統及 App 處理。"/>
@@ -127,6 +128,7 @@
                     </StackPanel>
                     <StackPanel x:Name="Composition" Visibility="Collapsed">
                         <controls:SettingCard>
+                            <controls:SettingToggle x:Name="ReadingPanelToggle" Label="組字面板" Description="{x:Bind Vm.ReadingPanelHelp, Mode=OneWay}" IsEnabled="{x:Bind Vm.CanChooseReadingPanel, Mode=OneWay}" IsOn="{x:Bind Vm.ReadingPanelShown, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="標點保留未完成的注音" Description="關閉時與上游相同：讀音還沒打完就按標點，未完成的注音會丟掉，標點直接進組字。開啟時注音留著，標點排在後面，補完聲調才一起轉換。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.PunctuationKeepsReading, Mode=TwoWay}"/>
                         </controls:SettingCard>
@@ -161,28 +163,21 @@
                         </controls:SettingCard>
                         <TextBlock Text="翻頁" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="→ 右方向鍵" Description="無：維持原方向鍵操作；下一頁：翻頁；展開：三欄多列，數字選字以反白所在的九項為一組，↑／↓ 逐項移動，頂列 ↑ 收回。">
+                            <controls:SettingRow Label="{x:Bind Vm.RightActionLabel, Mode=OneWay}" Description="無：維持原方向鍵操作；下一頁：翻頁；展開：三欄多列，數字選字以反白所在的九項為一組，↑／↓ 逐項移動，頂列 ↑ 收回。Windows 操作預設的 Tab 跟 → 同一個動作，並預設展開，與微軟注音相同；善解操作預設的 Tab 與上游相同，關閉候選並交給 App。">
                                 <ComboBox x:Name="CandidateRightAction" SelectedIndex="{x:Bind Vm.RightAction, Mode=TwoWay}" MinWidth="140"><ComboBoxItem Content="無"/><ComboBoxItem Content="下一頁"/><ComboBoxItem Content="展開"/></ComboBox>
                             </controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Text="空白鍵操作候選" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
-                            <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="預設關閉：用 ↓ 開啟選字，空白不開啟或翻動候選。開啟後依下方設定操作；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="SpaceOperatesToggle" Label="空白鍵操作候選字" Description="關閉時用 ↓ 開啟選字，空白不開啟或翻動候選（Windows 範本的預設）。開啟後依下方設定操作（善解範本的預設，與上游相同）；候選操作優先於空白提交。" IsOn="{x:Bind Vm.SpaceOperates, Mode=TwoWay}"/>
                             <controls:SettingRow Label="完整組字後開啟選字" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}"><controls:Segmented Options="↓ 下鍵|空白鍵|↓ 或空白鍵" SelectedIndex="{x:Bind Vm.Trigger, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
                             <controls:SettingToggle Label="空白換下一頁候選" IsEnabled="{x:Bind Vm.SpaceOperates, Mode=OneWay}" IsOn="{x:Bind Vm.SpacePages, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="最後一頁再換頁時回到第一頁" Description="適用於空白鍵與設為「下一頁」的右方向鍵。" IsEnabled="{x:Bind Vm.CanWrapSpacePages, Mode=OneWay}" IsOn="{x:Bind Vm.WrapPages, Mode=TwoWay}"/>
                         </controls:SettingCard>
-                        <TextBlock Text="字元集" Style="{StaticResource SjGroupTitle}"/>
-                        <controls:SettingCard>
-                            <controls:SettingToggle Label="候選只顯示 Big5 字元集" Description="同時套用到轉換候選、即時預測與聯想詞；已組好的文字不會被轉換。" IsOn="{x:Bind Vm.Big5, Mode=TwoWay}" OnText="Big5" OffText="Unicode"/>
-                        </controls:SettingCard>
                     </StackPanel>
                     <StackPanel x:Name="Appearance" Visibility="Collapsed">
                         <TextBlock x:Name="AppearanceOptions" Text="候選視窗" Style="{StaticResource SjGroupTitle}"/>
-                        <controls:SettingCard>
-                            <controls:SettingRow Label="候選排列"><controls:Segmented Options="橫向（善解膠囊列）|直式（微軟注音）" SelectedIndex="{x:Bind Vm.CandidateLayout, Mode=TwoWay}" MinWidth="180"/></controls:SettingRow>
-                        </controls:SettingCard>
-                        <TextBlock Style="{StaticResource SjNote}" Text="每頁最多九項；直式一列一個候選，與微軟注音相同。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="每頁最多九項，一列一個候選，與微軟注音相同。"/>
                         <controls:SettingCard>
                             <controls:SettingRow Label="候選文字大小"><NumberBox Value="{x:Bind Vm.FontSize, Mode=TwoWay}" Minimum="14" Maximum="32" SmallChange="1" SpinButtonPlacementMode="Inline"/></controls:SettingRow>
                         </controls:SettingCard>
@@ -233,7 +228,7 @@
                         <controls:SettingCard Padding="14,12,14,12" Spacing="4">
                             <TextBlock x:Name="Differences" Style="{StaticResource SjBody}"/>
                             <HyperlinkButton Content="微軟注音官方操作說明" NavigateUri="https://support.microsoft.com/en-us/windows/hardware/input-devices/microsoft-traditional-chinese-ime" Padding="0,4,0,0"/>
-                            <HyperlinkButton Content="上游模型與詞類表說明" NavigateUri="https://github.com/Nanako0129/shanjie/blob/main/data/models.tsv" Padding="0"/>
+                            <HyperlinkButton Content="上游模型與詞類表說明" NavigateUri="https://github.com/tavricccc/shanjie-upstream-backup/blob/main/data/models.tsv" Padding="0"/>
                         </controls:SettingCard>
                         <TextBlock Text="更新" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
@@ -256,5 +251,6 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"><Button Content="重新啟動輸入法" Click="Restart" MinHeight="32" ToolTipService.ToolTip="儲存設定、提交目前組字並重載善解核心"/><Button Content="取消" Click="Cancel" MinHeight="32"/><Button Content="儲存" Style="{StaticResource SjAccentButton}" Click="Save" MinHeight="32"/></StackPanel>
             </Grid>
         </Grid>
+        <Grid x:Name="QuickSetupLayer" Grid.ColumnSpan="2" Visibility="Collapsed"/>
     </Grid>
 </UserControl>

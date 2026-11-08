@@ -28,7 +28,6 @@ struct Preferences {
     bool associations = false;
     unsigned keyboard = 0; // Profile / Standard / Eten / Hanyu / Taiwan.
     bool alphanumeric = true;
-    bool big5 = false;
     bool enterCommits = true;
     bool upCycles = true;
     bool backspaceDeletes = false;

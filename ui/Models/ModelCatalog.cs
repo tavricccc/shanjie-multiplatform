@@ -87,7 +87,7 @@ public static partial class ModelCatalog
         {
             for(int page=1;page<=10;page++)
             {
-                var batch=JsonSerializer.Deserialize<List<Release>>(await Fetch($"https://api.github.com/repos/Nanako0129/shanjie/releases?per_page=100&page={page}",token),Json)??[];
+                var batch=JsonSerializer.Deserialize<List<Release>>(await Fetch($"https://api.github.com/repos/tavricccc/shanjie-upstream-backup/releases?per_page=100&page={page}",token),Json)??[];
                 releases.AddRange(batch);if(batch.Count<100)break;
             }
             var temporary=cache+".download";
@@ -123,7 +123,7 @@ public static partial class ModelCatalog
         &&s.ModelSha256.Length==64&&s.ClassesSha256.Length==64&&s.ModelSha256.All(Uri.IsHexDigit)&&s.ClassesSha256.All(Uri.IsHexDigit);
     private static bool HasAsset(List<Release> releases,string tag,string name,long size,string hash)=>
         releases.Any(r=>r is not null&&r.TagName==tag&&!r.Draft&&!r.Prerelease&&r.Assets is not null&&r.Assets.Any(a=>a is not null&&a.Name==name&&a.Size==size
-            &&a.Digest=="sha256:"+hash&&a.BrowserDownloadUrl==$"https://github.com/Nanako0129/shanjie/releases/download/{tag}/{name}"));
+            &&a.Digest=="sha256:"+hash&&a.BrowserDownloadUrl==$"https://github.com/tavricccc/shanjie-upstream-backup/releases/download/{tag}/{name}"));
     internal static CatalogResult Rows(List<Release> releases,List<ModelSpec> known,string status)
     {
         releases=releases.Where(r=>r is not null&&r.TagName is not null&&r.Assets is not null).ToList();
@@ -149,7 +149,7 @@ public static partial class ModelCatalog
         if(offset<size)
         {
             using var deadline=CancellationTokenSource.CreateLinkedTokenSource(token);deadline.CancelAfter(TimeSpan.FromMinutes(15));
-            using var request=new HttpRequestMessage(HttpMethod.Get,$"https://github.com/Nanako0129/shanjie/releases/download/{tag}/{name}");
+            using var request=new HttpRequestMessage(HttpMethod.Get,$"https://github.com/tavricccc/shanjie-upstream-backup/releases/download/{tag}/{name}");
             if(offset>0)request.Headers.Range=new RangeHeaderValue(offset,null);
             using var response=await Client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);response.EnsureSuccessStatusCode();
             bool append=response.StatusCode==HttpStatusCode.PartialContent&&offset>0;

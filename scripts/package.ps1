@@ -59,4 +59,5 @@ try {
     Preserve-Output $setup
     & "$root/dist/setup/shanjie-pack.exe" "$root/dist/setup/安裝善解.exe" $output $setup
     if ($LASTEXITCODE) { throw 'Single-file installer packing failed.' }
+    Set-Content "$setup.sha256" "$((Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant())  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
 } finally { Pop-Location }

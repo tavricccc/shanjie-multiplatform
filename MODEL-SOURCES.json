@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "repository": "https://github.com/Nanako0129/shanjie",
+  "repository": "https://github.com/tavricccc/shanjie-upstream-backup",
   "builtin": {
     "id": "builtin",
     "folder": "models/builtin",
@@ -10,7 +10,7 @@
       { "role": "smoothing", "name": "承接 SJ-KN-2-397K", "release": "sj-kn-2-397k", "filename": "kn.sjkn", "size": 1587772, "sha256": "880ee87c6cbedf4097a8f73540de335a5bfe6abb48413513a83e7f75254e985a" },
       { "role": "trigram", "name": "連文 SJ-CX-2-7.7M", "release": "sj-cx-2-7.7m", "filename": "trigram.sjt3", "size": 133297536, "sha256": "34305a2d749dcd7f8528250e03f24a8cb7f1042a940669a415374cdfbbc8d8eb" },
       { "role": "trigram-chat", "name": "連文 SJ-CX-2-950K", "release": "sj-cx-2-950k", "filename": "trigram-chat.sjt3", "size": 15114784, "sha256": "24ee8645817060508f12ec2731995244df00b913b305161f46e46527ea122275" },
-      { "role": "semantic", "name": "會意 SJ-SR-7-15M", "release": "sj-sr-7-15m", "filename": "tinylm.sjtl", "size": 14886880, "sha256": "f7d0ac6377bfe973cf4239a949d7a763f1acb0095e50bc6c1323bd3ed09d3478" },
+      { "role": "semantic", "name": "會意 SJ-SR-8-15M", "release": "sj-sr-8-15m", "filename": "tinylm.sjtl", "size": 14886880, "sha256": "356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de", "source": "models/sj-sr-8-15m/tinylm.sjtl", "pinned_sha256": "f7d0ac6377bfe973cf4239a949d7a763f1acb0095e50bc6c1323bd3ed09d3478" },
       { "role": "colloquial", "name": "常談 SJ-CL-2-69K", "release": "sj-cl-2-69k", "filename": "colloquial.sjlm", "size": 4713933, "sha256": "81c2470d3956ee3a2c9377d7b8bc317739c1fe5b0c4793c29d6228a848fec8c4" },
       { "role": "attribution", "release": "sj-cl-2-69k", "filename": "colloquial-attribution.tsv", "size": 2000233, "sha256": "eb6fb69abf8d062b80479e20d2b1608381af2a6d51ba96435d62d3ca47015f22" }
     ]

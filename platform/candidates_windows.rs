@@ -245,11 +245,10 @@ mod windows_candidates {
     }
 
     #[test]
-    fn right_anchor_tolerant_choices_keep_their_lexicon_reading_after_filtering() {
+    fn right_anchor_tolerant_choices_keep_their_lexicon_reading() {
         let lex = Lexicon::parse("ㄍㄨㄥ 公 -1\nㄍㄨㄣ 棍 -2\n").unwrap();
         let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
         e.set_candidate_anchor(true);
-        e.set_candidate_charset(true);
         e.set_fuzzy(1).unwrap(); // ㄣ／ㄥ
         for ch in "ej/ ".chars() {
             e.key(if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) }).unwrap();

@@ -5,7 +5,7 @@
 ## 開始前
 
 - 先看開啟中的 issue；動到核心或上游前讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md) 與 `UPSTREAM.json`。架構與驗證指令見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- 查上游（Nanako0129/shanjie）有沒有比 `UPSTREAM.json` 新的 release，有就提醒使用者。
+- 查上游（Nanako0129/shanjie 已無法存取，改查鏡像 tavricccc/shanjie-upstream-backup）有沒有比 `UPSTREAM.json` 新的 release，有就提醒使用者。
 - 定位是移植：功能、預設值與上游一致；與上游不同的預設或行為（新增或改變的設定）要明確告訴使用者，並記在 UPSTREAM-CHANGES.md。
 
 ## 上游與核心

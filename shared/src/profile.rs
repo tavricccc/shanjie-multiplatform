@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 26] = [
+pub const REBUILD: [(&str, &str); 25] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -34,7 +34,6 @@ pub const REBUILD: [(&str, &str); 26] = [
     ("input", "english_key_order"),
     ("candidates", "anchor"),
     ("input", "learning"),
-    ("candidates", "big5"),
     ("input", "dictionary"),
     ("input", "context"),
     ("input", "mixed_input"),
@@ -62,6 +61,15 @@ impl Document {
             }
         }
     }
+    /// The raw-key mixing mode (`[input] mixed_input`): takes effect on Zhuyin keyboards only, whatever the file says.
+    pub fn raw_key_mixing(&self) -> bool {
+        self.number("input", "keyboard", 0) < 3 && self.flag("input", "mixed_input", false)
+    }
+    /// Whether the reading panel shows. Raw-key mixing keeps keys in the composition and its Zhuyin hint in the panel, so it
+    /// forces the panel on at read time; the stored `[candidates] reading_panel` is left alone for when the mode is off.
+    pub fn reading_panel(&self) -> bool {
+        self.raw_key_mixing() || self.flag("candidates", "reading_panel", false)
+    }
     pub fn fuzzy(&self) -> u32 {
         FUZZY_KEYS.iter().enumerate().fold(0, |flags, (bit, key)| flags | (self.flag("engine", key, false) as u32) << bit)
     }
@@ -83,6 +91,13 @@ impl Document {
                 return Err("設定必須放在分類之下。".into());
             }
             out.set(&section, key.trim(), value.trim());
+        }
+        // The candidate window is vertical only on Windows: a line left in an old profile is dropped unread.
+        // The Linux frontends still read `layout`.
+        if cfg!(windows) {
+            if let Some(candidates) = out.0.get_mut("candidates") {
+                candidates.remove("layout");
+            }
         }
         Ok(out)
     }
@@ -236,11 +251,19 @@ impl Document {
                 self.0.entry(s.clone()).or_default().entry(k).or_insert(v);
             }
         }
+        // The two mixing keys are one choice (中英混打方式): off, upstream English or raw-key mixing. Raw-key mixing wins:
+        // both on (兩者並用, 0.9.0 to 0.15.x) is no longer offered and raw-key mixing judged first there, and a profile
+        // without the upstream key (older than it, or edited by hand) must not take the template's 1 beside it.
+        if self.flag("input", "mixed_input", false) {
+            self.set("input", "upstream_english", 0);
+        }
         self.set("profile", "schema", SCHEMA);
-        if !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
+        if cfg!(not(windows)) && !matches!(self.get("candidates", "layout", ""), "horizontal" | "vertical") {
             self.set("candidates", "layout", "horizontal");
         }
+        // `reading` is an old switch from before the panel merged with the candidates; `reading_panel` is not it.
         for key in [
+            "big5",
             "reading",
             "tab_expands",
             "right_expands",
@@ -326,14 +349,13 @@ pub fn dictionary_content(text: &str) -> Result<String> {
     Ok(content)
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
-const PERSONAL: [(&str, &[&str]); 4] = [
+const PERSONAL: [(&str, &[&str]); 3] = [
     ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
         "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
-    ("candidates", &["big5"]),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 8] = [
@@ -483,6 +505,162 @@ mod tests {
         }
     }
     use super::*;
+    fn template(windows: bool) -> Document {
+        Document::parse(if windows { include_str!("../../profiles/windows.ini") } else { include_str!("../../profiles/shanjie.ini") }).unwrap()
+    }
+    #[test]
+    fn templates_default_to_upstream_mixing_without_the_reading_panel() {
+        for windows in [true, false] {
+            let doc = template(windows);
+            assert!(doc.flag("input", "upstream_english", false) && !doc.flag("input", "mixed_input", true));
+            assert!(!doc.flag("candidates", "reading_panel", true) && !doc.reading_panel());
+        }
+    }
+    #[test]
+    fn the_mixing_mode_is_one_choice_and_both_become_raw_key_mixing() {
+        let mode = |doc: &Document| (doc.flag("input", "mixed_input", false), doc.flag("input", "upstream_english", false));
+        for interaction in ["windows", "shanjie"] {
+            // Raw-key mixing from before upstream English existed (schema 6, v0.8), or a hand-edited newer file.
+            for schema in [6, 9] {
+                let old = format!("[profile]\nschema={schema}\ninteraction={interaction}\n[input]\nmixed_input=1\n");
+                let mut doc = Document::parse(&old).unwrap();
+                doc.migrate();
+                assert_eq!(mode(&doc), (true, false), "{interaction} schema {schema}");
+                doc.migrate();
+                assert_eq!(mode(&doc), (true, false), "stays after another migration");
+                // A shared preset written that way keeps its single mode too.
+                assert_eq!(mode(&Document::parse(&import_preset("", &old).unwrap()).unwrap()), (true, false));
+            }
+            let mut upstream = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nupstream_english=1\n")).unwrap();
+            upstream.migrate();
+            assert_eq!(mode(&upstream), (false, true));
+            // Both on (兩者並用, no longer offered) becomes raw-key mixing, which judged first, whatever the schema; it stays so,
+            // and a shared preset or a template merge written with both comes in the same way.
+            for schema in [6, 9] {
+                let old = format!("[profile]\nschema={schema}\ninteraction={interaction}\n[input]\nmixed_input=1\nupstream_english=1\n");
+                let mut both = Document::parse(&old).unwrap();
+                both.migrate();
+                assert_eq!(mode(&both), (true, false), "{interaction} schema {schema} both");
+                both.migrate();
+                assert_eq!(mode(&both), (true, false), "both stays raw-key mixing");
+                assert_eq!(mode(&Document::parse(&import_preset("", &old).unwrap()).unwrap()), (true, false));
+                assert_eq!(mode(&Document::parse(&merge_preset(&Document::default(), Document::parse(&old).unwrap())).unwrap()), (true, false));
+            }
+            // An off key beside a missing one still takes the template's default.
+            let mut off = Document::parse(&format!("[profile]\nschema=9\ninteraction={interaction}\n[input]\nmixed_input=0\n")).unwrap();
+            off.migrate();
+            assert_eq!(mode(&off), mode(&template(interaction == "windows")));
+        }
+    }
+    #[test]
+    fn shanjie_template_follows_upstream_defaults() {
+        let doc = template(false);
+        for (section, key) in [("candidates", "space_operates"), ("shortcuts", "shift_toggle"), ("input", "learning"),
+            ("input", "caps_lock_english"), ("shortcuts", "forget_candidate")] {
+            assert!(doc.flag(section, key, false), "{key}");
+        }
+        assert_eq!(doc.get("candidates", "open", ""), "both");
+        assert!(doc.flag("candidates", "space_pages", false));
+    }
+    #[test]
+    fn windows_template_follows_microsoft_for_the_candidate_list_and_keeps_explicit_values() {
+        let doc = template(true);
+        assert_eq!(doc.get("candidates", "right_action", ""), "expand");
+        let shanjie = template(false);
+        assert_eq!(shanjie.get("candidates", "right_action", ""), "none");
+        let mut mine = Document::parse("[profile]\nschema=9\ninteraction=windows\n[candidates]\nright_action=none\n").unwrap();
+        mine.migrate();
+        assert_eq!(mine.get("candidates", "right_action", ""), "none");
+        // A profile from before right_action keeps its old → (the legacy mapping, not the template).
+        let mut legacy = Document::parse("[profile]\nschema=5\ninteraction=windows\n").unwrap();
+        legacy.migrate();
+        assert_eq!(legacy.get("candidates", "right_action", ""), "none");
+    }
+    #[test]
+    fn stale_big5_values_load_harmlessly() {
+        let stale = "[profile]\nschema=9\ninteraction=windows\n[candidates]\nbig5=1\nanchor=left\n";
+        let mut doc = Document::parse(stale).unwrap();
+        doc.migrate();
+        assert!(!doc.0["candidates"].contains_key("big5"));
+        assert_eq!(doc.get("candidates", "anchor", ""), "left");
+        assert!(!preset(stale, true).unwrap().contains("big5"));
+        assert!(!import_preset(stale, stale).unwrap().contains("big5"));
+    }
+    #[test]
+    fn stale_layout_lines_load_harmlessly_on_windows() {
+        // Any old value, even one that is not valid, goes without touching the keys around it.
+        for value in ["horizontal", "vertical", "sideways"] {
+            let stale = format!("[profile]\nschema=9\ninteraction=windows\n[candidates]\nlayout={value}\nanchor=left\n[appearance]\nglass_tint=70\n");
+            let mut doc = Document::parse(&stale).unwrap();
+            doc.migrate();
+            assert_eq!(doc.get("candidates", "anchor", ""), "left");
+            assert_eq!(doc.number("appearance", "glass_tint", 0), 70);
+            if cfg!(windows) {
+                assert!(!doc.0["candidates"].contains_key("layout"));
+                assert!(!template(true).0["candidates"].contains_key("layout"));
+                assert!(!template(false).0["candidates"].contains_key("layout"));
+                assert!(!import_preset(&stale, &stale).unwrap().contains("layout"));
+                assert!(!preset(&stale, false).unwrap().contains("layout"));
+            }
+        }
+    }
+    #[test]
+    fn raw_key_mixing_forces_the_reading_panel_without_rewriting_it() {
+        let doc = |keyboard, mixed, upstream, panel| {
+            let mut doc = Document::parse(&format!("[profile]\nschema=9\ninteraction=windows\n[input]\nkeyboard={keyboard}\nmixed_input={mixed}\nupstream_english={upstream}\n[candidates]\nreading_panel={panel}\n")).unwrap();
+            doc.migrate();
+            doc
+        };
+        // Off, upstream only, then the user's own choice.
+        assert!(!doc(0, 0, 0, 0).reading_panel() && !doc(0, 0, 1, 0).reading_panel());
+        assert!(doc(0, 0, 1, 1).reading_panel());
+        // Raw-key mixing on every Zhuyin layout, also from a profile that had upstream's on beside it; the stored value stays 0.
+        for (keyboard, upstream) in [(0, 0), (0, 1), (1, 0), (2, 0)] {
+            let forced = doc(keyboard, 1, upstream, 0);
+            assert!(forced.reading_panel() && !forced.flag("candidates", "reading_panel", true));
+        }
+        // Pinyin keyboards never run the mode, so nothing forces the panel.
+        assert!(!doc(3, 1, 0, 0).raw_key_mixing() && !doc(3, 1, 0, 0).reading_panel());
+    }
+    #[test]
+    fn migration_keeps_the_new_panel_key_and_explicit_values() {
+        // A profile from before the setting: the key is added off, a stale `reading` is still dropped, explicit values stay.
+        let mut doc = Document::parse("[profile]\nschema=9\ninteraction=shanjie\n[input]\nlearning=0\nmixed_input=0\nupstream_english=0\ncaps_lock_english=0\n[candidates]\nreading=1\nspace_operates=0\n[shortcuts]\nshift_toggle=0\nforget_candidate=0\n").unwrap();
+        doc.migrate();
+        assert!(!doc.0["candidates"].contains_key("reading"));
+        assert_eq!(doc.0["candidates"].get("reading_panel").map(String::as_str), Some("0"));
+        for (section, key) in [("input", "learning"), ("input", "upstream_english"), ("input", "caps_lock_english"),
+            ("candidates", "space_operates"), ("shortcuts", "shift_toggle"), ("shortcuts", "forget_candidate")] {
+            assert!(!doc.flag(section, key, true), "{key}");
+        }
+        // Turned on, it survives further migrations and a shared preset.
+        doc.set("candidates", "reading_panel", 1);
+        doc.migrate();
+        assert!(doc.reading_panel());
+        let shared = export_preset(&doc.content(), "panel").unwrap();
+        assert!(Document::parse(&import_preset("", &shared).unwrap()).unwrap().reading_panel());
+        // Missing keys take the new defaults of the profile's own template.
+        let mut empty = Document::parse("[profile]\nschema=9\ninteraction=windows\n").unwrap();
+        empty.migrate();
+        assert!(empty.flag("input", "upstream_english", false) && !empty.reading_panel());
+    }
+    #[test]
+    fn the_panel_without_the_reading_row_closes_on_composition_alone() {
+        let state = |candidates: &[&str], reading_hint| crate::protocol::Snapshot {
+            preedit: "gj".into(),
+            cursor: 2,
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+            reading_hint,
+            ..Default::default()
+        };
+        let closed = crate::input::panel_view(state(&[], false), false);
+        assert!(closed.preedit.is_empty() && closed.candidates.is_empty(), "nothing left to draw: the panel closes");
+        let listed = crate::input::panel_view(state(&["好"], false), false);
+        assert!(listed.preedit.is_empty() && listed.candidates.len() == 1, "candidates without the sentence row");
+        assert_eq!(crate::input::panel_view(state(&["ㄕㄨ", "gj"], true), false).preedit, "gj", "a hint always draws");
+        let on = crate::input::panel_view(state(&[], false), true);
+        assert!(on.preedit == "gj" && on.cursor == 2);
+    }
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {
         let rows = ["ㄋㄧˇ  你", "ㄏㄠˇ\t好\t-1.25"];
@@ -524,7 +702,7 @@ mod tests {
     #[test]
     fn shared_presets_keep_personal_choices_and_reject_bad_values() {
         let mine = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=mine.tsv\nkeyboard=2\n[appearance]\nfont_size=24\n";
-        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nlayout=vertical\n";
+        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nanchor=left\n";
         let shared = export_preset(source, "朋友\n").unwrap();
         assert!(!shared.contains("dictionary") && !shared.contains("\nkeyboard=") && !shared.contains("[appearance]"));
         let merged = Document::parse(&import_preset(mine, &shared).unwrap()).unwrap();
@@ -532,7 +710,7 @@ mod tests {
         assert_eq!(merged.number("input", "keyboard", 0), 2);
         assert_eq!(merged.number("appearance", "font_size", 0), 24);
         assert!(merged.flag("punctuation", "plain_lbracket", false));
-        assert_eq!(merged.get("candidates", "layout", ""), "vertical");
+        assert_eq!(merged.get("candidates", "anchor", ""), "left");
         assert_eq!(merged.get("preset", "name", ""), "朋友");
         for bad in [
             // Legacy values (e.g. layout=grid) are migrated first; unknown ones are refused.
@@ -582,7 +760,6 @@ mod tests {
         doc.migrate();
         assert!(!doc.0["input"].contains_key("smart_zhuyin"));
         assert!(!doc.0["engine"].contains_key("model"));
-        assert_eq!(doc.get("candidates", "layout", ""), "horizontal");
         assert_eq!(doc.get("input", "dictionary", ""), "custom.tsv");
         assert!(doc.flag("input", "learning", false));
         assert_eq!(doc.number("appearance", "font_size", 0), 22);

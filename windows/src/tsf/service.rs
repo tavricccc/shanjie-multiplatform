@@ -830,11 +830,9 @@ impl Data {
                     .size
                     .set(current.number("appearance", "font_size", 18));
                 c.data
-                    .vertical
-                    .set(current.get("candidates", "layout", "horizontal") == "vertical");
-                c.data
                     .anchor_right
                     .set(current.get("candidates", "anchor", "right") == "right");
+                c.data.reading_panel.set(current.reading_panel());
             }
         }
         if let Some(popup)=self.word_popup.borrow().as_ref(){let _=popup.set_theme(current.number("appearance","theme",0));}
@@ -955,7 +953,7 @@ fn option_operations(p:&Document) -> [crate::broker::Op;4] {
     let windows=p.get("profile","interaction","windows")=="windows";
     [crate::broker::Op::Options(p.input_options() | 1 << 23 | (windows as u32) << 24),
      crate::broker::Op::English(english),
-     crate::broker::Op::Mixed(zhuyin && p.flag("input","mixed_input",false)),
+     crate::broker::Op::Mixed(p.raw_key_mixing()),
      crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false))]
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
@@ -1044,12 +1042,9 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
             )?;
             candidates
                 .data
-                .vertical
-                .set(preferences.get("candidates", "layout", "horizontal") == "vertical");
-            candidates
-                .data
                 .anchor_right
                 .set(preferences.get("candidates", "anchor", "right") == "right");
+            candidates.data.reading_panel.set(preferences.reading_panel());
             self.data.state.borrow_mut().candidates = Some(candidates);
             let keys: ITfKeystrokeMgr = thread.cast()?;
             keys.AdviseKeyEventSink(client, &self.to_interface::<ITfKeyEventSink>(), true)?;

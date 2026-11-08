@@ -1,7 +1,7 @@
 #Requires -Version 7
 param(
     [Parameter(Mandatory)][string]$OldPackage,
-    [ValidateSet(5,6)][int]$OldSchema = 5,
+    [ValidateRange(5,8)][int]$OldSchema = 8,
     [ValidateSet('all','x64','x86')][string]$Architecture = 'all',
     [string]$Evidence
 )
@@ -14,6 +14,7 @@ if (Test-Path -LiteralPath $Evidence) { throw 'Use a new evidence directory.' }
 New-Item -ItemType Directory -Path $Evidence | Out-Null
 $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (!$vs) { throw 'Visual Studio C++ tools required.' }
+$newSchema = [int]((Select-String -LiteralPath "$root/profiles/windows.ini" -Pattern '^schema=(\d+)').Matches[0].Groups[1].Value)
 $architectures = if ($Architecture -eq 'all') { @('x64','x86') } else { @($Architecture) }
 foreach ($arch in $architectures) {
     $output = Join-Path $Evidence $arch
@@ -31,7 +32,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 "$root/tests/profile_coexistence.
     Set-Content -LiteralPath "$output/build.cmd" -Value $command -Encoding utf8NoBOM
     & cmd.exe /d /c "$output/build.cmd"
     if ($LASTEXITCODE) { throw 'Coexistence probe compile failed.' }
-    & "$output/probe.exe" $oldDll $newDll "$output/profile" $OldSchema
+    & "$output/probe.exe" $oldDll $newDll "$output/profile" $OldSchema $newSchema
     if ($LASTEXITCODE) { throw 'Coexistence probe failed.' }
-    [pscustomobject]@{architecture=$arch;old_schema=$OldSchema;old_sha256=(Get-FileHash -LiteralPath $oldDll).Hash;new_sha256=(Get-FileHash -LiteralPath $newDll).Hash;status='PASS';read_pairs=64;broadcasts_disabled=$true} | ConvertTo-Json | Set-Content -LiteralPath "$output/result.json" -Encoding utf8NoBOM
+    [pscustomobject]@{architecture=$arch;old_schema=$OldSchema;new_schema=$newSchema;old_sha256=(Get-FileHash -LiteralPath $oldDll).Hash;new_sha256=(Get-FileHash -LiteralPath $newDll).Hash;status='PASS';read_pairs=64;broadcasts_disabled=$true} | ConvertTo-Json | Set-Content -LiteralPath "$output/result.json" -Encoding utf8NoBOM
 }

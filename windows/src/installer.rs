@@ -992,13 +992,18 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
         pending += remove_tree(&personal.join(".deleted_files"))? + purge_parked(&personal);
         for file in files(&personal)? {
             let name = file.file_name().unwrap().to_string_lossy();
-            if name.starts_with("profile.ini") || name.starts_with("profile.") {
+            if removed_with_settings(&name) {
                 pending += remove_tree(&file)?;
             }
         }
     }
     progress::step("Data", "succeeded", "");
     Ok(Some(pending))
+}
+
+/// Uninstalling with "keep personal data" still removes the settings. Quick Setup's marker goes with them, so a reinstall starts over.
+fn removed_with_settings(name: &str) -> bool {
+    name.starts_with("profile.") || name == "quick-setup.txt"
 }
 fn reject_live_test_mutation() -> Result<()> {
     if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
@@ -1021,6 +1026,16 @@ pub fn record_manager_failure(message: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quick_setup_marker_goes_with_the_settings_and_personal_files_stay() {
+        for name in ["profile.ini", "profile.ini.bak", "quick-setup.txt"] {
+            assert!(removed_with_settings(name), "{name}");
+        }
+        for name in ["update-channel.txt", "my-words.tsv", "quick-setup-notes.txt"] {
+            assert!(!removed_with_settings(name), "{name}");
+        }
+    }
     #[test]
     fn cleanup_removes_retired_nested_payload() {
         let root = std::env::temp_dir().join(format!("shanjie-cleanup-{}", std::process::id()));

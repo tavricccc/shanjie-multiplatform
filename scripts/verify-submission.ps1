@@ -19,7 +19,7 @@ Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encodi
 $DllRoot = $payload
 $taskProfileRoot=Join-Path $ResultRoot 'profile'
 New-Item -ItemType Directory -Path "$taskProfileRoot/Shanjie" -Force | Out-Null
-$content=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^prediction=.*','prediction=1' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^shift_side=.*','shift_side=2' -replace '(?m)^escape=.*','escape=clear'
+$content=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^mixed_input=.*','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0' -replace '(?m)^learning=.*','learning=0' -replace '(?m)^prediction=.*','prediction=1' -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^shift_side=.*','shift_side=2' -replace '(?m)^escape=.*','escape=clear'
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_HEADLESS','SHANJIE_TEST_PROFILE','SHANJIE_CORE_LOCAL'){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $results=@()
 try {
@@ -41,7 +41,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
    $prefix=if($keyboard -eq 1){'SU3'}else{'NE3'}
    $cases=@(@('commit','ADB','adb'),@('commit','XYZ','xyz'),@('commit',$prefix,'你'),@('commit',($prefix+'ADB'),'你adb'),@('commit',('A'*96),('a'*96)),@('cancel','ADB',''),@('focus','ADB','adb'),@('toggle','ADB','adb'),@('refresh','ADB','adb'),@('return','ADB','adb'),@('cancel-generation','ADB',''),@('deactivate','ADB','adb'),@('refresh-twice','ADB','adb'),@('busy','A','adb'),@('busy-epoch','A','adb'),@('busy-cancel','A',''),@('busy-focus','A','a'),@('busy-expire','A','adb'),@('busy-pick',$prefix,'妳'),@('busy-mouse',$prefix,'妳'),@('retire-write-fail','ADB','adb'),@('retire-request-fail','ADB','adb'),@('retire-escape','ADB','adb'),@('retire-deactivate','ADB','adb'),@('retire-stale','ADB','adb'))
    if($keyboard -eq 1) {
-    foreach($mix in 0,1,2,3) {
+    # Mix bits: 1 raw-key mixing, 2 upstream English; one choice, so never both.
+    foreach($mix in 0,1,2) {
      $cases+=,@('input-digits','9 U. ','哎呦',$mix)
      $cases+=,@('input-digits','GK42U/4','設定',$mix)
      $cases+=,@('input-digits','9 ⎋GK42U/4','設定',$mix)

@@ -1,6 +1,6 @@
 [package]
 name = "shanjie-windows"
-version = "0.15.4-beta.5"
+version = "0.16.0-beta.1"
 edition = "2021"
 
 [features]

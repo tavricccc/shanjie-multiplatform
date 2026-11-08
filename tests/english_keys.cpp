@@ -28,6 +28,7 @@ int wmain(int argc,wchar_t** argv) {
         LPARAM flags=LPARAM(1)|(LPARAM(MapVirtualKeyW(vk,MAPVK_VK_TO_VSC))<<16);
         require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&test)),915);
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
+        if(required && !(test&&eaten))std::fprintf(stderr,"Unconsumed key: vk=%d shift=%d test=%d eaten=%d\n",vk,shift,test,eaten);
         if(required)require(test&&eaten,917);
     };
     if(scenario==L"english-symbol-order"){
@@ -57,8 +58,6 @@ int wmain(int argc,wchar_t** argv) {
         auto code=store->text;store->externalCaret((LONG)before.size());
         MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
         require(store->text==code,943);press(VK_SPACE);require(store->text==before+L"，",944);
-        press(VK_OEM_3);press('B');for(auto ch:std::wstring(L"A440"))press(ch);press(VK_SPACE);
-        require(store->text==before+L"，一",945);
         auto committed=store->text;
         press(VK_OEM_3);press(VK_OEM_4);press(VK_DOWN);press('2');
         require(store->text==committed+L"『",955);

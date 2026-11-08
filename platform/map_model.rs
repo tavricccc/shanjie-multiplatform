@@ -8,7 +8,12 @@ fn main() {
         // Lm::load checks kn.sjkn and both trigram tables against the model.
         let lm = core::lm::Lm::load(map).expect("model with its side files");
         let tiny = map.with_file_name("tinylm.sjtl");
-        if tiny.exists() { core::tinylm::TinyLm::load_paired(&tiny, &lm).expect("semantic model pairing"); }
+        if tiny.exists() {
+            let model = core::tinylm::TinyLm::load_paired(&tiny, &lm).expect("semantic model pairing");
+            if map.with_file_name("colloquial.sjlm").exists() {
+                assert!(core::colloquial::applies(core::lm::Profile::Chat, &model), "colloquial model pairing");
+            }
+        }
         return;
     }
     assert_eq!(args.len(),4,"map-model INPUT OUTPUT CLASSES|- (explicit class-less v1/v2), or map-model --check MAP");
