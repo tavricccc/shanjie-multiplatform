@@ -9,17 +9,23 @@ if ($manifest.format -ne 2) { throw 'MODEL-SOURCES.json must be format 2.' }
 $cache = Join-Path $root 'build/model'
 New-Item -ItemType Directory -Path $cache -Force | Out-Null
 $bundle = $manifest.builtin
-# The built-in set must be exactly the one the pinned upstream ships (its data/<file>.sha256).
+# A separately updated release records the checksum from the pinned core as pinned_sha256.
 foreach ($asset in $bundle.assets) {
     $record = Join-Path $root "upstream/shanjie/data/$($asset.filename).sha256"
     if (!(Test-Path -LiteralPath $record)) { throw "Upstream does not ship $($asset.filename); review MODEL-SOURCES.json." }
-    if (((Get-Content -LiteralPath $record -Raw) -split '\s+')[0] -ne $asset.sha256) { throw "$($asset.filename) differs from the pinned upstream; update MODEL-SOURCES.json." }
+    if (((Get-Content -LiteralPath $record -Raw) -split '\s+')[0] -ne ($asset.pinned_sha256 ?? $asset.sha256)) { throw "$($asset.filename) differs from the pinned upstream; update MODEL-SOURCES.json." }
 }
 function Get-VerifiedAsset($asset) {
     # Releases reuse file names (every main model is bigram.sjlm), so the cache key carries the release.
     $source = Join-Path $cache "$($asset.release)-$($asset.filename)"
     if (!(Test-Path -LiteralPath $source) -or (Get-FileHash -LiteralPath $source).Hash.ToLowerInvariant() -ne $asset.sha256) {
-        & "$PSScriptRoot/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$($asset.release)/$($asset.filename)" -Destination $source -Size $asset.size -Sha256 $asset.sha256
+        if ($asset.source) {
+            $local = Join-Path $root $asset.source
+            if ((Get-Item -LiteralPath $local).Length -ne $asset.size -or (Get-FileHash -LiteralPath $local).Hash.ToLowerInvariant() -ne $asset.sha256) { throw "Bundled model source differs: $($asset.source)" }
+            Copy-Item -LiteralPath $local -Destination $source -Force
+        } else {
+            & "$PSScriptRoot/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$($asset.release)/$($asset.filename)" -Destination $source -Size $asset.size -Sha256 $asset.sha256
+        }
     }
     return $source
 }

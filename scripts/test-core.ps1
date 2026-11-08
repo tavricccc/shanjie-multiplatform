@@ -47,12 +47,21 @@ $upstream = Join-Path $root 'upstream/shanjie'
 Push-Location $root
 try {
     if (!$UseExistingCore) { & "$PSScriptRoot/prepare-core.ps1" }
-    # The models upstream's tests read from data/lm (ignored by its git): the built-in set, checked against data/*.sha256.
+    # Upstream's fixed candidate assertions use its pinned models; separately updated built-ins are checked by prepare-models.
     & "$PSScriptRoot/prepare-models.ps1" | Out-Null
     $manifest = [IO.File]::ReadAllText((Join-Path $root 'MODEL-SOURCES.json')) | ConvertFrom-Json
     New-Item -ItemType Directory -Path "$upstream/data/lm" -Force | Out-Null
     foreach ($asset in $manifest.builtin.assets) {
-        Copy-Item (Join-Path $root "build/model/$($asset.release)-$($asset.filename)") "$upstream/data/lm/$($asset.filename)" -Force
+        $source = Join-Path $root "build/model/$($asset.release)-$($asset.filename)"
+        if ($asset.pinned_sha256) {
+            $row = Get-Content "$upstream/data/models.tsv" | Where-Object { ($_ -split "`t")[0] -eq $asset.filename }
+            $release = ($row -split "`t")[3].ToLowerInvariant()
+            $source = Join-Path $root "build/model/$release-$($asset.filename)"
+            if (!(Test-Path -LiteralPath $source) -or (Get-FileHash -LiteralPath $source).Hash.ToLowerInvariant() -ne $asset.pinned_sha256) {
+                & "$PSScriptRoot/download-asset.ps1" -Url "$($manifest.repository)/releases/download/$release/$($asset.filename)" -Destination $source -Size $asset.size -Sha256 $asset.pinned_sha256
+            }
+        }
+        Copy-Item -LiteralPath $source -Destination "$upstream/data/lm/$($asset.filename)" -Force
     }
     # A separate checkout-shaped tree (test/core, test/data, test/eval), so the test patches below never reach
     # the core that is shipped and every path the tests take from CARGO_MANIFEST_DIR lands in upstream's files.
