@@ -328,6 +328,9 @@ impl Engine {
     pub fn is_mixed_hint(&self) -> bool {
         self.mixed_input && !self.mixed_latin && !self.mixed_raw.is_empty() && !self.pending().is_empty()
     }
+    pub(crate) fn mixed_order_active(&self) -> bool {
+        self.mixed_input || (self.windows_shifted_boundaries && self.english && self.english_reversal_guard)
+    }
 
     // Each column (initial, medial, final) appears at most once. A run starting with an
     // English letter must also follow initial -> medial -> final, so an English word does
