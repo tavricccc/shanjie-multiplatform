@@ -23,7 +23,9 @@ internal sealed record ModelSources(int Format, BuiltinSet Builtin);
 public static partial class ModelCatalog
 {
     public const string Builtin = "builtin";
-    public const string BuiltinName = "SJ-LM-7＋SJ-WC-6 完整配套（內建）";
+    public static string BuiltinName => string.Join("＋", BuiltinAssets.Value
+        .Where(a => a.Role is "bigram" or "classes" or "semantic")
+        .Select(a => a.Release[..a.Release.LastIndexOf('-')].ToUpperInvariant())) + "（內建）";
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy=JsonNamingPolicy.SnakeCaseLower, PropertyNameCaseInsensitive=true };
     public static string Folder => Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, "Models");
     private static readonly HttpClient LiveClient = CreateClient();
