@@ -1,6 +1,6 @@
 # 模型清單自動維護
 
-Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄、與上游 App 相同的整組模型（id `builtin`）；上游 pin 維持 `UPSTREAM.json`，資料更新不替換程式碼。
+Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄的整組模型（id `builtin`）：會意更新為 SJ-SR-8-15M，其餘維持上游 v0.6.1 配套；核心 pin 維持 `UPSTREAM.json`。`source` 指向隨版本庫保存的原始附件，`pinned_sha256` 記錄核心 pin 的原有模型雜湊。
 
 ## 上線與日常操作
 
