@@ -27,6 +27,8 @@
     <!-- The settings navigation shows the app logo; Quick Setup's welcome shows it large. -->
     <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Contributors\*" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets/contributors.json" LogicalName="About.contributors.json" />
     <EmbeddedResource Include="../MODEL-CATALOG.json" LogicalName="Models.catalog.json" />
     <EmbeddedResource Include="../MODEL-SOURCES.json" LogicalName="Models.sources.json" />
     <EmbeddedResource Include="../profiles/windows.ini" LogicalName="Profiles.windows.ini" />

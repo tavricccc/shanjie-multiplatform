@@ -1,0 +1,43 @@
+{
+  "updatedAt": "2026-11-09",
+  "repository": "tavricccc/shanjie-multiplatform",
+  "revision": "85843a42551574925f99f78f44f701a8efd7264a",
+  "contributors": [
+    {
+      "login": "tavricccc",
+      "name": "Tavric",
+      "contributions": 563,
+      "type": "User",
+      "summary": "Windows TSF 移植、原生候選與設定介面，以及模型管理、安裝與更新流程。",
+      "avatar": "tavricccc.jpg",
+      "avatarSource": "https://avatars.githubusercontent.com/u/177928699?s=128&v=4"
+    },
+    {
+      "login": "Nanako0129",
+      "name": "Nyanako",
+      "contributions": 315,
+      "type": "User",
+      "summary": "原始善解注音引擎、輸入與選字演算法、詞庫與語言模型，以及上游評測與測試。",
+      "avatar": "Nanako0129.png",
+      "avatarSource": "https://avatars.githubusercontent.com/u/44753291?s=128&v=4"
+    },
+    {
+      "login": "HolyBearTW",
+      "name": "聖小熊",
+      "contributions": 59,
+      "type": "User",
+      "summary": "原鍵混打與逆序音節、符號候選、選字學習修正，以及第 8 版會意模型整合與回歸測試。",
+      "avatar": "HolyBearTW.png",
+      "avatarSource": "https://avatars.githubusercontent.com/u/50009618?s=128&v=4"
+    },
+    {
+      "login": "Jackboy001",
+      "name": "Jackboy001",
+      "contributions": 46,
+      "type": "User",
+      "summary": "模型清單與發布流程、個人詞庫整合，以及 TSF 相容性、DPI 與隔離測試修正。",
+      "avatar": "Jackboy001.jpg",
+      "avatarSource": "https://avatars.githubusercontent.com/u/48660972?s=128&v=4"
+    }
+  ]
+}
