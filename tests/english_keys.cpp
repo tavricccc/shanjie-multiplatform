@@ -88,6 +88,11 @@ int wmain(int argc,wchar_t** argv) {
         require(store->text==L"你",919);
     }else if(scenario==L"shift"){
         press('R',true);press('U');press('S');press('T');press(VK_RETURN);require(store->text==L"Rust",920);
+    }else if(scenario==L"shift-caps-zh"){
+        for(auto ch:std::wstring(L"GEMINI"))press(ch,true,true);
+        for(auto ch:std::wstring(L"CL3M/4A87"))press(ch==L'/'?VK_OEM_2:ch,false,true);
+        require(store->text==L"gemini好用嗎",963);
+        press(VK_RETURN);require(store->text==L"gemini好用嗎",964);
     }else if(scenario==L"shift-caps"){
         press('R',true,true);press('U',false,true);press(VK_RETURN);require(store->text==L"rU",921);
     }else if(scenario==L"eten"){
