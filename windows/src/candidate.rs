@@ -183,7 +183,11 @@ fn progress(start: Option<Instant>, ms: f32, curve: [f32; 4]) -> Option<f32> {
     (t < 1.0).then(|| ease(curve, t.max(0.0)))
 }
 /// Whether Windows' animation effects are on (and this is not a capture run, which needs the final frame).
+/// `SHANJIE_VERIFY_MOTION` is the harness asking to time a glide whatever the desktop's setting is.
 fn animated() -> bool {
+    if std::env::var_os("SHANJIE_VERIFY_MOTION").is_some() {
+        return true;
+    }
     let mut on = BOOL(1);
     unsafe {
         let _ = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, Some((&mut on as *mut BOOL).cast()),
@@ -238,8 +242,6 @@ pub struct Host {
     work_width: f32,
     /// Room for the panel on the roomier side of the caret, in DIPs; the grid shows only the rows that fit.
     work_height: f32,
-    /// Microsoft IME style: one candidate per row instead of the horizontal pill.
-    pub vertical: bool,
     /// The candidate target is the character right of the cursor (profile `anchor=right`).
     pub anchor_right: bool,
 }
@@ -299,7 +301,6 @@ impl Host {
                 end: 0,
                 work_width: 0.0,
                 work_height: 0.0,
-                vertical: false,
                 anchor_right: true,
             });
             let module = crate::tsf::module();
@@ -539,13 +540,11 @@ impl Host {
         }
     }
     fn row_top(&self, index: usize) -> f32 {
-        let row = if self.state.columns > 0 { (index - self.start) / crate::input::GRID_COLUMNS }
-            else if self.vertical { index - self.start } else { 0 };
+        let row = if self.state.columns > 0 { (index - self.start) / crate::input::GRID_COLUMNS } else { index - self.start };
         self.top() + row as f32 * (self.row + 2.0 * self.size as f32 / 16.0)
     }
     fn height(&self) -> f32 {
-        let lines = if self.state.columns > 0 { (self.end - self.start).div_ceil(crate::input::GRID_COLUMNS) }
-            else if self.vertical { self.end - self.start } else { 1 };
+        let lines = if self.state.columns > 0 { (self.end - self.start).div_ceil(crate::input::GRID_COLUMNS) } else { self.end - self.start };
         let rows = if self.items.is_empty() {
             0.0
         } else {
@@ -575,71 +574,27 @@ impl Host {
             }
             return (natural * scale + gaps + 10.0 * ratio).min(self.work_width);
         }
-        if self.vertical {
-            // A page holds at most nine candidates, so every row is shown; rows share one width.
-            self.start = 0;
-            self.end = count;
-            // Rows keep a minimum width so a list of single characters is not a thin strip.
-            let widest = self.items.iter().map(|i| i.natural).fold(112.0 * ratio, f32::max);
-            let width = widest.min((self.work_width - 10.0 * ratio).max(1.0));
-            for item in &mut self.items {
-                item.width = width;
-            }
-            return (width + 10.0 * ratio).min(self.work_width);
+        // A page holds at most nine candidates, so every row is shown; rows share one width.
+        self.start = 0;
+        self.end = count;
+        // The reading row alone has no rows to keep wide: the panel is exactly its text (`measure` adds the insets).
+        if count == 0 {
+            return 0.0;
         }
-        self.start = self.start.min(count.saturating_sub(1));
-        if let Some(selected) = selected {
-            if selected < self.start {
-                self.start = selected;
-            }
+        // Rows keep a minimum width so a list of single characters is not a thin strip.
+        let widest = self.items.iter().map(|i| i.natural).fold(112.0 * ratio, f32::max);
+        let width = widest.min((self.work_width - 10.0 * ratio).max(1.0));
+        for item in &mut self.items {
+            item.width = width;
         }
-        loop {
-            for item in &mut self.items {
-                item.width = item.natural;
-            }
-            let left = if self.start > 0 { 14.0 * ratio } else { 0.0 };
-            let natural = self.items[self.start..]
-                .iter()
-                .map(|i| i.natural)
-                .sum::<f32>()
-                + 2.0 * ratio * (count - self.start).saturating_sub(1) as f32;
-            let right = if natural + left + 10.0 * ratio > self.work_width {
-                14.0 * ratio
-            } else {
-                0.0
-            };
-            let available = (self.work_width - left - right - 10.0 * ratio).max(1.0);
-            let mut used = 0.0;
-            self.end = self.start;
-            for i in self.start..count {
-                let gap = if i == self.start { 0.0 } else { 2.0 * ratio };
-                let width = self.items[i].natural.min(available);
-                if self.end > self.start && used + gap + width > available {
-                    break;
-                }
-                self.items[i].width = width;
-                used += gap + width;
-                self.end = i + 1;
-            }
-            if selected.is_some_and(|i| i >= self.end) && self.start + 1 < count {
-                self.start += 1;
-                continue;
-            }
-            return (used + left + if self.end < count { 14.0 * ratio } else { 0.0 } + 10.0 * ratio)
-                .min(self.work_width);
-        }
+        (width + 10.0 * ratio).min(self.work_width)
     }
     /// Left edge, top and width of candidate `i` inside the panel.
     fn slot(&self, i: usize) -> (f32, f32, f32) {
         let ratio = self.size as f32 / 16.0;
-        let arrow = self.start > 0 && self.state.columns == 0;
-        let mut x = (5.0 + if arrow { 14.0 } else { 0.0 }) * ratio;
+        let mut x = 5.0 * ratio;
         if self.state.columns > 0 {
             for item in &self.items[..i % crate::input::GRID_COLUMNS] {
-                x += item.width + 2.0 * ratio;
-            }
-        } else if !self.vertical {
-            for item in &self.items[self.start..i] {
                 x += item.width + 2.0 * ratio;
             }
         }
@@ -678,59 +633,6 @@ impl Host {
         let width = (panel.0 * self.scale).ceil() as i32 + 2 * side;
         let height = ((panel.1 + TOP + BOTTOM) * self.scale).ceil() as i32;
         (x - side, y - top, width, height)
-    }
-    unsafe fn scroll(&mut self, next: bool) -> Result<()> {
-        if self.items.is_empty() {
-            return Ok(());
-        }
-        let start = if next {
-            self.end.min(self.items.len() - 1)
-        } else {
-            self.start.saturating_sub((self.end - self.start).max(1))
-        };
-        if start == self.start {
-            return Ok(());
-        }
-        self.start = start;
-        self.glide = None;
-        self.sequence = self.sequence.wrapping_add(1);
-        let ratio = self.size as f32 / 16.0;
-        let width = self
-            .fit_view(None)
-            .max(self.reading_width + 2.0 * READING_SIDE * ratio)
-            .min(self.work_width);
-        for item in &self.items {
-            item.word
-                .SetMaxWidth((item.width - item.tag - 11.0 * ratio).max(1.0))?;
-        }
-        let mut rect = RECT::default();
-        GetWindowRect(self.window, &mut rect)?;
-        let mut monitor = MONITORINFO {
-            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            ..Default::default()
-        };
-        GetMonitorInfoW(
-            MonitorFromWindow(self.window, MONITOR_DEFAULTTONEAREST),
-            &mut monitor,
-        )
-        .ok()?;
-        self.panel = (width, self.height());
-        let pixels = (width * self.scale).ceil() as i32;
-        let left = rect.left + (SIDE * self.scale).round() as i32;
-        let top = rect.top + (TOP * self.scale).round() as i32;
-        let x = if std::env::var_os("SHANJIE_VERIFY_UI").is_some() {
-            left
-        } else {
-            left.clamp(
-                monitor.rcWork.left,
-                (monitor.rcWork.right - pixels).max(monitor.rcWork.left),
-            )
-        };
-        self.origin = (x, top);
-        self.morph = None;
-        let (x, y, w, h) = self.frame(self.panel, x, top);
-        SetWindowPos(self.window, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)?;
-        self.display()
     }
     pub fn publish(
         &mut self,
@@ -908,8 +810,7 @@ impl Host {
             radiusY: radius,
         };
         let ratio = self.size as f32 / 16.0;
-        // Panel corners in both layouts (no pill): 14 for a list, 12 for the single row.
-        let radius = if self.vertical { 14.0 } else { 12.0 } * ratio;
+        let radius = 14.0 * ratio;
         // Soft shadow: stacked, widening rounded rectangles under the panel, offset downward.
         if self.palette.shadow > 0.0 {
             // Each layer is wider and fainter, so the edges fade out like a blur.
@@ -1034,41 +935,6 @@ impl Host {
             );
             self.target.PopAxisAlignedClip();
         }
-        self.brush.SetColor(&self.palette.label);
-        for (present, center, direction) in [
-            (self.state.columns == 0 && self.start > 0, 10.0 * ratio, -1.0),
-            (self.state.columns == 0 && self.end < self.items.len(), width - 10.0 * ratio, 1.0),
-        ] {
-            if present {
-                let middle = self.top() + self.row / 2.0;
-                self.target.DrawLine(
-                    Vector2 {
-                        X: center - direction * 2.0 * ratio,
-                        Y: middle - 4.0 * ratio,
-                    },
-                    Vector2 {
-                        X: center + direction * 2.0 * ratio,
-                        Y: middle,
-                    },
-                    &self.brush,
-                    1.5 * ratio,
-                    None,
-                );
-                self.target.DrawLine(
-                    Vector2 {
-                        X: center + direction * 2.0 * ratio,
-                        Y: middle,
-                    },
-                    Vector2 {
-                        X: center - direction * 2.0 * ratio,
-                        Y: middle + 4.0 * ratio,
-                    },
-                    &self.brush,
-                    1.5 * ratio,
-                    None,
-                );
-            }
-        }
         self.target.PopAxisAlignedClip();
         self.target.SetTransform(&Matrix3x2::identity());
         self.target.EndDraw(None, None)
@@ -1116,15 +982,6 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
             if host.state.reading_hint { return LRESULT(0); }
             let x = (lp.0 as u16 as i16) as f32 / host.scale - SIDE;
             let y = ((lp.0 >> 16) as u16 as i16) as f32 / host.scale - TOP;
-            let ratio = host.size as f32 / 16.0;
-            if host.state.columns == 0 && host.start > 0 && x < 17.0 * ratio {
-                let _ = host.scroll(false);
-                return LRESULT(0);
-            }
-            if host.state.columns == 0 && host.end < host.items.len() && x > host.panel.0 - 17.0 * ratio {
-                let _ = host.scroll(true);
-                return LRESULT(0);
-            }
             for i in host.start..host.end {
                 let (left, top, width) = host.slot(i);
                 if x >= left

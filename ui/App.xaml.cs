@@ -88,6 +88,16 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), error.ToString() + "\n" + string.Join("\n", error.Data.Keys.Cast<object>().Select(key => key + ": " + error.Data[key]))); }
             Exit();
         }
+        else if (arguments.Length == 4 && arguments[1] == "--verify-quick-setup")
+        {
+            string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
+            Environment.SetEnvironmentVariable("SHANJIE_TEST_PROFILE", "1");
+            string result = Path.Combine(output, $"result-{arguments[3]}.txt");
+            try { window = new MainWindow(); await Verification.QuickSetupVerifier.RunPhase((MainWindow)window, arguments[3], output); File.WriteAllText(result, "PASS"); }
+            catch (Exception error) { File.WriteAllText(result, error.ToString()); }
+            Environment.Exit(0);
+        }
         else if (arguments.Length == 3 && arguments[1] == "--verify-setup")
         {
             string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
@@ -125,6 +135,8 @@ public partial class App : Application
                 if (instance is null) { Exit(); return; }
                 var main = new MainWindow(); window = main; instance.Listen(main);
                 if (about) main.ShowSection(MainWindow.Pages.About);
+                else if (arguments.Contains(Setup.QuickSetupGate.OpenArgument)) main.OpenQuickSetup(true);
+                else if (Setup.QuickSetupGate.Due(arguments)) main.OpenQuickSetup();
                 main.Host.Show();
                 if (!about) Setup.UpdateNotice.CheckInBackground();
             }

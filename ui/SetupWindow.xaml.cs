@@ -47,6 +47,7 @@ public sealed partial class SetupWindow : UserControl
     internal string PrimaryForVerification => PrimaryButton.Visibility == Visibility.Visible ? (string)PrimaryButton.Content : "";
     internal bool PrimaryEnabledForVerification => PrimaryButton.IsEnabled;
     internal uint KeyboardForVerification => KeyboardChoice.SelectedIndex == 1 ? 2u : 1u;
+    internal void ShowStatusErrorForVerification(string message) { StatusError.Message = message; StatusError.IsOpen = true; }
 
     internal async Task LoadStatus()
     {

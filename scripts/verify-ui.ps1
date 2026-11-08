@@ -52,6 +52,27 @@ foreach ($phase in 'first-open','reopen') {
 Stop-CoresOnProfile "$modelOutput/profile"
 Remove-Item -LiteralPath $modelOutput -Recurse -Force
 Write-Host 'Saved model kept across settings restarts.'
+# Quick Setup shows once: separate processes on one isolated profile, like reopening the settings and upgrading.
+$quickOutput = Join-Path $root ('build/ui-quick-setup/' + [guid]::NewGuid().ToString('N'))
+foreach ($phase in 'first-open','reopen','after-upgrade') {
+    if ($phase -eq 'after-upgrade') { Set-Content "$quickOutput/profile/Shanjie/quick-setup.txt" 'shown 0.0.0-older' -Encoding utf8NoBOM }
+    $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickOutput + '"'),$phase -WindowStyle Hidden -PassThru
+    $process.WaitForExit()
+    $result = Get-Content "$quickOutput/result-$phase.txt" -Raw
+    if ($result -ne 'PASS') { throw "Quick Setup $phase`: $result" }
+}
+Stop-CoresOnProfile "$quickOutput/profile"
+Remove-Item -LiteralPath $quickOutput -Recurse -Force
+Write-Host 'Quick Setup showed once across reopening and upgrading.'
+# Quick Setup's decisions, saved files, keys, demos and screenshots (each step, mid-transition and the finish), on its own profile.
+$quickReview = Join-Path $root 'build/ui-review-quick-setup'
+if (Test-Path $quickReview) { Remove-Item -LiteralPath $quickReview -Recurse -Force }
+$process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickReview + '"'),'flow' -WindowStyle Hidden -PassThru
+$process.WaitForExit()
+$result = Get-Content "$quickReview/result-flow.txt" -Raw
+Stop-CoresOnProfile "$quickReview/profile"
+if ($result -ne 'PASS') { throw "Quick Setup flow: $result" }
+Write-Host "Quick Setup flow checks passed: $quickReview/quick-setup"
 $output = Join-Path $root 'build/ui-review-final'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
 $process.WaitForExit()

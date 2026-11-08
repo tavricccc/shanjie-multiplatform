@@ -25,9 +25,6 @@ int wmain(int argc,wchar_t** argv) {
     for (auto ch : "1f600") { key.ch = ch; special.key(key,preferences); }
     key.kind = 2;
     assert(special.key(key,preferences).commit == L"\U0001f600");
-    key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = 'b'; special.key(key,preferences);
-    for (auto ch : "a440") { key.ch = ch; special.key(key,preferences); }
-    key.kind = 2; assert(special.key(key,preferences).commit == L"一");
     preferences.backquoteSymbols = true; key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = ',';
     assert(special.key(key,preferences).commit == L"，");
     key.ch = ','; key.modifiers = 6; special.key(key,preferences); key.modifiers = 0; key.kind = 10;
@@ -168,5 +165,5 @@ int wmain(int argc,wchar_t** argv) {
     std::filesystem::copy_file(modelRoot / L"builtin/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
     assert(invalidCached.open(wrongData,0,0,true));
     std::cout << "PASS: latest model, required class pairing, passive/entered prediction, live off, key options and composed punctuation\n";
-    std::cout << "PASS: candidate policy, Unicode/Big5/symbols, interleaved learning, personal dictionary, associations, pinyin\n";
+    std::cout << "PASS: candidate policy, Unicode/symbols, interleaved learning, personal dictionary, associations, pinyin\n";
 }

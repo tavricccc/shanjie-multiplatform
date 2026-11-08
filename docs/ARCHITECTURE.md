@@ -30,10 +30,11 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 單一 Win32 layered popup，由 Rust 以 Direct2D／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點，沒有陰影與動畫；alpha 只用於外側圓角抗鋸齒，正文不透明。
 
-- **排列**：橫向膠囊（預設）或直式，收合時每頁最多 9 項。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 逐項移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心仍以九項為一組處理數字選字；橫向單列在窄工作區用兩端箭頭翻動。
+- **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 逐項移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心仍以九項為一組處理數字選字。
 - **尺寸**：字詞 16 DIP、序號 9 DIP，依個人字級（14–32）等比縮放；選取膠囊至少 24 DIP，外框至少 30 DIP，內距 3 DIP，與 caret 間距 6 DIP。
 - **配色**：淺色 `#FFFFFF` 底、`#222225` 字、`#65656E` 序號、`#D3D3D8` 邊線；深色 `#202020` 底、`#F5F5F7` 字、`#B8B8C2` 序號、`#505055` 邊線。邊線 0.5 DIP，選取為 `#006EE6` 配白字。主題與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`；高對比改用系統色。
-- **混打提示**：Windows 注音順序混打時，原始按鍵（如 `gj`）留在組字區，候選窗位置改顯示藍底白字的 `ㄕㄨ`，沒有序號、不能點選。
+- **組字面板**（`[candidates] reading_panel`，預設關閉）：關閉時與上游相同，組字只在 App 內，沒有候選也沒有提示就不顯示面板，有候選時也不畫整句列（`shanjie_shell::input::panel_view`）。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。原鍵混打需要它，`Document::reading_panel()` 在這個模式下讀出為開，不改寫設定值；舊 `[candidates] reading` 仍由遷移刪除，與它無關。
+- **混打提示**：原鍵混打時，原始按鍵（如 `gj`）留在組字區，組字面板以藍底白字標出 `ㄕㄨ`，沒有序號、不能點選。顯示名稱集中在 `SettingsViewModel.RawKeyMixingName`；儲存的鍵仍是 `[input] mixed_input`。
 - **預測**：被動預測沒有序號與反白，按 Tab 進入後才出現。
 - **滑鼠**：點擊帶 sequence，TSF 拒絕過期點擊；失焦、取消與 layout 銷毀都會關閉候選。
 
@@ -46,6 +47,25 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 設定是草稿，按「儲存」才寫入 `%LOCALAPPDATA%\Shanjie\profile.ini` 並通知已啟用的實例。解析、schema 遷移、範本與保存都在 Rust（`shared/`）；讀取只在記憶體中遷移，明確儲存時才備份與寫回。命令列的 `apply-windows.cmd`／`apply-shanjie.cmd` 走同一套邏輯。設定程式跨程序只開一份，重複啟動會轉到既有視窗。
 
 更新檢查由 `Shanjie.UI.exe --check-update` 這個短命程序負責，常駐核心不連網。隱藏排程 `ShanjieUpdateCheck`（登入後 2 分鐘、之後每 24 小時）與開啟設定程式都走這個入口。自動檢查關閉、沒有新版或離線時，程序直接結束；排程檢查在這一版 24 小時內已通知過，或系統處於全螢幕或勿擾時也直接結束。開啟設定程式時（`--from-settings`）只要有新版就通知。否則顯示 `UpdateCard`：與設定程式相同的玻璃視窗，以 `WS_EX_NOACTIVATE` 置於主螢幕右下角，不搶焦點，一分鐘後自動關閉。通知時間存在 `update-notice.txt`；出更新的版本不用等 24 小時。「查看更新」以 `--about` 啟動設定程式，已開啟時經單一實例管道轉送 `ABOUT` 請求，保留未儲存的草稿；下載與安裝仍由使用者在「關於」頁操作。
+
+### 快速設定
+
+全新安裝或從舊版升級後，第一次以一般方式開啟設定程式時，主視窗會先蓋上快速設定（`QuickSetupView`）：歡迎、選範本、一個畫面一題調整細節、完成後試打。
+
+- **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
+- **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
+- **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿；在最後一題按「套用」才經 `ProfileStore.Save` 寫入（暫存檔再整檔取代）並通知實例。
+  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
+  - 保留我現在的設定：已存的 profile 加上實際改動的鍵；沒有差異就不寫。
+  - 第一次寫入前把舊檔複製成 `profile.ini.before-quick-setup.bak`（只留一份，同一次流程再寫不覆蓋）；解除安裝時隨設定一起刪除。略過或關閉不碰檔案；個人詞典與學習資料是另外的檔案，不受影響。
+  - 升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
+- **混打**：只提供自動判斷與原鍵混打兩種，與設定頁一樣是單選；`Document::migrate` 把兩者同時開著的舊 profile 讀成原鍵混打，沒改就不寫回檔案。原鍵混打會固定開啟組字面板，該題變灰並說明。
+- **按鍵**：Enter 繼續、Esc 上一步（試打框裡兩者都屬於文字），方向鍵在答案間移動；焦點進每一頁時落在目前的答案上。
+- **試打區**：是設定程式裡一般的 TextBox，和個人詞典、聊天 App 清單的欄位一樣由目前的輸入法處理，不另外載入核心；內容不保存。
+
+示範（`TypingDemo`）是原生 XAML 元素加計時器，格與格之間的動作是 composition 動畫，沒有影片也沒有新相依。每一格的內容來自真實核心與 `tests/windows_interaction.cpp` 的結果（`QuickSetupDemos`）；Windows 關閉動畫時停在該腳本的關鍵畫面，不跑計時器。換頁、選擇、進度與完成（`Choreography`、`ChoiceCards`、`StepProgress`、`FinishMark`）都在 composition 執行緒上跑，不改版面。
+
+`verify-ui.ps1` 的 `--verify-quick-setup <資料夾> flow` 階段在獨立 profile 上檢查上述保存與按鍵、每個示範影格與最小視窗的溢出，並把每一步、換頁中途與完成動畫的影格存成 PNG（`build/ui-review-quick-setup/quick-setup`）。RenderTargetBitmap 看不到執行中的 composition 動畫，所以中途影格是把動畫停下，依同一組關鍵影格與曲線算出該時間點的值後直接設上去再擷取。
 
 ## 安裝與版本目錄
 

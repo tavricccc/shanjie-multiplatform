@@ -10,13 +10,12 @@ function Replace-Contract([string]$old, [string]$replacement, [int]$count = 1) {
     }
     $script:content = $script:content.Replace($old,$replacement)
 }
-Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,`n    candidate_big5: bool,"
-Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,`n            candidate_big5: false,"
+Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,"
+Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,"
 Replace-Contract '    fn open_candidates(&mut self, rows: Vec<Pred>) {' '    fn open_candidates_left(&mut self, rows: Vec<Pred>) {'
 Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l);' 2
 Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
 Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
-Replace-Contract '        all.truncate(PREDICT_MAX);' "        if self.candidate_big5 { all.retain(|p| fits_big5(&p.word)); }`n        all.truncate(PREDICT_MAX);"
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/input_windows.rs" -Raw)
 Set-Content $engine $content -Encoding utf8NoBOM

@@ -37,7 +37,7 @@ try {
   $fixture=[IO.Path]::GetFullPath((Join-Path $Output $scenario))
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
   $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
-  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1'
+  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
   if($scenario -eq 'cancel-theme-dark'){$profile=$profile -replace '(?m)^theme=0','theme=2'}
   if($scenario -eq 'cancel-theme-light'){$profile=$profile -replace '(?m)^theme=0','theme=1'}
   Set-Content -LiteralPath "$fixture/Shanjie/profile.ini" -Value $profile -Encoding utf8NoBOM

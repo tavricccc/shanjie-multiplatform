@@ -2,6 +2,13 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.0-beta.1（Windows pre-release）
+
+詳見 [0.16.0-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.1.md)。
+
+- 中英混打方式改為單選（關閉、自動判斷或原鍵混打），移除「兩者並用」；原本兩者並用的設定檔會自動改為原鍵混打。
+- 快速設定改為從頭重寫設定檔，舊設定檔備份為 `profile.ini.before-quick-setup.bak`。
+
 ## 0.15.4-beta.5（Windows pre-release）
 
 詳見 [0.15.4-beta.5 版本說明](docs/releases/RELEASE-NOTES-0.15.4-beta.5.md)。

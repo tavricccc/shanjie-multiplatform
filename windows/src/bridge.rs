@@ -266,7 +266,6 @@ pub unsafe extern "C" fn sj_engine_new(
         ranking,
         right: flags & 1 != 0,
         learning: flags & 2 != 0,
-        big5: flags & 4 != 0,
         dictionary: text(dictionary).into(),
         prediction: flags & 8 != 0,
         ..Default::default()
@@ -548,12 +547,6 @@ pub extern "C" fn sj_host_new(callback: isize) -> *mut Host {
 pub unsafe extern "C" fn sj_host_free(p: *mut Host) {
     if !p.is_null() {
         drop(Box::from_raw(p));
-    }
-}
-#[no_mangle]
-pub unsafe extern "C" fn sj_host_vertical(p: *mut Host, vertical: bool) {
-    if !p.is_null() {
-        (*p).vertical = vertical;
     }
 }
 #[no_mangle]

@@ -134,7 +134,12 @@ impl Data {
         if result.is_err() && !written {
             checkpoint.restore(&mut self.state.borrow_mut());
         }
-        if written {
+        // Text already written must not be retried, so a written key counts as eaten. Tab in the Shanjie
+        // interaction is the exception: as in upstream, the composition is sent and the App still gets the key.
+        let tab_passes = matches!(result, Ok(false))
+            && key.vk.0 == VK_TAB.0 as usize
+            && self.state.borrow().prefs.get("profile", "interaction", "windows") != "windows";
+        if written && !tab_passes {
             Ok(true)
         } else {
             result

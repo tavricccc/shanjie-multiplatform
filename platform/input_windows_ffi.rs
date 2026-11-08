@@ -17,13 +17,6 @@ pub unsafe extern "C" fn shanjie_windows_is_prediction_row(engine: *mut ShanjieE
     unsafe { (*engine).0.is_prediction_row() as u32 }
 }
 #[no_mangle]
-pub unsafe extern "C" fn shanjie_windows_set_candidate_charset(engine: *mut ShanjieEngine, big5: u32) -> i32 {
-    guard(|| {
-        if engine.is_null() || big5 > 1 { return SHANJIE_ERR_NULL; }
-        unsafe { (*engine).0.set_candidate_charset(big5 == 1); } SHANJIE_OK
-    })
-}
-#[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_associate(engine: *mut ShanjieEngine, prefix: *const c_char, out: *mut *mut ShanjieOutput) -> i32 {
     guard(|| {
         if !unsafe { clear_out(out) } || engine.is_null() || prefix.is_null() { return SHANJIE_ERR_NULL; }

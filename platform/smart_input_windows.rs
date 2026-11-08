@@ -22,8 +22,8 @@ mod windows_smart_tests {
         assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"rU");
         for ch in "su".chars(){e.key_with_latin(Key::ch(ch,0),Some(ch.to_ascii_uppercase())).unwrap();}
         e.key(Key::ch('3',0)).unwrap();assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit,"你");
-        e.layout=Layout::Eten;e.set_mixed_input(true);e.set_upstream_english(true,true,true,true).unwrap();
-        assert!(!e.english&&e.mixed_input,"unsupported upstream English never disables Eten Windows mixed input");
+        e.layout=Layout::Eten;e.set_upstream_english(true,true,true,true).unwrap();
+        assert!(!e.english,"upstream English never turns on for Eten, which it does not support");
     }
     #[test]
     fn symbols_kept_behind_a_reading_stay_before_an_english_run() {
@@ -38,12 +38,12 @@ mod windows_smart_tests {
     #[test]
     fn incomplete_reading_keeps_unconvertible_tone_digits() {
         let lex=Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄐㄧˇ 己 -0.1\nㄅㄚˋ 爸 -0.1\nㄓˊ 直 -0.1\n").unwrap());
-        for english in [false,true] {
+        {
             let mut e=Engine::with_lexicon(lex.clone(),Layout::Standard);
-            e.set_mixed_input(true);e.set_upstream_english(english,true,true,true).unwrap();
+            e.set_mixed_input(true);
             for digits in ["13","14","16","17","13467","1234567890",
                 "r3","r4","r6","r7","r3467","q3","w3","e3","s3","d3","f3","a3","z3","x3","c3","v3","r3a"] {
-                assert_eq!(type_keys(&mut e,digits).preedit,digits,"english={english}");
+                assert_eq!(type_keys(&mut e,digits).preedit,digits);
                 assert_eq!(e.reset(ResetMode::Commit).commit,digits);
             }
             assert_eq!(type_keys(&mut e,"13su3").preedit,"13你");e.reset(ResetMode::Discard);
@@ -136,10 +136,10 @@ mod windows_smart_tests {
     }
 
     #[test]
-    fn upstream_english_runs_beside_the_windows_policy() {
+    fn upstream_english_keeps_the_windows_punctuation_while_idle() {
         let mut e = engine();
+        e.set_mixed_input(false);
         e.set_upstream_english(true, true, true, true).unwrap();
-        assert!(e.mixed_input && e.english, "both stay on");
         // Shift+letter starts upstream's English run; the Windows raw state stays out of it.
         let out = e.key(Key::ch('r', MOD_SHIFT)).unwrap();
         assert_eq!(out.english_run_utf16_len, 1);
@@ -151,11 +151,9 @@ mod windows_smart_tests {
         // Idle again, the Windows policy maps the symbol as before.
         assert_eq!(e.key(Key::ch('[', 0)).unwrap().preedit, "「");
         e.reset(ResetMode::Discard);
-        // The Windows order rule still turns non-Zhuyin keys into English.
-        assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
-        e.reset(ResetMode::Discard);
-        // Switching upstream off leaves only the Windows policy.
+        // Switching to raw-key mixing leaves only the Windows policy, whose order rule turns non-Zhuyin keys into English.
         e.set_upstream_english(false, true, true, true).unwrap();
+        e.set_mixed_input(true);
         assert!(!e.english && e.mixed_input);
         assert_eq!(type_keys(&mut e, "gj").preedit, "gj");
     }
@@ -229,8 +227,8 @@ impl Engine {
         }
         if choices.len() == 1 { choices.into_iter().next() } else { None }
     }
-    /// Upstream English (zhen-revert/zhen-reapply) runs beside the Windows mixed policy: the three
-    /// revert triggers and the reversal guard are upstream's switches.
+    /// Upstream English (zhen-revert/zhen-reapply), the other mixing mode beside raw-key mixing (the profile turns on
+    /// one of them): the three revert triggers and the reversal guard are upstream's switches.
     pub fn set_upstream_english(&mut self, on: bool, overwrite: bool, key_order: bool, guard: bool) -> Result<(), EngineError> {
         // Upstream's English composer supports Standard; Eten keeps Windows mixed input.
         let on=on && self.layout==Layout::Standard;
@@ -440,9 +438,9 @@ impl Engine {
             out.commit=commit+&out.commit;
             return Ok(self.mixed_view(out));
         }
-        // While an upstream English run, English window or inline letters are on screen, upstream
-        // owns the key (punctuation ends a run, Backspace takes a letter); otherwise the Windows
-        // policy runs first and upstream English only sees what it leaves.
+        // While an upstream English run or English window is on screen, upstream owns the key
+        // (punctuation ends a run, Backspace takes a letter); otherwise the Windows punctuation and
+        // literal policy runs first and upstream English only sees what it leaves.
         if self.english && self.upstream_english_busy() {
             if key.kind==KeyKind::Char && key.ch.is_ascii_alphabetic() {
                 let actual=self.latin_character(key);
@@ -535,8 +533,7 @@ impl Engine {
                 _ => return self.finish_latin(key),
             }
         }
-        // With upstream English on, Shift+letter starts its English run instead.
-        if self.mixed_input && !self.english
+        if self.mixed_input
             && key.kind == KeyKind::Char
             && key.modifiers == MOD_SHIFT
             && key.ch.is_ascii_alphabetic()

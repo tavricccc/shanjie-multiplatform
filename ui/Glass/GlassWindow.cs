@@ -190,14 +190,18 @@ internal sealed partial class GlassWindow : IDisposable
     }
 
     FrameworkElement[] captions = [];
+    readonly HashSet<FrameworkElement> captionHooked = [];
+    bool captionLoaded;
     RectInt32[] captionRects = [], passRects = [];
     /// <summary>Areas that move the window when dragged, handled by the system like a title bar so the window follows
     /// the pointer without the XAML thread in the loop; buttons inside them stay clickable.</summary>
     internal void SetCaption(params FrameworkElement[] areas)
     {
+        // Quick Setup swaps the areas while the window is open.
         captions = areas;
-        foreach (var area in areas) area.SizeChanged += (_, _) => UpdateCaption();
-        content.Loaded += (_, _) => UpdateCaption();
+        foreach (var area in areas) if (captionHooked.Add(area)) area.SizeChanged += (_, _) => UpdateCaption();
+        if (!captionLoaded) { captionLoaded = true; content.Loaded += (_, _) => UpdateCaption(); }
+        else UpdateCaption();
     }
 
     void UpdateCaption()

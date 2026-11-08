@@ -93,9 +93,9 @@ components:
 
 設定程式初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動，InfoBar 與儲存列固定在內容外。開關為同列左標籤、右 ToggleSwitch，MinHeight 40 DIP，並提供 AutomationProperties.Name。
 
-候選窗每頁最多九項，可選橫向或直式。預設字級下選取膠囊 24 DIP、外框至少 30 DIP，字體需要時加高。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
+候選窗一律直式，每頁最多九項，一列一個候選。預設字級下選取膠囊 24 DIP、外框至少 30 DIP，字體需要時加高。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
 
-**The Natural Width Rule.** 橫向排列時字詞依自然寬度量測，窄工作區只顯示放得下的項目，兩端箭頭翻動，目前選取項保持可見。只有單項超過可用寬度才用 character ellipsis 省略。
+**The Natural Width Rule.** 字詞依自然寬度量測，各列共用最寬一項的寬度，有候選時至少 112 DIP（字級 16），單字清單才不會變成細條。只有組字面板時沒有下限，寬度就是文字加內距，打字時隨內容伸縮。只有單項超過可用寬度才用 character ellipsis 省略。
 
 中英模式提示用 `mode-indicator`，透明視窗、零內距，與 caret 間距為 `mode-caret-gap`，依所在螢幕 DPI 繪製，1400 ms、下一次輸入或失焦時隱藏。
 
@@ -103,7 +103,7 @@ components:
 
 設定與安裝視窗是毛玻璃風格（內容視窗＋Rust 玻璃視窗）。候選窗是單一 Win32 layered popup，以 Direct2D software DC render target 繪製，`UpdateLayeredWindow` 用 premultiplied alpha 合成；陰影與上緣亮邊畫在 bitmap 裡，沒有 blur 或背景視窗。
 
-**The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏與翻頁立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
+**The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
 
 ## Shapes
 
@@ -115,13 +115,34 @@ components:
 
 九頁共用一份草稿，按「儲存」才套用並通知已啟用的實例。開關共用 `SettingToggle`；ComboBox、NumberBox、TextBox 都對應真實設定；InfoBar 顯示儲存結果與格式錯誤，清除學習用 ContentDialog。操作預設只改按鍵、選字與預測，不動詞庫、學習、外觀與模型。「重新啟動輸入法」先保存草稿，再通知各實例提交組字並重載核心，不終止 App。來源：`ui/MainWindow.xaml`、`shared/src/profile.rs`。
 
+### 狀態列
+
+設定與安裝程式的 InfoBar 共用 `ui/Themes/Sj.xaml` 的隱含樣式：卡片同款玻璃底（`SjFillControlBrush`）、12 圓角、1 點邊線，疊一層很淡的嚴重度色（`SjStatus*TintBrush`）並把邊線染成同色（`SjStatus*StrokeBrush`）。左邊是 18 點 Lucide 線條圖示，形狀分辨嚴重度：成功圓勾、資訊 i（霧藍）、警告三角、錯誤圓叉；文字 13 點 `SjText1Brush`，關閉鍵用 `SjIconButton`。深淺色各有一組較亮／較深的圖示色以維持對比；高對比時只在狀態列內改用 `SystemColorWindow*`／`SystemColorHighlight`，不加底色。出現時上移 6 點並淡入（`Motion.Normal`、Smooth），關閉時淡出（`Motion.Fast`），由 `StatusMotion` 的隱含動畫負責，Windows 動畫效果關閉時立即切換。
+
+### 快速設定
+
+與設定共用一張玻璃，蓋住導覽與內容，一個畫面只問一件事：歡迎 → 打字方式 → 空白鍵 → Tab／→ → 中英混打（注音時）→ 單按 Shift → 選字學習 → 組字面板 → 完成與試打。頂部是標題、進度膠囊（136×4，霧藍填色）與「n／m」、視窗按鈕；底部固定略過（純文字鈕）、上一步、繼續（主按鈕；最後一題是「套用」，完成頁是「開始使用」）。
+
+問題頁左邊是霧藍小標、28 點標題、14 點短說明與答案卡片，右邊是 360 寬的示範與一行註記。答案卡片是設定頁同款玻璃卡（14 圓角），右側空心圓；選中的卡片疊一圈 1.5 點霧藍外框與很淡的霧藍底，勾選圓點填滿。歡迎頁置中，放大的「解」圖示後面有一層淡霧藍光暈；完成頁置中，上方是勾選徽章，下面是試打框與兩欄的「你的選擇」。文字用一般人看得懂的話，描述結果，不用設定鍵名。
+
+動態全部是 composition 動畫（`Choreography`，同一段長度內以關鍵影格錯開）：
+- **換頁**：舊頁 240 ms 往反方向滑出並淡出，新頁的各部分（小標、標題、說明、卡片、註記、示範）每 40 ms 依序從前進的方向滑入 44 點並淡入，Smooth 曲線；上一步時方向相反。進度膠囊以 Glide 曲線滑到新位置。
+- **選擇**：外框從原本的卡片滑到新卡片（320 ms Glide），勾選以彈簧放大，卡片輕壓一下；示範換成新答案時整個場景淡入上移。
+- **示範**：候選窗從游標側淡入放大、選取膠囊在項目間滑動、換頁與展開淡入、中／A 提示彈出、送出的字落進文字框。
+- **完成**：霧藍圓環從頂端順時針畫出，內部填滿並彈起，白色勾分兩筆畫出，徽章再輕彈一次；同時背後的光暈亮起，一圈光往外擴散淡去，十幾顆霧藍、淡藍與一點淡金的小點向外飄散消失；標題與試打區隨後依序升起。約 2 秒。
+- **交回設定**：流程 280 ms 淡出並微縮，設定頁的導覽與內容依序滑入。
+
+Windows 關閉「動畫效果」時以上全部立即到位，示範停在關鍵畫面。高對比時外框、勾選與進度改用系統醒目色，不畫光暈與小點。
+
+示範場景裡的候選窗沿用 `candidate.rs` 的配色與比例，字級略小以放得下；格狀與直向清單會截短。組字面板的標記與真實視窗相同：微弱的藍色底，游標在句尾時不標。
+
 ### 候選與預測
 
 一般項用 `candidate-item`，目前選取用 `candidate-item-selected`，表面依主題用 `candidate-surface`／`candidate-surface-dark`。被動預測沒有序號與反白，Tab 進入後才出現，Shift＋Tab 或 Esc 退出。聯想候選顯示 Shift＋序號。滑鼠點擊帶原候選索引與 sequence，TSF 拒絕過期點擊。來源：`windows/src/candidate.rs`、`windows/src/tsf/`。
 
 ### 混打注音提示
 
-Windows 注音順序混打時，原始按鍵（如 `gj`）留在組字區，`mixed-reading-hint` 顯示 `ㄕㄨ`：同一個候選視窗與尺寸，藍底白字，沒有序號，不能點選。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`。
+原鍵混打時，原始按鍵（如 `gj`）留在組字區，`mixed-reading-hint` 顯示 `ㄕㄨ`：同一個候選視窗與尺寸，藍底白字，沒有序號，不能點選。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`。
 
 ### 圖示與中英模式提示
 

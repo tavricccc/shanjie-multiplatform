@@ -18,7 +18,7 @@ public sealed partial class MainWindow : UserControl
             if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
-        Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，關閉即時預測、選字後聯想及善解的額外標點／聲調操作。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
+        Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，Tab 與 → 展開表格，關閉即時預測、選字後聯想及善解的額外標點／聲調操作；Esc、候選讀音項與符號鍵盤等仍有差異，見專案文件。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
         RefreshPresets(); ShowLoadFeedback();
         Root.Loaded+=InitializeModels;
         Closed+=(_,_)=>{modelsClosed=true;modelScan?.Cancel();modelOperation?.Cancel();modelWatcher?.Dispose();};
@@ -38,6 +38,7 @@ public sealed partial class MainWindow : UserControl
     internal string? ShownModelForVerification => (ModelSelector.SelectedItem as Models.ModelChoice)?.Id;
     internal void SetCapsLockForVerification(bool value) => CapsLockToggle.SetToggleForVerification(value);
     internal void SetMixedModeForVerification(int mode) => MixedModeSelector.SelectedIndex = mode;
+    internal int MixedModeCountForVerification => MixedModeSelector.Items.Count;
     internal void SetSpaceCommitsForVerification(bool value) => SpaceCommitsToggle.SetToggleForVerification(value);
     internal void SetSpaceInputsZhuyinForVerification(bool value) => SpaceInputsZhuyinToggle.SetToggleForVerification(value);
     internal void SetSpaceOperatesForVerification(bool value) => SpaceOperatesToggle.SetToggleForVerification(value);
@@ -74,6 +75,7 @@ public sealed partial class MainWindow : UserControl
     internal string DictionaryForVerification => PersonalDictionaryEditor.Text;
     internal (bool standard, bool eten) InstalledOptionsForVerification => (StandardKeyboardOption.IsEnabled, EtenKeyboardOption.IsEnabled);
     internal InfoBarSeverity FeedbackForVerification => StatusBar.Severity;
+    internal void ShowFeedbackForVerification(InfoBarSeverity severity, string text) { Vm.Status = text; StatusBar.Severity = severity; StatusBar.IsOpen = true; }
     internal void SetInstalledForVerification(uint mask) { Vm.ApplyInstalledKeyboards(mask); ShowLoadFeedback(); }
     private void ShowLoadFeedback() { StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = !string.IsNullOrWhiteSpace(Vm.Status); }
     private void ShiftAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, true);
@@ -133,6 +135,37 @@ public sealed partial class MainWindow : UserControl
     internal void LoadProfile(bool windows)
     {
         Vm.Preset(windows); StatusBar.Severity = InfoBarSeverity.Informational; StatusBar.IsOpen = true;
+    }
+    internal QuickSetupView? QuickSetup { get; private set; }
+    /// Covers the settings pages in this window, so the single-instance forwarding and the glass stay as they are.
+    internal void OpenQuickSetup(bool reopened = false)
+    {
+        if (QuickSetup is not null) return;
+        Setup.QuickSetupGate.MarkShown();
+        QuickSetup = new QuickSetupView(reopened, FinishQuickSetup, () => Host.Minimize(true), () => { if (Host.CanClose()) Host.Close(); });
+        NavPane.Visibility = MainPane.Visibility = Visibility.Collapsed;
+        QuickSetupLayer.Children.Add(QuickSetup); QuickSetupLayer.Visibility = Visibility.Visible;
+        Host.SetCaption(QuickSetup.Caption);
+    }
+    private void FinishQuickSetup(bool applied)
+    {
+        QuickSetupLayer.Children.Clear(); QuickSetupLayer.Visibility = Visibility.Collapsed; QuickSetup = null;
+        NavPane.Visibility = MainPane.Visibility = Visibility.Visible;
+        Host.SetCaption(AppTitleBar, Head);
+        // The settings come up under the departing flow: navigation first, then the page.
+        var settle = new Controls.Choreography(Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(Root).Compositor, 520);
+        settle.Enter(NavPane, new System.Numerics.Vector3(-12, 0, 0), 0, 420).Enter(MainPane, new System.Numerics.Vector3(0, 12, 0), 70, 440).Then(() => { });
+        if (!applied) return;
+        Vm.Load(); RefreshPresets(); Vm.Status = "快速設定已套用。"; StatusBar.Severity = InfoBarSeverity.Success; StatusBar.IsOpen = true;
+    }
+    private async void ReopenQuickSetup(object sender, RoutedEventArgs args)
+    {
+        if (Vm.HasChanges)
+        {
+            var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = "先儲存目前的修改？", Content = "快速設定會從已儲存的設定開始，要先把這裡還沒儲存的修改存起來。", PrimaryButtonText = "儲存並繼續", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !SaveDraft()) return;
+        }
+        OpenQuickSetup(true);
     }
     private void Reload(object sender, RoutedEventArgs args) { Vm.Load(); RefreshPresets(); ShowLoadFeedback(); }
     private void Cancel(object sender, RoutedEventArgs args) => Close();

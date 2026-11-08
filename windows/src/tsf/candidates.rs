@@ -26,8 +26,8 @@ pub struct Candidates {
     caret: Cell<RECT>,
     pub theme: Cell<u32>,
     pub size: Cell<u32>,
-    pub vertical: Cell<bool>,
     pub anchor_right: Cell<bool>,
+    pub reading_panel: Cell<bool>,
     owner: Weak<Data>,
     view: Cell<HWND>,
     _count: Count,
@@ -59,8 +59,8 @@ pub unsafe fn new(
         caret: Cell::new(RECT::default()),
         theme: Cell::new(theme),
         size: Cell::new(size),
-        vertical: Cell::new(false),
         anchor_right: Cell::new(true),
+        reading_panel: Cell::new(false),
         owner,
         view: Cell::new(HWND::default()),
         _count: Count::new(),
@@ -122,6 +122,7 @@ impl Candidates {
         range: &ITfRange,
         state: Snapshot,
     ) -> Result<()> {
+        let state = crate::input::panel_view(state, self.reading_panel.get());
         if state.candidates.is_empty() && state.preedit.is_empty() {
             self.close();
             return Ok(());
@@ -130,7 +131,7 @@ impl Candidates {
         self.revision.set(self.revision.get() + 1);
         *self.snapshot.borrow_mut() = state;
         *self.document.borrow_mut() = Some(context.GetDocumentMgr()?);
-        // Composition without candidates keeps only our reading panel; TSF sees no candidate list.
+        // Composition without candidates (reading panel on) keeps only that panel; TSF sees no candidate list.
         if !listed {
             if self.id.get() != TF_INVALID_UIELEMENTID {
                 let id = self.id.replace(TF_INVALID_UIELEMENTID);
@@ -232,7 +233,6 @@ impl Candidates {
             *host = Some(Host::start(self.window.get(), owner)?);
         }
         if let Some(host) = host.as_mut() {
-            host.vertical = self.vertical.get();
             host.anchor_right = self.anchor_right.get();
             host.publish(
                 self.snapshot.borrow().clone(),

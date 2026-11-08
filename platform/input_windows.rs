@@ -13,7 +13,7 @@ impl Engine {
         for index in first..self.lex.by_word.len() {
             let (word, score) = word_at(index);
             if !word.starts_with(prefix) { break; }
-            if word.len() > prefix.len() && (!self.candidate_big5 || fits_big5(word)) { words.push((word[prefix.len()..].to_owned(), score)); }
+            if word.len() > prefix.len() { words.push((word[prefix.len()..].to_owned(), score)); }
         }
         words.sort_by(|a,b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         words.truncate(81);
@@ -67,7 +67,6 @@ impl Engine {
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
         engine.digit_table = windows_digit_table(data); Ok(engine)
     }
-    pub fn set_candidate_charset(&mut self, big5: bool) { self.candidate_big5 = big5; self.cands = None; self.clear_pred(); }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
     pub fn candidate_reading(&self) -> String {
         let Some(cands) = &self.cands else { return String::new() };
@@ -86,21 +85,15 @@ impl Engine {
         let commit = self.display.chars().take(before).collect::<String>() + &reading + &self.display.chars().skip(after).collect::<String>();
         self.clear_all(); self.view(true,commit)
     }
-    /// Windows policy on a window upstream just opened: the Big5 and reading-text filters, the typed-zhuyin and
+    /// Windows policy on a window upstream just opened: the reading-text filter, the typed-zhuyin and
     /// original-letters items. Windows built from a prediction row, English or digit windows keep upstream's list
-    /// (their indexes carry meaning); only the lexicon items behind a row are filtered.
+    /// (their indexes carry meaning).
     fn decorate_windows_candidates(&mut self) {
         let Some(mut cands) = self.cands.take() else { return };
         let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
         let touching = self.cursor.saturating_sub(1);
         let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
         if !plain || digits {
-            let kept = cands.rows.len();
-            if self.candidate_big5 && cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() {
-                let kept = kept.min(cands.list.len());
-                let keep: Vec<bool> = cands.list.iter().enumerate().map(|(i,(word,_))| i < kept || fits_big5(word)).collect();
-                retain_with_alt(&mut cands, &keep);
-            }
             self.cands = (!cands.list.is_empty()).then_some(cands);
             return;
         }
@@ -113,7 +106,7 @@ impl Engine {
     /// `alt` is upstream's map from a list position to a tolerant item's lexicon reading; it follows its items.
     fn make_candidates_with(&self, list: Vec<(String,usize)>, alt: HashMap<usize,Vec<String>>) -> Option<Cands> {
         let (_,length) = list.first()?.clone();
-        let keep: Vec<bool> = list.iter().map(|(word,_)| (self.space_inputs_zhuyin || !windows_reading_text(word)) && (!self.candidate_big5 || fits_big5(word))).collect();
+        let keep: Vec<bool> = list.iter().map(|(word,_)| self.space_inputs_zhuyin || !windows_reading_text(word)).collect();
         let (start,end) = self.candidate_span(length);
         let mut cands = Cands::new(list, self.cand_vertical);
         cands.alt = alt;
@@ -159,52 +152,6 @@ fn insert_with_alt(cands: &mut Cands, index: usize, item: (String,usize)) {
 /// missing or malformed leaves the digit layer off.
 fn windows_digit_table(data: &Path) -> Option<Arc<DigitTable>> {
     std::fs::read_to_string(data.join("digits.tsv")).ok().and_then(|t| DigitTable::parse(&t)).map(Arc::new)
-}
-// glibc's CP950 is the same code page; without //TRANSLIT it never substitutes, matching
-// WC_NO_BEST_FIT_CHARS. The descriptor is kept per thread; without one nothing is filtered.
-#[cfg(unix)]
-fn fits_big5(word: &str) -> bool {
-    use std::{cell::Cell, ffi::{c_char, c_void}, ptr::null_mut};
-    extern "C" {
-        fn iconv_open(to: *const c_char, from: *const c_char) -> *mut c_void;
-        fn iconv(cd: *mut c_void, input: *mut *mut c_char, input_left: *mut usize, output: *mut *mut c_char, output_left: *mut usize) -> usize;
-    }
-    thread_local! { static CD: Cell<*mut c_void> = const { Cell::new(null_mut()) }; }
-    let cd = CD.with(|cd| {
-        if cd.get().is_null() { cd.set(unsafe { iconv_open(c"CP950".as_ptr(), c"UTF-8".as_ptr()) }); }
-        cd.get()
-    });
-    if cd as isize == -1 { return true; }
-    let mut input = word.as_bytes().to_vec();
-    let mut output = vec![0u8; input.len() * 2 + 8];
-    let (mut input_ptr, mut input_left) = (input.as_mut_ptr().cast::<c_char>(), input.len());
-    let (mut output_ptr, mut output_left) = (output.as_mut_ptr().cast::<c_char>(), output.len());
-    unsafe {
-        iconv(cd, null_mut(), null_mut(), null_mut(), null_mut());
-        iconv(cd, &mut input_ptr, &mut input_left, &mut output_ptr, &mut output_left) == 0 && input_left == 0
-    }
-}
-#[cfg(windows)]
-fn fits_big5(word: &str) -> bool {
-    #[link(name="kernel32")]
-    unsafe extern "system" { fn WideCharToMultiByte(page: u32, flags: u32, text: *const u16, length: i32, output: *mut u8, capacity: i32, default: *const u8, used: *mut i32) -> i32; }
-    let wide: Vec<u16> = word.encode_utf16().collect(); let mut bytes = vec![0u8; wide.len()*2]; let mut used = 0;
-    let length = unsafe { WideCharToMultiByte(950,0x400,wide.as_ptr(),wide.len() as i32,bytes.as_mut_ptr(),bytes.len() as i32,std::ptr::null(),&mut used) };
-    length > 0 && used == 0
-}
-
-#[cfg(test)]
-mod windows_input_tests {
-    use super::*;
-    #[test]
-    fn big5_candidate_filter_preserves_unicode_default() {
-        let lex = Lexicon::parse("ㄐㄧˊ 𠮷 -0.1\nㄐㄧˊ 吉 -0.2\n").unwrap();
-        let mut engine = Engine::with_lexicon(Arc::new(lex),Layout::Standard);
-        for ch in "ru6".chars() { engine.key(Key::ch(ch,0)).unwrap(); }
-        assert!(engine.key(Key::new(KeyKind::Down)).unwrap().candidates.contains(&"𠮷".to_owned()));
-        engine.set_candidate_charset(true);
-        assert_eq!(engine.key(Key::new(KeyKind::Down)).unwrap().candidates,vec!["吉"]);
-    }
 }
 #[cfg(test)]
 mod personal_lexicon_tests {

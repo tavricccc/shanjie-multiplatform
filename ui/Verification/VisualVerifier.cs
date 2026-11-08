@@ -83,9 +83,9 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 0 || settings.Vm.Anchor != 0 || !settings.Vm.ShiftToggle || settings.Vm.CtrlSpaceToggle || settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.FontSize != 22 || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.ShiftPunctuation)
             throw new InvalidDataException("Windows preset/retained data round-trip failed");
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.Interaction != 1 || settings.Vm.ShiftToggle) throw new InvalidDataException("Shanjie profile round-trip failed");
+        if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
-        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || !File.ReadAllText(Models.ProfileStore.Path).Contains("layout=horizontal")) throw new InvalidDataException("Latest model/horizontal migration failed");
+        settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");
@@ -129,18 +129,18 @@ internal static class VisualVerifier
             await Capture(settings.CaptureElement, Path.Combine(output, $"candidate-right-action-{(windowsMode ? "windows" : "shanjie")}.png"));
         }
         File.WriteAllText(Models.ProfileStore.Path, beforeRight); settings.Vm.Load();
-        // 0.6.0: per-key punctuation, vertical layout and a shared preset round-trip that keeps personal data.
-        settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.CandidateLayout = 1; settings.Vm.Save(); settings.Vm.Load();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1) throw new InvalidDataException("Per-key punctuation/vertical persistence failed");
+        // 0.6.0: per-key punctuation and a shared preset round-trip that keeps personal data.
+        settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.Save(); settings.Vm.Load();
+        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn) throw new InvalidDataException("Per-key punctuation persistence failed");
         string shared = settings.Vm.ExportPreset("驗證預設");
         if (shared.Contains("font_size") || shared.Contains("dictionary")) throw new InvalidDataException("Exported preset carries personal data");
         settings.LoadProfile(true); settings.Vm.ImportPreset(shared, "fallback"); settings.RefreshPresets();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.CandidateLayout != 1 || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
+        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
             throw new InvalidDataException("Shared preset import failed");
         bool rejected = false;
         try { settings.Vm.ImportPreset("[candidates]\nanchor=middle\n", "bad"); } catch (InvalidDataException) { rejected = true; }
         if (!rejected) throw new InvalidDataException("Invalid preset was accepted");
-        settings.LoadProfile(true); settings.Vm.CandidateLayout = 0; settings.Vm.Save(); settings.Vm.Load();
+        settings.LoadProfile(true); settings.Vm.Save(); settings.Vm.Load();
         settings.ShowSection(MainWindow.Pages.Dictionary); settings.SetPredictionForVerification(true); await Task.Delay(60);
         if (!settings.Vm.Prediction) throw new InvalidDataException("Native toggle did not update the shared draft");
         settings.SetPredictionForVerification(false); await Task.Delay(60);
@@ -149,12 +149,21 @@ internal static class VisualVerifier
         if (settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle off did not update the shared draft");
         settings.SetCapsLockForVerification(true); await Task.Delay(60);
         if (!settings.Vm.CapsLockEnglish) throw new InvalidDataException("Caps Lock toggle on did not update the shared draft");
-        foreach (var mode in new[] { 1, 2, 3, 0 })
+        // A saved opt-out stays: saving must not run the older-schema migration again.
+        bool backquote = settings.Vm.BackquoteSymbols;
+        settings.Vm.BackquoteSymbols = false; settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.BackquoteSymbols) throw new InvalidDataException("Saving reset an explicit backquote opt-out");
+        settings.Vm.BackquoteSymbols = backquote; settings.Vm.Save(); settings.Vm.Load();
+        // One choice: off, raw-key mixing, upstream English; 兩者並用 is gone.
+        if (settings.MixedModeCountForVerification != 3) throw new InvalidDataException("The mixing mode should offer exactly off, raw-key mixing and upstream English");
+        foreach (var mode in new[] { 1, 2, 0 })
         {
             settings.SetMixedModeForVerification(mode); await Task.Delay(60);
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} binding failed");
             settings.Vm.Save(); settings.Vm.Load();
             if (settings.Vm.MixedMode != mode) throw new InvalidDataException($"Mixed mode {mode} persistence failed");
+            bool forced = mode == 1;
+            if (settings.Vm.ReadingPanelShown != forced || settings.Vm.CanChooseReadingPanel == forced || settings.Vm.ReadingPanel) throw new InvalidDataException($"Mixed mode {mode} reading panel rule failed");
         }
         if (settings.Vm.SpaceCommits || settings.Vm.SpaceOperates) throw new InvalidDataException("Space should insert editable whitespace by default");
         foreach (bool enabled in new[] { true, false }) {
@@ -179,6 +188,16 @@ internal static class VisualVerifier
             }
             settings.ShowSection(0); settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-saved.png"));
+            // The status bar in each severity; the app has no warning message yet, so that one is sample text.
+            foreach (var (severity, name, text) in new[] {
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success, "success", "快速設定已套用。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational, "info", "已載入「Windows／微軟注音按鍵」操作預設，按儲存後才套用。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning, "warning", "驗證用的警告訊息：這一行測試換行時圖示、文字與關閉按鈕的對齊，所以刻意寫得比較長一些，好讓它在設定視窗裡折成兩行。"),
+                (Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error, "error", "無法儲存設定：存取被拒。") })
+            {
+                settings.ShowFeedbackForVerification(severity, text); await Task.Delay(350);
+                await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-status-{name}.png"));
+            }
             settings.ShowSection(MainWindow.Pages.Dictionary); settings.Vm.DictionaryText = "invalid"; settings.SaveDraft(); await Task.Delay(350);
             await Capture(settings.CaptureElement, Path.Combine(output, $"settings-{theme}-error.png"));
             settings.Vm.DictionaryText = ""; settings.LoadProfile(false); settings.ShowSection(MainWindow.Pages.Candidates); await Task.Delay(350);

@@ -320,6 +320,9 @@ int wmain(int argc, wchar_t** argv) {
             press(VK_DOWN,1001);require(selected()==3,1003);
             press(VK_UP,1004);require(selected()==2,1006);
             press(VK_UP,1007);candidates->GetCount(&gridCount);require(gridCount<=9,1009);
+            // Tab shares the action with the right arrow in the Windows interaction.
+            press(VK_TAB,1023);candidates->GetCount(&gridCount);require(gridCount>9,1025);
+            press(VK_UP,1026);candidates->GetCount(&gridCount);require(gridCount<=9,1027);
             press(VK_RIGHT,1010);candidates->GetCount(&gridCount);require(gridCount>9,1012);
             for(int i=0;i<7;i++)press(VK_DOWN,1013);
             require(selected()==9,1015);
@@ -469,6 +472,12 @@ int wmain(int argc, wchar_t** argv) {
     if (original) {
         press(VK_RIGHT,110); UINT selection = 0; candidates->GetSelection(&selection); require(selection == 1,112);
         press(VK_ESCAPE,113); press(VK_ESCAPE,115);
+        // Tab as upstream (core tests/engine.rs, rule 8 then 21): the list closes, the composition is sent and the App gets the key.
+        auto beforeTab=store->text; press('S',1046); press('U',1047); press('3',1048); press(VK_DOWN,1049);
+        BOOL tabTest=FALSE, tabEaten=TRUE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_TAB,0,&tabTest)) && tabTest,1050);
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_TAB,0,&tabEaten)) && !tabEaten,1051);
+        require(store->text.size()==beforeTab.size()+1 && store->text.find(L'你')!=std::wstring::npos,1052);
         wchar_t local[32768];GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
         auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
         for(auto action:{L"none",L"page",L"expand"}) {
@@ -486,6 +495,9 @@ int wmain(int argc, wchar_t** argv) {
             } else {candidates->GetSelection(&selection);require(selection==1&&count<=9,1040);}
             press(VK_ESCAPE,1041);press(VK_ESCAPE,1043);
         }
+        // The template turns the single-Shift switch on as upstream does; turned off, Shift passes through untouched.
+        require(WritePrivateProfileStringW(L"shortcuts",L"shift_toggle",L"0",profile.c_str()),116);
+        localNotify(L"Shanjie.ProfileChanged.v2");
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
         std::puts("Original Shanjie profile: none/page/expand candidate navigation and unchanged Shift passed");
     }

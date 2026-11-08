@@ -172,9 +172,7 @@ impl Engine {
             e.operation(|h, o| shanjie_engine_set_rerank(h, config.rerank as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank_level(h, config.rerank_level, o))?;
             e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;
-            if shanjie_windows_set_candidate_anchor(e.handle, config.right as u32) != 0
-                || shanjie_windows_set_candidate_charset(e.handle, config.big5 as u32) != 0
-            {
+            if shanjie_windows_set_candidate_anchor(e.handle, config.right as u32) != 0 {
                 return None;
             }
             if config.learning {

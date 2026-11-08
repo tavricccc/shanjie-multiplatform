@@ -235,6 +235,19 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         rerank_ready: false,
     }
 }
+fn warming_name(endpoint: &str) -> Vec<u16> {
+    crate::wide(&format!("Local\\ShanjieCoreWarmed-{:x}", Sha256::digest(endpoint.as_bytes())))
+}
+/// Whether the core on this endpoint is still loading its resources. A host that cannot open the event
+/// (a sandbox, an older core) counts it as not warming and keeps the short limit on a busy pipe.
+fn warming(endpoint: &str) -> bool {
+    use windows::{core::PCWSTR, Win32::{Foundation::{CloseHandle, WAIT_TIMEOUT}, System::Threading::{OpenEventW, WaitForSingleObject, SYNCHRONIZATION_SYNCHRONIZE}}};
+    let name = warming_name(endpoint);
+    let Ok(event) = (unsafe { OpenEventW(SYNCHRONIZATION_SYNCHRONIZE, false, PCWSTR(name.as_ptr())) }) else { return false };
+    let waiting = unsafe { WaitForSingleObject(event, 0) } == WAIT_TIMEOUT;
+    let _ = unsafe { CloseHandle(event) };
+    waiting
+}
 fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pipe_io::Pipe> {
     use std::os::windows::fs::OpenOptionsExt;
     let name = endpoint(data)?;
@@ -278,6 +291,10 @@ fn connect(data: &Path, start: bool, deadline: Instant) -> io::Result<crate::pip
             },
             Err(error) => {
                 if error.raw_os_error() == Some(231) {
+                    // One listener exists while the core warms: busy then means "wait", not a full pool.
+                    if warming(&name) {
+                        full_since = None;
+                    }
                     let since = *full_since.get_or_insert_with(Instant::now);
                     if since.elapsed() >= Duration::from_secs(1) {
                         return Err(error);
@@ -524,6 +541,10 @@ pub fn serve(data: &Path) -> io::Result<()> {
             Ok(File::from_raw_handle(raw))
         }
     };
+    // Created unset before the pipe and set after warming, for the life of this process: see `warming`.
+    let warmed_name = warming_name(&endpoint);
+    let warmed = unsafe { windows::Win32::System::Threading::CreateEventW(None, true, false, PCWSTR(warmed_name.as_ptr())) }
+        .map_err(|e| io::Error::other(e.to_string()))?;
     // Own the endpoint before warming, so simultaneous first keys start one core.
     let mut pipe = create(true)?;
     let p = crate::profile::load(&crate::profile::path())
@@ -536,6 +557,7 @@ pub fn serve(data: &Path) -> io::Result<()> {
         .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
     let _warm = warm; // Keep resources resident even with no input clients.
     crate::word_helper::start_resident(data);
+    unsafe { windows::Win32::System::Threading::SetEvent(warmed) }.map_err(|e| io::Error::other(e.to_string()))?;
     let sessions: session::Sessions = Default::default();
     loop {
         let connected = unsafe {
