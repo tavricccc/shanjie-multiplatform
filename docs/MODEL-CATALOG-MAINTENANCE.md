@@ -41,6 +41,8 @@ Actions 的 `model-catalog-publication` artifact 保留 30 天，含清單、狀
 
 本機契約測試：`python -m unittest discover -s scripts/model_catalog -p "test_*.py" -v`。`probe.ps1` 需要 Windows、兩架構 MSVC 與 Rust；原生檢查使用公開資料，不讀個人字典或學習檔。
 
+內建模型可在獨立的 `LOCALAPPDATA`、`SHANJIE_TEST_PROFILE=1` 與 `SHANJIE_CORE_LOCAL=1` 下，以 `shanjie-model-check builtin <LOCALAPPDATA>/Shanjie/Models builtin dist/data` 驗證聊天與書面模式的輸入、單次提交及同步／背景重排，不依賴線上配套的來源識別。
+
 ## Actions 執行環境
 
 模型與 release 工作流程的官方 Actions 固定為 Node.js 24 版本：checkout 7.0.1、cache 6.1.0、setup-python 7.1.0、setup-dotnet 6.0.0、upload-artifact 7.0.2、download-artifact 8.0.2，均使用完整 commit SHA。版本依各官方 repository 的 release、action.yml 與 README 核對；例如 [checkout 的 runner／憑證變更](https://github.com/actions/checkout/tree/v7.0.1)、[artifact 的 archive 契約](https://github.com/actions/upload-artifact/tree/v7.0.2)。

@@ -80,7 +80,7 @@ prepare 腳本以確切錨點核對陣列型別、`Fixed` 欄位、初始化、`
 
 ## 測試
 
-`scripts/test-core.ps1` 在獨立的 `build/test` 樹跑上游 core 的全部單元與整合測試，使用核心 pin 的原始模型組（會意第 7 版），保留固定候選結果的斷言；內建第 8 版由模型準備時的載入與常談配對檢查驗證。Windows 只做以下調整，其餘斷言照上游：
+`scripts/test-core.ps1` 在獨立的 `build/test` 樹跑上游 core 的全部單元與整合測試，使用核心 pin 的原始模型組（會意第 7 版），保留固定候選結果的斷言；內建第 8 版由模型準備時的載入／常談配對檢查與 `shanjie-model-check builtin` 的原生輸入／重排檢查驗證。Windows 只做以下調整，其餘斷言照上游：
 
 - 符號連結改為複製；不存在的來源以資料夾代替（同樣是「存在但讀不到」）。
 - 唯讀映射中的檔案不能刪除或改寫：`tri_tiny` 先釋放模型再刪檔；`load_lm_refuses_a_bad_trigram_table` 跳過。
