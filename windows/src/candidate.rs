@@ -32,8 +32,9 @@ pub(crate) struct Palette {
     pub(crate) text: D2D1_COLOR_F,
     label: D2D1_COLOR_F,
     number: D2D1_COLOR_F,
-    accent: D2D1_COLOR_F,
-    selected: D2D1_COLOR_F,
+    pub(crate) accent: D2D1_COLOR_F,
+    pub(crate) selected: D2D1_COLOR_F,
+    pub(crate) hint: D2D1_COLOR_F,
     edge: D2D1_COLOR_F,
     mark: D2D1_COLOR_F,
     divider: D2D1_COLOR_F,
@@ -41,6 +42,9 @@ pub(crate) struct Palette {
 }
 impl Palette {
     pub(crate) fn new(theme: u32) -> Result<Self> {
+        Self::with(theme, crate::appearance::Appearance::default())
+    }
+    pub(crate) fn with(theme: u32, appearance: crate::appearance::Appearance) -> Result<Self> {
         unsafe {
             let mut contrast = HIGHCONTRASTW {
                 cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,
@@ -65,6 +69,7 @@ impl Palette {
                     number: system(COLOR_WINDOWTEXT),
                     accent: system(COLOR_HIGHLIGHT),
                     selected: system(COLOR_HIGHLIGHTTEXT),
+                    hint: system(COLOR_WINDOWTEXT),
                     edge: rgba(0, 0.0),
                     mark: rgba(0, 0.0),
                     divider: system(COLOR_WINDOWTEXT),
@@ -80,17 +85,20 @@ impl Palette {
                     w!("AppsUseLightTheme"), RRF_RT_REG_DWORD, None,
                     Some((&mut light as *mut u32).cast()), Some(&mut size));
             }
+            let accent = appearance.accent(if matches!(appearance.accent,shanjie_shell::appearance::Accent::Windows){crate::appearance::system_accent()}else{crate::appearance::DEFAULT_ACCENT});
+            let selected = shanjie_shell::appearance::foreground(accent);
             if theme == 2 || (theme == 0 && light == 0) {
                 return Ok(Self {
-                    background: rgba(0x1c1c20, 0.97),
+                    background: if appearance.pure_black { rgb(0) } else { rgba(0x1c1c20, 0.97) },
                     border: rgba(0xffffff, 0.08),
                     text: rgba(0xffffff, 0.94),
                     label: rgba(0xffffff, 0.64),
                     number: rgba(0xffffff, 0.4),
-                    accent: rgb(0x5874c9),
-                    selected: rgb(0xffffff),
+                    accent: rgb(accent),
+                    selected: rgb(selected),
+                    hint: rgb(shanjie_shell::appearance::text_accent(accent,if appearance.pure_black{0}else{0x1c1c20})),
                     edge: rgba(0xffffff, 0.12),
-                    mark: rgba(0x5874c9, 0.3),
+                    mark: rgba(accent, 0.3),
                     divider: rgba(0xffffff, 0.08),
                     shadow: 0.42,
                 });
@@ -101,10 +109,11 @@ impl Palette {
                 text: rgba(0x141418, 0.92),
                 label: rgba(0x141418, 0.62),
                 number: rgba(0x141418, 0.42),
-                accent: rgb(0x5874c9),
-                selected: rgb(0xffffff),
+                accent: rgb(accent),
+                selected: rgb(selected),
+                hint: rgb(shanjie_shell::appearance::text_accent(accent,0xf8f8fa)),
                 edge: rgba(0xffffff, 0.8),
-                mark: rgba(0x5874c9, 0.14),
+                mark: rgba(accent, 0.14),
                 divider: rgba(0x000000, 0.06),
                 shadow: 0.18,
             })
@@ -184,7 +193,7 @@ fn progress(start: Option<Instant>, ms: f32, curve: [f32; 4]) -> Option<f32> {
 }
 /// Whether Windows' animation effects are on (and this is not a capture run, which needs the final frame).
 /// `SHANJIE_VERIFY_MOTION` is the harness asking to time a glide whatever the desktop's setting is.
-fn animated() -> bool {
+fn animated(policy: shanjie_shell::appearance::Animation) -> bool {
     if std::env::var_os("SHANJIE_VERIFY_MOTION").is_some() {
         return true;
     }
@@ -193,7 +202,7 @@ fn animated() -> bool {
         let _ = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, Some((&mut on as *mut BOOL).cast()),
             SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0));
     }
-    on.as_bool() && std::env::var_os("SHANJIE_VERIFY_UI").is_none()
+    policy.enabled(on.as_bool()) && std::env::var_os("SHANJIE_VERIFY_UI").is_none()
 }
 struct Item {
     word: IDWriteTextLayout,
@@ -211,6 +220,8 @@ pub struct Host {
     pub sequence: i32,
     state: Snapshot,
     theme: u32,
+    pub(crate) appearance: crate::appearance::Appearance,
+    hint_brush: ID2D1SolidColorBrush,
     size: u32,
     scale: f32,
     row: f32,
@@ -271,12 +282,14 @@ impl Host {
             };
             let target = factory.CreateDCRenderTarget(&properties)?;
             let brush = target.CreateSolidColorBrush(&rgb(0), None)?;
+            let hint_brush = target.CreateSolidColorBrush(&rgb(crate::appearance::DEFAULT_ACCENT), None)?;
             let mut host = Box::new(Self {
                 window: HWND::default(),
                 callback,
                 sequence: 0,
                 state: Snapshot::default(),
                 theme: 0,
+                appearance: crate::appearance::Appearance::default(),
                 size: 16,
                 scale: 1.0,
                 row: 28.0,
@@ -284,6 +297,7 @@ impl Host {
                 text_factory,
                 target,
                 brush,
+                hint_brush,
                 palette: Palette::new(0)?,
                 items: Vec::new(),
                 reading: None,
@@ -504,9 +518,8 @@ impl Host {
                         Ok(x)
                     };
                     self.reading_mark = Some((edge(start)?, edge(start + length)?.min(self.reading_width)));
-                    let blue = self.target.CreateSolidColorBrush(&self.palette.accent, None)?;
                     let _ = layout.SetDrawingEffect(
-                        &blue,
+                        &self.hint_brush,
                         DWRITE_TEXT_RANGE { startPosition: start as u32, length: length as u32 },
                     );
                 }
@@ -661,7 +674,8 @@ impl Host {
             self.state = state;
             self.theme = theme;
             self.size = size;
-            self.palette = Palette::new(theme)?;
+            self.palette = Palette::with(theme, self.appearance)?;
+            self.hint_brush.SetColor(&self.palette.hint);
             let mut monitor = MONITORINFO {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
@@ -719,7 +733,7 @@ impl Host {
                     x = -12000;
                     y = -12000;
                 }
-                let motion = animated();
+                let motion = animated(self.appearance.animation);
                 self.origin = (x, y);
                 if !shown {
                     self.opened = motion.then(Instant::now);
@@ -1013,13 +1027,19 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
         }
         if [
             WM_SETTINGCHANGE,
+            WM_SYSCOLORCHANGE,
             WM_THEMECHANGED,
             WM_DWMCOLORIZATIONCOLORCHANGED,
         ]
         .contains(&message)
         {
             let host = &mut *ptr;
-            if let Ok(p) = Palette::new(host.theme) {
+            if !animated(host.appearance.animation) {
+                host.opened=None;host.glide=None;host.morph=None;
+                let _=KillTimer(Some(window),TIMER);
+            }
+            if let Ok(p) = Palette::with(host.theme, host.appearance) {
+                host.hint_brush.SetColor(&p.hint);
                 host.palette = p;
             }
             if host.shown() {
@@ -1064,6 +1084,63 @@ impl Drop for Buffer {
             let _ = DeleteObject(self.bitmap.into());
         }
     }
+}
+#[cfg(test)]
+mod appearance_tests {
+    use super::*;
+    use crate::appearance::Appearance;
+    #[test]
+    fn custom_accent_and_black_surface_follow_the_profile() {
+        if crate::appearance::high_contrast() { return; }
+        let mut appearance=Appearance::default();
+        appearance.accent=shanjie_shell::appearance::Accent::Custom(0xffff00);
+        appearance.pure_black=true;
+        let dark=Palette::with(2,appearance).unwrap();
+        assert_eq!((dark.background.r,dark.background.g,dark.background.b,dark.background.a),(0.0,0.0,0.0,1.0));
+        assert_eq!((dark.accent.r,dark.accent.g,dark.accent.b),(1.0,1.0,0.0));
+        assert_eq!((dark.selected.r,dark.selected.g,dark.selected.b),(0.0,0.0,0.0));
+        assert!(Palette::with(1,appearance).unwrap().background.r>0.9);
+    }
+    #[test]
+    #[ignore="Owned offscreen renderer measurement; run with isolated verification permission"]
+    fn candidate_buffer_allocation_cost() { unsafe {
+        use windows::Win32::System::{Com::*,Threading::*};
+        CoInitializeEx(None,COINIT_APARTMENTTHREADED).ok().unwrap();
+        std::env::set_var("SHANJIE_VERIFY_UI","1");
+        let mut host=Host::start(HWND::default(),None).unwrap();
+        let state=Snapshot{candidates:vec!["善解".into(),"候選視窗".into(),"文字輸入".into()],selected:Some(0),total:3,..Default::default()};
+        let caret=RECT{left:100,top:100,right:101,bottom:120};
+        let cpu=||{
+            let(mut a,mut b,mut c,mut d)=(FILETIME::default(),FILETIME::default(),FILETIME::default(),FILETIME::default());
+            GetThreadTimes(GetCurrentThread(),&mut a,&mut b,&mut c,&mut d).unwrap();
+            ((c.dwHighDateTime as u64)<<32|c.dwLowDateTime as u64)+((d.dwHighDateTime as u64)<<32|d.dwLowDateTime as u64)
+        };
+        for size in [16,32] {
+            host.publish(state.clone(),2,size,caret,true).unwrap();
+            let panel=host.panel;let(_,_,w,h)=host.frame(panel,100,100);
+            let baseline=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+            let buffer=Buffer::new(w,h).unwrap();
+            let mut fresh=Vec::new();let mut reused=Vec::new();let mut allocations=Vec::new();
+            let start_cpu=cpu();
+            for i in 0..320 {
+                let order=if i%2==0{[true,false]}else{[false,true]};
+                for allocate in order {
+                    let start=Instant::now();
+                    if allocate {let alloc=Instant::now();let b=Buffer::new(w,h).unwrap();if i>=20{allocations.push(alloc.elapsed().as_secs_f64()*1e6);}host.paint(b.dc,w,h,panel).unwrap();}
+                    else {host.paint(buffer.dc,w,h,panel).unwrap();}
+                    if i>=20{if allocate{fresh.push(start.elapsed().as_secs_f64()*1e6)}else{reused.push(start.elapsed().as_secs_f64()*1e6)}}
+                }
+            }
+            let cpu_ms=(cpu()-start_cpu) as f64/10000.0;
+            drop(buffer);
+            let after=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+            assert!(after<=baseline+2,"GDI objects must not grow: {baseline} -> {after}");
+            for values in [&mut fresh,&mut reused,&mut allocations]{values.sort_by(f64::total_cmp);}
+            println!("BUFFER size={size} pixels={w}x{h} frames=600 allocations=300 fresh_p50_us={:.3} reused_p50_us={:.3} allocation_p50_us={:.3} fresh_p95_us={:.3} reused_p95_us={:.3} thread_cpu_ms={cpu_ms:.3} gdi={baseline}->{after}",fresh[150],reused[150],allocations[150],fresh[285],reused[285]);
+            host.hide();
+        }
+        drop(host);std::env::remove_var("SHANJIE_VERIFY_UI");CoUninitialize();
+    }}
 }
 #[cfg(test)]
 mod grid_tests {

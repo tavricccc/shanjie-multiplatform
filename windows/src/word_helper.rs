@@ -151,7 +151,7 @@ impl State{
             if let Ok(p)=crate::profile::load(&crate::profile::path()){self.prefs=p;}
             self.refresh=Instant::now();
             if !self.prefs.flag("shortcuts","add_word",true){self.close();}
-            if let Some(p)=&self.popup{let _=p.set_theme(self.prefs.number("appearance","theme",0));}
+            if let Some(p)=&self.popup{let _=p.set_appearance(self.prefs.number("appearance","theme",0),crate::appearance::Appearance::from_document(&self.prefs));}
         }
         if self.popup.as_ref().is_some_and(|p|!p.active()){self.close();return;}
         // During an upgrade a host may still hold the old TIP. Its existing
@@ -169,7 +169,7 @@ impl State{
                 let rect=RECT{left:m.rect[0],top:m.rect[1],right:m.rect[2],bottom:m.rect[3]};
                 let keyboard=self.prefs.number("input","keyboard",0);
                 let layout=if keyboard==1{shanjie_core::engine::Layout::Eten}else{shanjie_core::engine::Layout::Standard};
-                match Popup::open_helper(self.window,self.source,rect,m.word,self.data.clone(),layout,self.prefs.number("appearance","theme",0)){
+                match Popup::open_helper(self.window,self.source,rect,m.word,self.data.clone(),layout,self.prefs.number("appearance","theme",0),crate::appearance::Appearance::from_document(&self.prefs)){
                     Ok(p)=>{
                         let mut pid=0;GetWindowThreadProcessId(self.source,Some(&mut pid));
                         match SetWindowsHookExW(WH_KEYBOARD_LL,Some(route_key),Some(HINSTANCE(GetModuleHandleW(None).unwrap().0)),0){
@@ -318,7 +318,7 @@ pub fn display_fixture(source:usize,owner:u32)->Result<()> {unsafe{
     let helper=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,w!("STATIC"),w!(""),WS_POPUP,-12000,-12000,1,1,None,None,None,None)?;
     for mouse in [true,false]{
         let foreground=GetForegroundWindow();
-        let p=Popup::open_helper(helper,source,RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),shanjie_core::engine::Layout::Standard,0)?;
+        let p=Popup::open_helper(helper,source,RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),shanjie_core::engine::Layout::Standard,0,Default::default())?;
         let w=p.window();let mut rect=RECT::default();GetWindowRect(w,&mut rect)?;
         let dpi=windows::Win32::UI::HiDpi::GetDpiForWindow(w) as i32;
         assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));

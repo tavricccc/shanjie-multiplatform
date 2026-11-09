@@ -207,6 +207,30 @@ internal static class VisualVerifier
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
         await VerifyModelRescans(settings); VerifyCatalogText(); await VerifyAboutModels(settings, output);
+        // Palette preview, invalid HEX rejection, personal choices surviving a preset, and persistence.
+        settings.Vm.AccentMode=2;settings.Vm.AccentColor="#FFFF00";settings.Vm.PureBlack=true;settings.Vm.Theme=2;settings.Vm.AnimationMode=1;
+        settings.Vm.Save();settings.Vm.Load();
+        if (settings.Vm.AccentMode!=2 || settings.Vm.AccentColor!="#FFFF00" || !settings.Vm.PureBlack || settings.Vm.AnimationMode!=1 || !Controls.Motion.Animated)
+            throw new InvalidDataException("Appearance save/reload failed");
+        if (!Controls.Motion.HighContrast && (Controls.Motion.Accent.Color.R!=255 || Controls.Motion.Accent.Color.G!=255 || Controls.Motion.OnAccent.Color.R!=0))
+            throw new InvalidDataException("Bright accent selection is unreadable or not applied");
+        byte[] validAppearance=File.ReadAllBytes(Models.ProfileStore.Path);settings.Vm.AccentColor="#zzzzzz";
+        bool rejectedHex=false;try{settings.Vm.Save();}catch(InvalidDataException){rejectedHex=true;}
+        if(!rejectedHex || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(validAppearance))throw new InvalidDataException("Invalid HEX changed saved settings");
+        settings.Vm.AccentColor="#FFFF00";settings.Vm.Preset(true);
+        if(settings.Vm.AccentMode!=2 || !settings.Vm.PureBlack || settings.Vm.AnimationMode!=1)throw new InvalidDataException("Preset replaced personal appearance");
+        settings.ShowAppearance();await Task.Delay(150);await Capture(settings.CaptureElement,Path.Combine(output,"settings-custom-black.png"));
+        foreach(bool systemMotion in new[]{false,true}) {
+            Controls.Motion.SystemAnimationsForVerification=systemMotion;
+            foreach(int mode in new[]{0,1,2}) {
+                settings.Vm.AnimationMode=mode;
+                if(Controls.Motion.Animated!=(mode==1 || mode==0 && systemMotion))throw new InvalidDataException("Animation policy ignored");
+            }
+        }
+        Controls.Motion.SystemAnimationsForVerification=null;
+        settings.Vm.AccentMode=1;settings.Vm.AnimationMode=0;settings.Vm.PureBlack=false;
+        await Task.Delay(150);await Capture(settings.CaptureElement,Path.Combine(output,"settings-system-accent.png"));
+        settings.Vm.AccentMode=0;settings.Vm.AccentColor="#5874C9";settings.Vm.Save();
         // The single right-arrow selector migrates old switches and persists all three choices in both modes.
         string beforeRight = File.ReadAllText(Models.ProfileStore.Path);
         var rightChoice = (Microsoft.UI.Xaml.Controls.ComboBox)settings.FindName("CandidateRightAction");

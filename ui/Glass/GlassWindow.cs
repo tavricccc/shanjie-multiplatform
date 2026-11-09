@@ -37,12 +37,15 @@ internal sealed partial class GlassWindow : IDisposable
     internal nint Handle { get; }
     internal AppWindow AppWindow { get; }
     internal event EventHandler? Closed;
+    internal event Action? SystemAppearanceChanged;
     /// <summary>Asked before a user close (title bar button, Alt+F4, taskbar); returning false keeps the window open.</summary>
     internal Func<bool> CanClose { get; set; } = () => true;
     float tint = SavedTint();
     /// <summary>Glass density: the tint layer's opacity, 0 to 1 (default 0.42).</summary>
     internal float Tint { get => tint; set { tint = Math.Clamp(value, 0, 1); ApplyTheme(); } }
-    float Speed => system.AnimationsEnabled ? 1 : 0;
+    bool pureBlack;
+    internal bool PureBlack { get => pureBlack; set { pureBlack=value; ApplyTheme(); } }
+    float Speed => Controls.Motion.Animated ? 1 : 0;
     float Dpi => GetDpiForWindow(Handle) / 96f;
 
     internal GlassWindow(FrameworkElement content, string title, double width, double height, bool resizable, bool notification = false)
@@ -83,7 +86,7 @@ internal sealed partial class GlassWindow : IDisposable
         open.Add(this);
     }
 
-    void ApplyTheme() { if (!disposed) sj_glass_theme(glass, content.ActualTheme == ElementTheme.Dark, sj_glass_solid(), tint); }
+    void ApplyTheme() { if (!disposed) sj_glass_appearance(glass, content.ActualTheme == ElementTheme.Dark, sj_glass_solid(), tint, pureBlack); }
 
     void Center(double width, double height)
     {
@@ -272,6 +275,9 @@ internal sealed partial class GlassWindow : IDisposable
         if (!ready) return m == 0x83 ? 0 : DefWindowProcW(h, m, w, l);
         switch (m)
         {
+            case 0x1A: case 0x15: case 0x31A: case 0x320: // settings, system colors, theme, DWM accent
+                content.DispatcherQueue.TryEnqueue(() => { ApplyTheme(); SystemAppearanceChanged?.Invoke(); });
+                break;
             case 0x83: return 0; // WM_NCCALCSIZE: no frame; the whole window is client area
             case 0x21 when notification: return 3; // WM_MOUSEACTIVATE: MA_NOACTIVATE, buttons work without taking focus
             case 0x84: return HitTest(l);
@@ -338,6 +344,7 @@ internal sealed partial class GlassWindow : IDisposable
     const string Rust = "shanjie_windows.dll";
     [DllImport(Rust)] static extern nint sj_glass_create(nint owner);
     [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_theme(nint glass, [MarshalAs(UnmanagedType.I1)] bool dark, [MarshalAs(UnmanagedType.I1)] bool solid, float tint);
+    [DllImport(Rust)] [return: MarshalAs(UnmanagedType.I1)] static extern bool sj_glass_appearance(nint glass, [MarshalAs(UnmanagedType.I1)] bool dark, [MarshalAs(UnmanagedType.I1)] bool solid, float tint, [MarshalAs(UnmanagedType.I1)] bool pureBlack);
     [DllImport(Rust)] static extern float sj_glass_saved_tint();
     /// <summary>The saved strength from the profile, so setup and settings open with what the user chose.</summary>
     internal static float SavedTint() { try { return sj_glass_saved_tint(); } catch (Exception) { return 0.42f; } }
