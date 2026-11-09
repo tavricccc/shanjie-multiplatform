@@ -39,8 +39,9 @@ try {
             }
             'windows-unit' {
                 $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
-                Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target} -Action {
-                    cargo test --manifest-path windows/Cargo.toml --lib --target $target
+                # Installer journal and progress tests share a process-wide sink.
+                Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target;test_threads=1} -Action {
+                    cargo test --manifest-path windows/Cargo.toml --lib --target $target -- --test-threads=1
                     if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
                 }
             }

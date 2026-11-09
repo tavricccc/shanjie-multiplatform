@@ -31,8 +31,8 @@ try {
             & cargo test --manifest-path shared/Cargo.toml --lib --target x86_64-pc-windows-msvc
             if ($LASTEXITCODE) { throw 'Shared Rust unit tests failed.' }
         }
-        Invoke-Timed -Name 'Windows Rust unit tests' -Category 'rust.unit.windows' -Details @{ target='x86_64-pc-windows-msvc' } -Action {
-            & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc
+        Invoke-Timed -Name 'Windows Rust unit tests' -Category 'rust.unit.windows' -Details @{ target='x86_64-pc-windows-msvc';test_threads=1 } -Action {
+            & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --test-threads=1
             if ($LASTEXITCODE) { throw 'Windows Rust unit tests failed.' }
         }
         Invoke-Timed -Name 'Upstream core regression suite' -Category 'core.suite' -Details @{ architecture=$Architecture } -Action {
