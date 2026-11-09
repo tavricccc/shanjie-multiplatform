@@ -65,7 +65,7 @@
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="每行一個執行檔名稱，例如 discord.exe；可在工作管理員的「詳細資料」查到。瀏覽器裡的網頁聊天無法分辨，跟著瀏覽器用書面設定。"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="模型配置"><ComboBox x:Name="ModelSelector" ItemsSource="{x:Bind Vm.AvailableModels}" DisplayMemberPath="Name" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged"/></controls:SettingRow>
+                            <controls:SettingRow Label="模型配置" Stacked="True"><controls:ModelPicker x:Name="ModelSelector" ItemsSource="{x:Bind Vm.AvailableModels}" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged" HorizontalAlignment="Stretch"/></controls:SettingRow>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="取得其他模型…" Click="OnlineModels"/><Button Content="開啟模型資料夾" Click="OpenModelsFolder"/><Button Content="重新掃描" Click="RescanModels"/></StackPanel></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource SjNote}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
@@ -230,6 +230,8 @@
                             <TextBlock Text="原生 Windows 候選 · 本機注音引擎" FontSize="14" Foreground="{ThemeResource SjText1Brush}" TextWrapping="Wrap"/>
                             <TextBlock Text="輸入內容、詞庫、學習及設定都留在電腦上。操作預設調整按鍵與候選；鍵盤配置決定標準／倚天或拼音。" Style="{StaticResource SjBody}"/>
                         </controls:SettingCard>
+                        <TextBlock Text="貢獻者" Style="{StaticResource SjGroupTitle}"/>
+                        <controls:SettingCard Padding="14,8,14,12"><controls:ContributorsView x:Name="ContributorsList"/></controls:SettingCard>
                         <TextBlock Text="與微軟注音的差異" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard Padding="14,12,14,12" Spacing="4">
                             <TextBlock x:Name="Differences" Style="{StaticResource SjBody}"/>
