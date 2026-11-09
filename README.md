@@ -75,7 +75,8 @@
 
 ```powershell
 git submodule update --init
-pwsh -File scripts/package.ps1      # 建置並打包成 dist/Shanjie-Windows-Setup.exe
+pwsh -File scripts/package.ps1      # 建置測試用候選包，位於 build/release-candidates/
+pwsh -File scripts/release.ps1      # 完整 RELEASE 或重用有效紀錄，再產出正式安裝包
 pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建單一架構
 pwsh -File scripts/test.ps1 -Level FAST       # 日常快速檢查
 pwsh -File scripts/test.ps1 -Level AFFECTED   # 依變更範圍跑相關回歸
@@ -87,7 +88,7 @@ CTest 測試分類、案例清冊、報告與基準比較方法見 [Windows 驗�
 
 推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式附上；手動執行 workflow 預設只建置驗證，不覆寫既有 Release。
 
-`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
+`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只把現有 `dist/` 封裝為候選包。正式本機安裝包由 `release.ps1` 核對乾淨 commit、四處版本、完整雙架構 CTest／JUnit 與產物雜湊後提升至 `dist/Shanjie-Windows-Setup.exe`；CI-safe 或失效紀錄不能代替，流程見 [測試文件](docs/TESTING.md)。一般 PR CI 固定執行必要輕量基線，不擴大成完整驗收。
 
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
 - [上游差異](UPSTREAM-CHANGES.md)：核心覆蓋與升版流程。更新上游前先讀。

@@ -29,14 +29,21 @@
 - PR 與 issue 的標題、內文、留言盡量用繁體中文；程式碼、檔名與專有名詞可保留原文，commit 訊息仍用英文。
 - PR 標題格式 `type: 說明`（`type` 保留英文），內文用 [PR 模板](.github/pull_request_template.md)，關聯 issue 寫 `Closes #N`。一個 PR 只做一件事；功能與修正的 PR 不改版本號，發布另開升版 PR（見下方「版本號」）。
 - PR 要先跟上最新 `main`（rebase 或 merge 都可以），並依下方「驗證」表跑過該跑的項目後再開；沒跑的在 PR 裡寫明。
-- PR 的 `ci.yml` 以 CMake／CTest 執行 AFFECTED；影響範圍不明的建置或測試框架修改會按影響規則擴大至 FULL。WinUI 程式有變更時 CI 會編譯 UI 並跑離屏 mode smoke。Release workflow 執行 `RELEASE -CiSafe`；需要本機互動 Windows session 的驗收仍須在發布前由 Windows 本機完成。CI artifact 會附 CTest JUnit、日誌與分級報告；沒有實際執行的項目在 PR 內文標明。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
+- PR 的 `ci.yml` 與手動 `workflow_dispatch` 固定執行 `CI` 集合：上游資料、core overlay、shared／windows Rust 單元測試及低成本測試框架自檢，不依變更擴大、不建置完整產品或下載／轉換模型。維持 `ci`／`unit-tests` 名稱；一般分支 push 不觸發。完整 CTest 由本機 Windows 執行。既有 Release workflow 的版本發布條件與預設僅驗證模式保留；`RELEASE -CiSafe` 略過的互動項目須在本機補驗，不能宣稱通過。CI artifact 附 JUnit、日誌與 JSON 報告。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
 - Bug 與功能建議用 [issue 模板](.github/ISSUE_TEMPLATE/)；問題要附版本、Windows 版本與重現步驟。
 
 ## Commit、push 與發布
 
 - 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
 - push、開 PR、Release、安裝到實機、刪除使用者資料都先問。
-- 建置、CI 與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。
+- 完整建置與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。輕量 CI 不建置安裝包。
+
+### 本機正式發布防護
+
+- 「打包新版本」的本機入口是 `pwsh -File scripts/release.ps1`。它只重用同 commit、同四處版本、乾淨工作樹、完整 x64／x86 RELEASE 清冊與 JUnit 通過、所有子案例已執行，且建置檔／候選安裝包／JUnit 雜湊仍一致的紀錄；無效就重新建置並跑 RELEASE，有效則不重跑。
+- `package.ps1` 預設只產生 `build/release-candidates/<id>/` 的候選包。RELEASE 在這裡驗證候選包，不呼叫正式發布入口；整套通過後才可由 `package.ps1 -Promote -ReportPath <report.json>` 的程式防護提升至 `dist/Shanjie-Windows-Setup.exe`，並寫 `dist/release.json`。
+- `status=passed`、不完整清冊、跳過／未執行、CI-safe、舊 commit／版本或變更過的產物均不能授權本機正式發布。正式動作不得直接繞過此入口；不得把候選包當成正式發布完成。
+- GitHub Actions 的 RELEASE -CiSafe 只匯出標示為 CI artifact 的產物，不產生本機完整驗收標記；日常 PR 仍用固定輕量 CI。遠端 push／tag／Release 仍須使用者授權。
 
 ### 版本號
 
@@ -58,11 +65,12 @@
 
 ## 驗證：做多少
 
-所有一般驗收統一由 `scripts/test.ps1` 和 CTest 管理。變更路徑會依 `scripts/test.ps1` 的影響規則選測；規則無法明確判斷時擴大到 FULL。變更影響表與 CTest 案例清冊見 [docs/TESTING.md](docs/TESTING.md)。
+所有一般驗收統一由 `scripts/test.ps1` 和 CTest 管理。本機 AFFECTED 依 `scripts/test-plan.psm1` 的影響規則選測；規則無法明確判斷時擴大到 FULL。GitHub Actions 使用固定 CI 集合，沒有這項擴大機制。變更影響表與 CTest 案例清冊見 [docs/TESTING.md](docs/TESTING.md)。
 
 | 時機／變更 | 跑 | 用途 |
 | --- | --- | --- |
-| 日常程式修改 | `pwsh -File scripts/test.ps1 -Level FAST` | 靜態資料清冊、核心 overlay 與共用／Windows Rust 單元測試；純文件或註解不建置、不測試 |
+| 自動 PR／手動輕量 CI | `pwsh -File scripts/test.ps1 -Level CI -CiSafe` | 固定必要基線，不分析分支差異、不擴大至 FULL、不建置產品 |
+| 日常程式修改 | `pwsh -File scripts/test.ps1 -Level FAST` | 靜態資料清冊、核心 overlay 與共用／Windows Rust 單元測試；純文件不建置、不測試；程式碼檔不以行首符號判定純註解 |
 | 功能完成 | `pwsh -File scripts/test.ps1 -Level AFFECTED` | FAST 加上依變更模組選出的完整相關回歸；未知影響自動擴大至 FULL |
 | PR 或整合前 | `pwsh -File scripts/test.ps1 -Level FULL` | 完整 x64 驗收，保留上游核心、模型、TSF 與每項既有回歸斷言 |
 | Release 前 | `pwsh -File scripts/test.ps1 -Level RELEASE` | FULL、x86 回歸、離屏互動 harness、WinUI、候選 host 與安裝包檢查 |
@@ -77,9 +85,9 @@ ctest --preset windows-x64 -L tsf --output-on-failure
 pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 ```
 
-`-RetryFailures` 只對失敗案例最多重跑一次；通過案例不重跑。每次分級驗收都在 `build/reports/<run>/report.json` 記錄層級、選中與未選測試的原因、結果、耗時、快取資訊與 JUnit 位置；CTest 原始日誌和 JUnit XML 也保存在同一個 ignored build 目錄。回報必須列出實際跑過與未跑的測試及原因。不得把未執行的 Windows／TSF 測試說成通過。
+`-RetryFailures` 只對失敗 CTest 項目最多重跑一次；必要 fixture 由 CTest 重新加入。兩次 JUnit／日誌各自保留，JSON 的 `attempts` 與 `flaky_tests` 保留首次失敗。英文鍵與提交測試的全部模式／鍵盤／按鍵組合由同一份清冊產生執行計畫與 `subcases` 結果；未執行不算通過。每次分級驗收都在 `build/reports/<run>/report.json` 記錄層級、選中與未選測試的原因、結果、耗時、快取資訊與 JUnit 位置；CTest 原始日誌和 JUnit XML 也保存在同一個 ignored build 目錄。回報必須列出實際跑過與未跑的測試及原因。不得把未執行的 Windows／TSF 測試說成通過。
 
-`scripts/verify.ps1` 與 `scripts/test-core.ps1` 保留作為舊入口、核心除錯與 benchmark 對照；日常與 PR 驗收使用上列分級入口。上游核心測試原有的記憶體使用限制排程仍保留，`engine_lm` 與 `engine_replay` 延遲斷言仍各自序列執行。CTest 對模型使用、核心 fixture 與 UI 工作加鎖；私人桌面案例各用獨立 profile，不註冊輸入法、不切換桌面、不讀寫真實使用者資料。
+`scripts/verify.ps1` 與 `scripts/test-core.ps1` 保留作為舊入口、核心除錯與 benchmark 對照；日常與 PR 驗收使用上列分級入口。上游核心測試原有的記憶體使用限制排程仍保留，混打測試的快取身分斷言使用獨立 Cargo 程序，避免其他案例淘汰它正在比對的快取；`engine_lm` 與 `engine_replay` 延遲斷言仍各自序列執行。CTest 對模型使用、核心 fixture 與 UI 工作加鎖；私人桌面案例各用獨立 profile，不註冊輸入法、不切換桌面、不讀寫真實使用者資料。
 
 ### 建置與 Rust
 
@@ -109,8 +117,7 @@ pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 
 ## CodeGraph
 
-- 結構理解、符號搜尋、靜態函式呼叫關係與依賴／變更影響分析，優先使用 CodeGraph（`codegraph_explore`；單一符號或檔案用 `codegraph_node`）。結果不足或語言不支援時，再用原始碼搜尋等工具補足；靜態關係不代表執行期行為。
-- 使用前確認目標是本 Git 根目錄 `D:\Software\shanjie-windows-sourcecode\shanjie-windows`，必要時明確傳入 `projectPath`；外層工作區不是索引根目錄。
-- 後續聊天重用 `.codegraph/`，先以 `codegraph_status` 檢查索引與 watcher 狀態；自動更新落後時執行增量 `sync`，不要每次 `init` 或完整 `index`。本機 CLI：`& '..\.build-tools\codegraph\1.6.2\codegraph-win32-x64\bin\codegraph.cmd' status .`（將 `status` 換為 `sync` 可增量更新）。
-- MCP 連線存續時 watcher 自動更新；沒有連線時不常駐，重開後先檢查更新狀態。從 CLI 執行時同樣設定 `$env:CODEGRAPH_TELEMETRY='0'`、`$env:CODEGRAPH_NO_UPDATE_CHECK='1'`，避免遙測與使用者層級的版本檢查快取。
-- 遵守既有專案規則、權限與核准限制；MCP 不擴大寫入、部署或系統變更權限。PowerShell、XAML 等未受支援內容仍需直接查原始檔。
+- 有 `.codegraph/` 索引時，結構、符號與靜態呼叫關係優先使用 CodeGraph；明確傳入 `git rev-parse --show-toplevel` 得到的專案根目錄，不使用其他開發者的工作目錄。
+- 先檢查索引／watcher 狀態，必要時增量 sync，不反覆 init／完整 index。沒有索引時直接讀原始碼，不為一般驗收自動建索引。
+- CLI 從 PATH 尋找，執行時設定 `CODEGRAPH_TELEMETRY=0` 與 `CODEGRAPH_NO_UPDATE_CHECK=1`。PowerShell、XAML 等不受支援內容直接檢查原始碼；靜態關係不等於執行期行為。
+- 工具鏈以 PATH、vswhere、CMake 偵測或明確環境設定取得。個人驗收腳本可留在 ignored build/，正式腳本、CMake 與 Actions 不得引用個人路徑。

@@ -11,7 +11,11 @@ pwsh -File scripts/test.ps1 -Level FULL
 pwsh -File scripts/test.ps1 -Level RELEASE
 ```
 
-`FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準。純文件或可辨識的整行註解變更時，入口直接產生「未執行」報告，不啟動 CMake。`FAST` 執行快速基線；`AFFECTED` 再依實際變更加選相關回歸。無法判定影響範圍的檔案會擴大至 FULL。
+`FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準；分支已含廣泛變更時，`-BaseRef HEAD` 可只檢查目前工作樹，正式整合仍須 FULL。只有明確的文件檔可自動略過；程式碼檔不靠行首正則式判斷純註解。FAST 保持快速基線，AFFECTED 才依影響加選或擴大至 FULL。
+
+GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢；不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史、不傳輸大型 target／模型快取，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
+
+PR 指向 main 時，開啟、更新提交與重新開啟會跑輕量 CI；`workflow_dispatch` 也只跑相同集合。一般開發分支 push、本機編譯、commit 或 CTest 都不觸發 Actions。完整驗收在本機執行；未另加自動或手動 FULL workflow。既有 release workflow 仍只在 main 的版本檔變更或明確手動啟動時執行，手動預設僅驗證，發布仍受原本的版本、相依 job 與模式檢查約束。
 
 直接使用 CTest：
 
@@ -21,21 +25,26 @@ cmake --build --preset windows-x64 --target shanjie_tsf_smoke
 ctest --preset windows-x64 --show-only
 ctest --preset windows-x64 -L english --output-on-failure
 ctest --preset windows-x64 -R 'full\.private\.popup-lifecycle\.' --output-on-failure
-ctest --preset windows-x64 --repeat until-pass:2 --output-on-failure
+pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 ```
 
-CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產品、模型與資料；`scripts/test.ps1` 會依測試需要自動完成這些步驟。每次入口驗收在 ignored 的 `build/reports/<run>/` 產生 `report.json`、CTest 輸出日誌和 JUnit XML。CTest 本身也能以 `-L` 標籤或 `-R` 名稱選測、`--repeat until-pass:2` 重跑失敗案例；預設不重跑已通過案例。
+CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產品、模型與資料；`scripts/test.ps1` 會依測試需要自動完成這些步驟。每次入口驗收在 ignored 的 `build/reports/<run>/` 產生 `report.json`、CTest 輸出日誌、每次執行的 `LastTest-<preset>[-retry].log` 和保留完整案例輸出的 JUnit XML。CTest 本身也能以 `-L` 標籤或 `-R` 名稱選測、`--repeat until-pass:2` 重跑失敗案例；預設不重跑已通過案例。
 
 ## 層級與變更影響
 
 | 層級 | 選取內容 | 用途 |
 | --- | --- | --- |
-| FAST | 上游資料靜態清冊、Windows core overlay、`shared` 與 `windows` Rust `--lib` 測試 | 日常快速錯誤檢查；不明影響會保守擴大 |
+| CI | 固定上游資料、core overlay、shared／windows 單元測試與框架自檢 | 自動／手動輕量 CI；永不擴大，不建置產品 |
+| FAST | 快速基線；明確的純文件變更可略過 | 本機日常快速錯誤檢查 |
 | AFFECTED | FAST 加上變更對應的 Cargo／TSF／UI／Harness 回歸 | 功能完成後的相關驗收；無關 WinUI 的變更略過 UI publish |
 | FULL | FULL 標籤的全部 x64 測試案例及產品建置 | PR、整合前完整 x64 驗收 |
 | RELEASE | x64 FULL、x86 TSF／混打／Rust 檢查、兩架構候選 host、輸入互動與 mode harness、WinUI 驗收和安裝包校驗 | 正式發布前 |
 
-影響規則集中在 `scripts/test.ps1`。`shared/` 會測 shared 與 Windows crate；`windows/src/tsf/` 會加跑 TSF 回歸；鍵盤、引擎、模型、profile、上游、prepare／build、依賴、CTest 架構及不明來源會擴大至 FULL；各專用 C++ harness 只選相應案例；`ui/` 會選 UI 相關回歸及產品建置中的 WinUI publish；mode harness 有獨立影響標籤，單獨變更時可略過 WinUI publish。Codex Cloud 的 Linux 環境不會把 Windows 測試標記為通過。
+影響規則集中在 `scripts/test-plan.psm1`。profile／bridge 對應 TSF、設定更新與 WinUI；shared 輸入政策對應 TSF 與引擎互動；原生候選／模式元件對應 TSF、UI 與 mode。其餘 Windows／shared 共用邏輯、核心、模型、依賴及不明影響會擴大至 FULL；專用 harness 選相應案例。無關 WinUI 的 AFFECTED 可略過 UI publish。CI 的固定集合不使用這些選測規則。
+
+每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 30 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+
+計時事件含 stage ID、parent ID、原始包含子階段耗時及 `exclusive_duration_ms`。後者扣除子階段區間聯集，避免巢狀重複加總；平行工作的合計仍可能大於 wall-clock。探測程序使用有期限的等待並只清理自己啟動的程序；CTest 另設每項 timeout。
 
 ## 舊流程覆蓋對照
 
@@ -44,6 +53,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | 舊流程／測試 | CTest 案例 | 保留的驗證與條件 |
 | --- | --- | --- |
 | `verify-upstream-data.ps1` | `fast.upstream-data`, `full.dist-data` | 上游詞庫、詞包、模型清冊及建置後檔案完整性 |
+| 測試框架本身 | `fast.infrastructure` | 影響分類、fixture、完整子案例、重試歷程、空快取、必要輸入、探測 timeout 與計時階層 |
 | `prepare-core.ps1`、Rust `shared/windows --lib` | `fast.prepare-core`, `fast.rust.*` | 與 CI 相同的 core overlay 與 Rust 單元測試 |
 | `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；原本依實體記憶體排程與 `engine_lm`／`engine_replay` 序列延遲斷言不變 |
 | ignored `mixed_regression` | `full.mixed-regression.x64` | 使用建置模型與資料執行混打、數字回歸 |
@@ -56,7 +66,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
 
-目前 CMake 宣告 85 個 x64 FULL CTest rows；這些 rows 可各自顯示結果，但有些 row 內會保留多個原始組態斷言。x86 Release 宣告 83 個架構專屬 rows；x64 Release 共 91 rows，包含額外 Shanjie profile smoke、離屏 harness、互動驗收與封裝檢查。WinUI publish 是產品建置的一部分，會獨立記錄在 `report.json` 的建置計時，不再重複註冊成另一個建置測試。CI-safe 模式會依影響規則編譯 WinUI 並執行離屏 harness，但略過需要本機互動 Windows session 的驗收。實際執行數量、未執行案例、失敗輸出與耗時以每次 CTest XML 和 `report.json` 為準。
+CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
 
 ### 專用驗收（不屬於舊 `verify.ps1` FULL 清冊）
 
@@ -87,8 +97,24 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | 環境 | 可驗證內容 |
 | --- | --- |
 | Codex Cloud Linux | 原始碼與報告設計、JSON/YAML 等靜態檢查；沒有 MSVC、Windows SDK、WinUI、TSF runtime 時不得宣稱 Windows 測試通過 |
-| GitHub Actions Windows | PR 跑 CMake／CTest AFFECTED，Release workflow 跑 RELEASE；UI 變更會編譯 UI，影響無法縮小的建置或測試框架變更會擴大至 FULL。`-CiSafe` 會把需要本機互動 UI session 的項目列為未執行，並記錄原因 |
+| GitHub Actions Windows | PR 與手動 ci 固定跑 CI 基線；不建置 WinUI 或產品。既有 Release job 才跑 RELEASE -CiSafe，略過的互動項目列為未執行，須本機補驗 |
 | Windows 本機 | FAST、AFFECTED、FULL、RELEASE 全部實際 Windows 測試；WinUI 驗收與候選 host 可使用本機 Windows／SDK |
+
+## 本機候選封裝與正式發布
+
+```powershell
+pwsh -File scripts/package.ps1 -UseExistingBuild   # 只建立測試用候選安裝包
+pwsh -File scripts/test.ps1 -Level RELEASE          # 建置、完整驗收與候選包校驗
+pwsh -File scripts/release.ps1                      # 取得或重用有效驗收，再提升正式產物
+```
+
+候選包位於 `build/release-candidates/<id>/`。`package.ps1` 不呼叫 test.ps1；RELEASE 的封裝項目只產生並校驗候選包，因此沒有循環依賴。FAST／AFFECTED／FULL 不要求正式發布紀錄。
+
+本機正式入口先要求工作樹乾淨、Cargo／lock／WinUI／channel 四處版本一致。驗收紀錄必須是相同 commit、版本及兩架構的完整 RELEASE：逐項對照目前 CTest 清冊與原始 JUnit、JSON 結果和全部英文／提交子案例，不能只有 `status=passed`。CI-safe、跳過、未完成或缺少架構都會被拒絕。
+
+紀錄保存驗收前後原始碼身分，以及所有出貨建置檔、候選安裝包、候選 metadata 和 JUnit 的 SHA-256。提升前重新核對，驗收後更動原始碼、版本或產物就失效。有效紀錄可重用，不重跑整套。`package.ps1 -Promote -ReportPath <report.json>` 也會執行同一防護，不能直接繞過；它把已驗證的候選包複製至 `dist/Shanjie-Windows-Setup.exe`，確認複製後雜湊，再寫 `dist/release.json` 的本機完整驗收標記。
+
+GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯出 CI artifact；標記明確表示它不是本機完整驗收。日常 PR 的固定輕量 CI 不變。本機正式入口不 push、建立 tag 或呼叫 GitHub Release，遠端動作另需授權。
 
 ## 新舊耗時比較
 
@@ -98,8 +124,8 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 pwsh -File scripts/benchmark-verification.ps1 -Commit HEAD
 ```
 
-Benchmark 建立兩個 detached worktree、初始化相同固定 submodule，依序執行舊 `verify.ps1` 與新 FULL 各一次 fresh workspace cache、一次 warm workspace cache，將比較、JUnit、日誌、CTest 分組列數、Rust core test binary 數與英文／提交／私人桌面實際案例數放在 `build/benchmark/<run>/`。共享的 Cargo registry／NuGet 套件快取可能已暖，因此報告會把 cold 定義為乾淨的專案 build/test outputs，並註明此限制。
+Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的原始 `verify.ps1`、目前提交的相容 `verify.ps1`、目前提交的 CTest FULL。預設以首次加入 CMakeLists.txt 的提交之前一版為改造前基準，也可用 `-BaselineCommit <ref>` 指定。三份產品原始碼、詞庫、模型與 pin 必須一致；不同就拒絕宣稱驗收流程加速。
 
-計算方式：`saved = legacy wall − CTest FULL wall`，`speedup = saved / legacy wall × 100%`。分項報告會比較 C++ harness、Rust／WinUI 建置、模型／資料準備與核心測試階段。CTest 本身是排程與報告管理工具，單獨替換帶來的時間差不會冒稱為 runtime 最佳化；平行化效果沒有獨立 ablation 前也不會歸因為已證實收益。AFFECTED 的選測時間另行記錄，不能拿來和 FULL 的不同覆蓋範圍作公平比較。
+比較前，從實際 Cargo／核心日誌、TSF 輸出、英文 profile、提交與私人桌面結果產生案例識別碼及組態，六次必須完全一致。新增的框架自檢另行說明，不冒充原本產品覆蓋。原始 baseline 沒有 JUnit 或分階段計時，僅保留原生證據與外部量到的 wall-clock；不捏造缺少的資料。比較、JSON、JUnit、原始日誌及案例證據保存在 `build/benchmark/<run>/`，即使失敗也寫 `comparison.json` 並標示不可比較及未執行項目。
 
-尚未在 Windows 實測時，所有冷／暖改善均標記「尚未量測」。首次 Windows FULL 和 benchmark 完成後，效益以產生的機器報告為準。
+「改造前 vs CTest」與「同提交相容入口 vs CTest」分開計算，不能把後者宣稱為整次改造效益。冷快取指全新專案輸出；Cargo registry／NuGet 下載快取與 OS 檔案快取可能已暖。為隔離舊版的全域快取身分斷言，六次都設定 `RUST_TEST_THREADS=1`；不同核心 test binary 仍保留原本的記憶體限制平行排程。報告列秒數、分鐘、冷暖差異與包含／自身分類耗時；未執行或覆蓋不等價時不宣稱改善。GitHub Runner 的 CI 耗時另看實際 Actions 紀錄，不能用本機暖快取時間替代。
