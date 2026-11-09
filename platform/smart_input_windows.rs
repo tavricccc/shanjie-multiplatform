@@ -644,12 +644,28 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // Literal tokens keep typed order and use the existing cursor, deletion and commit paths.
+        // This precedes English/digit interpretation, including tone keys that otherwise start a digit run.
+        if self.zhuyin_only && key.modifiers == 0 {
+            match key.kind {
+                KeyKind::Char => {
+                    if let Some(symbol) = self.layout.symbol_of(key.ch).map(|(_, symbol)| symbol)
+                        .or_else(|| self.layout.key_tone_mark(key.ch)) {
+                        return self.insert_windows_literal(&symbol.to_string());
+                    }
+                }
+                KeyKind::Space => return self.insert_windows_literal(" "),
+                KeyKind::Up | KeyKind::Down => return self.handled(),
+                _ => {}
+            }
+        }
         // An open digit run (upstream digits.md A.3.4) sees every key first, as in upstream's dispatch.
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
         // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
         if self.drun.is_some() {
-            // Enter sends what the screen shows (upstream A.12), and a lone key shows as its digit here.
-            if key.kind == KeyKind::Enter && self.lone_digit().is_some() {
+            // Enter and Down treat a lone key shown as its digit as that digit token, leaving
+            // its Zhuyin symbol selectable in the opened candidate list.
+            if matches!(key.kind, KeyKind::Enter | KeyKind::Down) && self.lone_digit().is_some() {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
             }

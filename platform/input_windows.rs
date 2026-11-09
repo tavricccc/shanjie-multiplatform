@@ -91,7 +91,8 @@ impl Engine {
     /// (their indexes carry meaning).
     fn decorate_windows_candidates(&mut self) {
         let Some(mut cands) = self.cands.take() else { return };
-        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
+        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none()
+            && cands.digit_zhuyin.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
         let touching = self.cursor.saturating_sub(1);
         let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
         if !plain || digits {

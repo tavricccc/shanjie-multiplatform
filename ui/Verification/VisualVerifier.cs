@@ -66,6 +66,37 @@ internal static class VisualVerifier
             if (item.DesiredSize.Width > width + 0.5 || item.DesiredSize.Height < 80) throw new InvalidDataException($"Catalog row does not wrap at {width}: {item.DesiredSize}");
         }
     }
+    private static async Task VerifyZhuyinMode(MainWindow settings, string output)
+    {
+        var toggle = (Controls.SettingToggle)settings.FindName("ZhuyinOnlyToggle");
+        foreach (bool windows in new[] { true, false })
+        {
+            settings.LoadProfile(windows);
+            var installed = settings.InstalledOptionsForVerification;
+            settings.Vm.Keyboard = 0; settings.Vm.Save(); settings.Vm.Load();
+            settings.ShowSection(MainWindow.Pages.Composition); await Task.Delay(100);
+            if (settings.Vm.ZhuyinOnly) throw new InvalidDataException("Pure Zhuyin is enabled by default");
+            var saved = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(true); await Task.Delay(60);
+            if (!settings.Vm.ZhuyinOnly || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved))
+                throw new InvalidDataException("Pure Zhuyin toggle did not remain an unsaved draft");
+            foreach (int keyboard in new[] { 0, 1, 2, 3, 4, 0 }.Where(k => (k != 1 || installed.standard) && (k != 2 || installed.eten)))
+            {
+                settings.Vm.Keyboard = keyboard; await Task.Delay(60);
+                if (toggle.IsEnabled != (keyboard < 3)) throw new InvalidDataException("Pure Zhuyin is available for the wrong keyboard");
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+                if (!settings.Vm.ZhuyinOnly) throw new InvalidDataException("Reload lost the pure Zhuyin preference");
+            }
+            if (!settings.Vm.ExportPreset("純注音").Contains("zhuyin_only=1")) throw new InvalidDataException("Shared preset lost pure Zhuyin");
+            if (windows) foreach (int theme in new[] { 1, 2 })
+            {
+                settings.Vm.Theme = theme; await Task.Delay(100);
+                await Capture(settings.CaptureElement, Path.Combine(output, $"zhuyin-mode-{theme}.png"));
+            }
+            toggle.SetToggleForVerification(false); settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.ZhuyinOnly) throw new InvalidDataException("Pure Zhuyin opt-out was not saved");
+        }
+    }
     private static async Task VerifyAboutModels(MainWindow settings, string output, string? feature = null)
     {
         // GitHub's account type alone does not exclude automation accounts using a regular User account.
@@ -144,6 +175,8 @@ internal static class VisualVerifier
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false);
         await Task.Delay(500);
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
+        if (feature is null or "zhuyin-mode") await VerifyZhuyinMode(settings, output);
+        if (feature == "zhuyin-mode") { settings.Close(); return; }
         if (feature is "about-models" or "contributors" or "model-picker")
         {
             settings.Vm.Save();
