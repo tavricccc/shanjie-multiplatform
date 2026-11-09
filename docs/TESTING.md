@@ -11,7 +11,7 @@ pwsh -File scripts/test.ps1 -Level FULL
 pwsh -File scripts/test.ps1 -Level RELEASE
 ```
 
-`FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準；分支已含廣泛變更時，`-BaseRef HEAD` 可只檢查目前工作樹，正式整合仍須 FULL。只有明確的文件檔可自動略過；程式碼檔不靠行首正則式判斷純註解。FAST 保持快速基線，AFFECTED 才依影響加選或擴大至 FULL。
+`FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準；分支已含廣泛變更時，`-BaseRef HEAD` 可只檢查目前工作樹，正式整合仍須 FULL。只有明確的文件檔可自動略過；程式碼檔不靠行首正則式判斷純註解。FAST 保持快速基線，AFFECTED 才依影響加選或擴大至 FULL。明確指定 FULL／RELEASE 時，一律執行完整集合，不套用文件略過規則。
 
 GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢；不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史、不傳輸大型 target／模型快取，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
 
@@ -91,6 +91,7 @@ CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準�
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
 - 測試 payload 僅建立在 `build/cmake/`，其中 `data`、`tools` 是指向 `dist/` 的唯讀 junction；測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
+- 加詞視窗與私人桌面案例在不切換的測試桌面執行，避免目前桌面的前景視窗變動關閉測試 popup；這不代表已驗證使用者正在操作的前景 App。
 
 ## 執行環境
 
