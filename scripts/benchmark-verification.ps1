@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$Commit='HEAD',[string]$BaselineCommit,[switch]$KeepWorktrees)
+param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[switch]$KeepWorktrees)
 $ErrorActionPreference='Stop'
 if(!$IsWindows){throw 'This benchmark requires a Windows host with MSVC, Windows SDK, Rust, PowerShell 7, and .NET 10.'}
 $root=Split-Path $PSScriptRoot -Parent
@@ -8,7 +8,16 @@ if($LASTEXITCODE){throw "Cannot resolve benchmark commit: $Commit"}
 $head=(& git -C $root rev-parse --verify 'HEAD^{commit}').Trim()
 if($head -ne $resolved){throw "Benchmark commit $resolved must be the checked-out HEAD $head; check out the intended commit first."}
 $dirty=@(& git -C $root status --porcelain --untracked-files=normal)
-if($LASTEXITCODE -or $dirty.Count){throw 'Benchmark requires a clean worktree so both detached runs use the exact checked-out source and submodule pins.'}
+if($LASTEXITCODE -or $dirty.Count){throw 'Benchmark requires a clean worktree so detached runs use the exact checked-out source and submodule pins.'}
+if(!$BaselineCommit){
+    # After syncing newer product changes, prefer the matching pre-CTest main
+    # ancestor; the original migration parent may no longer have the same product.
+    $mainBase=& git -C $root merge-base $resolved origin/main 2>$null
+    if(!$LASTEXITCODE){
+        & git -C $root cat-file -e "${mainBase}:CMakeLists.txt" 2>$null
+        if($LASTEXITCODE){$BaselineCommit=$mainBase}
+    }
+}
 if(!$BaselineCommit){
     $migration=& git -C $root log -1 --diff-filter=A --format=%H -- CMakeLists.txt
     if(!$migration){throw 'Specify -BaselineCommit for the version before the verification migration.'}
@@ -20,7 +29,8 @@ $productPaths=@('windows','shared','platform','ui','profiles','data','models','a
 $productChanges=@(& git -C $root diff --name-only $baseline $resolved -- @productPaths)
 if($LASTEXITCODE -or $productChanges.Count){throw "Baseline and candidate product inputs differ; choose a comparable baseline before claiming a verification speedup: $($productChanges -join ', ')"}
 $runId=[guid]::NewGuid().ToString('N')
-$benchmarkRoot=Join-Path $root "build/benchmark/$runId"
+$benchmarkParent=if($OutputRoot){[IO.Path]::GetFullPath($OutputRoot)}else{Join-Path $root 'build/benchmark'}
+$benchmarkRoot=Join-Path $benchmarkParent $runId
 $legacyRoot=Join-Path $benchmarkRoot 'legacy'
 $baselineRoot=Join-Path $benchmarkRoot 'baseline'
 $ctestRoot=Join-Path $benchmarkRoot 'ctest'
@@ -52,6 +62,7 @@ function Get-RunCoverage([string]$Worktree,[datetime]$Started,[string]$Log,$Repo
             elseif($crate -and $line -match '^test (\S+) \.\.\. ok\s*$'){[void]$ids.Add("rust:$crate`:$($Matches[1])")}
             if($line -match '^TSF composition, caret, commit, cancel, candidates, and COM lifetime passed\s*$'){[void]$ids.Add('tsf:standard:x64:windows')}
             if($line -match '^PASS: activation and system shortcuts require no model or lexicon\s*$'){[void]$ids.Add('tsf:cold:x64')}
+            if($line -match '^PASS: pure Zhuyin, literal Space, both layouts, both interactions and mode reload\s*$'){[void]$ids.Add('tsf:zhuyin-only:x64')}
             if($line -match '^Upstream data coverage ok: (.+)$'){[void]$ids.Add("data:$($Matches[1].Trim())")}
         }
     }
@@ -163,7 +174,7 @@ function Invoke-Run([string]$Name,[string]$Worktree,[ValidateSet('baseline','leg
     if($exit){throw "$Name failed with exit $exit; archived log: $artifactLog"}
     if(!$report){throw "$Name completed without a timing report; archived log: $artifactLog"}
     if($coverageError){$measurements[$Name].status='not-comparable';throw "Coverage could not be read for $Name`: $coverageError"}
-    foreach($prefix in 'rust:shanjie_shell:','rust:shanjie_windows:','core:','english:','submission:','private:x64:compat:','private:x64:popup:','word:','tsf:standard:','tsf:cold:','data:'){
+    foreach($prefix in 'rust:shanjie_shell:','rust:shanjie_windows:','core:','english:','submission:','private:x64:compat:','private:x64:popup:','word:','tsf:standard:','tsf:cold:','tsf:zhuyin-only:','data:'){
         if(!@($coverage | Where-Object { $_.StartsWith($prefix) }).Count){$measurements[$Name].status='not-comparable';throw "Coverage evidence is missing $prefix in $Name; the run is not comparable."}
     }
     Write-Host ("Benchmark {0}: {1:F3}s ({2:F2} minutes), {3} observed product cases." -f $Name,$watch.Elapsed.TotalSeconds,($watch.Elapsed.TotalSeconds/60),$coverage.Count)
@@ -285,7 +296,7 @@ try {
             observed_ids=$expected
             exact_configuration_match=$true
             additional_checks='The candidate flows also run test-infrastructure self-tests, which are not part of the pre-migration product acceptance scope.'
-            preserved_suite_list=@('upstream data static and built-output checks','shared and windows Cargo --lib','upstream core library and every integration-test binary, with latency suites serialized','ignored mixed-input and digit regressions','TSF standard and cold activation','add-word popup','all 19 English-key scenarios across their original mode/layout combinations','all 21 submission mode groups plus the input-digit matrix','all 18 private TSF compatibility cases','all 15 popup lifecycle private-desktop cases')
+            preserved_suite_list=@('upstream data static and built-output checks','shared and windows Cargo --lib','upstream core library and every integration-test binary, with latency suites serialized','ignored mixed-input and digit regressions','TSF standard, pure Zhuyin and cold activation','add-word popup','all 19 English-key scenarios across their original mode/layout combinations','all 21 submission mode groups plus the input-digit matrix','all 18 private TSF compatibility cases','all 15 popup lifecycle private-desktop cases')
         }
         measurements=[ordered]@{
             baseline_cold=[ordered]@{wall_seconds=$baselineCold;report=$measurements.baseline_cold.report_path;log=$measurements.baseline_cold.log_path}
@@ -345,7 +356,7 @@ try {
     if(!$KeepWorktrees){foreach($path in $gitAdded){
         $cleanupPath=[IO.Path]::GetFullPath($path)
         if([IO.Path]::GetDirectoryName($cleanupPath) -ne [IO.Path]::GetFullPath($benchmarkRoot)){throw 'Benchmark cleanup path must remain directly under its own run directory.'}
-        & git -C $root worktree remove --force $cleanupPath *> $null
+        & git -C $root -c core.longpaths=true worktree remove --force $cleanupPath *> $null
     }}
     if($gitAdded.Count){& git -C $root worktree prune}
 }
