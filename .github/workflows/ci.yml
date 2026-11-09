@@ -1,7 +1,7 @@
 name: ci
 
-# Pull requests into main use the CTest AFFECTED set. Changes to broad build/test inputs expand to FULL automatically.
-# Interactive WinUI acceptance remains local/release-only; UI changes still compile on this Windows runner.
+# PR updates and manual runs use only the fixed, model-free CTest CI baseline.
+# Full product builds, upstream core suites, TSF/UI regressions and packaging stay local/release-only.
 on:
   pull_request:
     branches: [main]
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   unit-tests:
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     defaults:
       run:
         shell: pwsh
@@ -26,37 +26,17 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
-          fetch-depth: 0
-      - name: Set up .NET for WinUI builds
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
-        with:
-          dotnet-version: 10.0.x
-      - name: Cache Rust targets and validated model sources
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.nuget/packages
-            ui/bin
-            ui/obj
-            dist/ui
-            build/ui-publish-cache.json
-            windows/target
-            build/core/target
-            build/test/core/target
-            build/core/src
-            build/core/Cargo.toml
-            build/core/.prepare-cache.json
-            build/model
-            dist/data
-            dist/LICENSES
-            build/data-output-cache.json
-          key: shanjie-win-${{ runner.os }}-dotnet10-${{ hashFiles('**/Cargo.lock', 'ui/**', 'NuGet.Config', 'MODEL-CATALOG.json', 'MODEL-SOURCES.json', 'UPSTREAM.json', 'profiles/**', 'platform/**', 'scripts/build.ps1', 'scripts/test-support.psm1', 'scripts/prepare-*.ps1') }}
-          restore-keys: |
-            shanjie-win-${{ runner.os }}-
-      - name: Configure, build and run CTest AFFECTED coverage
-        run: pwsh -File scripts/test.ps1 -Level AFFECTED -BaseRef origin/main -CiSafe
+          fetch-depth: 1
+      - name: Check PowerShell syntax
+        run: |
+          $files = Get-ChildItem scripts -Recurse -File | Where-Object Extension -In '.ps1','.psm1'
+          foreach ($file in $files) {
+            $tokens = $null; $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors) { throw "$($file.Name): $($parseErrors.Message -join '; ')" }
+          }
+      - name: Configure and run the fixed lightweight CTest baseline
+        run: pwsh -File scripts/test.ps1 -Level CI -CiSafe
       - name: Upload machine-readable test reports and failure logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
