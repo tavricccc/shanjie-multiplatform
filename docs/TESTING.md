@@ -92,6 +92,7 @@ CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準�
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
 - 測試 payload 僅建立在 `build/cmake/`，其中 `data`、`tools` 是指向 `dist/` 的唯讀 junction；測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
 - 加詞視窗與私人桌面案例在不切換的測試桌面執行，避免目前桌面的前景視窗變動關閉測試 popup；這不代表已驗證使用者正在操作的前景 App。
+- WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果與畫面保留在本次報告目錄。
 
 ## 執行環境
 

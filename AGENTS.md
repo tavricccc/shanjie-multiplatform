@@ -62,6 +62,7 @@
 - 私人詞典不進內建詞庫、模型、安裝包或 Git。
 - 會動到實機的測試先說明並取得同意。不控制目前使用者的核心、不廣播測試設定、不清除真實學習資料；測試用獨立的 `LOCALAPPDATA` 與 `SHANJIE_TEST_PROFILE`。
 - 測試啟動的核心與加詞輔助程式（路徑在 `build/` 或 `dist/` 下）跑完要停掉，不碰 `Program Files` 裡的。
+- WinUI 驗證須在建立子程序前設定獨立 `LOCALAPPDATA`、`SHANJIE_TEST_PROFILE` 與行程內核心，不能等 XAML 啟動後才隔離；不得掃描工作副本外的核心作為清理對象。
 
 ## 驗證：做多少
 
