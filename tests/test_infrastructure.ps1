@@ -7,6 +7,7 @@ Import-Module "$root/scripts/test-plan.psm1" -ErrorAction Stop
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/test-infrastructure-'+[guid]::NewGuid().ToString('N'))}
 $null=New-Item -ItemType Directory -Path $ResultRoot -Force
 function Assert-Check([bool]$Condition,[string]$Name){if(!$Condition){throw "FAIL $Name"}}
+& "$PSScriptRoot/verification_paths.ps1" -ResultRoot (Join-Path $ResultRoot 'verification-paths')
 
 foreach($path in 'CMakeLists.txt','.github/workflows/ci.yml','scripts/test-support.psm1','shared/Cargo.toml','shared/src/protocol.rs','windows/src/broker.rs') {
     Assert-Check (Get-VerificationImpact $path).Full "$path must expand AFFECTED to FULL"

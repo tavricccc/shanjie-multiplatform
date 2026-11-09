@@ -1,6 +1,6 @@
 # CTest 交接（2026-11-10）
 
-分支：`refactor/ctest-verification`；遠端：`HolyBearTW/shanjie-multiplatform` 的同名既有分支。程式碼檢查點：`688f1cb72024c5c48c129d77b3df38041a0b62e5`（本交接文件提交前的 HEAD；文件提交後以 `git rev-parse HEAD` 取得最新 SHA）。已合入 `origin/main` 的 `64c22ef536ae5f106e684bcd31e8ff0a36233838`，沒有切換或修改本機 main，沒有建立 PR、tag 或 Release。
+分支：`refactor/ctest-verification`；遠端：`HolyBearTW/shanjie-multiplatform` 的同名既有分支。本輪 P2 修正以原交接 `8c5d0030bd4b98f12055b21a043c203acd6617c2` 為基底；最新 SHA 以包含本文件更新的 `git rev-parse HEAD` 為準。JSON 的 `code_checkpoint` 保留原 Windows 交接前的歷史檢查點 `688f1cb72024c5c48c129d77b3df38041a0b62e5`；本輪變更與驗證見 `latest_fix_update`。既有歷史已合入 `64c22ef536ae5f106e684bcd31e8ff0a36233838`；本輪沒有同步上游或修改 main。
 
 **最終 Commit 尚未完成 RELEASE 驗收。** 不得將較舊的成功紀錄套到最新提交，也不得把 Linux Cloud 的檢查當成 Windows RELEASE。使用者要求台灣時間 02:00 硬性停止；本次測試已提前停止，不應留下背景測試。
 
@@ -11,6 +11,13 @@
 - 日常 `ci`／`unit-tests` 固定 `test.ps1 -Level CI -CiSafe` 五項：上游資料、core overlay、shared／windows Rust 單元測試及框架自檢。PR 到 main／PR 更新與手動 dispatch 執行；一般分支 push 不執行。沒有 FULL 擴大、完整產品／模型／WinUI／TSF／安裝包建置、大型 target 快取或完整歷史下載。
 - 本機正式產物走 `scripts/release.ps1`；`package.ps1` 預設只做候選包。提升正式產物前核對乾淨來源、commit、四處版本、x64／x86 必要清冊、實際 JUnit／子案例及產物雜湊；CI-safe、缺測、舊紀錄不能授權。有效紀錄直接重用，避免 package 與 RELEASE 循環。
 - 測試使用獨立 profile／私人桌面及自有核心，WinUI 在建立子程序前隔離。修正 Windows 單元測試共享 sink 的平行衝突、混打快取身分測試的程序隔離，以及加詞浮層隱藏早於詞典存檔的實際競態；最後一項僅以既有有界等待保留原內容斷言，沒有修改產品行為。
+
+## 本輪 P2 最小修正（Linux）
+
+- `build.ps1` 的產品 Cargo build 明確指定絕對 `--target-dir <工作樹>/windows/target`，覆蓋外部 `CARGO_TARGET_DIR`；沿用既有增量目錄與兩個 `--target` 子目錄，和 DLL／工具複製及 CMake staticlib 位置一致。
+- `test.ps1` 的 committed、staged、unstaged diff 使用 `--no-renames`，將搬移視為刪除加新增；原、新路徑都參與 FAST／AFFECTED 判斷。純文件修改與文件重新命名仍可略過建置／測試。
+- `tests/verification_paths.ps1` 以真實 Git fixture 與 mock Cargo 產物驗證上述路徑，已接入既有 `fast.infrastructure`，CI 仍為固定五項。Linux PowerShell 7.5.4：34 項檢查通過，59 支 `.ps1`／`.psm1` 語法解析零錯誤；分別換回原版 build／test 腳本時，回歸測試都能拒絕原問題。可單獨執行 `pwsh -File tests/verification_paths.ps1`。
+- 本輪未編譯 Rust／MSVC，未執行 Windows TSF／WinUI／x86 或任何 Benchmark。四輪完成數據、案例集合雜湊及原始證據路徑完整保留；P3 計時與其他最佳化暫緩。
 
 ## Windows 驗證紀錄
 
@@ -45,7 +52,7 @@
 
 ## 下一步
 
-Linux Codex Cloud：先檢查分支／HEAD／status，閱讀本文件與精簡 JSON；審查 CTest 清冊、影響規則、CI／Release 邊界、快取與發布防護。可做 YAML、文字／靜態規則及環境支援的純邏輯檢查；不要為通過 Linux 而移除 Windows 條件、減少測試，或把未執行的 MSVC／TSF／WinUI／x86／RELEASE 標成成功。不要重跑或丟棄已完成的四輪數據。
+Linux Codex Cloud：本輪指定的兩項 P2 修正及針對性檢查已完成；提交／推送此單一修正後停止。不得把這些檢查當成 MSVC／TSF／WinUI／x86／RELEASE 通過，也不要重跑或丟棄已完成的四輪數據。
 
 Windows 原機續跑：先確認乾淨工作樹、工具鏈版本與原測試條件。舊版量測曾因防毒自動恢復而提前中斷，原因未完全確定；若再遇無完成報告，保留失敗，不冒充成功。正式腳本從 PATH／vswhere／CMake 或明確環境設定找工具，沒有個人路徑依賴；ignored `build/` 的環境與私人桌面 helper 僅是這台電腦的操作工具，不是程式相依。
 
@@ -61,6 +68,6 @@ pwsh -File scripts/benchmark-verification.ps1 -Commit HEAD `
   -KeepWorktrees
 ```
 
-Benchmark 完成後，對最終乾淨 HEAD 跑 `pwsh -File scripts/test.ps1 -Level RELEASE`，再以 `pwsh -File scripts/release.ps1` 核對並重用收據、提升同一候選包；確認沒有重跑有效 RELEASE。檢查當前 CI／FAST 與必要靜態檢查；沒有新的程式修改就不要為求心安重跑已過的套件。實際安裝、前景 App、多螢幕、高對比、讀屏，以及未納入清冊的特殊 ignored 測試仍未驗，不屬於已通過的 CTest 宣稱。
+Benchmark 完成後，對最終乾淨 HEAD 跑 `pwsh -File scripts/test.ps1 -Level RELEASE`。可在這次 RELEASE 設定一個隔離的 `CARGO_TARGET_DIR`，補驗真實 x64／x86 產品仍輸出至本工作樹 `windows/target`、CMake 連結及打包正常，完成後還原環境；不要為此另跑整套驗收。新 HEAD 必須產生自己的完整收據，不能沿用先前 commit 的成功紀錄。再以 `pwsh -File scripts/release.ps1` 核對並重用該收據、提升同一候選包；確認沒有重跑有效 RELEASE。檢查當前 CI／FAST 與必要靜態檢查；沒有新的程式修改就不要為求心安重跑已過的套件。實際安裝、前景 App、多螢幕、高對比、讀屏，以及未納入清冊的特殊 ignored 測試仍未驗，不屬於已通過的 CTest 宣稱。
 
 只在此功能分支工作；不修改或 push main，不 force push、不建立 PR 或正式發布。本機驗收目錄與無關工作檔不刪除。

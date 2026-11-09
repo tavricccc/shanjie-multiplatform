@@ -3,6 +3,31 @@
   "recorded_local": "2026-11-10T01:49:03.6763262+08:00",
   "branch": "refactor/ctest-verification",
   "code_checkpoint": "688f1cb72024c5c48c129d77b3df38041a0b62e5",
+  "latest_fix_update": {
+    "base_commit": "8c5d0030bd4b98f12055b21a043c203acd6617c2",
+    "source_ref": "HEAD containing this update; resolve with git rev-parse HEAD. code_checkpoint remains the historical Windows checkpoint.",
+    "changes": [
+      "Pin product Cargo --target-dir to the existing worktree windows/target root for x64 and x86",
+      "Collect both sides of committed, staged and unstaged moves using git diff --no-renames"
+    ],
+    "linux_validation": {
+      "powershell": "7.5.4",
+      "parser_files": 59,
+      "parser_errors": 0,
+      "portable_checks_passed": 34,
+      "cargo_mode": "Mock command/output fixtures with CARGO_TARGET_DIR and stale products; no Rust or MSVC compilation",
+      "real_git_cases": ["staged", "committed", "unstaged", "documentation-only"],
+      "original_build_and_test_drivers_rejected": true,
+      "windows_acceptance_run": false,
+      "benchmark_run": false
+    },
+    "completed_measurements_preserved": true,
+    "windows_pending": [
+      "Resume only CTest cold and warm on the original Windows host using the existing ResumeReport and HistoricalLegacyReport",
+      "Complete RELEASE on the final clean HEAD; include native x64/x86 output-path verification with an isolated CARGO_TARGET_DIR",
+      "Reuse only the matching new RELEASE receipt for guarded local candidate promotion"
+    ]
+  },
   "current_head_release_verified": false,
   "benchmark_complete": false,
   "completed_measurements": [

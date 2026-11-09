@@ -61,7 +61,8 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup
     $env:SHANJIE_ICON_RESOURCE = Join-Path $objects 'mode_icons.res'
     $env:SHANJIE_SETUP_RESOURCE = Join-Path $objects 'setup.res'
     Invoke-Timed -Name 'Rust Windows release build' -Category 'build.rust.release' -Details @{ architecture=$Architecture; target=$target; incremental='Cargo fingerprints' } -Action {
-        $cargoArguments=@('build','--release','--manifest-path','windows/Cargo.toml','--target',$target)
+        # Match every DLL/tool copy and the CMake staticlib path, even with CARGO_TARGET_DIR set.
+        $cargoArguments=@('build','--release','--manifest-path','windows/Cargo.toml','--target',$target,'--target-dir',"$root/windows/target")
         if($CargoVerbose){$cargoArguments+='-vv'}
         & cargo @cargoArguments
         if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }

@@ -49,11 +49,12 @@ function Get-ChangedPathList([string]$Ref) {
     $base=$Ref
     if (!(git -C $root rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'." } }
     $items=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $diff=@(git -C $root diff --name-only "$base...HEAD" 2>$null)
+    # Treat moves as delete/add so both paths participate in impact and documentation checks.
+    $diff=@(git -C $root diff --no-renames --name-only "$base...HEAD" 2>$null)
     if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'." } }
     foreach($path in $diff){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    foreach($path in @(git -C $root diff --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    foreach($path in @(git -C $root diff --cached --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $root diff --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $root diff --cached --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
     foreach($path in @(git -C $root ls-files --others --exclude-standard)){if($path){[void]$items.Add($path.Replace('\','/'))}}
     return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null }
 }
