@@ -1,5 +1,17 @@
 # 上游差異
 
+Windows 設定程式以未封裝桌面身分執行。從帶有套件身分的宿主啟動時，入口會用 Windows 桌面程序啟動政策重新啟動自身，保留參數與結束碼，避免 WinUI 將宿主的 PRI 當成善解資源；只影響這次程序啟動。一般啟動失敗會將例外堆疊、HRESULT 與資源位置寫入使用者 `Shanjie/Logs`，對話框顯示日誌位置，不記錄詞典、學習或輸入內容。
+
+模型下載使用鏡像；本機驗證同時接受原上游與鏡像的合法收據，保留以來源資訊計算的配套 ID，不改寫舊收據。原鍵混打直接插入標點時保留畫面上已有的純數字段，包括尚未形成小數的 `1%`。
+
+原鍵混打的純數字暫存於左／右／Home／End 移動游標前，先轉成可編輯字面單元，保留畫面上的數字與後續插入、刪除及提交。上游判斷啟用 Windows 單數字顯示政策時，游標移動同樣保留所見數字；完成注音與明確開啟注音候選的路徑各自維持。
+
+設定列、自訂開關與分段選擇器在首次載入時同步停用外觀；相依選項停用時保留其儲存值，恢復可用後沿用原選擇。
+
+Windows 外觀新增 `[appearance] accent=default|windows|custom`、`accent_color=#RRGGBB`、`pure_black=0|1` 與 `animation=system|on|off`。既有預設藍與跟隨系統動畫保留；選取文字依強調色明度選黑或白，提示文字另維持對比。深色純黑使用不透明黑底並停用玻璃混色，高對比優先採系統色。設定草稿只在設定程序預覽，儲存後沿用既有通知套用到選字框與加詞浮層；外觀屬個人設定，不由操作範本覆寫或匯出。強制動畫只改善解的繪圖與動畫政策，不改 Windows 選項。
+
+加詞常駐輔助程式定期核對已放開的非 Ctrl 按鍵，避免漏收放開事件後永久將雙 Ctrl 判為組合鍵；Ctrl 的按放序列仍由手勢處理。有限日誌記錄手勢阻擋、狀態核對、取詞開始／逾時與設定 Shell 啟動失敗等階段，不記錄按鍵值、反白字詞或文件內容。此回復路徑已隔離回歸，尚不代表已確認使用者遇到的所有浮層失效都出於同一原因。
+
 使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129；原 repo 已無法存取，現由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供子模組與模型 Release）v0.6.1 核心，實際 commit 以 `UPSTREAM.json` 為準；內建會意單獨更新為 SJ-SR-8-15M，其餘模型保留該版上游配套，見 `MODEL-SOURCES.json`。各版變更見 [Changelog](Changelog.md)，升版步驟見 [AGENTS.md](AGENTS.md)。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。

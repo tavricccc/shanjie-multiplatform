@@ -14,7 +14,7 @@ Windows 版是原生 Rust TSF 輸入法，使用由上游產生的核心。Linux
 | `windows/src/candidate.rs`、`native.rs` | Direct2D／DirectWrite 候選窗、DPI 與工作區定位、中英模式提示、設定通知 |
 | `windows/src/profile.rs`、`bridge.rs` | 設定範本、原子保存、個人詞庫、給 WinUI 的窄 C ABI |
 | `windows/src/registration.rs`、`installer.rs` | 註冊、校驗、更新與回復、舊版清理、解除安裝 |
-| `ui/` | WinUI 3 設定程式（C#／XAML），只負責控制項與草稿綁定 |
+| `ui/` | WinUI 3 設定程式（C#／XAML）、快速設定、模型下載與更新／安裝畫面；資料保存與安裝變更透過原生介面執行 |
 | `linux/` | IBus 引擎、GTK 4＋libadwaita 設定程式、安裝腳本（停止維護，未驗證） |
 | `tests/support/` | C++ 測試 adapter，不進安裝包 |
 
@@ -28,13 +28,13 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 ## 候選窗
 
-單一 Win32 layered popup，由 Rust 以 Direct2D／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點，沒有陰影與動畫；alpha 只用於外側圓角抗鋸齒，正文不透明。
+單一 Win32 layered popup，由 Rust 以 Direct2D software DC render target／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點；以 premultiplied alpha 合成接近不透明的底面、細邊線、上緣亮邊與柔和陰影，不使用系統背景模糊。開啟時淡入並微幅縮放，選取高亮滑動，顯示中大小或位置改變時滑到新位置；隱藏立即完成，動畫政策關閉或跨螢幕 DPI 改變時直接定位。高對比改用不透明系統色並移除陰影。外觀來源與細節見 [DESIGN.md](DESIGN.md)。
 
 - **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 沿同一直排移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心與數字標籤仍以九項為一組；1–9 選取反白所在群組的候選。
-- **尺寸**：字詞 16 DIP、序號 9 DIP，依個人字級（14–32）等比縮放；選取膠囊至少 24 DIP，外框至少 30 DIP，內距 3 DIP，與 caret 間距 6 DIP。
-- **配色**：淺色 `#FFFFFF` 底、`#222225` 字、`#65656E` 序號、`#D3D3D8` 邊線；深色 `#202020` 底、`#F5F5F7` 字、`#B8B8C2` 序號、`#505055` 邊線。邊線 0.5 DIP，選取為 `#006EE6` 配白字。主題與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`；高對比改用系統色。
+- **尺寸與字型**：字詞預設 16 DIP、序號 9 DIP，依個人字級（14–32）等比縮放；候選列至少 24 DIP，上下各留 5 DIP，與 caret 間距 6 DIP。已安裝時優先用 Noto Sans 家族；否則候選字用 Microsoft JhengHei UI，序號用 Segoe UI（`windows/src/font.rs`）。
+- **配色**：一般主題預設霧藍 `#5874C9`，可跟隨 Windows 強調色或選自訂 HEX；選取文字依對比選黑或白。淺色底為 `#F8F8FA`、深色底為 `#1C1C20`，底面 alpha 均為 0.97，字、邊線與標記另有透明度。深色可選不透明純黑，其他底面維持原色。共用政策在 `shared/src/appearance.rs`，Windows 系統色在 `windows/src/appearance.rs`，色值由 `candidate.rs::Palette` 管理；主題偏好與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`，高對比優先使用系統色。
 - **組字面板**（`[candidates] reading_panel`，預設關閉）：關閉時與上游相同，組字只在 App 內，沒有候選也沒有提示就不顯示面板，有候選時也不畫整句列（`shanjie_shell::input::panel_view`）。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。原鍵混打需要它，`Document::reading_panel()` 在這個模式下讀出為開，不改寫設定值；舊 `[candidates] reading` 仍由遷移刪除，與它無關。
-- **混打提示**：原鍵混打時，原始按鍵（如 `gj`）留在組字區，組字面板以藍底白字標出 `ㄕㄨ`，沒有序號、不能點選。顯示名稱集中在 `SettingsViewModel.RawKeyMixingName`；儲存的鍵仍是 `[input] mixed_input`。
+- **混打提示**：原鍵混打時，原始按鍵（如 `gj`）留在 App 組字區，組字面板以霧藍字與淡色底標出 `ㄕㄨ`，沒有序號、不能點選。顯示名稱集中在 `SettingsViewModel.RawKeyMixingName`；儲存的鍵仍是 `[input] mixed_input`。
 - **預測**：被動預測沒有序號與反白，按 Tab 進入後才出現。
 - **滑鼠**：點擊帶 sequence，TSF 拒絕過期點擊；失焦、取消與 layout 銷毀都會關閉候選。
 
@@ -69,7 +69,9 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 
 ## 安裝與版本目錄
 
-DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版；刪除一律是真的刪除，不另留備份；使用中刪不掉的檔案（通常是 App 仍載入的 `Shanjie.dll`）只留下那幾個，同時排入 Windows 重新開機刪除，並登記一次性的 SYSTEM 排程 `ShanjieCleanup`（`installer/cleanup_task.rs`），在下次任一使用者登入或開機時只刪那些路徑，完成後自行移除。輸入法清單只經 Windows 的 `InstallLayoutOrTip` 加入或移除善解自己的 TIP（由 Windows 加在最後，缺少中文（台灣）時一併加入），不改寫其他語言與輸入法；之後從 `HKCU\Control Panel\International\User Profile` 讀回，只核對善解的配置。某個語言只剩善解時拒絕解除安裝，因為移除最後一個輸入法會讓 Windows 連語言一起拿掉。變更前保存註冊（含上述清單）、啟動檔案、登入啟動與更新檢查排程，失敗時嘗試完整回復。常駐核心由工作排程器根目錄的隱藏工作 `ShanjieCore` 在任一使用者登入時啟動；安裝時移除舊版的 `Run` 啟動值，解除安裝時一併移除這個排程與 `ShanjieUpdateCheck`。安裝紀錄格式見 [README](../README.md#疑難排解)。
+DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<stamp>/`。Rust 安裝管理程式 `shanjie-manager.exe` 驗證檔案、註冊、核對 COM 路徑與雜湊後才清除舊版。舊版任一架構的 `Shanjie.dll` 仍被 App 載入時，保留該版目錄中的核心、模型與其他配套，讓仍在執行的舊 DLL 可繼續使用自己的資源（`installer.rs::Leftover::retire_version`）；將舊版目錄交給一次性的 SYSTEM 排程 `ShanjieCleanup`（`installer/cleanup_task.rs`），待下次登入或開機清理，完成後排程自行移除。沒有使用中 DLL 的舊版則立即清除；安裝程式的清理是直接刪除，不另留回收副本。
+
+輸入法清單只經 Windows 的 `InstallLayoutOrTip` 加入或移除善解自己的 TIP（由 Windows 加在最後，缺少中文（台灣）時一併加入），不改寫其他語言與輸入法；之後從 `HKCU\Control Panel\International\User Profile` 讀回，只核對善解的配置。某個語言只剩善解時拒絕解除安裝，因為移除最後一個輸入法會讓 Windows 連語言一起拿掉。變更前保存註冊（含上述清單）、啟動檔案、登入啟動與更新檢查排程，失敗時嘗試完整回復。常駐核心由工作排程器根目錄的隱藏工作 `ShanjieCore` 在任一使用者登入時啟動；安裝時移除舊版的 `Run` 啟動值，解除安裝時一併移除這個排程與 `ShanjieUpdateCheck`。安裝紀錄格式見 [README](../README.md#疑難排解)。
 
 安裝與解除安裝畫面是設定程式的 `--setup`／`--uninstall` 模式。安裝包根目錄的 `安裝善解.exe`（`shanjie-setup`）在解壓後的安裝包旁只負責開啟 `ui\Shanjie.UI.exe --setup`；Release 的 `Shanjie-Windows-Setup.exe` 是同一個 stub 在檔尾附上整個安裝包（`setup_bundle.rs`：檔案依序寫成「路徑、大小、內容」串流，`ui\` 與 `tools\` 排在最前面，每 16 MiB 以系統 cabinet.dll 的 LZMS 壓縮，檔尾記錄長度、這兩個資料夾的大小與 SHA-256）。它先校驗整段內容，不顯示任何對話框，把 `ui\`、`tools\` 解開到 `%TEMP%\ShanjieSetup-<隨機>`，隨即從那裡開啟同一個安裝畫面；其餘檔案等使用者按下安裝（畫面寫出 `setup-extract-go`）才解開，進度寫在同資料夾的 `setup-extract.txt`（`running <已寫> <總量>`、`done` 或 `failed <訊息>`，整檔替換）。按下安裝後先顯示解開進度再開始安裝；畫面關閉後停止解開並刪除暫存；manager 安裝時仍會依 `SHA256SUMS.txt` 再校驗一次。打包由建置用的 `shanjie-pack` 完成，不放進安裝包。畫面不提權，只是 `shanjie-manager` 的外殼：它以一般權限呼叫 `--elevate install`／`uninstall`，由 manager 自己要求 UAC，安裝後也由 manager 的未提權那一半啟動使用者的核心。提權後的 manager 經 `--progress \.\pipe\ShanjieSetup-<隨機>` 把每個階段寫成一行 JSON，最後一行是結果；管道由畫面建立、只開一個實例，manager 以 SECURITY_IDENTIFICATION 連線，不讓管道端冒用提權身分。`install-status` 唯讀回報已安裝版本與鍵盤配置。「已安裝的應用程式」的解除安裝指向 `Shanjie.UI.exe --uninstall`，它先把 `ui` 與 manager 複製到 `%TEMP%\ShanjieUninstall-<隨機>` 再從那裡執行，結束後刪掉這份暫存。解除安裝直接刪除安裝目錄，剩下的使用中檔案交給 `ShanjieCleanup`，也清掉 0.12.1 以前留在 `.deleted_files\<時間戳>-<名稱>` 的副本；選擇移除時個人資料直接刪除。命令列腳本放在安裝包的 `scripts\`，`settings.cmd` 與 `uninstall.cmd` 安裝時複製到安裝目錄。
 
