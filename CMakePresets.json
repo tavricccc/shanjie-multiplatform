@@ -45,7 +45,9 @@
       "configurePreset": "windows-x64",
       "configuration": "Release",
       "output": {
-        "outputOnFailure": true
+        "outputOnFailure": true,
+        "maxPassedTestOutputSize": 0,
+        "maxFailedTestOutputSize": 0
       },
       "execution": {
         "jobs": 4
@@ -56,7 +58,9 @@
       "configurePreset": "windows-x86",
       "configuration": "Release",
       "output": {
-        "outputOnFailure": true
+        "outputOnFailure": true,
+        "maxPassedTestOutputSize": 0,
+        "maxFailedTestOutputSize": 0
       },
       "execution": {
         "jobs": 4

@@ -167,7 +167,10 @@ try {
         $linkedTarget = if ($linkItem -and ($linkItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { [string]$linkItem.Target } else { $null }
         if ($linkedTarget) {
             if ([IO.Path]::GetFullPath($linkedTarget) -eq [IO.Path]::GetFullPath($target)) { continue }
-            throw "Refusing to replace a fixture link with an unexpected target: $link"
+            $previousFixture = [IO.Path]::GetRelativePath((Join-Path $root 'build/test-resources'), [IO.Path]::GetFullPath($linkedTarget))
+            if ($previousFixture -notmatch "^(?:[0-9a-f]{32}|[0-9a-f]{40})[\\/]$name`$") {
+                throw "Refusing to replace a fixture link with an unexpected target: $link"
+            }
         }
         if ($linkItem) {
             $archive = Join-Path $base '.deleted_files'
@@ -182,7 +185,7 @@ try {
     $cargoVersion = (& cargo --version 2>&1 | Out-String).Trim()
     $testKey = Get-ContentFingerprint -Root $root -Paths @(
         'build/core/src','build/core/Cargo.toml','upstream/shanjie/core/tests','upstream/shanjie/core/Cargo.toml',
-        'scripts/test-core.ps1','scripts/prepare-test-contracts.ps1','scripts/test-support.psm1'
+        'scripts/test-core.ps1','scripts/prepare-test-contracts.ps1'
     ) -Values @($upstreamPin,$rustVersion,$cargoVersion,$env:RUSTFLAGS,$env:CARGO_ENCODED_RUSTFLAGS)
     $testManifest = Join-Path $tree '.source-cache.json'
     $testPaths = @('src','tests','Cargo.toml')
@@ -229,7 +232,7 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
             # Unix file modes only prepare fixtures for upstream's learning store; Windows has its own store.
             $fuzzy = Join-Path $tree 'tests/engine_fuzzy_rerank.rs'
             $content = [IO.File]::ReadAllText($fuzzy)
-            $setup = [regex]'(?m)^\s*(use std::os::unix::fs\PermissionsExt;|std::fs::set_permissions\([^\n]*from_mode\(0o[0-7]+\)\)\.unwrap\(\);)\r?\n'
+            $setup = [regex]'(?m)^\s*(use std::os::unix::fs::PermissionsExt;|std::fs::set_permissions\([^\n]*from_mode\(0o[0-7]+\)\)\.unwrap\(\);)\r?\n'
             if ($setup.Matches($content).Count -ne 3) { throw 'Upstream fuzzy learning fixture changed.' }
             [IO.File]::WriteAllText($fuzzy, $setup.Replace($content, ''), [Text.UTF8Encoding]::new($false))
             # Tests of behavior Windows does not have, each named with the reason.

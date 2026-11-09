@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('FAST','AFFECTED','FULL','RELEASE')][string]$Level,
+    [Parameter(Mandatory)][ValidateSet('CI','FAST','AFFECTED','FULL','RELEASE')][string]$Level,
     [string]$BaseRef='origin/main',
     [ValidateRange(1,32)][int]$Jobs=4,
     [switch]$RetryFailures,
@@ -9,12 +9,18 @@ param(
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+$version=(Get-Content -LiteralPath "$root/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json).version
+$sourceStart=$null;$sourceEnd=$null;$releaseData=$null
 $runId=[guid]::NewGuid().ToString('N')
 $reportRoot=Join-Path $root "build/reports/$($Level.ToLowerInvariant())-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$($runId.Substring(0,8))"
 $eventsRoot=Join-Path $reportRoot 'events'
 $null=New-Item -ItemType Directory -Path $eventsRoot -Force
 $consoleLog=Join-Path $reportRoot 'console.log'
 Start-Transcript -Path $consoleLog -Force | Out-Null
+$previousRunId=$env:SHANJIE_TEST_RUN_ID
+$previousTimingsDirectory=$env:SHANJIE_TEST_TIMINGS_DIR
 $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
 $whole=[Diagnostics.Stopwatch]::StartNew()
@@ -54,56 +60,12 @@ function Get-ChangedPathList([string]$Ref) {
 function Test-DocumentationOnly([string]$Path) {
     return ($Path -match '^(docs/|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
 }
-function Test-CommentOnlyChange([string]$Path) {
-    $extension=[IO.Path]::GetExtension($Path).ToLowerInvariant()
-    $hashComments=@('.ps1','.psm1','.cmake','.yml','.yaml','.toml','.lock','.ini')
-    $slashComments=@('.rs','.cpp','.cc','.c','.h','.hpp','.cs')
-    if($extension -notin ($hashComments+$slashComments) -and $Path -ne 'CMakeLists.txt'){return $false}
-    $diffLines=@()
-    $diffLines+=@(git -C $root diff --unified=0 "$BaseRef...HEAD" -- "$Path" 2>$null)
-    $diffLines+=@(git -C $root diff --unified=0 -- "$Path" 2>$null)
-    $diffLines+=@(git -C $root diff --cached --unified=0 -- "$Path" 2>$null)
-    $changed=@($diffLines | Where-Object { $_ -match '^[+-]' -and $_ -notmatch '^(\+\+\+|---)' })
-    if(!$changed.Count){return $false}
-    foreach($line in $changed){
-        $content=$line.Substring(1).Trim()
-        if(!$content){return $false}
-        $comment=if($extension -in $slashComments){$content -match '^(//|/\*|\*|\*/)' -or $content -match '^<!--'}else{$content -match '^#' -or $content -match '^;'}
-        if(!$comment){return $false}
-        if($extension -in @('.ps1','.psm1') -and $content -match '^#requires\b'){return $false}
-    }
-    return $true
-}
 function Classify-ChangedPath([string]$Path) {
     if (Test-DocumentationOnly $Path) { $pathReasons[$Path]='Documentation-only change; no build or tests.'; return }
-    if ($Level -in @('FAST','AFFECTED') -and (Test-CommentOnlyChange $Path)) { $pathReasons[$Path]='Only full-line comments changed; no build or tests.'; return }
-    if ($Path -match '^(shared/|shared\\)') { Add-Label 'shared' "$Path changes shared Rust logic; test shared and downstream Windows crates."; Add-Label 'windows' "$Path is consumed by the Windows crate."; return }
-    if ($Path -match '^(windows/src/engine\.rs|windows/src/input\.rs|windows/src/mixed_regression\.rs|windows/src/model_store\.rs|windows/Cargo\.(toml|lock)|shared/Cargo\.(toml|lock)|platform/|upstream/|data/|profiles/|MODEL-|UPSTREAM\.json)') { $script:forceFull=$true; $pathReasons[$Path]='Core, model, profile, dependency, or upstream change has broad regression impact.'; return }
-    if ($Path -match '^windows/src/tsf/') { Add-Label 'windows' "$Path changes the Windows TSF crate."; Add-Label 'tsf' "$Path changes TSF behavior; run the isolated TSF regression matrix."; return }
-    if ($Path -match '^windows/src/') { Add-Label 'windows' "$Path changes the Windows Rust crate."; return }
-    if ($Path -match '^tests/(english_keys\.cpp)$') { Add-Label 'english' "$Path is the English-key harness."; return }
-    if ($Path -match '^tests/submission\.cpp$') { Add-Label 'submission' "$Path is the input-submission harness."; return }
-    if ($Path -match '^tests/add_word_popup\.cpp$') { Add-Label 'word' "$Path is the add-word popup harness."; return }
-    if ($Path -match '^tests/candidate_host_smoke\.cpp$') { Add-Label 'ui' "$Path is the candidate-host UI harness."; return }
-    if ($Path -match '^tests/mode_button_smoke\.cpp$|^tests/support/mode_indicator\.(cpp|h)$') { Add-Label 'mode' "$Path is the off-screen mode-indicator harness."; return }
-    if ($Path -match '^tests/windows_interaction\.cpp$') { Add-Label 'interaction' "$Path is the isolated Windows interaction harness."; return }
-    if ($Path -match '^tests/tsf_smoke\.cpp$') { Add-Label 'smoke' "$Path is the TSF smoke harness."; return }
-    if ($Path -match '^tests/tsf_compat\.cpp$') { Add-Label 'private-desktop' "$Path is the private-desktop TSF compatibility harness."; return }
-    if ($Path -match '^tests/popup_lifecycle\.cpp$') { Add-Label 'private-desktop' "$Path is the private-desktop popup lifecycle harness."; return }
-    if ($Path -match '^tests/') { $script:forceFull=$true; $pathReasons[$Path]='Shared C++ support or test inventory changed; run the full regression matrix.'; return }
-    if ($Path -match '^(ui/|scripts/verify-ui\.ps1$)') { Add-Label 'ui' "$Path affects WinUI or its host harness."; return }
-    if ($Path -match '^scripts/verify-mode\.ps1$') { Add-Label 'mode' "$Path runs the off-screen mode-indicator smoke test."; return }
-    if ($Path -match '^scripts/verify-interaction\.ps1$') { Add-Label 'interaction' "$Path runs the isolated Windows interaction harness."; return }
-    if ($Path -match '^scripts/verify-(english-keys|submission|add-word|private-desktop)\.ps1$') {
-        if ($Path -match 'english') { Add-Label 'english' "$Path runs English-key regressions." }
-        elseif ($Path -match 'submission') { Add-Label 'submission' "$Path runs submission regressions." }
-        elseif ($Path -match 'add-word') { Add-Label 'word' "$Path runs add-word regressions." }
-        else { Add-Label 'private-desktop' "$Path runs isolated private-desktop regressions." }
-        return
-    }
-    if ($Path -match '^(scripts/(build|prepare|test-core|verify|verify-regressions|verify-upstream-data|ctest-case|test\.ps1|prepare-test-payload)\.ps1|CMakeLists\.txt|CMakePresets\.json|\.github/|Cargo\.toml|Cargo\.lock)') { $script:forceFull=$true; $pathReasons[$Path]='Build, test framework, CI, or dependency logic changed; run FULL.'; return }
-    $script:forceFull=$true
-    $pathReasons[$Path]='Change impact is not mapped; use conservative FULL coverage.'
+    $impact=Get-VerificationImpact $Path
+    $pathReasons[$Path]=$impact.Reason
+    if($impact.Full){$script:forceFull=$true}
+    foreach($label in $impact.Labels){Add-Label $label "$Path`: $($impact.Reason)"}
 }
 function Get-CtestInventory([string]$BinaryDirectory) {
     $raw=& ctest --test-dir $BinaryDirectory -C Release --show-only=json-v1 2>&1
@@ -135,12 +97,12 @@ function Get-SelectedTests($Inventory,[string[]]$Levels,[string]$Preset) {
             $reason=if($Level -in @('FAST','AFFECTED')) { ($matches | ForEach-Object { if($pathReasons.Contains($_)){$pathReasons[$_]}else{"Selected by $Level level."} }) -join ' ' } else { "$Level level selects the $($matches -join ', ') test group." }
             $selected.Add([pscustomobject]@{name=$test.name;labels=$labels;reason=$reason;preset=$Preset})
         } else {
-            $reason=if($skipTests){'Documentation-only change; build and test not needed.'}elseif($Level -eq 'FAST'){'Outside the FAST smoke set.'}elseif($Level -eq 'AFFECTED'){'No selected label matches the changed modules.'}elseif($Level -eq 'FULL'){'Release-only check; outside FULL.'}elseif($Level -eq 'RELEASE' -and $Preset -eq 'windows-x86' -and $test.name -notlike 'release.*'){'x64 FULL suites are already run on the x64 preset; this x86 pass contains only x86 release checks.'}else{'Test is not selected for this architecture preset.'}
+            $reason=if($skipTests){'Documentation-only change; build and test not needed.'}elseif($Level -eq 'CI'){'Outside the fixed CI baseline; full product and desktop acceptance run locally or before release.'}elseif($Level -eq 'FAST'){'Outside the FAST smoke set.'}elseif($Level -eq 'AFFECTED'){'No selected label matches the changed modules.'}elseif($Level -eq 'FULL'){'Release-only check; outside FULL.'}elseif($Level -eq 'RELEASE' -and $Preset -eq 'windows-x86' -and $test.name -notlike 'release.*'){'x64 FULL suites are already run on the x64 preset; this x86 pass contains only x86 release checks.'}else{'Test is not selected for this architecture preset.'}
             $omitted.Add([pscustomobject]@{name=$test.name;labels=$labels;reason=$reason;preset=$Preset})
         }
     }
     $requiredFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach($test in $selected) { foreach($fixture in (Get-TestFixtureProperty $test 'FIXTURES_REQUIRED')) { if($fixture){[void]$requiredFixtures.Add($fixture)} } }
+    foreach($test in $Inventory.tests | Where-Object name -In $selected.name) { foreach($fixture in (Get-TestFixtureProperty $test 'FIXTURES_REQUIRED')) { if($fixture){[void]$requiredFixtures.Add($fixture)} } }
     if($requiredFixtures.Count) {
         foreach($test in $Inventory.tests) {
             $setup=Get-TestFixtureProperty $test 'FIXTURES_SETUP'
@@ -175,7 +137,7 @@ function Invoke-CmakeBuild([string]$Preset,[object[]]$Tests) {
     $stage=Start-TestStage -Name "Incremental C++ harness build ($Preset)" -Category 'build.cpp.harness'
     $status='passed';$errorMessage=$null
     try {
-        & cmake --build --preset $Preset --target @targets --config Release
+        & cmake --build --preset $Preset --target @targets --config Release --parallel $Jobs
         if ($LASTEXITCODE) { throw "CMake harness build failed for $Preset." }
         Complete-TestStage -Stage $stage -Details @{preset=$Preset;targets=$targets;cache='CMake incremental build'}
     } catch { $status='failed';$errorMessage=$_.Exception.Message;Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;targets=$targets} -ErrorMessage $errorMessage;throw }
@@ -184,30 +146,48 @@ function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[
     if (!$Tests.Count) { return }
     $names=@($Tests | ForEach-Object name)
     $regex='^(' + (($names | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
-    $log=Join-Path $reportRoot "ctest-$Preset.log"
-    $junit=Join-Path $reportRoot "junit-$Preset.xml"
-    $ctestArguments=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--output-log',$log,'--output-junit',$junit,'--parallel',"$Jobs",'--no-tests=error','-R',$regex)
-    if($RetryFailures){$ctestArguments+=@('--repeat','until-pass:2')}
     $stage=Start-TestStage -Name "CTest execution ($Preset)" -Category 'ctest.run'
-    $script:ctestReports += [pscustomobject]@{preset=$Preset;log=$log;junit=$junit;tests=$names}
     $status='passed';$errorMessage=$null
-    try { & ctest @ctestArguments; if($LASTEXITCODE){throw "CTest failed for $Preset (exit $LASTEXITCODE); see $log and $junit."} }
-    catch { $status='failed';$errorMessage=$_.Exception.Message;throw }
-    finally { Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;selected_tests=$names.Count;log=$log;junit=$junit} -ErrorMessage $errorMessage }
+    $previousAttempt=$env:SHANJIE_CTEST_ATTEMPT
+    $previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
+    $env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
+    try {
+        for($attempt=1;$attempt -le $(if($RetryFailures){2}else{1});$attempt++) {
+            $suffix=if($attempt -eq 1){''}else{'-retry'}
+            $log=Join-Path $reportRoot "ctest-$Preset$suffix.log"
+            $junit=Join-Path $reportRoot "junit-$Preset$suffix.xml"
+            $ctestArguments=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--test-output-size-passed','0','--test-output-size-failed','0','--output-log',$log,'--output-junit',$junit,'--parallel',"$Jobs",'--no-tests=error')
+            if($attempt -eq 1){$ctestArguments+=@('-R',$regex)}else{$ctestArguments+='--rerun-failed'}
+            $script:ctestReports += [pscustomobject]@{preset=$Preset;attempt=$attempt;log=$log;junit=$junit;tests=$names}
+            $env:SHANJIE_CTEST_ATTEMPT="$attempt"
+            & ctest @ctestArguments
+            $ctestExit=$LASTEXITCODE
+            $lastTest=Join-Path $BinaryDirectory 'Testing/Temporary/LastTest.log'
+            if(Test-Path -LiteralPath $lastTest){Copy-Item -LiteralPath $lastTest -Destination (Join-Path $reportRoot "LastTest-$Preset$suffix.log") -Force}
+            if(!$ctestExit){break}
+        }
+        if($ctestExit){throw "CTest failed for $Preset (exit $ctestExit); see $log and $junit."}
+    } catch { $status='failed';$errorMessage=$_.Exception.Message;throw }
+    finally {
+        $env:SHANJIE_CTEST_ATTEMPT=$previousAttempt
+        $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
+        Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;selected_tests=$names.Count;log=$log;junit=$junit} -ErrorMessage $errorMessage
+    }
 }
 
 try {
-    $changeSet=Get-ChangedPathList $BaseRef
+    if($Level -eq 'RELEASE'){$sourceStart=Get-ReleaseIdentity $root}
+    $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null}}else{Get-ChangedPathList $BaseRef}
     $changedPaths=@($changeSet.Paths)
     if ($changeSet.Error) { $forceFull=$true;$notes.Add($changeSet.Error+' Conservative full test selection is active.') }
     foreach($path in $changedPaths){Classify-ChangedPath $path}
-    $codeChanges=@($changedPaths | Where-Object { !(Test-DocumentationOnly $_) -and !(Test-CommentOnlyChange $_) })
+    $codeChanges=@($changedPaths | Where-Object { !(Test-DocumentationOnly $_) })
     if ($changedPaths.Count -and !$codeChanges.Count) { $skipTests=$true }
     if (!$changedPaths.Count -and !$changeSet.Error -and $Level -eq 'AFFECTED') { $skipTests=$true;$notes.Add('No changed paths were found; selected no affected tests.') }
-    if ($forceFull -and $Level -in @('FAST','AFFECTED')) { $notes.Add('Impact could not be bounded safely; expanded selection to FULL.') }
+    if ($forceFull -and $Level -eq 'AFFECTED') { $notes.Add('Impact could not be bounded safely; expanded selection to FULL.') }
     if ($Level -eq 'FAST' -and !$skipTests) {
         $requestedLabels.Clear()
-        [void]$requestedLabels.Add($(if($forceFull){'full'}else{'fast'}))
+        [void]$requestedLabels.Add('fast')
         if(!$pathReasons.Contains('fast')){$pathReasons['fast']='FAST source coverage and Rust unit smoke checks.'}
         if(!$changedPaths.Count -and !$changeSet.Error){$notes.Add('No changed paths were found; running the FAST smoke set.')}
     }
@@ -217,6 +197,7 @@ try {
         if(!$pathReasons.Contains('fast')){$pathReasons['fast']='FAST source coverage and Rust unit smoke checks run before the mapped regressions.'}
     }
     if ($Level -eq 'FULL') { [void]$requestedLabels.Add('full') }
+    if ($Level -eq 'CI') { [void]$requestedLabels.Add('ci');$notes.Add('Fixed CI baseline: ignores change impact and never expands to FULL or builds the product.') }
     if ($Level -eq 'RELEASE') { [void]$requestedLabels.Add('full');[void]$requestedLabels.Add('release') }
     $skipTests = $skipTests -and $Level -in @('FAST','AFFECTED') -and !$forceFull
     $presets=if($skipTests){@()}else{@('windows-x64')}
@@ -236,14 +217,15 @@ try {
         if($Level -eq 'RELEASE' -and $preset -eq 'windows-x86'){$labels=@('release')}
         if($skipTests){$labels=@()}
         $selection=Get-SelectedTests $inventory $labels $preset
+        if($Level -eq 'CI'){Assert-FixedCiSelection $selection.Selected}
         $selectedByPreset[$preset]=$selection.Selected
         $unselectedByPreset[$preset]=$selection.Omitted
-        $needsProduct=$needsProduct -or [bool](@($selection.Selected | Where-Object { ($_.labels | Where-Object { $_ -in @('tsf','english','submission','word','private-desktop','smoke','models','ui','mode','package') }) }).Count)
+        $needsProduct=$Level -ne 'CI' -and ($needsProduct -or [bool](@($selection.Selected | Where-Object { ($_.labels | Where-Object { $_ -in @('tsf','english','submission','word','private-desktop','smoke','models','ui','mode','package') }) }).Count))
     }
 
     if ($Level -eq 'AFFECTED' -and !$forceFull) {
         $needsUiOutput = [bool](@($changedPaths | Where-Object { $_ -match '^(ui/|scripts/verify-ui\.ps1$|tests/candidate_host_smoke\.cpp$)' }).Count) -or
-            [bool](@($selectedByPreset.Values | ForEach-Object { $_ } | Where-Object { $_.name -match '^release\.ui\.(candidate|verify)$' }).Count)
+            [bool](@($selectedByPreset.Values | ForEach-Object { $_ } | Where-Object { $_.name -match '^release\.ui\.(candidate\.|verify$)' }).Count)
         $skipSettingsBuild = !$needsUiOutput
         if ($skipSettingsBuild) { $notes.Add('AFFECTED product prerequisites omit WinUI publish because no changed path or selected interactive UI case needs it; FULL and RELEASE still include WinUI publish.') }
     }
@@ -272,29 +254,40 @@ try {
 } catch {
     $overallStatus='failed'
     $failureMessage=$_.Exception.Message
-    Write-Error $failureMessage
+    Write-Host "FAILED: $failureMessage"
 } finally {
     $whole.Stop()
-    foreach($report in $ctestReports) {
-        if(Test-Path -LiteralPath $report.junit) {
-            try {
-                [xml]$junit=Get-Content -LiteralPath $report.junit -Raw
-                foreach($case in $junit.SelectNodes('//testcase')) {
-                    $failure=$case.SelectSingleNode('failure')
-                    $skipped=$case.SelectSingleNode('skipped')
-                    $status=if($failure){'failed'}elseif($skipped){'not-run'}else{'passed'}
-                    $testResults+=,[pscustomobject]@{name=$case.name;class=$case.classname;preset=$report.preset;status=$status;duration_seconds=[double]$case.time;failure=if($failure){$failure.InnerText}else{$null};log=$report.log}
-                }
-            } catch { $notes.Add("Could not parse JUnit report $($report.junit): $($_.Exception.Message)") }
-        }
-    }
+    try { $testResults=@(Read-CtestResults $ctestReports) }
+    catch { $overallStatus='failed';$failureMessage=$_.Exception.Message;$notes.Add("Could not read CTest JUnit: $failureMessage") }
     $observed=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach($result in $testResults){[void]$observed.Add("$($result.preset)::$($result.name)")}
     foreach($selected in @($selectedByPreset.Values | ForEach-Object { $_ })) {
         $key="$($selected.preset)::$($selected.name)"
         if(!$observed.Contains($key)){$testResults+=,[pscustomobject]@{name=$selected.name;class=$null;preset=$selected.preset;status='not-run';duration_seconds=$null;failure=$null;reason=if($overallStatus -eq 'failed'){'CTest did not return a JUnit result; see the stage failure and log.'}else{'Selected in the plan but not started.'};log=$null}}
     }
-    $timings=@(Get-ChildItem -LiteralPath $eventsRoot -Filter '*.json' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json } | Sort-Object started_utc)
+    if($overallStatus -eq 'passed' -and @($testResults | Where-Object status -NE 'passed').Count){
+        $overallStatus='failed'
+        $failureMessage='Some selected tests failed or did not run; see the per-test results and CTest logs.'
+    }
+    $timingEvents=@(Get-ChildItem -LiteralPath $eventsRoot -Filter '*.json' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
+    $timings=@(Get-ExclusiveTestTimings $timingEvents | Sort-Object started_utc)
+    $caseRows=@(
+        foreach($row in $selectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$true}}
+        foreach($row in $unselectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$false}}
+    )
+    $subcases=@(Get-HarnessCasePlan $caseRows)
+    foreach($subcase in $subcases | Where-Object selected) {
+        $events=@($timings | Where-Object { $_.test_name -eq $subcase.parent -and $_.category -eq $subcase.category })
+        foreach($key in $subcase.parameters.Keys){$events=@($events | Where-Object { $_.details.$key -ceq $subcase.parameters[$key] })}
+        $subcase.attempts=@($events | Sort-Object attempt,started_utc | ForEach-Object { [pscustomobject]@{attempt=$_.attempt;status=$_.status;duration_ms=$_.duration_ms;error=$_.error} })
+        if($subcase.attempts.Count){
+            $subcase.status=$subcase.attempts[-1].status
+            $subcase.flaky=$subcase.status -eq 'passed' -and [bool](@($subcase.attempts | Where-Object status -eq 'failed').Count)
+        }else{$subcase.reason='Selected combination did not reach execution; inspect its parent CTest result and logs.'}
+    }
+    if($overallStatus -eq 'passed' -and @($subcases | Where-Object { $_.selected -and $_.status -ne 'passed' }).Count){
+        $overallStatus='failed';$failureMessage='Some selected harness combinations did not pass or did not run; see subcases.'
+    }
     $allSelected=@($selectedByPreset.Values | ForEach-Object { $_ })
     $allOmitted=@($unselectedByPreset.Values | ForEach-Object { $_ })
     if($skipTests){$allOmitted+=,[pscustomobject]@{name='CTest inventory';labels=@();reason='Inventory was not configured because this change needs no build or tests.';preset=$null}}
@@ -303,16 +296,29 @@ try {
             $allOmitted+=,[pscustomobject]@{name='CTest inventory';labels=@();reason='CMake configuration or CTest inventory failed before test rows could be listed.';preset=$preset}
         }
     }
+    if($Level -eq 'RELEASE'){
+        try {
+            $sourceEnd=Get-ReleaseIdentity $root
+            $releaseData=[ordered]@{source_start=$sourceStart;source_end=$sourceEnd;architectures=@('x64','x86');candidate_id=$runId;artifacts=$null}
+            if($overallStatus -eq 'passed'){$releaseData.artifacts=Get-ReleaseArtifacts $root $runId $ctestReports}
+        }catch{$overallStatus='failed';$failureMessage=$_.Exception.Message}
+    }
     $report=[ordered]@{
-        schema=2
+        schema=3
+        version=$version
+        commit=if($sourceEnd){$sourceEnd.commit}else{(& git -C $root rev-parse HEAD)}
+        worktree_dirty=if($sourceEnd){!$sourceEnd.clean}else{[bool](@(& git -C $root status --porcelain --untracked-files=normal).Count)}
         level=$Level
         status=$overallStatus
         wall_seconds=[Math]::Round($whole.Elapsed.TotalSeconds,3)
         base_ref=$BaseRef
         changed_paths=$changedPaths
         impact_reasons=$pathReasons
-        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;notes=@($notes);reason=if($skipTests){'Documentation-only or no changes.'}elseif($forceFull){'Conservative FULL expansion.'}else{"$Level change-impact selection."}}
+        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion.'}else{"$Level change-impact selection."}}
         results=$testResults
+        subcases=$subcases
+        flaky_tests=@($testResults | Where-Object flaky | ForEach-Object name)
+        release=$releaseData
         timings=$timings
         ctest=$ctestReports
         retry_failures=[bool]$RetryFailures
@@ -329,5 +335,10 @@ try {
     Write-Host "Test report: $json"
     Write-Host "Selected CTest rows: $($allSelected.Count); not selected: $($allOmitted.Count); elapsed: $($whole.Elapsed.TotalSeconds.ToString('F3'))s"
     Stop-Transcript | Out-Null
+    $env:SHANJIE_TEST_RUN_ID=$previousRunId
+    $env:SHANJIE_TEST_TIMINGS_DIR=$previousTimingsDirectory
 }
 if($overallStatus -ne 'passed'){throw $failureMessage}
+if($Level -eq 'RELEASE' -and $CiSafe -and $env:GITHUB_ACTIONS -eq 'true'){
+    & "$PSScriptRoot/package.ps1" -ExportCiArtifact -ReportPath $json
+}

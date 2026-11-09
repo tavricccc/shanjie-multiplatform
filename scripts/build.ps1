@@ -1,10 +1,10 @@
 #Requires -Version 7
-param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain)
+param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain, [switch]$CargoVerbose)
 $ErrorActionPreference = 'Stop'
 # Default builds both: x86 is the DLL that 32-bit apps on 64-bit Windows load.
 if ($Architecture -eq 'all') {
-    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain
-    & $PSCommandPath -Architecture x86 -UseExistingCore -UseCurrentToolchain:$UseCurrentToolchain
+    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose
+    & $PSCommandPath -Architecture x86 -UseExistingCore -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose
     return
 }
 $root = Split-Path $PSScriptRoot -Parent
@@ -42,19 +42,28 @@ try {
 @echo off
 $toolchainSetup
 if errorlevel 1 exit /b 1
-rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res" "$root/windows/resources.rc"
+rc /nologo /I"$root/assets/mode" /fo "$objects/mode_icons.res.tmp" "$root/windows/resources.rc"
 if errorlevel 1 exit /b 1
-rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
+rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup.rc"
 "@
     Set-Content "$objects/resources.cmd" $command -Encoding utf8NoBOM
     Invoke-Timed -Name 'Compile Windows resources' -Category 'build.native' -Details @{ architecture=$Architecture; resource_count=2 } -Action {
         & cmd.exe /d /c "$objects/resources.cmd"
         if ($LASTEXITCODE) { throw 'Mode resource build failed.' }
+        foreach($name in 'mode_icons','setup') {
+            $resource=Join-Path $objects "$name.res"
+            $temporary="$resource.tmp"
+            if((Test-Path -LiteralPath $resource) -and (Get-FileHash -LiteralPath $resource).Hash -eq (Get-FileHash -LiteralPath $temporary).Hash){
+                Remove-Item -LiteralPath $temporary -Force
+            }else{Move-Item -LiteralPath $temporary -Destination $resource -Force}
+        }
     }
     $env:SHANJIE_ICON_RESOURCE = Join-Path $objects 'mode_icons.res'
     $env:SHANJIE_SETUP_RESOURCE = Join-Path $objects 'setup.res'
     Invoke-Timed -Name 'Rust Windows release build' -Category 'build.rust.release' -Details @{ architecture=$Architecture; target=$target; incremental='Cargo fingerprints' } -Action {
-        cargo build --release --manifest-path windows/Cargo.toml --target $target
+        $cargoArguments=@('build','--release','--manifest-path','windows/Cargo.toml','--target',$target)
+        if($CargoVerbose){$cargoArguments+='-vv'}
+        & cargo @cargoArguments
         if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }
     }
     Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$output/Shanjie.dll" -Force
@@ -71,7 +80,7 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
             $uiKey = Get-ContentFingerprint -Root $root -Paths $uiSourcePaths -Values @($dotnetVersion,'Release','x64','dotnet publish')
             $uiCacheManifest = Join-Path $root 'build/ui-publish-cache.json'
             $existingUiPaths = if (Test-Path -LiteralPath $uiOutput) {
-                @(Get-ChildItem -LiteralPath $uiOutput -File -Recurse | Where-Object Name -ne 'Shanjie.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
+                @(Get-ChildItem -LiteralPath $uiOutput -File -Recurse | Where-Object Name -ne 'shanjie_windows.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
             } else { @() }
             $uiPublishMiss = !(Test-ContentCache -Root $root -ManifestPath $uiCacheManifest -Key $uiKey -Paths $existingUiPaths)
             if ($uiPublishMiss) {
@@ -89,7 +98,7 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
     if ($Architecture -eq 'x64') {
         if (Test-Path "$root/dist/ui") { Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force }
         if (!$SkipSettings -and $uiPublishMiss) {
-            $publishedPaths = @(Get-ChildItem -LiteralPath "$root/dist/ui" -File -Recurse | Where-Object Name -ne 'Shanjie.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
+            $publishedPaths = @(Get-ChildItem -LiteralPath "$root/dist/ui" -File -Recurse | Where-Object Name -ne 'shanjie_windows.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
             Save-ContentCache -Root $root -ManifestPath $uiCacheManifest -Key $uiKey -Paths $publishedPaths
         }
         New-Item -ItemType Directory "$root/dist/tools" -Force | Out-Null

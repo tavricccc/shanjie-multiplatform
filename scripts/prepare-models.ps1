@@ -50,7 +50,7 @@ $sourceHashes = foreach ($asset in $bundle.assets) {
 }
 $cachePaths = @("$Output/$($bundle.folder)")
 $cacheManifest = Join-Path $cache "$($bundle.id)-map-cache.json"
-$cacheInputs = @('MODEL-SOURCES.json','UPSTREAM.json','scripts/prepare-models.ps1','scripts/test-support.psm1','build/core/src','build/core/Cargo.toml')
+$cacheInputs = @('MODEL-SOURCES.json','UPSTREAM.json','scripts/prepare-models.ps1','build/core/src','build/core/Cargo.toml')
 $cacheValues = @($pin,$bundle.id,$Output,'release','map-model --verify-equivalence; map-model --check',$rustVersion,$cargoVersion,$env:RUSTFLAGS,$env:CARGO_ENCODED_RUSTFLAGS)+@($sourceHashes)
 $cacheKey = Get-ContentFingerprint -Root $root -Paths $cacheInputs -Values $cacheValues
 if (Test-ContentCache -Root $root -ManifestPath $cacheManifest -Key $cacheKey -Paths $cachePaths) {
@@ -58,6 +58,8 @@ if (Test-ContentCache -Root $root -ManifestPath $cacheManifest -Key $cacheKey -P
     Invoke-Timed -Name 'Validate built-in model cache' -Category 'models.prepare' -Details @{ cache='hit'; model_id=$bundle.id; upstream_commit=$pin } -Action { $true | Out-Null }
 } else {
     $modelStage = Start-TestStage -Name 'Prepare built-in model set' -Category 'models.prepare'
+    $previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
+    $env:SHANJIE_TEST_PARENT_STAGE_ID=$modelStage.Id
     try {
         Preserve-Output $folder
         New-Item -ItemType Directory -Path $folder -Force | Out-Null
@@ -84,6 +86,8 @@ if (Test-ContentCache -Root $root -ManifestPath $cacheManifest -Key $cacheKey -P
     } catch {
         Complete-TestStage -Stage $modelStage -Status 'failed' -Details @{ cache='miss'; model_id=$bundle.id; upstream_commit=$pin } -ErrorMessage $_.Exception.Message
         throw
+    } finally {
+        $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
     }
 }
 # Only the built-in folder belongs in the package; earlier layouts are removed from the output.

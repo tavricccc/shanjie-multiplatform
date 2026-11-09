@@ -44,27 +44,11 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         # Elevated test hosts deliberately cannot auto-start a user core. Start
         # the isolated fixture explicitly; its endpoint includes this profile.
         $startStage=Start-TestStage -Name "Start add-word core ($arch)" -Category 'core.lifecycle'
-        try{$worker=Start-Process -FilePath "$runtimeRoot/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -RedirectStandardError "$out/core-error.log" -RedirectStandardOutput "$out/core-output.log" -PassThru;Complete-TestStage -Stage $startStage -Details @{architecture=$arch;profile=$out/profile;pid=$worker.Id}}
-        catch{Complete-TestStage -Stage $startStage -Status 'failed' -Details @{architecture=$arch;profile=$out/profile} -ErrorMessage $_.Exception.Message;throw}
+        try{$worker=Start-Process -FilePath "$runtimeRoot/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -RedirectStandardError "$out/core-error.log" -RedirectStandardOutput "$out/core-output.log" -PassThru;Complete-TestStage -Stage $startStage -Details @{architecture=$arch;profile="$out/profile";pid=$worker.Id}}
+        catch{Complete-TestStage -Stage $startStage -Status 'failed' -Details @{architecture=$arch;profile="$out/profile"} -ErrorMessage $_.Exception.Message;throw}
         # A pipe exists before resource preload finishes. Wait for a real reply;
         # a fixed sleep races the TSF preload connection on slower cold starts.
-        $readyStage=Start-TestStage -Name "Wait for add-word core readiness ($arch)" -Category 'core.lifecycle'
-        $ready=$false
-        $readyCompleted=$false
-        try {
-            for($attempt=0;$attempt -lt 10;$attempt++) {
-                if($worker.HasExited){throw 'Isolated add-word core exited during preload.'}
-                $probe=Start-Process "$runtimeRoot/tools/shanjie-core.exe" -ArgumentList '--status' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput "$out/core-status.json" -RedirectStandardError "$out/core-status-error.log"
-                if($probe.ExitCode -eq 0 -and (Get-Content "$out/core-status.json" -Raw | ConvertFrom-Json).ok){$ready=$true;break}
-                Start-Sleep -Milliseconds 100
-            }
-            if(!$ready){throw 'Isolated add-word core did not finish preload.'}
-            Complete-TestStage -Stage $readyStage -Details @{architecture=$arch;attempts=$attempt+1}
-            $readyCompleted=$true
-        } catch {
-            if(!$readyCompleted){Complete-TestStage -Stage $readyStage -Status 'failed' -Details @{architecture=$arch;attempts=if($ready){$attempt+1}else{10}} -ErrorMessage $_.Exception.Message}
-            throw
-        }
+        Wait-TestCoreReady -CorePath "$runtimeRoot/tools/shanjie-core.exe" -OutputDirectory $out | Out-Null
         Invoke-Timed -Name "Add-word TSF regression ($arch)" -Category 'word.add' -Details @{architecture=$arch;theme=$theme;model=$ModelId} -Action { & $exe "$runtimeRoot/$arch/Shanjie.dll" $out *> "$out/result.log";if($LASTEXITCODE){throw "Add-word TSF regression failed: $arch, exit $LASTEXITCODE"} }
     } finally {
         $stopStage=Start-TestStage -Name "Stop add-word core ($arch)" -Category 'core.lifecycle'

@@ -23,6 +23,7 @@ $timingDirectory = Initialize-TestTimings -ProjectRoot $root -Name 'verify'
 $whole = [Diagnostics.Stopwatch]::StartNew()
 Push-Location $root
 try {
+    if (!$SmokeOnly) { Invoke-Timed -Name 'Test framework regressions' -Category 'test.infrastructure' -Action { & "$root/tests/test_infrastructure.ps1" } }
     if (!$SmokeOnly) { Invoke-Timed -Name 'Static upstream data coverage' -Category 'data.validate' -Action { & "$PSScriptRoot/verify-upstream-data.ps1" } }
     if (!$SmokeOnly -and !$NativeOnly) {
         if (!$UseExistingBuild) { Invoke-Timed -Name 'Windows product build' -Category 'build.product' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/build.ps1" -Architecture $Architecture } }
@@ -43,10 +44,7 @@ try {
     if (!$SmokeOnly) {
         Invoke-Timed -Name 'Validate built upstream data' -Category 'data.validate' -Details @{ output='dist/data' } -Action { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
         # Unit tests that read built data and models; plain cargo test --lib intentionally ignores these.
-        Invoke-Timed -Name 'Mixed-input and digit model regressions' -Category 'rust.mixed-regression' -Details @{ target='x86_64-pc-windows-msvc'; tests='mixed_regression' } -Action {
-            & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored mixed_regression
-            if ($LASTEXITCODE) { throw 'The mixed-input and digit regressions failed against the built data.' }
-        }
+        & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture
     }
 
     $harness = if ($TsfHarnessPath) { [IO.Path]::GetFullPath($TsfHarnessPath) } else { Join-Path $root "build/tsf-smoke-$Architecture.exe" }
@@ -86,7 +84,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
             $start = Start-TestStage -Name 'Start isolated core process' -Category 'core.lifecycle'
             try{$fixtureCore = Start-Process "$runtimeRoot/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru;Complete-TestStage -Stage $start -Details @{ pid=$fixtureCore.Id; architecture=$Architecture; profile=$profileRoot }}
             catch{Complete-TestStage -Stage $start -Status 'failed' -Details @{ architecture=$Architecture; profile=$profileRoot } -ErrorMessage $_.Exception.Message;throw}
-            Wait-TestCoreReady -CorePath "$runtimeRoot/tools/shanjie-core.exe" -OutputDirectory $profileRoot -TimeoutMilliseconds 1000 | Out-Null
+            Wait-TestCoreReady -CorePath "$runtimeRoot/tools/shanjie-core.exe" -OutputDirectory $profileRoot | Out-Null
 
             $arguments = @("$runtimeRoot/$Architecture/Shanjie.dll")
             if ($Visual) { $arguments += '--visual' }

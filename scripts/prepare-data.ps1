@@ -20,7 +20,7 @@ $existingRootNames=if(Test-Path -LiteralPath $data){@(Get-ChildItem -LiteralPath
 $outputPaths = @("$Output/packs",$Licenses) + @($expectedRootNames | ForEach-Object { "$Output/$_" }) + @($existingRootNames | ForEach-Object { "$Output/$_" })
 $inputPaths = @(
     'UPSTREAM.json','MODEL-SOURCES.json','scripts/prepare-data.ps1','scripts/export-upstream.ps1',
-    'data/pinyin-map.tsv','LICENSES','upstream/scripts/build-app.sh','upstream/tools/build_english_words.py'
+    'data/pinyin-map.tsv','data/README.md','LICENSES','upstream/shanjie/scripts/build-app.sh','upstream/shanjie/tools/build_english_words.py'
 )
 $attributionHash = (Get-FileHash -LiteralPath $attribution -Algorithm SHA256).Hash.ToLowerInvariant()
 $inputKey = Get-ContentFingerprint -Root $root -Paths $inputPaths -Values @($pin,$Output,$Licenses,$attributionHash)

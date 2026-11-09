@@ -1,15 +1,17 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
     [string]$Mode,
     [int[]]$Keyboards=@(1,2),
     [string]$HarnessPath,
-    [string]$PayloadRoot
+    [string]$PayloadRoot,
+    [string]$TestName
 )
 $ErrorActionPreference = 'Stop'
+$env:SHANJIE_CTEST_TEST_NAME=$TestName
 $root = Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 $timingDirectory = Initialize-TestTimings -ProjectRoot $root -Name "ctest-$CaseId"
@@ -18,12 +20,15 @@ $caseToken = (($CaseId,$Architecture,$Scenario,$Mode) -join '-') -replace '[^A-Z
 $resultRoot = Join-Path $root "build/reports/ctest-$runId/cases/$caseToken-$([guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Path $resultRoot -Force | Out-Null
 $stage = Start-TestStage -Name "CTest $CaseId $Scenario $Mode" -Category "ctest.$CaseId"
+$previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
+$env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
 $status = 'passed'
 $failure = $null
 try {
     Push-Location $root
     try {
         switch ($CaseId) {
+            'infrastructure' { & "$root/tests/test_infrastructure.ps1" -ResultRoot $resultRoot }
             'upstream-data' { & "$PSScriptRoot/verify-upstream-data.ps1" }
             'prepare-core' { & "$PSScriptRoot/prepare-core.ps1" }
             'shared-unit' {
@@ -40,13 +45,7 @@ try {
                 }
             }
             'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels }
-            'mixed-regression' {
-                $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
-                Invoke-Timed -Name "Mixed-input and digit model regressions ($Architecture)" -Category 'rust.mixed-regression' -Details @{target=$target;tests='mixed_regression'} -Action {
-                    cargo test --manifest-path windows/Cargo.toml --lib --target $target -- --ignored mixed_regression
-                    if ($LASTEXITCODE) { throw "Mixed-input and digit regressions failed for $Architecture." }
-                }
-            }
+            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }
@@ -90,7 +89,7 @@ try {
                 & "$PSScriptRoot/verify-ui.ps1" -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
             'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -OutputRoot (Join-Path $resultRoot 'ui') }
-            'package' { & "$PSScriptRoot/package.ps1" -UseExistingBuild }
+            'package' { & "$PSScriptRoot/package.ps1" -UseExistingBuild -CandidateId $runId }
         }
     } finally { Pop-Location }
 } catch {
@@ -98,5 +97,6 @@ try {
     $failure = $_.Exception.Message
     throw
 } finally {
+    $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
     Complete-TestStage -Stage $stage -Status $status -Details @{ architecture=$Architecture; scenario=$Scenario; mode=$Mode; result_root=$resultRoot } -ErrorMessage $failure
 }

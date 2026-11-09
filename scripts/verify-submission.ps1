@@ -2,6 +2,7 @@
 param([string]$ResultRoot,[string]$DllRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Modes,[ValidateSet(1,2)][int[]]$Keyboards=@(1,2),[string]$HarnessPath,[string]$PayloadRoot)
 $ErrorActionPreference='Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'submission'
@@ -52,27 +53,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
    Invoke-Timed -Name "Compile submission harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/submission.cpp'} -Action { & cmd.exe /d /c "$out/compile.cmd" | Set-Content "$out/compile.log";if($LASTEXITCODE){throw "$arch submission harness build failed; see compile.log"} }
   }
   foreach($keyboard in $Keyboards) {
-   $prefix=if($keyboard -eq 1){'SU3'}else{'NE3'}
-   $cases=@(@('commit','ADB','adb'),@('commit','XYZ','xyz'),@('commit',$prefix,'你'),@('commit',($prefix+'ADB'),'你adb'),@('commit',('A'*96),('a'*96)),@('cancel','ADB',''),@('focus','ADB','adb'),@('toggle','ADB','adb'),@('refresh','ADB','adb'),@('return','ADB','adb'),@('cancel-generation','ADB',''),@('deactivate','ADB','adb'),@('refresh-twice','ADB','adb'),@('busy','A','adb'),@('busy-epoch','A','adb'),@('busy-cancel','A',''),@('busy-focus','A','a'),@('busy-expire','A','adb'),@('busy-pick',$prefix,'妳'),@('busy-mouse',$prefix,'妳'),@('retire-write-fail','ADB','adb'),@('retire-request-fail','ADB','adb'),@('retire-escape','ADB','adb'),@('retire-deactivate','ADB','adb'),@('retire-stale','ADB','adb'))
-   if($keyboard -eq 1) {
-    # Mix bits: 1 raw-key mixing, 2 upstream English; one choice, so never both.
-    foreach($mix in 0,1,2) {
-     $cases+=,@('input-digits','9 U. ','哎呦',$mix)
-     $cases+=,@('input-digits','GK42U/4','設定',$mix)
-     $cases+=,@('input-digits','9 ⎋GK42U/4','設定',$mix)
-     if(!($mix -band 2)) { $cases+=,@('input-digits','0D4','看',$mix) }
-     if($mix) { $cases+=,@('input-digits','13 ','13 ',$mix) }
-     if($mix -band 1) {
-      foreach($digits in '13','14','16','17','13467','R3','R4','R6','R7','R3467') {
-       $cases+=,@('input-digits',$digits,$digits.ToLowerInvariant(),$mix)
-      }
-      $cases+=,@('input-digits','GK42U⌫U/4','設定',$mix)
-     }
-     if($mix -band 2) {
-      foreach($digits in '3.14','0.5','2026/10/15') {$cases+=,@('input-digits',$digits,$digits,$mix)}
-     }
-    }
-   }
+   $cases=Get-SubmissionCases $keyboard
    foreach($case in $cases) {
     $testContent=$content -replace '(?m)^keyboard=.*',('keyboard='+$keyboard)
     if($case.Count -gt 3) {
@@ -88,14 +69,14 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
     $start=[Diagnostics.ProcessStartInfo]::new($exe);$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
     $start.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
     foreach($arg in @("$DllRoot/$arch/Shanjie.dll")+$case[0..2]){$start.ArgumentList.Add($arg)}
-    $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case'
+    $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2]}
     try {
      $process=[Diagnostics.Process]::Start($start);$stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
      if(!$process.WaitForExit(60000)){$process.Kill();throw 'Owned submission harness timed out'}
      $log=$stdout.GetAwaiter().GetResult();$errorLog=$stderr.GetAwaiter().GetResult();$code=$process.ExitCode;$process.Dispose()
      Set-Content "$out/$name.log" ($log+$errorLog) -Encoding utf8NoBOM
      if($code -or $log -notmatch 'PASS mode='){throw "$arch $name failed ($code): $log $errorLog"}
-     Complete-TestStage -Stage $caseStage -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1}}
+     Complete-TestStage -Stage $caseStage
     } catch { Complete-TestStage -Stage $caseStage -Status 'failed' -ErrorMessage $_.Exception.Message;throw }
     $results += [pscustomobject]@{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2];passed=$true}
    }

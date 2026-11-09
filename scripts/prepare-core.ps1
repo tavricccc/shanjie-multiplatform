@@ -15,13 +15,8 @@ $null = & "$PSScriptRoot/prepare-english.ps1"
 $english = Join-Path $root 'build/english-words.txt'
 $englishHash = (Get-FileHash -LiteralPath $english -Algorithm SHA256).Hash.ToLowerInvariant()
 $preparationScripts = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'prepare-*.ps1' -File | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
-$cacheInputs = @('UPSTREAM.json','MODEL-SOURCES.json','platform','data/english-words.txt','scripts/test-support.psm1') + $preparationScripts
-$toolVersions = @()
-foreach ($tool in 'rustc','cargo','python','python3') {
-    $command = Get-Command $tool -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($command) { $toolVersions += "$tool=$((& $command.Source --version 2>&1 | Select-Object -First 1).ToString().Trim())" }
-}
-$cacheValues = @($pin.commit,$englishHash)+$toolVersions
+$cacheInputs = @('UPSTREAM.json','MODEL-SOURCES.json','platform') + $preparationScripts
+$cacheValues = @($pin.commit,$englishHash)
 $key = Get-ContentFingerprint -Root $root -Paths $cacheInputs -Values $cacheValues
 $cacheManifest = Join-Path $output '.prepare-cache.json'
 $cachePaths = @('src','Cargo.toml')
@@ -39,7 +34,9 @@ if ($cacheHit) {
 }
 
 $stage = Start-TestStage -Name 'Generate Windows core overlay' -Category 'core.prepare'
-function New-CoreOverlay {
+$previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
+$env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
+try {
 foreach ($relative in $cachePaths) {
     $old = Join-Path $output $relative
     if (Test-Path -LiteralPath $old) { Preserve-Output $old }
@@ -85,13 +82,11 @@ $anchor = 'profile == Profile::Chat && model.file_sha256() == PAIRED_TINYLM_SHA2
 if (!$content.Contains($anchor)) { throw 'Upstream colloquial model pairing changed.' }
 $content = $content.Replace($anchor, 'profile == Profile::Chat && (model.file_sha256() == PAIRED_TINYLM_SHA256 || model.file_sha256() == "356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de")')
 Set-Content $colloquial $content -Encoding utf8NoBOM
-}
-
-try {
-    New-CoreOverlay
     Save-ContentCache -Root $output -ManifestPath $cacheManifest -Key $key -Paths $cachePaths
-    Complete-TestStage -Stage $stage -Status 'passed' -Details @{ cache='miss'; upstream_commit=$pin.commit; source_files=(Get-RelativeFileEntries -Root $output -Paths $cachePaths).Count }
+    Complete-TestStage -Stage $stage -Status 'passed' -Details @{ cache='miss'; upstream_commit=$pin.commit }
 } catch {
     Complete-TestStage -Stage $stage -Status 'failed' -ErrorMessage $_.Exception.Message -Details @{ cache='miss'; upstream_commit=$pin.commit }
     throw
+} finally {
+    $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
 }

@@ -2,6 +2,7 @@
 param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Scenarios,[string]$HarnessPath,[string]$PayloadRoot)
 $ErrorActionPreference='Stop';$root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'english-keys'
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/english-keys-'+[guid]::NewGuid().ToString('N'))}
@@ -18,18 +19,7 @@ if($PayloadRoot){
  Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 }
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
-# Mode bits: 1 raw-key mixing, 2 upstream English; the mixing mode is one choice, so never both.
-$cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order'){$cases+=,@($mode,$scenario,1,1)}}
-foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
-foreach($scenario in 'shift','shift-caps'){$cases+=,@(2,$scenario,1,1)}
-$cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
-foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
-$cases+=,@(0,'backquote-disabled',1,1)
-foreach($mode in 0,1,2){$cases+=,@($mode,'numpad',1,1)}
-$cases+=,@(0,'numpad',2,1)
-foreach($mode in 0,1,2){$cases+=,@($mode,'standalone-tones',1,1)}
-$cases+=,@(2,'standalone-tones-off',1,1);$cases+=,@(2,'standalone-tones-shanjie',1,1)
-$cases+=,@(0,'fullwidth',1,1);$cases+=,@(0,'fullwidth-english',1,1);$cases+=,@(0,'fullwidth-disabled',1,1)
+$cases=Get-EnglishKeyCases
 try{
  $env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_HEADLESS='1';$env:SHANJIE_CORE_LOCAL=$null
  foreach($arch in $Architectures){
@@ -66,10 +56,11 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    Set-Content "$folder/profile/Shanjie/profile.ini" $text -Encoding utf8NoBOM;$env:LOCALAPPDATA="$folder/profile"
    $start=Start-TestStage -Name "Start English-key core ($arch $($case[1]))" -Category 'core.lifecycle'
    $worker=$null
-   try{$worker=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru;Complete-TestStage -Stage $start -Details @{architecture=$arch;profile=$folder/profile;pid=$worker.Id}}
-   catch{Complete-TestStage -Stage $start -Status 'failed' -Details @{architecture=$arch;profile=$folder/profile} -ErrorMessage $_.Exception.Message;throw}
+   try{$worker=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru;Complete-TestStage -Stage $start -Details @{architecture=$arch;profile="$folder/profile";pid=$worker.Id}}
+   catch{Complete-TestStage -Stage $start -Status 'failed' -Details @{architecture=$arch;profile="$folder/profile"} -ErrorMessage $_.Exception.Message;throw}
    try{
-    Invoke-Timed -Name "English-key regression ($arch $($case[1]))" -Category 'english.keys' -Details @{architecture=$arch;scenario=$case[1];mode=$case[0];keyboard=$case[2]} -Action { & $exe "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"} }
+    Wait-TestCoreReady -CorePath "$payload/tools/shanjie-core.exe" -OutputDirectory $folder | Out-Null
+    Invoke-Timed -Name "English-key regression ($arch $($case[1]))" -Category 'english.keys' -Details @{architecture=$arch;scenario=$case[1];mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3]} -Action { & $exe "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"} }
     Write-Output "PASS $arch $($case -join ',')"
    } finally {
     $stopStage=Start-TestStage -Name "Stop English-key core ($arch $($case[1]))" -Category 'core.lifecycle'
