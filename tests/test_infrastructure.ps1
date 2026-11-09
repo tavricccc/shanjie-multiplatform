@@ -43,6 +43,13 @@ Assert-Check (@($plan | Where-Object status -ne 'not-run').Count -eq 0) 'Plannin
 # Exercise the real selection and retry functions without invoking compilers or CTest.
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile("$root/scripts/test.ps1",[ref]$tokens,[ref]$errors)
+$Level='RELEASE';$skipTests=$false
+# Evaluate the driver's real preset assignments on the RELEASE path. A scalar
+# assignment followed by += silently concatenated the two architecture names.
+foreach($assignment in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$presets'},$false)){
+    . ([scriptblock]::Create($assignment.Extent.Text))
+}
+Assert-Check ($presets.Count -eq 2 -and $presets[0] -ceq 'windows-x64' -and $presets[1] -ceq 'windows-x86') 'RELEASE retains two separate architecture presets'
 foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-SelectedTests','Invoke-CtestSelection') {
     $definition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$false)
     . ([scriptblock]::Create($definition.Extent.Text))

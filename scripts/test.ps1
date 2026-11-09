@@ -200,7 +200,7 @@ try {
     if ($Level -eq 'CI') { [void]$requestedLabels.Add('ci');$notes.Add('Fixed CI baseline: ignores change impact and never expands to FULL or builds the product.') }
     if ($Level -eq 'RELEASE') { [void]$requestedLabels.Add('full');[void]$requestedLabels.Add('release') }
     $skipTests = $skipTests -and $Level -in @('FAST','AFFECTED') -and !$forceFull
-    $presets=if($skipTests){@()}else{@('windows-x64')}
+    $presets=@(if(!$skipTests){'windows-x64'})
     if($Level -eq 'RELEASE'){$presets+=@('windows-x86')}
     foreach($preset in $presets) {
         Invoke-Timed -Name "CMake configure ($preset)" -Category 'build.cmake.configure' -Details @{preset=$preset} -Action {
