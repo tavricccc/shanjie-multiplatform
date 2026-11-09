@@ -29,6 +29,8 @@ jobs:
           persist-credentials: false
       - name: Upstream data coverage
         run: pwsh -File scripts/verify-upstream-data.ps1
+      - name: Release transaction tests (no GitHub writes)
+        run: python scripts/test_release.py
       - name: Prepare the Windows core
         run: pwsh -File scripts/prepare-core.ps1
       - name: Unit tests (shared)
