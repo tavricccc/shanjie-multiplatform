@@ -88,6 +88,7 @@ CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準�
 
 - C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本仍保留原編譯 fallback。
 - Cargo target 保留既有增量 fingerprint；上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取。
+- Windows Rust 單元測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink；測試範圍與斷言均保留。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
 - 測試 payload 僅建立在 `build/cmake/`，其中 `data`、`tools` 是指向 `dist/` 的唯讀 junction；測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
