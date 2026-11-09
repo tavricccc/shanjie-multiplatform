@@ -17,7 +17,8 @@ $savedLocal = $env:LOCALAPPDATA
 $savedTest = $env:SHANJIE_TEST_PROFILE
 try {
     $env:SHANJIE_TEST_PROFILE = '1'
-    $env:LOCALAPPDATA = if ($Learning) { "$root/build/perf-profile-learning" } else { "$root/build/perf-profile" }
+    $measurementProfile = if ($Learning) { "$root/build/perf-profile-learning" } else { "$root/build/perf-profile" }
+    $env:LOCALAPPDATA = [IO.Path]::GetFullPath($measurementProfile)
     if ($Learning) {
         New-Item -ItemType Directory -Path "$env:LOCALAPPDATA/Shanjie" -Force | Out-Null
         $day = [int][Math]::Floor(([DateTime]::Today - [DateTime]::new(1970,1,1)).TotalDays)
@@ -29,4 +30,12 @@ try {
     if ($Learning) { $arguments += '--learning' }
     & "$root/build/engine-perf.exe" @arguments
     if ($LASTEXITCODE) { throw 'Engine benchmark failed.' }
-} finally { $env:LOCALAPPDATA = $savedLocal; $env:SHANJIE_TEST_PROFILE = $savedTest }
+} finally {
+    try {
+        # Engine::free releases the session; the resident process has its own lifetime.
+        # Keep the isolated profile selected while stopping only this measurement's core.
+        $stop = Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
+        $null = $stop.Handle
+        if (!$stop.WaitForExit(5000) -or $stop.ExitCode -ne 0) { throw 'Measurement core stop request failed.' }
+    } finally { $env:LOCALAPPDATA = $savedLocal; $env:SHANJIE_TEST_PROFILE = $savedTest }
+}

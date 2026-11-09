@@ -13,7 +13,9 @@ foreach ($arch in $Architectures) {
  New-Item -ItemType Directory -Path "$payload/$arch" -Force | Out-Null
  Copy-Item "$DllRoot/$arch/Shanjie.dll" "$payload/$arch" -Force
 }
-foreach ($name in 'data','tools') { New-Item -ItemType Junction -Path "$payload/$name" -Target "$DllRoot/$name" | Out-Null }
+New-Item -ItemType Junction -Path "$payload/data" -Target "$DllRoot/data" | Out-Null
+New-Item -ItemType Directory -Path "$payload/tools" | Out-Null
+Get-ChildItem "$DllRoot/tools" -File | Copy-Item -Destination "$payload/tools"
 # Test both layouts independently of the user's installed keyboard selection.
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 $DllRoot = $payload

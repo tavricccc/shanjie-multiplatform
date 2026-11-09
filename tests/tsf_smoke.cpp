@@ -191,7 +191,13 @@ int wmain(int argc, wchar_t** argv) {
     }
     auto press = [&](WPARAM vk, int check) {
         if(!visual) { BYTE keyboard[256]{}; keyboard[VK_NUMLOCK]=1; require(SetKeyboardState(keyboard),1045); }
-        BOOL test = FALSE, eaten = FALSE; require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,0,&test)) && test,check); require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,0,&eaten)) && eaten,check+1);
+        BOOL test = FALSE, eaten = FALSE;
+        HRESULT hr=keys->OnTestKeyDown(context.Get(),vk,0,&test);
+        if(FAILED(hr)||!test)std::printf("OnTestKeyDown: vk=%llu hr=%08lx accepted=%d layout=%p\n",(unsigned long long)vk,(unsigned long)hr,test,GetKeyboardLayout(0));
+        require(SUCCEEDED(hr) && test,check);
+        hr=keys->OnKeyDown(context.Get(),vk,0,&eaten);
+        if(FAILED(hr)||!eaten)std::printf("OnKeyDown: vk=%llu hr=%08lx eaten=%d\n",(unsigned long long)vk,(unsigned long)hr,eaten);
+        require(SUCCEEDED(hr) && eaten,check+1);
     };
     ComPtr<ITfUIElementMgr> ui;
     ComPtr<IEnumTfUIElements> elements;
