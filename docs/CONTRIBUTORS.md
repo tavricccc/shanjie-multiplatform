@@ -1,6 +1,6 @@
 # 關於頁的貢獻者資料
 
-名單來自 [GitHub Contributors API](https://api.github.com/repos/tavricccc/shanjie-multiplatform/contributors?per_page=100)，依 `contributions` 由多至少排列。這是 GitHub 對帳號的提交統計，不另計共同作者或 PR 數；只列人類帳號，不列 GitHub、Claude 等自動化帳號。
+名單來自 [GitHub Contributors API](https://api.github.com/repos/tavricccc/shanjie-multiplatform/contributors?per_page=100)，依 `contributions` 由多至少排列；有 `role` 的帳號（原作者）置頂並在名字旁標示。這是 GitHub 對帳號的提交統計，不另計共同作者或 PR 數；只列人類帳號，不列 GitHub、Claude 等自動化帳號。
 
 資料快照在 `ui/Assets/contributors.json`，包含擷取日期、對應 repository commit、帳號、提交數、貢獻摘要與頭像來源。開啟預覽卡片時，先透過 HTTPS 從 GitHub 的 `avatarSource` 載入頭像，失敗時使用 `ui/Assets/Contributors/` 的本地頭像。名單與提交數不會連線更新；點擊個人頁面或提交紀錄時開啟外部瀏覽器。
 
