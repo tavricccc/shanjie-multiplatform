@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "recorded_local": "2026-11-10T01:49:03.6763262+08:00",
+  "branch": "refactor/ctest-verification",
+  "code_checkpoint": "688f1cb72024c5c48c129d77b3df38041a0b62e5",
+  "current_head_release_verified": false,
+  "benchmark_complete": false,
+  "completed_measurements": [
+    {
+      "name": "baseline_cold",
+      "status": "passed",
+      "commit": "64c22ef536ae5f106e684bcd31e8ff0a36233838",
+      "wall_seconds": 1404.563,
+      "product_case_count": 1003,
+      "sorted_case_ids_sha256": "8f2846bb45a15457ab99fcbd25eb8c697cc8e70a4e1c8238e786bb8077b0b165",
+      "historical_reference_only": false,
+      "report": "SHANJIE_BENCHMARK_ROOT/75e8e4557bf041599d07e12a55934e55/artifacts/baseline_cold/worktree/build/reports/baseline/report.json",
+      "log": "SHANJIE_BENCHMARK_ROOT/75e8e4557bf041599d07e12a55934e55/artifacts/baseline_cold/worktree/build/benchmark-baseline-cold.log",
+      "raw_verify_seconds": 1388.292,
+      "ci_unit_seconds": 15.929
+    },
+    {
+      "name": "baseline_warm",
+      "status": "passed",
+      "commit": "64c22ef536ae5f106e684bcd31e8ff0a36233838",
+      "wall_seconds": 1253.556,
+      "product_case_count": 1003,
+      "sorted_case_ids_sha256": "8f2846bb45a15457ab99fcbd25eb8c697cc8e70a4e1c8238e786bb8077b0b165",
+      "historical_reference_only": false,
+      "report": "SHANJIE_BENCHMARK_ROOT/75e8e4557bf041599d07e12a55934e55/artifacts/baseline_warm/worktree/build/reports/baseline/report.json",
+      "log": "SHANJIE_BENCHMARK_ROOT/75e8e4557bf041599d07e12a55934e55/artifacts/baseline_warm/worktree/build/benchmark-baseline-warm.log",
+      "raw_verify_seconds": 1243.177,
+      "ci_unit_seconds": 10.046
+    },
+    {
+      "name": "legacy_cold",
+      "status": "passed",
+      "commit": "1ca8c8d4c5a02b6b48d05e1f1d7641c62164667d",
+      "wall_seconds": 1302.611,
+      "product_case_count": 1003,
+      "sorted_case_ids_sha256": "8f2846bb45a15457ab99fcbd25eb8c697cc8e70a4e1c8238e786bb8077b0b165",
+      "historical_reference_only": true,
+      "report": "SHANJIE_BENCHMARK_ROOT/913d804fd8bd490fb77f032cdefe2fee/artifacts/legacy_cold/worktree/build/reports/verify-20261110-003155-a84e1581/report.json",
+      "log": "SHANJIE_BENCHMARK_ROOT/913d804fd8bd490fb77f032cdefe2fee/artifacts/legacy_cold/worktree/build/benchmark-legacy-cold.log",
+      "raw_verify_seconds": null,
+      "ci_unit_seconds": null
+    },
+    {
+      "name": "legacy_warm",
+      "status": "passed",
+      "commit": "1ca8c8d4c5a02b6b48d05e1f1d7641c62164667d",
+      "wall_seconds": 1004.494,
+      "product_case_count": 1003,
+      "sorted_case_ids_sha256": "8f2846bb45a15457ab99fcbd25eb8c697cc8e70a4e1c8238e786bb8077b0b165",
+      "historical_reference_only": true,
+      "report": "SHANJIE_BENCHMARK_ROOT/913d804fd8bd490fb77f032cdefe2fee/artifacts/legacy_warm/worktree/build/reports/verify-20261110-005340-559a4dac/report.json",
+      "log": "SHANJIE_BENCHMARK_ROOT/913d804fd8bd490fb77f032cdefe2fee/artifacts/legacy_warm/worktree/build/benchmark-legacy-warm.log",
+      "raw_verify_seconds": null,
+      "ci_unit_seconds": null
+    }
+  ],
+  "remaining_benchmark": [
+    {
+      "name": "ctest_cold",
+      "status": "not-completed",
+      "last_attempt_commit": "d63dc62ca76df546dbcf989f5697e9d9eeebc325",
+      "last_attempt_seconds": 336.277,
+      "last_attempt_status": "failed",
+      "reason": "Add-word assertion747 observed asynchronous dictionary persistence; fixed in07c43a4 and scoped x64/x86 passed, complete FULL still pending"
+    },
+    {
+      "name": "ctest_warm",
+      "status": "not-run",
+      "reason": "No successful current cold run; do not claim a speedup"
+    }
+  ],
+  "interrupted_latest_attempt": {
+    "commit": "07c43a4ddd01be09225a720ac0798f34d833b045",
+    "name": "legacy_cold",
+    "status": "interrupted",
+    "partial_elapsed_seconds": 964.562,
+    "reason": "Stopped for user hard deadline and immediate handoff; not a valid completed benchmark time",
+    "comparison": "SHANJIE_BENCHMARK_ROOT/ee01a3ce6efb40eaac656f7cc9e4b459/comparison.json"
+  },
+  "last_complete_windows_release": {
+    "commit": "bed03c39ffe06418e7f7ac06de90ccd3a0c9c88e",
+    "version": "0.16.0-beta.1",
+    "level": "RELEASE",
+    "status": "passed",
+    "clean": true,
+    "ci_safe": false,
+    "wall_seconds": 1527.076,
+    "ctest_passed": 175,
+    "subcases_passed": 214,
+    "architectures": [
+      "x64",
+      "x86"
+    ],
+    "includes_x64_full": true,
+    "report": "build/reports/release-20261109-223421-6b6f5fed/report.json",
+    "valid_for_current_head": false
+  },
+  "ci": {
+    "original_github_job_seconds": [
+      151,
+      137,
+      154
+    ],
+    "original_run_ids": [
+      42510239927,
+      42503420574,
+      42503414470
+    ],
+    "local_clean_worktree_cold": {
+      "commit": "9125d266ef34f967662774dd085f6c9d81882767",
+      "seconds": 51.533,
+      "passed": 5
+    },
+    "local_warm": {
+      "commit": "bed03c39ffe06418e7f7ac06de90ccd3a0c9c88e",
+      "seconds": 5.735,
+      "passed": 5
+    },
+    "new_github_duration": "not-measured",
+    "local_times_are_not_runner_times": true
+  },
+  "cheap_checks": {
+    "powershell_parser_files": 58,
+    "powershell_errors": 0,
+    "yaml_workflows": 3,
+    "yaml_status": "passed",
+    "historical_resume_preserves_four": "passed",
+    "missing_report_zero_exit_is_failure": "passed"
+  },
+  "raw_backup": {
+    "location": "LOCAL_VALIDATION_ROOT/handoff/ctest-windows-evidence-20261110-014621.zip",
+    "sha256": "8fb2d34ea9cb0a839517bf9ac84920d2bcba5340d604e43d78eff887201446c4",
+    "files": 10603,
+    "bytes": 19825459,
+    "in_git": false,
+    "contains_raw_local_paths": true
+  },
+  "raw_reports_in_git": false,
+  "cloud_can_run_windows_acceptance": false
+}
