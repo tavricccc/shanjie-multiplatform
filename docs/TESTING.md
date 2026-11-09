@@ -133,6 +133,8 @@ Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的�
 
 量測中斷後，可在同一台電腦、相同工具鏈與桌面控制下加上 `-ResumeReport <中斷的 comparison.json>`，重用已完整通過且保有原始證據的冷暖配對。原始 baseline 必須同 commit；候選流程的測試與建置來源也必須完全相同，只容許 benchmark 執行器或文件修正。改到其他來源就重跑候選流程；只完成冷快取時會重跑整對，以維持暖快取條件。報告記錄原始 commit 與來源，最終仍要求六次實際案例及組態相同。程序提前結束或沒有完成報告的輪次記為失敗，不能因 exit code 為 0 當成通過。
 
+若要保留先前已完成的相容入口量測，避免重跑，可另加 `-HistoricalLegacyReport <保有成功 legacy_cold／legacy_warm 的 comparison.json>`。產品來源必須相同；這兩輪明確標為原 commit 的歷史參考，停用它們與目前 CTest 的加速百分比，不能當作目前 commit 已驗收。主要效能比較仍是原始 baseline 對目前 CTest FULL，實際案例與組態仍須完全一致。這不授權重用不同 commit 的 RELEASE 紀錄。
+
 「改造前 vs CTest」與「同提交相容入口 vs CTest」分開計算，不能把後者宣稱為整次改造效益。冷快取指全新專案輸出；Cargo registry／NuGet 下載快取與 OS 檔案快取可能已暖。六輪清除環境中的 `RUST_TEST_THREADS`，保留各入口正常的排程：Windows 單元測試單執行緒、舊混打入口自己的單執行緒設定、新入口的獨立快取身分程序，以及原有上游核心記憶體限制排程；不把整套上游測試一併串行化。報告列秒數、分鐘、冷暖差異與包含／自身分類耗時；未執行或覆蓋不等價時不宣稱改善。GitHub Runner 的 CI 耗時另看實際 Actions 紀錄，不能用本機暖快取時間替代。
 
 舊版 harness 仍會讀取所在桌面的鍵盤狀態，量測應使用沒有實際鍵盤輸入干擾的 Windows 測試工作階段。桌面與其他控制條件須一致套用六輪，並隨量測環境記錄。
