@@ -42,9 +42,9 @@ $summary=$null
 $benchmarkFailure=$null
 $comparisonPath=Join-Path $benchmarkRoot 'comparison.json'
 $previousThreads=$env:RUST_TEST_THREADS
-# The pre-migration identity assertion shares a four-entry process cache with
-# other Rust tests. Use the same serial intra-binary setting for all six runs.
-$env:RUST_TEST_THREADS='1'
+# Keep ordinary suite scheduling. The old mixed suite has its own serial flag;
+# Windows unit suites serialize their shared installer sink at the call site.
+$env:RUST_TEST_THREADS=$null
 
 function Get-RunCoverage([string]$Worktree,[datetime]$Started,[string]$Log,$Report,[string]$EvidenceRoot) {
     $ids=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -138,7 +138,32 @@ function Invoke-Run([string]$Name,[string]$Worktree,[ValidateSet('baseline','leg
     foreach($key in 'SHANJIE_TEST_RUN_ID','SHANJIE_TEST_TIMINGS_DIR','SHANJIE_TEST_PARENT_STAGE_ID'){$timingEnvironment[$key]=[Environment]::GetEnvironmentVariable($key);[Environment]::SetEnvironmentVariable($key,$null)}
     try {
         Write-Host "Benchmark $Name started; live log: $log"
-        if($Flow -ne 'full') { & pwsh -NoLogo -NoProfile -File scripts/verify.ps1 *> $log }
+        if($Flow -eq 'baseline') {
+            # The original verify entry did not include the two ordinary CI unit
+            # suites. Add those commands externally without editing the baseline.
+            $driver=Join-Path $workBuild 'benchmark-baseline-driver.ps1'
+            $componentsPath=Join-Path $workBuild "baseline-components-$RunKind.json"
+            $driverSource=@'
+#Requires -Version 7
+param([string]$ComponentsPath)
+$ErrorActionPreference='Stop'
+$project=Split-Path $PSScriptRoot -Parent
+$verify=[Diagnostics.Stopwatch]::StartNew()
+& "$project/scripts/verify.ps1"
+$verify.Stop()
+$units=[Diagnostics.Stopwatch]::StartNew()
+Write-Host 'Baseline CI complement: the original shared and Windows Rust unit suites.'
+& cargo test --manifest-path "$project/shared/Cargo.toml" --lib --target x86_64-pc-windows-msvc
+if($LASTEXITCODE){throw 'Baseline shared CI unit suite failed.'}
+& cargo test --manifest-path "$project/windows/Cargo.toml" --lib --target x86_64-pc-windows-msvc -- --test-threads=1
+if($LASTEXITCODE){throw 'Baseline Windows CI unit suite failed.'}
+$units.Stop()
+@{verify_seconds=[Math]::Round($verify.Elapsed.TotalSeconds,3);ci_unit_seconds=[Math]::Round($units.Elapsed.TotalSeconds,3);ci_unit_suites=@('shared','windows')}|ConvertTo-Json|Set-Content -LiteralPath $ComponentsPath -Encoding utf8NoBOM
+'@
+            [IO.File]::WriteAllText($driver,$driverSource,[Text.UTF8Encoding]::new($false))
+            & pwsh -NoLogo -NoProfile -File $driver -ComponentsPath $componentsPath *> $log
+        }
+        elseif($Flow -eq 'legacy') { & pwsh -NoLogo -NoProfile -File scripts/verify.ps1 *> $log }
         else { & pwsh -NoLogo -NoProfile -File scripts/test.ps1 -Level FULL -BaseRef $resolved *> $log }
         $exit=$LASTEXITCODE
     } finally { $watch.Stop();Pop-Location;foreach($key in $timingEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$timingEnvironment[$key])} }
@@ -155,7 +180,10 @@ function Invoke-Run([string]$Name,[string]$Worktree,[ValidateSet('baseline','leg
     $coverageError=$null
     if(!$exit){try{$coverage=@(Get-RunCoverage $Worktree $started $log $(if($report){$report.Report}else{$null}) (Join-Path $runArtifacts 'evidence'))}catch{$coverageError=$_.Exception.Message}}
     if($Flow -eq 'baseline'){
-        $baselineReport=[ordered]@{level='baseline-verify';commit=$baseline;wall_seconds=$watch.Elapsed.TotalSeconds;timings=@();coverage_ids=$coverage;notes=@('Unmodified pre-migration scripts; no original JUnit or stage instrumentation.')}
+        $components=if(Test-Path -LiteralPath $componentsPath){Get-Content -LiteralPath $componentsPath -Raw|ConvertFrom-Json}else{$null}
+        if($components){Copy-Item -LiteralPath $componentsPath -Destination $artifactBuild -Force}
+        Copy-Item -LiteralPath $driver -Destination $artifactBuild -Force
+        $baselineReport=[ordered]@{level='baseline-verify';commit=$baseline;wall_seconds=$watch.Elapsed.TotalSeconds;raw_verify_seconds=$components.verify_seconds;ci_unit_seconds=$components.ci_unit_seconds;timings=@();coverage_ids=$coverage;notes=@('Unmodified pre-migration verify.ps1 plus the original CI shared/windows unit suites, matching CTest FULL coverage. Raw verify and CI-complement timings are separate; no original JUnit or stage instrumentation exists.')}
         $baselinePath=Join-Path $artifactWorktree 'build/reports/baseline/report.json'
         $null=New-Item -ItemType Directory -Path (Split-Path $baselinePath -Parent) -Force
         [IO.File]::WriteAllText($baselinePath,($baselineReport|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
@@ -288,9 +316,10 @@ try {
         commit=$resolved
         baseline_commit=$baseline
         status='measured'
-        comparable_scope='Legacy verify.ps1 and CTest FULL x64; both include shared/windows unit tests, all upstream core test binaries, mixed-input regressions, data validation, TSF smoke, add-word, English-key, submission, and each private-desktop case.'
+        comparable_scope='Pre-migration verify.ps1 plus its original CI shared/windows unit suites, current legacy verify.ps1, and CTest FULL x64. All include the same unit, core, mixed-input, data, TSF, add-word, English-key, submission and private-desktop cases.'
         coverage=[ordered]@{
             legacy_entry='scripts/verify.ps1 (compatibility path; all original assertions retained)'
+            baseline_entry='Unmodified original scripts/verify.ps1 plus the original CI shared/windows Cargo --lib commands.'
             ctest_case_count=[int]$ctestRows.Count
             ctest_case_names=@($ctestRows | ForEach-Object name)
             ctest_group_counts=$ctestGroupCounts
@@ -301,8 +330,8 @@ try {
             preserved_suite_list=@('upstream data static and built-output checks','shared and windows Cargo --lib','upstream core library and every integration-test binary, with latency suites serialized','ignored mixed-input and digit regressions','TSF standard, pure Zhuyin and cold activation','add-word popup','all 19 English-key scenarios across their original mode/layout combinations','all 21 submission mode groups plus the input-digit matrix','all 18 private TSF compatibility cases','all 15 popup lifecycle private-desktop cases')
         }
         measurements=[ordered]@{
-            baseline_cold=[ordered]@{wall_seconds=$baselineCold;report=$measurements.baseline_cold.report_path;log=$measurements.baseline_cold.log_path}
-            baseline_warm=[ordered]@{wall_seconds=$baselineWarm;report=$measurements.baseline_warm.report_path;log=$measurements.baseline_warm.log_path}
+            baseline_cold=[ordered]@{wall_seconds=$baselineCold;raw_verify_seconds=$measurements.baseline_cold.report.raw_verify_seconds;ci_unit_seconds=$measurements.baseline_cold.report.ci_unit_seconds;report=$measurements.baseline_cold.report_path;log=$measurements.baseline_cold.log_path}
+            baseline_warm=[ordered]@{wall_seconds=$baselineWarm;raw_verify_seconds=$measurements.baseline_warm.report.raw_verify_seconds;ci_unit_seconds=$measurements.baseline_warm.report.ci_unit_seconds;report=$measurements.baseline_warm.report_path;log=$measurements.baseline_warm.log_path}
             legacy_cold=[ordered]@{wall_seconds=$legacyCold;report=$measurements.legacy_cold.report_path;log=$measurements.legacy_cold.log_path}
             legacy_warm=[ordered]@{wall_seconds=$legacyWarm;report=$measurements.legacy_warm.report_path;log=$measurements.legacy_warm.log_path}
             ctest_cold=[ordered]@{wall_seconds=$ctestCold;report=$measurements.ctest_cold.report_path;log=$measurements.ctest_cold.log_path}
@@ -313,7 +342,7 @@ try {
             baseline_cold_speedup_percent=[Math]::Round(100*($baselineCold-$ctestCold)/$baselineCold,2)
             baseline_warm_saved_seconds=[Math]::Round($baselineWarm-$ctestWarm,3)
             baseline_warm_speedup_percent=[Math]::Round(100*($baselineWarm-$ctestWarm)/$baselineWarm,2)
-            baseline_scope='Unmodified scripts from baseline_commit versus candidate CTest FULL; product sources, data, models, pins, and observed case/configuration IDs must match.'
+            baseline_scope='Unmodified verify.ps1 from baseline_commit plus its original CI shared/windows unit suites versus candidate CTest FULL; product sources, data, models, pins, and every observed case/configuration ID must match.'
             same_commit_scope='The legacy_* versus ctest_* fields compare the two candidate entry points and therefore share the candidate caching improvements.'
             cold_saved_seconds=[Math]::Round($coldSaved,3)
             cold_speedup_percent=if($legacyCold){[Math]::Round(100*$coldSaved/$legacyCold,2)}else{$null}
@@ -324,7 +353,7 @@ try {
             parallelism='The existing memory-limited upstream core scheduler remains in both flows. Independent CTest cases use resource locks; effects are included in end-to-end wall time but not isolated by an ablation run.'
             selective_affected='Not part of this equal-scope FULL comparison. Each AFFECTED report records its own selected rows and wall time; compare only with a FULL run for the full-suite baseline.'
             model='Cold and warm mean fresh versus reused project build/test outputs; shared NuGet/Cargo download caches and the machine file cache may already be warm.'
-            rust_test_threads='RUST_TEST_THREADS=1 for all six runs to isolate the original process-wide cache identity assertion. Independent upstream test binaries still use the original memory-limited parallel scheduler.'
+            rust_test_threads='Ambient RUST_TEST_THREADS is cleared. Windows unit suites use --test-threads=1 for their shared installer sink. Original verify keeps its own serial mixed-suite flag; the candidate isolates cache identity in a separate process. Upstream tests keep their normal thread counts and original memory-limited binary scheduler.'
             category_model='Inclusive time contains child stages; exclusive time subtracts their interval union using parent IDs. Parallel work can exceed wall time. The uninstrumented baseline has no category breakdown.'
         }
         category_sums=$categorySums
