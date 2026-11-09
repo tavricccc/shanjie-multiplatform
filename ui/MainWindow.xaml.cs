@@ -9,6 +9,7 @@ public sealed partial class MainWindow : UserControl
     public MainWindow()
     {
         InitializeComponent(); Bindings.Initialize();
+        ContentScroll.ViewChanged += (_, _) => ContributorsList.ClosePreviews();
         Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
         Host.SetCaption(AppTitleBar, Head);
         navHighlight = new Controls.SlidingHighlight(NavLayer, 12); ShowSection(0); ApplyTheme();
@@ -49,6 +50,7 @@ public sealed partial class MainWindow : UserControl
     private int section;
     internal void ShowSection(int index)
     {
+        ContributorsList.ClosePreviews(); ModelSelector.CloseOptions();
         section = index;
         var panels = new StackPanel[] { General, English, Keys, Punctuation, Composition, Candidates, Appearance, Dictionary, About };
         for (int i = 0; i < panels.Length; i++) panels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;

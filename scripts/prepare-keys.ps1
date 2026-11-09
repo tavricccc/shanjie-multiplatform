@@ -8,8 +8,8 @@ function Replace-KeyContract([string]$old,[string]$replacement) {
     if ([regex]::Matches($script:content,[regex]::Escape($old)).Count -ne 1) { throw "Upstream key contract changed: $old" }
     $script:content = $script:content.Replace($old,$replacement)
 }
-Replace-KeyContract '    candidate_from_right: bool,' "    candidate_from_right: bool,`n    shift_punctuation: u32,`n    plain_punctuation: u32,`n    standalone_tones: bool,"
-Replace-KeyContract '            candidate_from_right: false,' "            candidate_from_right: false,`n            shift_punctuation: 0x1fff,`n            plain_punctuation: 0x3f,`n            standalone_tones: true,"
+Replace-KeyContract '    candidate_from_right: bool,' "    candidate_from_right: bool,`n    shift_punctuation: u32,`n    plain_punctuation: u32,`n    standalone_tones: bool,`n    windows_digit_zhuyin: bool,"
+Replace-KeyContract '            candidate_from_right: false,' "            candidate_from_right: false,`n            shift_punctuation: 0x1fff,`n            plain_punctuation: 0x3f,`n            standalone_tones: true,`n            windows_digit_zhuyin: false,"
 Replace-KeyContract '} else if is_char && m == MOD_SHIFT {' '} else if is_char && m == MOD_SHIFT && self.windows_shift_punct(k.ch) {'
 Replace-KeyContract '} else if is_char && m == 0 && self.layout.symbol_of(k.ch).is_none()' '} else if is_char && m == 0 && self.windows_plain_punct(k.ch) && self.layout.symbol_of(k.ch).is_none()'
 Replace-KeyContract 'if let (KeyKind::Char, Some(t)) = (k.kind, tone) {' 'if let (KeyKind::Char, Some(t), true) = (k.kind, tone, self.standalone_tones) {'

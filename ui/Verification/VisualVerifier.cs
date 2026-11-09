@@ -66,12 +66,124 @@ internal static class VisualVerifier
             if (item.DesiredSize.Width > width + 0.5 || item.DesiredSize.Height < 80) throw new InvalidDataException($"Catalog row does not wrap at {width}: {item.DesiredSize}");
         }
     }
-    public static async Task Run(MainWindow settings, string output)
+    private static async Task VerifyZhuyinMode(MainWindow settings, string output)
+    {
+        var toggle = (Controls.SettingToggle)settings.FindName("ZhuyinOnlyToggle");
+        foreach (bool windows in new[] { true, false })
+        {
+            settings.LoadProfile(windows);
+            var installed = settings.InstalledOptionsForVerification;
+            settings.Vm.Keyboard = 0; settings.Vm.Save(); settings.Vm.Load();
+            settings.ShowSection(MainWindow.Pages.Composition); await Task.Delay(100);
+            if (settings.Vm.ZhuyinOnly) throw new InvalidDataException("Pure Zhuyin is enabled by default");
+            var saved = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(true); await Task.Delay(60);
+            if (!settings.Vm.ZhuyinOnly || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved))
+                throw new InvalidDataException("Pure Zhuyin toggle did not remain an unsaved draft");
+            foreach (int keyboard in new[] { 0, 1, 2, 3, 4, 0 }.Where(k => (k != 1 || installed.standard) && (k != 2 || installed.eten)))
+            {
+                settings.Vm.Keyboard = keyboard; await Task.Delay(60);
+                if (toggle.IsEnabled != (keyboard < 3)) throw new InvalidDataException("Pure Zhuyin is available for the wrong keyboard");
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+                if (!settings.Vm.ZhuyinOnly) throw new InvalidDataException("Reload lost the pure Zhuyin preference");
+            }
+            if (!settings.Vm.ExportPreset("純注音").Contains("zhuyin_only=1")) throw new InvalidDataException("Shared preset lost pure Zhuyin");
+            if (windows) foreach (int theme in new[] { 1, 2 })
+            {
+                settings.Vm.Theme = theme; await Task.Delay(100);
+                await Capture(settings.CaptureElement, Path.Combine(output, $"zhuyin-mode-{theme}.png"));
+            }
+            toggle.SetToggleForVerification(false); settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.ZhuyinOnly) throw new InvalidDataException("Pure Zhuyin opt-out was not saved");
+        }
+    }
+    private static async Task VerifyAboutModels(MainWindow settings, string output, string? feature = null)
+    {
+        // GitHub's account type alone does not exclude automation accounts using a regular User account.
+        var catalog = Models.Contributors.Catalog;
+        var sample = catalog.Contributors.Take(2).Reverse().Concat(new[] {
+            new Models.Contributor("Claude", "Automation", 10000, "User", "", ""),
+            new Models.Contributor("github", "Automation", 10000, "User", "", ""),
+            new Models.Contributor("example[bot]", "Automation", 10000, "User", "", ""),
+            new Models.Contributor("automation", "Automation", 10000, "Bot", "", "") }).ToList();
+        var filtered = Models.Contributors.Parse(System.Text.Json.JsonSerializer.Serialize(catalog with { Contributors = sample }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        if (!filtered.Contributors.SequenceEqual(catalog.Contributors.Take(2))) throw new InvalidDataException("Contributor sorting or bot exclusion failed");
+        var credits = (Controls.ContributorsView)settings.FindName("ContributorsList");
+        if (credits.Profiles.Count != catalog.Contributors.Count) throw new InvalidDataException("Contributor list is incomplete");
+        var picker = (Controls.ModelPicker)settings.FindName("ModelSelector");
+        var installed = settings.Vm.AvailableModels.ToList();
+        string chosen = settings.Vm.ModelId;
+        var models = Enumerable.Range(0, 12).Select(i => new Models.ModelChoice($"fixture-{i}",
+            string.Concat(Enumerable.Repeat("SJ-LM-7＋SJ-WC-6＋SJ-SR-8＋SJ-Colloquial-4 ", 3)) + $"（配套 {i}）")).ToList();
+        settings.Vm.RefreshModels(models); settings.Vm.SelectModel(models[^1].Id);
+        foreach (int theme in new[] { 1, 2 })
+        {
+            settings.Vm.Theme = theme;
+            settings.ShowSection(MainWindow.Pages.About); await Task.Delay(250);
+            for (int i = 0; i < (feature == "model-picker" ? 0 : credits.Profiles.Count); i++)
+            {
+                var (link, preview) = credits.Profiles[i];
+                if (link.NavigateUri != catalog.Contributors[i].Profile) throw new InvalidDataException("Contributor profile link changed");
+                preview.ShowAt(link); await Task.Delay(200);
+                var details = (Microsoft.UI.Xaml.Controls.StackPanel)preview.Content;
+                var identity = (Microsoft.UI.Xaml.Controls.Grid)details.Children[0];
+                var brush = (Microsoft.UI.Xaml.Media.ImageBrush)((Microsoft.UI.Xaml.Shapes.Ellipse)identity.Children[0]).Fill;
+                for (int attempt = 0; ((BitmapImage)brush.ImageSource).PixelWidth == 0 && attempt < 100; attempt++) await Task.Delay(100);
+                var portrait = (BitmapImage)brush.ImageSource;
+                if (portrait.PixelWidth == 0 || details.ActualTheme != settings.CaptureElement.ActualTheme)
+                    throw new InvalidDataException("Contributor portrait or flyout theme failed: " + catalog.Contributors[i].Login);
+                if (i == 0 && theme == 1 && portrait.UriSource.Scheme == "https")
+                {
+                    // Exercise the real ImageFailed route after a successful online load.
+                    portrait.UriSource = new Uri("ms-appx:///Assets/Contributors/missing.png");
+                    for (int attempt = 0; (ReferenceEquals(brush.ImageSource, portrait) || ((BitmapImage)brush.ImageSource).PixelWidth == 0) && attempt < 50; attempt++) await Task.Delay(100);
+                    if (ReferenceEquals(brush.ImageSource, portrait) || ((BitmapImage)brush.ImageSource).UriSource != catalog.Contributors[i].Portrait || ((BitmapImage)brush.ImageSource).PixelWidth == 0)
+                        throw new InvalidDataException("Failed online portrait did not fall back to the local image");
+                }
+                if (i == 0) await Capture(details, Path.Combine(output, $"contributor-card-{theme}.png"));
+                preview.Hide();
+            }
+            if (feature != "model-picker") await Capture(settings.CaptureElement, Path.Combine(output, $"contributors-{theme}.png"));
+            foreach (int width in feature == "contributors" ? Array.Empty<int>() : new[] { 840, 1000 })
+            {
+                settings.AppWindow.Resize(new Windows.Graphics.SizeInt32(width, 680));
+                settings.ShowModelOptions(); await Task.Delay(200);
+                var selected = (Microsoft.UI.Xaml.Controls.TextBlock)picker.FindName("SelectedName");
+                var scroll = (Microsoft.UI.Xaml.Controls.ScrollViewer)settings.FindName("ContentScroll");
+                var bounds = picker.TransformToVisual(scroll).TransformBounds(new Windows.Foundation.Rect(0, 0, picker.ActualWidth, picker.ActualHeight));
+                if (selected.Text != models[^1].Name || selected.ActualHeight < selected.FontSize * 1.5 || bounds.Right > scroll.ActualWidth + 1 || bounds.Left < 0)
+                    throw new InvalidDataException($"Model name does not wrap within the card at {width}: bounds={bounds}, viewport={scroll.ActualWidth}, text={selected.ActualWidth}×{selected.ActualHeight}, shown={selected.Text}");
+                picker.ShowOptions(); await Task.Delay(250);
+                var choices = picker.OptionsForVerification;
+                if (choices.ActualWidth > picker.ActualWidth || choices.ActualHeight > 320 || choices.SelectedIndex != picker.SelectedIndex || choices.Items.Count != models.Count + 1)
+                    throw new InvalidDataException("Model menu does not fit its button or preserve the selected model");
+                // The FlyoutPresenter has its own ScrollViewer outside the ListView.
+                for (DependencyObject parent = choices; parent is not null; parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(parent))
+                    if (parent is Microsoft.UI.Xaml.Controls.ScrollViewer viewport && viewport.ScrollableWidth > 0.5)
+                        throw new InvalidDataException($"Model menu has horizontal overflow: {viewport.ScrollableWidth}");
+                await Capture((FrameworkElement)choices.Parent, Path.Combine(output, $"model-menu-{theme}-{width}.png"));
+                picker.CloseOptions();
+                await Capture(settings.CaptureElement, Path.Combine(output, $"model-picker-{theme}-{width}.png"));
+            }
+        }
+        settings.Vm.RefreshModels(installed.Where(m => m.Id != Models.ModelCatalog.Builtin)); settings.Vm.SelectModel(chosen);
+        settings.AppWindow.Resize(new Windows.Graphics.SizeInt32(840, 680)); settings.Vm.Load();
+    }
+    public static async Task Run(MainWindow settings, string output, string? feature = null)
     {
         // Keep verification away from the user's windows and never activate the test surfaces.
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false);
         await Task.Delay(500);
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
+        if (feature is null or "zhuyin-mode") await VerifyZhuyinMode(settings, output);
+        if (feature == "zhuyin-mode") { settings.Close(); return; }
+        if (feature is "about-models" or "contributors" or "model-picker")
+        {
+            settings.Vm.Save();
+            if (feature == "about-models") await VerifyModelRescans(settings);
+            await VerifyAboutModels(settings, output, feature);
+            settings.Close(); return;
+        }
         string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
         File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
         if (settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path) != legacy)
@@ -94,7 +206,7 @@ internal static class VisualVerifier
             settings.Vm.Preset(true);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
-        await VerifyModelRescans(settings); VerifyCatalogText();
+        await VerifyModelRescans(settings); VerifyCatalogText(); await VerifyAboutModels(settings, output);
         // The single right-arrow selector migrates old switches and persists all three choices in both modes.
         string beforeRight = File.ReadAllText(Models.ProfileStore.Path);
         var rightChoice = (Microsoft.UI.Xaml.Controls.ComboBox)settings.FindName("CandidateRightAction");

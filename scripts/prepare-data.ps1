@@ -58,7 +58,7 @@ try {
         }
         Copy-Item "$exportRoot/data/packs/quotes-add.tsv","$exportRoot/data/packs/quotes.json" "$data/packs" -Force
         # The English list of Windows mixed input is compiled into the core; its notices live in this repo since upstream 0.6.1 dropped the list.
-        Copy-Item "$upstream/LICENSE","$upstream/LICENSES/*","$root/LICENSES/windows-models.md","$root/LICENSES/mode-icons.md","$root/LICENSES/english-words-attribution.txt","$root/LICENSES/SCOWL.txt","$root/LICENSES/SymSpell-MIT.txt" $licenseDir -Force
+        Copy-Item "$upstream/LICENSE","$upstream/LICENSES/*","$root/LICENSES/windows-models.md","$root/LICENSES/mode-icons.md","$root/LICENSES/octicons.txt","$root/LICENSES/english-words-attribution.txt","$root/LICENSES/SCOWL.txt","$root/LICENSES/SymSpell-MIT.txt" $licenseDir -Force
         Copy-Item "$root/data/README.md" (Join-Path $licenseDir 'pinyin-data.md') -Force
         # The two notices upstream's build-app.sh writes into the app, taken from that script so they follow it.
         $buildApp = [IO.File]::ReadAllText("$upstream/scripts/build-app.sh").Replace("`r`n","`n")

@@ -93,6 +93,23 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
                 & $harness @arguments
                 if ($LASTEXITCODE) { throw 'TSF smoke harness failed.' }
             }
+            if(!$Visual){
+                # CTest's isolated payload already enables both layouts; the legacy
+                # dist entry uses a temporary fixture without changing registration.
+                $installation=Join-Path $runtimeRoot 'installed.json'
+                $savedInstallation=if(!$PayloadRoot -and (Test-Path -LiteralPath $installation)){[IO.File]::ReadAllBytes($installation)}else{$null}
+                try {
+                    if(!$PayloadRoot){[IO.File]::WriteAllText($installation,'{"version":"verification-fixture","keyboards":3}')}
+                    Invoke-Timed -Name 'Run pure Zhuyin TSF regression' -Category 'tsf.zhuyin-only' -Details @{architecture=$Architecture} -Action {
+                        & $harness "$runtimeRoot/$Architecture/Shanjie.dll" --zhuyin-only
+                        if($LASTEXITCODE){throw 'Pure Zhuyin TSF harness failed.'}
+                    }
+                } finally {
+                    if(!$PayloadRoot){
+                        if($null -ne $savedInstallation){[IO.File]::WriteAllBytes($installation,$savedInstallation)}else{Remove-Item -LiteralPath $installation}
+                    }
+                }
+            }
         } finally {
             try {
                 if ($fixtureCore) {

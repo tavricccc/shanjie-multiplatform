@@ -65,7 +65,7 @@
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="每行一個執行檔名稱，例如 discord.exe；可在工作管理員的「詳細資料」查到。瀏覽器裡的網頁聊天無法分辨，跟著瀏覽器用書面設定。"/>
                         <controls:SettingCard>
-                            <controls:SettingRow Label="模型配置"><ComboBox x:Name="ModelSelector" ItemsSource="{x:Bind Vm.AvailableModels}" DisplayMemberPath="Name" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged"/></controls:SettingRow>
+                            <controls:SettingRow Label="模型配置" Stacked="True"><controls:ModelPicker x:Name="ModelSelector" ItemsSource="{x:Bind Vm.AvailableModels}" SelectedIndex="{x:Bind Vm.ModelVariant, Mode=OneWay}" SelectionChanged="ModelSelectionChanged" HorizontalAlignment="Stretch"/></controls:SettingRow>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="取得其他模型…" Click="OnlineModels"/><Button Content="開啟模型資料夾" Click="OpenModelsFolder"/><Button Content="重新掃描" Click="RescanModels"/></StackPanel></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock x:Name="ModelDetails" Style="{StaticResource SjNote}" Text="{x:Bind Vm.ModelHelp, Mode=OneWay}"/>
@@ -128,6 +128,10 @@
                     </StackPanel>
                     <StackPanel x:Name="Composition" Visibility="Collapsed">
                         <TextBlock Text="組字操作" Style="{StaticResource SjGroupTitle}"/>
+                        <controls:SettingCard>
+                            <controls:SettingToggle x:Name="ZhuyinOnlyToggle" Label="純注音輸出" Description="直接輸入注音符號與聲調，不轉成漢字、不開候選；空白輸入空格、Enter 提交。啟用時優先於混打及空白鍵設定，關閉後恢復。僅適用標準／倚天注音。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.ZhuyinOnly, Mode=TwoWay}"/>
+                        </controls:SettingCard>
+                        <TextBlock Text="組字面板與讀音" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="ReadingPanelToggle" Label="組字面板" Description="{x:Bind Vm.ReadingPanelHelp, Mode=OneWay}" IsEnabled="{x:Bind Vm.CanChooseReadingPanel, Mode=OneWay}" IsOn="{x:Bind Vm.ReadingPanelShown, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
@@ -226,6 +230,8 @@
                             <TextBlock Text="原生 Windows 候選 · 本機注音引擎" FontSize="14" Foreground="{ThemeResource SjText1Brush}" TextWrapping="Wrap"/>
                             <TextBlock Text="輸入內容、詞庫、學習及設定都留在電腦上。操作預設調整按鍵與候選；鍵盤配置決定標準／倚天或拼音。" Style="{StaticResource SjBody}"/>
                         </controls:SettingCard>
+                        <TextBlock Text="貢獻者" Style="{StaticResource SjGroupTitle}"/>
+                        <controls:SettingCard Padding="14,8,14,12"><controls:ContributorsView x:Name="ContributorsList"/></controls:SettingCard>
                         <TextBlock Text="與微軟注音的差異" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard Padding="14,12,14,12" Spacing="4">
                             <TextBlock x:Name="Differences" Style="{StaticResource SjBody}"/>
