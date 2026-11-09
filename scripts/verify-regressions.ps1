@@ -4,8 +4,10 @@
 # No registration, foreground activation or desktop input; each case gets its own profile under build/.
 param([ValidateSet('x64','x86')][string]$Architecture='x64',[string]$ResultRoot)
 $ErrorActionPreference='Stop'
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
+$null=Initialize-TestTimings -ProjectRoot $root -Name 'verify-regressions'
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/regressions-'+[guid]::NewGuid().ToString('N'))}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot)
 if(Test-Path -LiteralPath $ResultRoot){throw 'Use a fresh result directory.'}
@@ -21,8 +23,7 @@ Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encodi
 $lifecycle=@('cancel-command','cancel-deactivate','cancel-double','cancel-escape','cancel-focus-notification','cancel-keyboard-reading',
     'cancel-late','cancel-mouse','cancel-outside','cancel-owner-destroy','cancel-reentry','cancel-save','cancel-stale-notify',
     'cancel-theme-dark','cancel-theme-light')
-# Every private desktop starts its own core from the payload; none of them may outlive the run.
-try{
+# Every private desktop uses an isolated profile, TEMP directory and local engine; no process cleanup scans the user's cores.
 foreach($suite in @(@('tsf_compat',$null),@('popup_lifecycle',$lifecycle))){
     $name=$suite[0];$out="$ResultRoot/$name";New-Item -ItemType Directory $out -Force|Out-Null
     $harness="$out/$name-$Architecture.exe"
@@ -33,12 +34,11 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/$name.cpp" /Fo"$out/$name.obj" /Fe"$harness" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@
     Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-    & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log"
-    if($LASTEXITCODE){throw "$name harness compile failed: $Architecture ($out/compile.log)"}
+    Invoke-Timed -Name "Compile $name harness ($Architecture)" -Category 'build.cpp.harness' -Details @{architecture=$Architecture;source="tests/$name.cpp"} -Action {
+        & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log"
+        if($LASTEXITCODE){throw "$name harness compile failed: $Architecture ($out/compile.log)"}
+    }
     $cases=if($suite[1]){@{Cases=$suite[1]}}else{@{}}
     & "$PSScriptRoot/verify-private-desktop.ps1" -Payload $payload -Harness $harness -Output "$out/cases" @cases
-}
-}finally{
-    Get-Process shanjie-core -ErrorAction SilentlyContinue|Where-Object{$_.Path -and $_.Path.StartsWith($payload,'OrdinalIgnoreCase')}|Stop-Process -Force -ErrorAction SilentlyContinue
 }
 Write-Host "PASS real-TSF regressions ($Architecture)"

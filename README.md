@@ -71,14 +71,19 @@
 
 ## 開發
 
-需要 PowerShell 7、Git、Rust MSVC、Visual Studio Build Tools（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
+需要 PowerShell 7、Git、Rust MSVC、CMake 3.27、Visual Studio 2022（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
 
 ```powershell
 git submodule update --init
 pwsh -File scripts/package.ps1      # 建置並打包成 dist/Shanjie-Windows-Setup.exe
 pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建單一架構
-pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
+pwsh -File scripts/test.ps1 -Level FAST       # 日常快速檢查
+pwsh -File scripts/test.ps1 -Level AFFECTED   # 依變更範圍跑相關回歸
+pwsh -File scripts/test.ps1 -Level FULL       # x64 完整回歸
+pwsh -File scripts/test.ps1 -Level RELEASE    # x64/x86、UI 與安裝包驗收
 ```
+
+CTest 測試分類、案例清冊、報告與基準比較方法見 [Windows 驗收流程](docs/TESTING.md)。
 
 推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式附上；手動執行 workflow 預設只建置驗證，不覆寫既有 Release。
 

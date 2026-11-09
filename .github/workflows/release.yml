@@ -1,7 +1,7 @@
 name: release
 
-# 版本號（windows/Cargo.toml）變更並推送後，若還沒有對應 tag 就建立 GitHub Release，
-# 再建置 Windows 安裝檔（Shanjie-Windows-Setup.exe）附上。手動預設僅驗證，不覆寫既有 Release。
+# 版本號（windows/Cargo.toml）變更並推送後，先完成 Windows RELEASE 與選用的 Linux 驗收，再建立 GitHub Release。
+# 手動預設僅驗證，不覆寫既有 Release。
 on:
   push:
     branches: [main]
@@ -25,7 +25,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       build_linux: ${{ steps.release.outputs.build_linux }}
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
           persist-credentials: false
-      - name: Create release when the version has no tag yet
+      - name: Validate release inputs and plan publication
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,30 +50,30 @@ jobs:
           if [ "$channel_version" != "$version" ]; then echo "Release channel version mismatch"; exit 1; fi
           prerelease=$(jq -r .prerelease RELEASE-CHANNEL.json)
           echo "build_linux=$(jq -r .build_linux RELEASE-CHANNEL.json)" >> "$GITHUB_OUTPUT"
-          echo "publish=false" >> "$GITHUB_OUTPUT"
-          if [ "$VERIFY_ONLY" = "true" ]; then echo "Build verification only"; exit 0; fi
-          flags=()
-          if [ "$prerelease" = "true" ]; then
-            flags=(--prerelease --latest=false)
-          elif [ "$prerelease" != "false" ]; then
+          if [ "$prerelease" != "true" ] && [ "$prerelease" != "false" ]; then
             echo "Invalid release channel"; exit 1
           fi
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag 已有 release；僅驗證，不修改發布內容或資產"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$VERIFY_ONLY" = "true" ]; then
+            echo "Build verification only"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag already exists without a release; review before publishing"; exit 1
           fi
-          gh release create "$tag" --target "$GITHUB_SHA" \
-            --title "善解輸入法 ${version}" --notes-file "$notes" "${flags[@]}"
           echo "publish=true" >> "$GITHUB_OUTPUT"
 
   windows:
     needs: release
     runs-on: windows-latest
+    timeout-minutes: 180
     permissions:
-      contents: write
+      contents: read
     defaults:
       run:
         shell: pwsh
@@ -85,29 +85,43 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
         with:
           dotnet-version: 10.0.x
-      - name: Cache upstream models
+      - name: Cache Rust, .NET and model inputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
-          path: build/model
-          key: models-${{ hashFiles('MODEL-SOURCES.json') }}
-      - name: Build and verify the package
-        run: pwsh -File scripts/package.ps1
-      - name: Unit tests
-        run: cargo test --manifest-path windows/Cargo.toml --lib
-      - name: Mixed-input regression against the built data
-        run: cargo test --manifest-path windows/Cargo.toml --lib -- --ignored mixed_regression
-      - name: Upload to the release
-        if: needs.release.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $assets = foreach ($name in @('Shanjie-Windows-Setup.exe')) {
-            $hash = (Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
-            Set-Content "dist/$name.sha256" "$hash  $name" -Encoding utf8NoBOM
-            "dist/$name"; "dist/$name.sha256"
-          }
-          gh release upload "${{ needs.release.outputs.tag }}" @assets
-          if ($LASTEXITCODE) { throw 'Release upload failed.' }
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.nuget/packages
+            ui/bin
+            ui/obj
+            dist/ui
+            build/ui-publish-cache.json
+            windows/target
+            build/core/target
+            build/test/core/target
+            build/core/src
+            build/core/Cargo.toml
+            build/core/.prepare-cache.json
+            build/model
+            dist/data
+            dist/LICENSES
+            build/data-output-cache.json
+          key: shanjie-win-${{ runner.os }}-dotnet10-${{ hashFiles('**/Cargo.lock', 'ui/**', 'NuGet.Config', 'MODEL-CATALOG.json', 'MODEL-SOURCES.json', 'UPSTREAM.json', 'profiles/**', 'platform/**', 'scripts/build.ps1', 'scripts/test-support.psm1', 'scripts/prepare-*.ps1') }}
+          restore-keys: |
+            shanjie-win-${{ runner.os }}-dotnet10-
+      - name: Run CTest RELEASE (interactive UI rows are reported as not run)
+        run: pwsh -File scripts/test.ps1 -Level RELEASE -BaseRef HEAD -CiSafe
+      - name: Upload CTest reports and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: windows-ctest-release-${{ github.run_id }}
+          path: |
+            build/reports/**
+            build/cmake/windows-x64/Testing/Temporary/LastTest.log
+            build/cmake/windows-x86/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 14
       - name: Build evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
         with:
@@ -123,7 +137,7 @@ jobs:
     # Linux 版的目標是 Fedora 44 GNOME；在同版容器建置，GTK 4／libadwaita 與 glibc 和使用者一致。
     container: fedora:44
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Install build tools
         run: |
@@ -141,10 +155,56 @@ jobs:
           key: models-${{ hashFiles('MODEL-SOURCES.json') }}
       - name: Build the package
         run: linux/scripts/package.sh
-      - name: Upload to the release
-        if: needs.release.outputs.publish == 'true'
+      - name: Save Linux package for post-verification publication
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: linux-package
+          path: |
+            build/linux/dist/shanjie-linux-*.tar.gz
+            build/linux/dist/shanjie-linux-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [release, windows, linux]
+    if: ${{ always() && needs.release.outputs.publish == 'true' && needs.windows.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-package
+          path: artifacts/windows
+      - name: Download Linux package
+        if: needs.release.outputs.build_linux == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-package
+          path: artifacts/linux
+      - name: Create release and upload verified packages
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+          BUILD_LINUX: ${{ needs.release.outputs.build_linux }}
         run: |
-          gh release upload "${{ needs.release.outputs.tag }}" build/linux/dist/shanjie-linux-*.tar.gz \
-            build/linux/dist/shanjie-linux-*.tar.gz.sha256 --repo "$GITHUB_REPOSITORY"
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' windows/Cargo.toml | head -n 1)
+          notes="docs/releases/RELEASE-NOTES-${version}.md"
+          prerelease=$(jq -r .prerelease RELEASE-CHANNEL.json)
+          flags=()
+          if [ "$prerelease" = "true" ]; then flags=(--prerelease --latest=false); fi
+          windows_asset="artifacts/windows/Shanjie-Windows-Setup.exe"
+          hash=$(sha256sum "$windows_asset" | cut -d' ' -f1)
+          printf '%s  %s\n' "$hash" "Shanjie-Windows-Setup.exe" > "${windows_asset}.sha256"
+          assets=("$windows_asset" "${windows_asset}.sha256")
+          if [ "$BUILD_LINUX" = "true" ]; then
+            mapfile -t linux_assets < <(find artifacts/linux -maxdepth 1 -type f -name 'shanjie-linux-*.tar.gz*' -print | sort)
+            if [ "${#linux_assets[@]}" -eq 0 ]; then echo "Linux package artifact missing"; exit 1; fi
+            assets+=("${linux_assets[@]}")
+          fi
+          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" \
+            --title "善解輸入法 ${version}" --notes-file "$notes" "${flags[@]}"
+          gh release upload "$RELEASE_TAG" "${assets[@]}"

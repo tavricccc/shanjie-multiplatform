@@ -1,0 +1,102 @@
+#Requires -Version 7
+param(
+    [Parameter(Mandatory)][ValidateSet('upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','package')][string]$CaseId,
+    [ValidateSet('x64','x86')][string]$Architecture='x64',
+    [ValidateSet('windows','shanjie')][string]$Interaction='windows',
+    [string]$Scenario,
+    [string]$Mode,
+    [int[]]$Keyboards=@(1,2),
+    [string]$HarnessPath,
+    [string]$PayloadRoot
+)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+$timingDirectory = Initialize-TestTimings -ProjectRoot $root -Name "ctest-$CaseId"
+$runId = if ($env:SHANJIE_TEST_RUN_ID) { $env:SHANJIE_TEST_RUN_ID } else { [guid]::NewGuid().ToString('N') }
+$caseToken = (($CaseId,$Architecture,$Scenario,$Mode) -join '-') -replace '[^A-Za-z0-9_.-]','_'
+$resultRoot = Join-Path $root "build/reports/ctest-$runId/cases/$caseToken-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+New-Item -ItemType Directory -Path $resultRoot -Force | Out-Null
+$stage = Start-TestStage -Name "CTest $CaseId $Scenario $Mode" -Category "ctest.$CaseId"
+$status = 'passed'
+$failure = $null
+try {
+    Push-Location $root
+    try {
+        switch ($CaseId) {
+            'upstream-data' { & "$PSScriptRoot/verify-upstream-data.ps1" }
+            'prepare-core' { & "$PSScriptRoot/prepare-core.ps1" }
+            'shared-unit' {
+                Invoke-Timed -Name 'Shared Rust unit tests' -Category 'rust.unit.shared' -Details @{target='x86_64-pc-windows-msvc'} -Action {
+                    cargo test --manifest-path shared/Cargo.toml --lib --target x86_64-pc-windows-msvc
+                    if ($LASTEXITCODE) { throw 'Shared Rust unit tests failed.' }
+                }
+            }
+            'windows-unit' {
+                $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
+                Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target} -Action {
+                    cargo test --manifest-path windows/Cargo.toml --lib --target $target
+                    if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
+                }
+            }
+            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels }
+            'mixed-regression' {
+                $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
+                Invoke-Timed -Name "Mixed-input and digit model regressions ($Architecture)" -Category 'rust.mixed-regression' -Details @{target=$target;tests='mixed_regression'} -Action {
+                    cargo test --manifest-path windows/Cargo.toml --lib --target $target -- --ignored mixed_regression
+                    if ($LASTEXITCODE) { throw "Mixed-input and digit regressions failed for $Architecture." }
+                }
+            }
+            'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
+            'runtime-payload' {
+                if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }
+                & "$PSScriptRoot/prepare-test-payload.ps1" -Architecture $Architecture -PayloadRoot $PayloadRoot
+            }
+            'tsf-smoke-standard' {
+                & "$PSScriptRoot/verify.ps1" -SmokeOnly -NativeOnly -SmokeCase standard -Interaction $Interaction -Architecture $Architecture -TsfHarnessPath $HarnessPath -ResultRoot $resultRoot -PayloadRoot $PayloadRoot
+            }
+            'tsf-smoke-cold' {
+                & "$PSScriptRoot/verify.ps1" -SmokeOnly -NativeOnly -SmokeCase cold -Interaction windows -Architecture $Architecture -TsfHarnessPath $HarnessPath -ResultRoot $resultRoot -PayloadRoot $PayloadRoot
+            }
+            'add-word' {
+                & "$PSScriptRoot/verify-add-word.ps1" -Architectures $Architecture -ResultRoot $resultRoot -HarnessPath $HarnessPath -PayloadRoot $PayloadRoot
+            }
+            'english-keys' {
+                if (!$Scenario) { throw 'English-key CTest rows require a scenario name.' }
+                & "$PSScriptRoot/verify-english-keys.ps1" -Architectures $Architecture -Scenarios $Scenario -ResultRoot $resultRoot -HarnessPath $HarnessPath -PayloadRoot $PayloadRoot
+            }
+            'submission' {
+                if (!$Mode) { throw 'Submission CTest rows require a mode name.' }
+                & "$PSScriptRoot/verify-submission.ps1" -Architectures $Architecture -Modes $Mode -Keyboards $Keyboards -ResultRoot $resultRoot -HarnessPath $HarnessPath -PayloadRoot $PayloadRoot
+            }
+            'private-tsf' {
+                if (!$Scenario -or !$HarnessPath -or !$PayloadRoot) { throw 'Private TSF test row is missing its case, harness, or payload.' }
+                & "$PSScriptRoot/verify-private-desktop.ps1" -Payload $PayloadRoot -Harness $HarnessPath -Output (Join-Path $resultRoot 'case') -Cases $Scenario
+            }
+            'private-popup' {
+                if (!$Scenario -or !$HarnessPath -or !$PayloadRoot) { throw 'Private popup test row is missing its case, harness, or payload.' }
+                & "$PSScriptRoot/verify-private-desktop.ps1" -Payload $PayloadRoot -Harness $HarnessPath -Output (Join-Path $resultRoot 'case') -Cases $Scenario
+            }
+            'mode-smoke' {
+                if (!$HarnessPath) { throw 'Mode smoke CTest row requires its CMake-built executable.' }
+                & "$PSScriptRoot/verify-mode.ps1" -Architectures $Architecture -HarnessPath $HarnessPath -CaptureRoot (Join-Path $resultRoot 'capture')
+            }
+            'interaction' {
+                if (!$HarnessPath) { throw 'Interaction CTest row requires its CMake-built executable.' }
+                & "$PSScriptRoot/verify-interaction.ps1" -HarnessPath $HarnessPath -ResultRoot (Join-Path $resultRoot 'fixture')
+            }
+            'candidate-host' {
+                if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
+                & "$PSScriptRoot/verify-ui.ps1" -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
+            }
+            'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -OutputRoot (Join-Path $resultRoot 'ui') }
+            'package' { & "$PSScriptRoot/package.ps1" -UseExistingBuild }
+        }
+    } finally { Pop-Location }
+} catch {
+    $status = 'failed'
+    $failure = $_.Exception.Message
+    throw
+} finally {
+    Complete-TestStage -Stage $stage -Status $status -Details @{ architecture=$Architecture; scenario=$Scenario; mode=$Mode; result_root=$resultRoot } -ErrorMessage $failure
+}

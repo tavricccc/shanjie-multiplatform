@@ -8,7 +8,9 @@ if ($Architecture -eq 'all') {
     return
 }
 $root = Split-Path $PSScriptRoot -Parent
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 . "$PSScriptRoot/preserve-output.ps1"
+$null = Initialize-TestTimings -ProjectRoot $root -Name 'build'
 Push-Location $root
 try {
     $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
@@ -16,9 +18,15 @@ try {
     # even when the core is reused (a moved submodule would otherwise ship data the pinned core does not read).
     $pin = (Get-Content "$root/UPSTREAM.json" -Raw | ConvertFrom-Json).commit
     if ((git -C "$root/upstream/shanjie" rev-parse HEAD) -ne $pin) { throw 'upstream/shanjie is not at the commit in UPSTREAM.json.' }
-    if (!$UseExistingCore) { & "$PSScriptRoot/prepare-core.ps1" }
-    rustup target add $target
-    if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
+    if (!$UseExistingCore) { Invoke-Timed -Name 'Prepare Windows core' -Category 'core.prepare' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/prepare-core.ps1" } }
+    $installedTargets = @(rustup target list --installed)
+    if ($LASTEXITCODE) { throw 'Unable to read installed Rust targets.' }
+    if ($target -notin $installedTargets) {
+        Invoke-Timed -Name 'Install Rust target' -Category 'toolchain.prepare' -Details @{ architecture=$Architecture; target=$target } -Action {
+            rustup target add $target
+            if ($LASTEXITCODE) { throw 'Rust target installation failed.' }
+        }
+    }
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     if(!$UseCurrentToolchain){
         $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -39,22 +47,51 @@ if errorlevel 1 exit /b 1
 rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
 "@
     Set-Content "$objects/resources.cmd" $command -Encoding utf8NoBOM
-    & cmd.exe /d /c "$objects/resources.cmd"
-    if ($LASTEXITCODE) { throw 'Mode resource build failed.' }
+    Invoke-Timed -Name 'Compile Windows resources' -Category 'build.native' -Details @{ architecture=$Architecture; resource_count=2 } -Action {
+        & cmd.exe /d /c "$objects/resources.cmd"
+        if ($LASTEXITCODE) { throw 'Mode resource build failed.' }
+    }
     $env:SHANJIE_ICON_RESOURCE = Join-Path $objects 'mode_icons.res'
     $env:SHANJIE_SETUP_RESOURCE = Join-Path $objects 'setup.res'
-    cargo build --release --manifest-path windows/Cargo.toml --target $target
-    if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }
+    Invoke-Timed -Name 'Rust Windows release build' -Category 'build.rust.release' -Details @{ architecture=$Architecture; target=$target; incremental='Cargo fingerprints' } -Action {
+        cargo build --release --manifest-path windows/Cargo.toml --target $target
+        if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }
+    }
     Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$output/Shanjie.dll" -Force
     if ($Architecture -eq 'x64' -and !$SkipSettings) {
         $uiOutput = [IO.Path]::GetFullPath((Join-Path $root 'dist/ui'))
         if ($uiOutput -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','ui')) { throw 'Unexpected UI output path.' }
-        Preserve-Output $uiOutput
-        dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o $uiOutput --nologo
-        if ($LASTEXITCODE) { throw 'WinUI settings build failed.' }
+        $uiStage=Start-TestStage -Name 'Validate or publish WinUI output' -Category 'build.winui.publish'
+        $uiStageStatus='passed';$uiFailure=$null
+        try {
+            $dotnetVersion = (& dotnet --version 2>&1 | Select-Object -First 1).ToString().Trim()
+            $uiSourcePaths = @(Get-ChildItem -LiteralPath "$root/ui" -File -Recurse | Where-Object {
+                $_.FullName -notmatch '[\\/](bin|obj)[\\/]'
+            } | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) }) + @('profiles/windows.ini','profiles/shanjie.ini','MODEL-CATALOG.json','MODEL-SOURCES.json','NuGet.Config','scripts/build.ps1')
+            $uiKey = Get-ContentFingerprint -Root $root -Paths $uiSourcePaths -Values @($dotnetVersion,'Release','x64','dotnet publish')
+            $uiCacheManifest = Join-Path $root 'build/ui-publish-cache.json'
+            $existingUiPaths = if (Test-Path -LiteralPath $uiOutput) {
+                @(Get-ChildItem -LiteralPath $uiOutput -File -Recurse | Where-Object Name -ne 'Shanjie.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
+            } else { @() }
+            $uiPublishMiss = !(Test-ContentCache -Root $root -ManifestPath $uiCacheManifest -Key $uiKey -Paths $existingUiPaths)
+            if ($uiPublishMiss) {
+                Preserve-Output $uiOutput
+                dotnet publish "$root/ui/Shanjie.UI.csproj" -c Release -p:Platform=x64 -o $uiOutput --nologo
+                if ($LASTEXITCODE) { throw 'WinUI settings build failed.' }
+            } else { Write-Host '.NET publish cache hit: source, SDK, and published file hashes verified.' }
+            Complete-TestStage -Stage $uiStage -Details @{ architecture='x64'; configuration='Release'; cache=if($uiPublishMiss){'miss'}else{'hit'};output_files=$existingUiPaths.Count }
+        } catch {
+            $uiStageStatus='failed';$uiFailure=$_.Exception.Message
+            Complete-TestStage -Stage $uiStage -Status 'failed' -Details @{ architecture='x64'; configuration='Release'; cache='miss' } -ErrorMessage $uiFailure
+            throw
+        }
     }
     if ($Architecture -eq 'x64') {
         if (Test-Path "$root/dist/ui") { Copy-Item "$root/windows/target/$target/release/shanjie_windows.dll" "$root/dist/ui" -Force }
+        if (!$SkipSettings -and $uiPublishMiss) {
+            $publishedPaths = @(Get-ChildItem -LiteralPath "$root/dist/ui" -File -Recurse | Where-Object Name -ne 'Shanjie.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
+            Save-ContentCache -Root $root -ManifestPath $uiCacheManifest -Key $uiKey -Paths $publishedPaths
+        }
         New-Item -ItemType Directory "$root/dist/tools" -Force | Out-Null
         Copy-Item "$root/windows/target/$target/release/shanjie-manager.exe" "$root/dist/tools" -Force
         Preserve-Output "$root/dist/tools/shanjie-core.exe"
@@ -68,7 +105,7 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res" "$root/windows/setup.rc"
     }
     # The data is the same for both architectures; the x64 pass (first in an 'all' build) prepares it.
     if ($Architecture -eq 'x64' -or !(Test-Path "$root/dist/data/models/builtin/bigram.winmap")) {
-        & "$PSScriptRoot/prepare-models.ps1"
-        & "$PSScriptRoot/prepare-data.ps1" -Licenses 'dist/LICENSES'
+        Invoke-Timed -Name 'Prepare built-in models' -Category 'models.prepare' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/prepare-models.ps1" }
+        Invoke-Timed -Name 'Prepare runtime data and licenses' -Category 'data.prepare' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/prepare-data.ps1" -Licenses 'dist/LICENSES' }
     }
 } finally { Remove-Item Env:SHANJIE_ICON_RESOURCE,Env:SHANJIE_SETUP_RESOURCE -ErrorAction SilentlyContinue; Pop-Location }

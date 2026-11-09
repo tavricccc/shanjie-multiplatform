@@ -11,14 +11,14 @@
 ## 上游與核心
 
 - `upstream/shanjie` 是固定 commit 的子模組，追蹤檔案保持乾淨；不把上游整棵 merge 進來。
-- **上游的詞庫、詞包與模型一律完整出貨，並照上游預設啟用。** 同步到的新版有新增或更新的檔案，就必須接上；不得因相容、體積或偏好而停用、略過或改預設值。真的有必要時先告訴使用者，並記在 UPSTREAM-CHANGES.md。`scripts/verify-upstream-data.ps1`（`verify.ps1` 與 CI 會呼叫）會比對，上游新增詞包或模型時它會失敗，要同步更新它的清單。
+- **上游的詞庫、詞包與模型一律完整出貨，並照上游預設啟用。** 同步到的新版有新增或更新的檔案，就必須接上；不得因相容、體積或偏好而停用、略過或改預設值。真的有必要時先告訴使用者，並記在 UPSTREAM-CHANGES.md。`scripts/verify-upstream-data.ps1`（CTest 的 `fast.upstream-data` 與 `full.dist-data` 會呼叫）會比對，上游新增詞包或模型時它會失敗，要同步更新它的清單。
 - Windows 對核心的變更放在 `platform/` 與 `scripts/prepare-*.ps1`。`build/core` 是產生檔，不手改。這些是核心擴充，不要描述成「只改 config」。
 - 升版：
   1. 本 repo 與子模組都乾淨。
   2. 子模組 fetch 並選定 commit，比較 C header、候選範圍、學習序列化、LM parser 與授權。
   3. checkout 新 commit，同步更新 `UPSTREAM.json`（`build.ps1` 拒絕不在 pin 上的子模組）。
   4. 跑 `prepare-core.ps1`；錨點失敗代表覆蓋要重新審查。
-  5. 跑 `test-core.ps1` 與 `verify.ps1`，再打包。
+  5. 跑 `pwsh -File scripts/test.ps1 -Level FULL`；Release 前再跑 `-Level RELEASE`。
   6. 分批 commit：pin 與覆蓋、Windows 功能、文件；更新 UPSTREAM-CHANGES.md。
 - 不向上游提 PR；右側候選與平台 backend 等和作者討論 API 後再整理。
 
@@ -29,7 +29,7 @@
 - PR 與 issue 的標題、內文、留言盡量用繁體中文；程式碼、檔名與專有名詞可保留原文，commit 訊息仍用英文。
 - PR 標題格式 `type: 說明`（`type` 保留英文），內文用 [PR 模板](.github/pull_request_template.md)，關聯 issue 寫 `Closes #N`。一個 PR 只做一件事；功能與修正的 PR 不改版本號，發布另開升版 PR（見下方「版本號」）。
 - PR 要先跟上最新 `main`（rebase 或 merge 都可以），並依下方「驗證」表跑過該跑的項目後再開；沒跑的在 PR 裡寫明。
-- PR 會自動跑 `ci.yml`（上游資料檢查，以及 `shared/` 與 `windows/` 的 `cargo test --lib`），須通過才能合入。核心測試、TSF 與介面驗證需要模型、建置產物或桌面，不在 CI，結果寫在 PR 內文。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
+- PR 的 `ci.yml` 以 CMake／CTest 執行 AFFECTED；影響範圍不明的建置或測試框架修改會按影響規則擴大至 FULL。WinUI 程式有變更時 CI 會編譯 UI 並跑離屏 mode smoke。Release workflow 執行 `RELEASE -CiSafe`；需要本機互動 Windows session 的驗收仍須在發布前由 Windows 本機完成。CI artifact 會附 CTest JUnit、日誌與分級報告；沒有實際執行的項目在 PR 內文標明。合入時，已是每個邏輯變更各自一個 commit 的用 merge，其餘用 squash。
 - Bug 與功能建議用 [issue 模板](.github/ISSUE_TEMPLATE/)；問題要附版本、Windows 版本與重現步驟。
 
 ## Commit、push 與發布
@@ -58,21 +58,34 @@
 
 ## 驗證：做多少
 
-依改到的地方挑，不必每次全跑：
+所有一般驗收統一由 `scripts/test.ps1` 和 CTest 管理。變更路徑會依 `scripts/test.ps1` 的影響規則選測；規則無法明確判斷時擴大到 FULL。變更影響表與 CTest 案例清冊見 [docs/TESTING.md](docs/TESTING.md)。
 
-| 改到 | 跑 |
-| --- | --- |
-| 只有文件、Changelog、註解 | 不建置、不測試 |
-| `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔 |
-| `shared/`、`windows/src` 的邏輯 | 對應 crate 的 `cargo test --lib`，加上相關的 `verify-*.ps1` |
-| 按鍵路徑或核心請求 | 再跑 `measure-engine.ps1` |
-| `ui/` | `verify-ui.ps1` |
-| 一輪變更完成、準備 commit 或發布 | x64 `verify.ps1` 一次；發布前或改到 x86 相關時加 `verify.ps1 -NativeOnly -Architecture x86` |
+| 時機／變更 | 跑 | 用途 |
+| --- | --- | --- |
+| 日常程式修改 | `pwsh -File scripts/test.ps1 -Level FAST` | 靜態資料清冊、核心 overlay 與共用／Windows Rust 單元測試；純文件或註解不建置、不測試 |
+| 功能完成 | `pwsh -File scripts/test.ps1 -Level AFFECTED` | FAST 加上依變更模組選出的完整相關回歸；未知影響自動擴大至 FULL |
+| PR 或整合前 | `pwsh -File scripts/test.ps1 -Level FULL` | 完整 x64 驗收，保留上游核心、模型、TSF 與每項既有回歸斷言 |
+| Release 前 | `pwsh -File scripts/test.ps1 -Level RELEASE` | FULL、x86 回歸、離屏互動 harness、WinUI、候選 host 與安裝包檢查 |
+
+CTest 操作範例：
+
+```powershell
+cmake --preset windows-x64
+cmake --build --preset windows-x64 --target shanjie_tsf_smoke
+ctest --preset windows-x64 --show-only
+ctest --preset windows-x64 -L tsf --output-on-failure
+pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
+```
+
+`-RetryFailures` 只對失敗案例最多重跑一次；通過案例不重跑。每次分級驗收都在 `build/reports/<run>/report.json` 記錄層級、選中與未選測試的原因、結果、耗時、快取資訊與 JUnit 位置；CTest 原始日誌和 JUnit XML 也保存在同一個 ignored build 目錄。回報必須列出實際跑過與未跑的測試及原因。不得把未執行的 Windows／TSF 測試說成通過。
+
+`scripts/verify.ps1` 與 `scripts/test-core.ps1` 保留作為舊入口、核心除錯與 benchmark 對照；日常與 PR 驗收使用上列分級入口。上游核心測試原有的記憶體使用限制排程仍保留，`engine_lm` 與 `engine_replay` 延遲斷言仍各自序列執行。CTest 對模型使用、核心 fixture 與 UI 工作加鎖；私人桌面案例各用獨立 profile，不註冊輸入法、不切換桌面、不讀寫真實使用者資料。
 
 ### 建置與 Rust
 
-- 平常只用 `cargo check`、`cargo test --lib`（加 `--target x86_64-pc-windows-msvc`），不跑 release build。
-- 完整建置（`build.ps1`）只在使用者要求或要交給使用者測試時做，而且一定連單檔安裝程式一起建，不留只建一半的 `dist/`。
+- FAST／AFFECTED 由 CTest 呼叫 Cargo 原生測試；FAST 是快速基線，AFFECTED 依變更再選相關回歸；Rust 測試框架仍由 Cargo 管理，不另造一套。
+- `build.ps1`、Cargo、NuGet／dotnet、模型與資料準備都有內容或工具鏈驗證過的增量快取；不要只因產物存在就跳過驗證。
+- Release 單檔安裝包由 RELEASE 驗收建立並校驗；一般修改不強制打包。
 - 全域 `~/.cargo/config.toml` 已設定：registry 快取每日自動 GC、dev/test 只留行號除錯資訊、相依套件 `opt-level = 1`。不要在 repo 裡設 `target-dir`（腳本寫死 `windows/target`）。
 - 清掉 30 天沒用的 target：`pwsh -File ~/.cargo/clean-stale-targets.ps1 -WhatIf` 先預覽。
 
@@ -81,7 +94,7 @@
 以下都是過去 commit 做過、後來刪掉或證明沒有用的：
 
 - **驗證紀錄與證據文件**：`VERIFICATION.md`、`docs/verification.md`、`docs/releases/VERIFICATION-*.md`，以及「record … verification／evidence／boundary」這類 commit（歷史上 26 個；0.13.x 有四個 commit 只為在證據檔加一兩行）。結果在回報裡說，未驗的開 issue，不另寫紀錄。
-- **以版本號命名的一次性測試**：`features_090`、`features_0100`、`compat_0122` 與對應的 `verify-features-*.ps1` 後來都改名併入 `verify.ps1`。新回歸加進以功能命名的既有 harness，並由 `verify.ps1` 呼叫，不另開只跑一次的腳本。
+- **以版本號命名的一次性測試**：`features_090`、`features_0100`、`compat_0122` 與對應的 `verify-features-*.ps1` 已整併至功能命名的 harness。新回歸加進適合的既有 harness，並在 CMake／CTest 登記穩定案例，不另開一次性腳本。
 - **沒人讀的 fixture 與參數**：`tests/fixtures/classes-v5` 沒有任何測試引用、harness 的模型參數沒有用到，都已刪除。新增 fixture 必須有測試讀它。
 - **同一行為測兩次**：加詞浮層的唯讀與密碼欄在 `add_word_popup` 與 `tsf_compat` 各測一次，前者依賴真實桌面而時好時壞，已刪。一個行為只放在最適合的 harness。
 - **重跑已通過的套件求心安**：已通過的不再跑第二次；偶發失敗重跑一次，通過就查原因或記下，不連跑多次。
