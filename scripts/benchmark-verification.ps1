@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[switch]$KeepWorktrees)
+param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[string]$ReuseBaselineReport,[switch]$KeepWorktrees)
 $ErrorActionPreference='Stop'
 if(!$IsWindows){throw 'This benchmark requires a Windows host with MSVC, Windows SDK, Rust, PowerShell 7, and .NET 10.'}
 $root=Split-Path $PSScriptRoot -Parent
@@ -41,6 +41,20 @@ $measurements=[ordered]@{}
 $summary=$null
 $benchmarkFailure=$null
 $comparisonPath=Join-Path $benchmarkRoot 'comparison.json'
+$reusedBaseline=$null
+if($ReuseBaselineReport){
+    $reusedBaseline=(Resolve-Path -LiteralPath $ReuseBaselineReport).Path
+    $prior=Get-Content -LiteralPath $reusedBaseline -Raw|ConvertFrom-Json
+    if($prior.schema -ne 1 -or $prior.baseline_commit -ne $baseline){throw 'Reusable baseline must use the same resolved pre-migration commit and benchmark schema.'}
+    foreach($name in 'baseline_cold','baseline_warm'){
+        $saved=$prior.measurements.$name
+        if(!$saved -or $saved.status -ne 'passed' -or $saved.flow -ne 'baseline' -or $saved.report.commit -ne $baseline -or !$saved.coverage_ids.Count -or $saved.report.raw_verify_seconds -le 0 -or $saved.report.ci_unit_seconds -le 0 -or !(Test-Path -LiteralPath $saved.report_path) -or !(Test-Path -LiteralPath $saved.log_path)){
+            throw "Reusable $name must retain its successful equal-scope measurement, component timings, archived report and log."
+        }
+        $measurements[$name]=$saved
+    }
+    Write-Host "Reusing unchanged baseline cold/warm measurements from $reusedBaseline; keep the same host, toolchain and desktop controls."
+}
 $previousThreads=$env:RUST_TEST_THREADS
 # Keep ordinary suite scheduling. The old mixed suite has its own serial flag;
 # Windows unit suites serialize their shared installer sink at the call site.
@@ -210,7 +224,9 @@ $units.Stop()
     Write-Host ("Benchmark {0}: {1:F3}s ({2:F2} minutes), {3} observed product cases." -f $Name,$watch.Elapsed.TotalSeconds,($watch.Elapsed.TotalSeconds/60),$coverage.Count)
 }
 try {
-    $worktrees=[ordered]@{baseline=$baselineRoot;legacy=$legacyRoot;ctest=$ctestRoot}
+    $worktrees=[ordered]@{}
+    if(!$reusedBaseline){$worktrees.baseline=$baselineRoot}
+    $worktrees.legacy=$legacyRoot;$worktrees.ctest=$ctestRoot
     foreach($name in $worktrees.Keys){
         $worktree=$worktrees[$name]
         $workCommit=if($name -eq 'baseline'){$baseline}else{$resolved}
@@ -220,8 +236,10 @@ try {
         & git -C $worktree submodule update --init --recursive *> (Join-Path $artifactsRoot "$name-submodules.log")
         if($LASTEXITCODE){throw "Could not initialize $name pinned submodule."}
     }
-    Invoke-Run 'baseline_cold' $baselineRoot baseline cold
-    Invoke-Run 'baseline_warm' $baselineRoot baseline warm
+    if(!$reusedBaseline){
+        Invoke-Run 'baseline_cold' $baselineRoot baseline cold
+        Invoke-Run 'baseline_warm' $baselineRoot baseline warm
+    }
     Invoke-Run 'legacy_cold' $legacyRoot legacy cold
     Invoke-Run 'legacy_warm' $legacyRoot legacy warm
     Invoke-Run 'ctest_cold' $ctestRoot full cold
@@ -315,6 +333,7 @@ try {
         schema=1
         commit=$resolved
         baseline_commit=$baseline
+        baseline_reused_from=$reusedBaseline
         status='measured'
         comparable_scope='Pre-migration verify.ps1 plus its original CI shared/windows unit suites, current legacy verify.ps1, and CTest FULL x64. All include the same unit, core, mixed-input, data, TSF, add-word, English-key, submission and private-desktop cases.'
         coverage=[ordered]@{
@@ -373,6 +392,7 @@ try {
             schema=1
             commit=$resolved
             baseline_commit=$baseline
+            baseline_reused_from=$reusedBaseline
             status='failed'
             failure=$benchmarkFailure
             measurements=$measurements
