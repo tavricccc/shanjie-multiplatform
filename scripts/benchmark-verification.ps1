@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[Alias('ReuseBaselineReport')][string]$ResumeReport,[switch]$KeepWorktrees)
+param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[Alias('ReuseBaselineReport')][string]$ResumeReport,[string]$HistoricalLegacyReport,[switch]$KeepWorktrees)
 $ErrorActionPreference='Stop'
 if(!$IsWindows){throw 'This benchmark requires a Windows host with MSVC, Windows SDK, Rust, PowerShell 7, and .NET 10.'}
 $root=Split-Path $PSScriptRoot -Parent
@@ -68,6 +68,24 @@ if($ResumeReport){
     }
     if(!$measurements.Contains('baseline_warm')){throw 'Resume requires both successful original baseline measurements.'}
     Write-Host "Reusing completed measurements ($($measurements.Keys -join ', ')) from $resumedFrom; keep the same host, toolchain and desktop controls."
+}
+$historicalLegacyCommit=$null
+if($HistoricalLegacyReport){
+    # Preserve completed compatibility measurements at their original revision.
+    # They are historical context, never a same-source speedup or RELEASE receipt.
+    $historyPath=(Resolve-Path -LiteralPath $HistoricalLegacyReport).Path
+    $history=Get-Content -LiteralPath $historyPath -Raw|ConvertFrom-Json
+    if($history.schema -ne 1 -or $history.baseline_commit -ne $baseline){throw 'Historical legacy measurements must use the same original baseline.'}
+    & git -C $root diff --quiet $history.commit $resolved -- @productPaths
+    if($LASTEXITCODE){throw 'Historical legacy product inputs differ from the current product.'}
+    foreach($name in 'legacy_cold','legacy_warm'){
+        $saved=$history.measurements.$name
+        if(!$saved -or $saved.status -ne 'passed' -or $saved.flow -ne 'legacy' -or !$saved.coverage_ids.Count -or $saved.wall_seconds -le 0 -or !(Test-Path -LiteralPath $saved.report_path) -or !(Test-Path -LiteralPath $saved.log_path)){throw "Historical $name requires a completed measurement and its original archived evidence."}
+        $measurements[$name]=$saved
+        $reusedMeasurements[$name]=[ordered]@{comparison=$historyPath;commit=$history.commit;historical_reference_only=$true}
+    }
+    $historicalLegacyCommit=$history.commit
+    Write-Host "Retaining legacy cold/warm as historical references at $historicalLegacyCommit; their comparison with current CTest timings is disabled."
 }
 $previousThreads=$env:RUST_TEST_THREADS
 # Keep ordinary suite scheduling. The old mixed suite has its own serial flag;
@@ -355,8 +373,9 @@ try {
         baseline_commit=$baseline
         resumed_from=$resumedFrom
         reused_measurements=$reusedMeasurements
+        historical_legacy_commit=$historicalLegacyCommit
         status='measured'
-        comparable_scope='Pre-migration verify.ps1 plus its original CI shared/windows unit suites, current legacy verify.ps1, and CTest FULL x64. All include the same unit, core, mixed-input, data, TSF, add-word, English-key, submission and private-desktop cases.'
+        comparable_scope='Pre-migration verify.ps1 plus its original CI shared/windows unit suites versus CTest FULL x64. Compatibility verify measurements are historical when explicitly marked. All observed unit, core, mixed-input, data, TSF, add-word, English-key, submission and private-desktop case configurations must match.'
         coverage=[ordered]@{
             legacy_entry='scripts/verify.ps1 (compatibility path; all original assertions retained)'
             baseline_entry='Unmodified original scripts/verify.ps1 plus the original CI shared/windows Cargo --lib commands.'
@@ -383,11 +402,12 @@ try {
             baseline_warm_saved_seconds=[Math]::Round($baselineWarm-$ctestWarm,3)
             baseline_warm_speedup_percent=[Math]::Round(100*($baselineWarm-$ctestWarm)/$baselineWarm,2)
             baseline_scope='Unmodified verify.ps1 from baseline_commit plus its original CI shared/windows unit suites versus candidate CTest FULL; product sources, data, models, pins, and every observed case/configuration ID must match.'
-            same_commit_scope='The legacy_* versus ctest_* fields compare candidate entry points with identical runtime source inputs and share caching improvements. Resumed measurements retain their original commit provenance; only benchmark-driver or documentation changes may reuse candidate results.'
-            cold_saved_seconds=[Math]::Round($coldSaved,3)
-            cold_speedup_percent=if($legacyCold){[Math]::Round(100*$coldSaved/$legacyCold,2)}else{$null}
-            warm_saved_seconds=[Math]::Round($warmSaved,3)
-            warm_speedup_percent=if($legacyWarm){[Math]::Round(100*$warmSaved/$legacyWarm,2)}else{$null}
+            same_commit_scope=if($historicalLegacyCommit){'Disabled: compatibility measurements belong to the recorded historical commit, not the current test-source revision.'}else{'Candidate entry points have identical runtime source inputs and share caching improvements. Resumed measurements retain their original commit provenance; only benchmark-driver or documentation changes may reuse candidate results.'}
+            legacy_vs_ctest_comparable=(!$historicalLegacyCommit)
+            cold_saved_seconds=if(!$historicalLegacyCommit){[Math]::Round($coldSaved,3)}else{$null}
+            cold_speedup_percent=if(!$historicalLegacyCommit -and $legacyCold){[Math]::Round(100*$coldSaved/$legacyCold,2)}else{$null}
+            warm_saved_seconds=if(!$historicalLegacyCommit){[Math]::Round($warmSaved,3)}else{$null}
+            warm_speedup_percent=if(!$historicalLegacyCommit -and $legacyWarm){[Math]::Round(100*$warmSaved/$legacyWarm,2)}else{$null}
             ctest_management_only='Not isolated: CTest centralizes scheduling and reporting; it is not counted as a runtime optimization by itself.'
             incremental_and_cache='Compare cold versus warm runs and build.cpp.harness, build.rust.release, build.winui.publish, models.*, and data.* stage events in the referenced reports.'
             parallelism='The existing memory-limited upstream core scheduler remains in both flows. Independent CTest cases use resource locks; effects are included in end-to-end wall time but not isolated by an ablation run.'
@@ -402,8 +422,10 @@ try {
     [IO.File]::WriteAllText($comparisonPath,($summary|ConvertTo-Json -Depth 16),[Text.UTF8Encoding]::new($false))
     Write-Host "Benchmark report: $comparisonPath"
     Write-Host ('Before migration cold/warm: {0:F2}/{1:F2} minutes; CTest cold/warm: {2:F2}/{3:F2} minutes.' -f ($baselineCold/60),($baselineWarm/60),($ctestCold/60),($ctestWarm/60))
-    Write-Host ('Cold: {0:F3}s -> {1:F3}s; saved {2:F3}s ({3:F2}%).' -f $legacyCold,$ctestCold,$coldSaved,$summary.comparison.cold_speedup_percent)
-    Write-Host ('Warm: {0:F3}s -> {1:F3}s; saved {2:F3}s ({3:F2}%).' -f $legacyWarm,$ctestWarm,$warmSaved,$summary.comparison.warm_speedup_percent)
+    if(!$historicalLegacyCommit){
+        Write-Host ('Cold: {0:F3}s -> {1:F3}s; saved {2:F3}s ({3:F2}%).' -f $legacyCold,$ctestCold,$coldSaved,$summary.comparison.cold_speedup_percent)
+        Write-Host ('Warm: {0:F3}s -> {1:F3}s; saved {2:F3}s ({3:F2}%).' -f $legacyWarm,$ctestWarm,$warmSaved,$summary.comparison.warm_speedup_percent)
+    }
 } catch {
     $benchmarkFailure=$_.Exception.Message
     throw
@@ -415,6 +437,7 @@ try {
             baseline_commit=$baseline
             resumed_from=$resumedFrom
             reused_measurements=$reusedMeasurements
+            historical_legacy_commit=$historicalLegacyCommit
             status='failed'
             failure=$benchmarkFailure
             measurements=$measurements
