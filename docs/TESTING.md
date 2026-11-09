@@ -124,7 +124,7 @@ GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯
 pwsh -File scripts/benchmark-verification.ps1 -Commit HEAD
 ```
 
-Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的原始 `verify.ps1`、目前提交的相容 `verify.ps1`、目前提交的 CTest FULL。預設以首次加入 CMakeLists.txt 的提交之前一版為改造前基準，也可用 `-BaselineCommit <ref>` 指定。三份產品原始碼、詞庫、模型與 pin 必須一致；不同就拒絕宣稱驗收流程加速。
+Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的原始 `verify.ps1`、目前提交的相容 `verify.ps1`、目前提交的 CTest FULL。預設使用與目前提交共同、尚未採用 CTest 的 origin/main 祖先；無此基準時才用首次加入 CMakeLists.txt 的前一版，也可用 `-BaselineCommit <ref>` 指定。三份產品原始碼、詞庫、模型與 pin 必須一致；不同就拒絕宣稱驗收流程加速。工作副本與報告預設放在 `build/benchmark/`，空間不足時可用 `-OutputRoot <目錄>` 或 `SHANJIE_BENCHMARK_ROOT` 指定其他磁碟。
 
 比較前，從實際 Cargo／核心日誌、TSF 輸出、英文 profile、提交與私人桌面結果產生案例識別碼及組態，六次必須完全一致。新增的框架自檢另行說明，不冒充原本產品覆蓋。原始 baseline 沒有 JUnit 或分階段計時，僅保留原生證據與外部量到的 wall-clock；不捏造缺少的資料。比較、JSON、JUnit、原始日誌及案例證據保存在 `build/benchmark/<run>/`，即使失敗也寫 `comparison.json` 並標示不可比較及未執行項目。
 
