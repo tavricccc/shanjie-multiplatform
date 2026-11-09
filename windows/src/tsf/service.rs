@@ -281,7 +281,7 @@ impl Data {
             .unwrap_or_else(|| self.state.borrow().binary.clone());
         let path = binary.join("ui/Shanjie.UI.exe");
         unsafe {
-            ShellExecuteW(
+            let result = ShellExecuteW(
                 None,
                 w!("open"),
                 PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
@@ -289,6 +289,9 @@ impl Data {
                 PCWSTR(crate::wide(&path.parent().unwrap().to_string_lossy()).as_ptr()),
                 SW_SHOWNORMAL,
             );
+            if result.0 as isize <= 32 {
+                crate::runtime_log::io("settings.launch", &std::io::Error::from_raw_os_error(result.0 as i32));
+            }
         }
     }
     pub fn set_mode(&self, chinese: bool) -> Result<()> {

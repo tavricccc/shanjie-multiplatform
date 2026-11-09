@@ -19,6 +19,15 @@ fn reading_key(vk:usize,ctrl:bool,alt:bool,win:bool)->bool{
     !alt&&!win&&(!ctrl||vk==0x41)
         &&(matches!(vk,8|13|27|32|46)||(0x30..=0x5a).contains(&vk)||(0xba..=0xc0).contains(&vk)||(0xdb..=0xdf).contains(&vk)||vk==0xe2)
 }
+/// Raw Input can miss releases during a desktop/session transition. Retire only
+/// released non-Ctrl keys; Ctrl's down/up sequence remains owned by the gesture.
+fn reconcile_released(held:&mut [bool;256],mut down:impl FnMut(usize)->bool)->bool{
+    let mut changed=false;
+    for (key,on) in held.iter_mut().enumerate(){
+        if *on && ![17,0xa2,0xa3].contains(&key) && !down(key){*on=false;changed=true;}
+    }
+    changed
+}
 unsafe fn legacy_panel(source:HWND)->bool{
     let mut source_pid=0;GetWindowThreadProcessId(source,Some(&mut source_pid));let mut after=None;
     for _ in 0..32{
@@ -129,12 +138,15 @@ impl State{
         let side=p.number("shortcuts","add_word_side",0);
         let pure=(side==0||key==if side==1{0xa2}else{0xa3})
             &&!self.held.iter().enumerate().any(|(i,&on)|on&&i!=key&&i!=17);
+        if !pure{crate::runtime_log::event("word.gesture.blocked_chord");}
         self.gesture.observe(key,down,repeat,self.epoch,pure,p.number("shortcuts","add_word_interval",450).clamp(200,1000))
     }
     unsafe fn begin(&mut self){
         self.close();let source=GetAncestor(GetForegroundWindow(),GA_ROOT);
         if source.is_invalid()||source==self.window{return;}
-        self.source=source;self.worker=Worker::start(source,self.window).ok();
+        self.source=source;
+        crate::runtime_log::event("word.capture.begin");
+        self.worker=Worker::start(source,self.window).map_err(crate::runtime_log::at("word.capture.spawn")).ok();
         SetTimer(Some(self.window),1,80,None);
     }
     unsafe fn mouse(&mut self,buttons:u16){
@@ -148,6 +160,10 @@ impl State{
     unsafe fn poll(&mut self){
         if self.parent.is_some_and(|h|WaitForSingleObject(h,0)!=WAIT_TIMEOUT){let _=PostMessageW(Some(self.window),WM_CLOSE,WPARAM(0),LPARAM(0));return;}
         if self.refresh.elapsed()>Duration::from_secs(1){
+            use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+            if reconcile_released(&mut self.held,|key|GetAsyncKeyState(key as i32) as u16&0x8000!=0){
+                crate::runtime_log::event("word.gesture.reconciled");
+            }
             if let Ok(p)=crate::profile::load(&crate::profile::path()){self.prefs=p;}
             self.refresh=Instant::now();
             if !self.prefs.flag("shortcuts","add_word",true){self.close();}
@@ -159,7 +175,7 @@ impl State{
         if (self.worker.is_some()||self.popup.is_some())&&legacy_panel(self.source){self.close();return;}
         let Some(worker)=self.worker.as_mut() else{return;};
         let answer=worker.receiver.try_recv();
-        if Instant::now()>worker.deadline{if worker.delivered{self.close();}else{self.failed();}return;}
+        if Instant::now()>worker.deadline{crate::runtime_log::event("word.capture.timeout");if worker.delivered{self.close();}else{self.failed();}return;}
         if answer.is_ok(){worker.deadline=Instant::now()+Duration::from_secs(2);}
         match answer{
             Ok(m) if m.ready&&!worker.delivered=>{
@@ -346,6 +362,21 @@ pub fn display_fixture(source:usize,owner:u32)->Result<()> {unsafe{
     }
     unsafe extern "system" fn fixture_proc(w:HWND,m:u32,a:WPARAM,b:LPARAM)->LRESULT{DefWindowProcW(w,m,a,b)}
     use super::*;
+    #[test]
+    fn missed_release_does_not_permanently_block_ctrl_taps(){
+        let mut held=[false;256];held[0xa0]=true;
+        let mut gesture=Gesture::default();
+        for down in [true,false,true,false]{assert!(!gesture.observe(0xa2,down,false,0,false,450));}
+        assert!(reconcile_released(&mut held,|_|false));
+        assert!(!held[0xa0]);
+        for down in [true,false,true]{assert!(!gesture.observe(0xa2,down,false,0,true,450));}
+        assert!(gesture.observe(0xa2,false,false,0,true,450));
+        // A real chord and Ctrl's event sequence must survive reconciliation.
+        held[0xa0]=true;held[0xa2]=true;held[b'C' as usize]=true;
+        assert!(!reconcile_released(&mut held,|_|true));
+        assert!(reconcile_released(&mut held,|_|false));
+        assert!(held[0xa2]);assert!(!held[0xa0]&&!held[b'C' as usize]);
+    }
     use windows::Win32::UI::Controls::EM_SETSEL;
     #[test]#[ignore="Run with explicitly built helper on owned offscreen fixtures"]
     fn cross_process_popup_dpi_zorder_and_cancellation(){unsafe{

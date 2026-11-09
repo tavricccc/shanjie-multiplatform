@@ -2,6 +2,8 @@
 //! paths, request payloads, selections, dictionary entries or error messages.
 use std::{collections::HashMap, io::{self, Write}, sync::{Mutex, OnceLock}, time::{Duration, Instant}};
 static RECENT: OnceLock<Mutex<HashMap<&'static str, Instant>>> = OnceLock::new();
+/// A bounded lifecycle marker; no key codes, selected words or document text.
+pub(crate) fn event(stage: &'static str) { io(stage, &io::Error::other("lifecycle")); }
 pub(crate) fn io(stage: &'static str, error: &io::Error) {
     let mut recent = RECENT.get_or_init(Default::default).lock().unwrap_or_else(|e|e.into_inner());
     if recent.get(stage).is_some_and(|t|t.elapsed()<Duration::from_secs(30)) { return; }
