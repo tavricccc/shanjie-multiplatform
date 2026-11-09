@@ -51,6 +51,19 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         $fixtureCore = Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru
         & $harness @arguments
         $harnessExit = $LASTEXITCODE
+        if (!$harnessExit -and !$Visual) {
+            # Make both layouts available to this portable DLL without changing machine registration.
+            $installation = Join-Path $root 'dist/installed.json'
+            $savedInstallation = if (Test-Path -LiteralPath $installation) { [IO.File]::ReadAllBytes($installation) } else { $null }
+            try {
+                [IO.File]::WriteAllText($installation,'{"version":"verification-fixture","keyboards":3}')
+                & $harness "$root/dist/$Architecture/Shanjie.dll" --zhuyin-only
+                $harnessExit = $LASTEXITCODE
+            } finally {
+                if ($null -ne $savedInstallation) { [IO.File]::WriteAllBytes($installation,$savedInstallation) }
+                else { Remove-Item -LiteralPath $installation }
+            }
+        }
     } finally {
         $stop = Start-Process "$root/dist/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
         $stop.WaitForExit(5000) | Out-Null

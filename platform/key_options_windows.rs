@@ -3,6 +3,7 @@ impl Engine {
     /// bit 0: standalone tones; bits 1-13: Shift; bits 14-19: plain; bit 20: disable space symbols;
     /// bit 21: Enter commits only up to the cursor; bit 22: punctuation keeps an unfinished reading;
     /// bit 23: a lone digit shows as the digit; bit 24: standalone tones win over upstream digit runs.
+    /// bit 25: output Zhuyin symbols without conversion.
     pub fn set_windows_input_options(&mut self, flags: u32) {
         self.windows_shifted_boundaries = true;
         self.windows_punctuation_candidates = true;
@@ -16,6 +17,7 @@ impl Engine {
         self.punctuation_keeps_reading = flags & (1 << 22) != 0;
         self.lone_digit_literal = flags & (1 << 23) != 0;
         self.tones_over_digits = flags & (1 << 24) != 0;
+        self.zhuyin_only = flags & (1 << 25) != 0;
     }
     fn windows_shift_punct(&self, ch: char) -> bool {
         SHIFT_PUNCT.iter().position(|(c, _)| *c == ch).is_some_and(|i| self.shift_punctuation & (1 << i) != 0)

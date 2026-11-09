@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 25] = [
+pub const REBUILD: [(&str, &str); 26] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -41,6 +41,7 @@ pub const REBUILD: [(&str, &str); 25] = [
     ("input", "english_overwrite"),
     ("input", "english_reversal_guard"),
     ("input", "space_inputs_zhuyin"),
+    ("input", "zhuyin_only"),
 ];
 
 #[derive(Clone, Default)]
@@ -64,6 +65,10 @@ impl Document {
     /// The raw-key mixing mode (`[input] mixed_input`): takes effect on Zhuyin keyboards only, whatever the file says.
     pub fn raw_key_mixing(&self) -> bool {
         self.number("input", "keyboard", 0) < 3 && self.flag("input", "mixed_input", false)
+    }
+    /// Pure Zhuyin is a Windows typing mode; Pinyin keeps its usual converter.
+    pub fn zhuyin_only(&self) -> bool {
+        self.number("input", "keyboard", 0) < 3 && self.flag("input", "zhuyin_only", false)
     }
     /// Whether the reading panel shows. Raw-key mixing keeps keys in the composition and its Zhuyin hint in the panel, so it
     /// forces the panel on at read time; the stored `[candidates] reading_panel` is left alone for when the mode is off.
@@ -317,6 +322,7 @@ impl Document {
         let windows = self.get("profile", "interaction", "windows") != "shanjie";
         flags |= (self.flag("candidates", "enter_to_cursor", windows) as u32) << 21;
         flags |= (self.flag("input", "punctuation_keeps_reading", false) as u32) << 22;
+        flags |= (self.zhuyin_only() as u32) << 25;
         flags
     }
 }
@@ -734,6 +740,28 @@ mod tests {
         doc.set("punctuation", "plain_lbracket", 1);
         assert_eq!(doc.input_options() >> 14 & 0x3f, 1);
         assert!(!doc.shift_punctuation('a'));
+    }
+    #[test]
+    fn zhuyin_only_defaults_and_preset_round_trip() {
+        assert!(REBUILD.contains(&("input", "zhuyin_only")));
+        for preset in [include_str!("../../profiles/windows.ini"), include_str!("../../profiles/shanjie.ini")] {
+            let mut doc = Document::parse(preset).unwrap();
+            assert!(!doc.zhuyin_only());
+            doc.set("input", "zhuyin_only", 1);
+            let exported = export_preset(&doc.content(), "純注音").unwrap();
+            let imported = import_preset("[profile]\nschema=9\n", &exported).unwrap();
+            let mut doc = Document::parse(&imported).unwrap();
+            for keyboard in 0..=4 {
+                doc.set("input", "keyboard", keyboard);
+                assert_eq!(doc.zhuyin_only(), keyboard < 3);
+                assert_eq!(doc.input_options() & (1 << 25) != 0, keyboard < 3);
+                assert!(doc.flag("input", "zhuyin_only", false));
+            }
+            assert!(import_preset(preset, "[input]\nzhuyin_only=2\n").is_err());
+        }
+        let mut old = Document::parse("[profile]\nschema=8\n").unwrap();
+        old.migrate();
+        assert!(!old.zhuyin_only());
     }
     #[test]
     fn space_symbol_toggle_defaults_and_preset_round_trip() {
