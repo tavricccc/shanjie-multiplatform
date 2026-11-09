@@ -92,7 +92,7 @@ CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準�
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
 - 測試 payload 僅建立在 `build/cmake/`，其中 `data`、`tools` 是指向 `dist/` 的唯讀 junction；測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
-- 加詞視窗與私人桌面案例在不切換的測試桌面執行，避免目前桌面的前景視窗變動關閉測試 popup；這不代表已驗證使用者正在操作的前景 App。
+- 英文鍵、提交、加詞視窗與非視覺 TSF smoke 在不切換的私人測試桌面執行，隔離目前桌面的實際 Alt／Ctrl／Shift 與前景視窗變動；既有私人桌面案例也保持隔離。這不代表已驗證使用者正在操作的前景 App。
 - WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果與畫面保留在本次報告目錄。
 
 ## 執行環境
@@ -132,3 +132,5 @@ Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的�
 比較前，從實際 Cargo／核心日誌、TSF 輸出、英文 profile、提交與私人桌面結果產生案例識別碼及組態，六次必須完全一致。新增的框架自檢另行說明，不冒充原本產品覆蓋。原始 baseline 沒有 JUnit 或分階段計時，僅保留原生證據與外部量到的 wall-clock；不捏造缺少的資料。比較、JSON、JUnit、原始日誌及案例證據保存在 `build/benchmark/<run>/`，即使失敗也寫 `comparison.json` 並標示不可比較及未執行項目。
 
 「改造前 vs CTest」與「同提交相容入口 vs CTest」分開計算，不能把後者宣稱為整次改造效益。冷快取指全新專案輸出；Cargo registry／NuGet 下載快取與 OS 檔案快取可能已暖。為隔離舊版的全域快取身分斷言，六次都設定 `RUST_TEST_THREADS=1`；不同核心 test binary 仍保留原本的記憶體限制平行排程。報告列秒數、分鐘、冷暖差異與包含／自身分類耗時；未執行或覆蓋不等價時不宣稱改善。GitHub Runner 的 CI 耗時另看實際 Actions 紀錄，不能用本機暖快取時間替代。
+
+舊版 harness 仍會讀取所在桌面的鍵盤狀態，量測應使用沒有實際鍵盤輸入干擾的 Windows 測試工作階段。桌面與其他控制條件須一致套用六輪，並隨量測環境記錄。
