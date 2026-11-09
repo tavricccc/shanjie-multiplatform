@@ -14,18 +14,7 @@ $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/preserve-output.ps1"
 Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
 if($Promote -or $ExportCiArtifact){
-    if($ExportCiArtifact -and $env:GITHUB_ACTIONS -ne 'true'){throw 'CI artifact export is available only inside GitHub Actions; it does not authorize a local formal release.'}
-    $accepted=Assert-ReleaseAcceptance -ProjectRoot $root -ReportPath $ReportPath -CiArtifact:$ExportCiArtifact
-    $setup=Join-Path $root 'dist/Shanjie-Windows-Setup.exe'
-    Preserve-Output $setup
-    Copy-Item -LiteralPath $accepted.installer -Destination $setup -Force
-    if((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant() -cne $accepted.sha256){throw 'Promoted installer does not match the verified candidate.'}
-    Set-Content -LiteralPath "$setup.sha256" -Value "$($accepted.sha256)  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
-    $marker=[ordered]@{schema=1;status=if($accepted.local_release_verified){'verified-local-release'}else{'github-actions-artifact'};local_release_verified=$accepted.local_release_verified;commit=$accepted.identity.commit;version=$accepted.identity.version;architectures=@('x64','x86');installer_sha256=$accepted.sha256;candidate_id=$accepted.candidate_id;report=$accepted.report_path;report_sha256=$accepted.report_sha256;created_utc=[DateTimeOffset]::UtcNow.ToString('O')}
-    $markerPath=Join-Path $root 'dist/release.json'
-    [IO.File]::WriteAllText("$markerPath.tmp",($marker|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
-    Move-Item -LiteralPath "$markerPath.tmp" -Destination $markerPath -Force
-    Write-Host "Verified artifact: $setup ($($marker.status))"
+    $null=Complete-ReleaseArtifact -ProjectRoot $root -ReportPath $ReportPath -CiArtifact:$ExportCiArtifact
     return
 }
 $candidateRoot=Join-Path $root "build/release-candidates/$CandidateId"

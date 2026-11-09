@@ -83,7 +83,9 @@ function Get-RunCoverage([string]$Worktree,[datetime]$Started,[string]$Log,$Repo
                 if($file.Directory.Name -match '^mode\d+-layout\d+-(.+)$'){
                     $scenario=$Matches[1]
                     $profile=@{}
-                    foreach($line in Get-Content -LiteralPath (Join-Path $file.Directory.FullName 'profile/Shanjie/profile.ini')){if($line -match '^(\w+)=(.*)$'){$profile[$Matches[1]]=$Matches[2]}}
+                    $profileFile=Get-Item -LiteralPath (Join-Path $file.Directory.FullName 'profile/Shanjie/profile.ini')
+                    $files.Add($profileFile)
+                    foreach($line in Get-Content -LiteralPath $profileFile.FullName){if($line -match '^(\w+)=(.*)$'){$profile[$Matches[1]]=$Matches[2]}}
                     if((Get-Content -LiteralPath $file.FullName -Raw) -match 'PASS'){
                         $mode=[int]$profile.mixed_input+2*[int]$profile.upstream_english
                         [void]$ids.Add("english:x64:$scenario`:mode$mode`:keyboard$($profile.keyboard):enter$($profile.enter_to_cursor)")
@@ -357,6 +359,7 @@ try {
         $cleanupPath=[IO.Path]::GetFullPath($path)
         if([IO.Path]::GetDirectoryName($cleanupPath) -ne [IO.Path]::GetFullPath($benchmarkRoot)){throw 'Benchmark cleanup path must remain directly under its own run directory.'}
         & git -C $root -c core.longpaths=true worktree remove --force $cleanupPath *> $null
+        if($LASTEXITCODE){Write-Warning "Benchmark worktree cleanup failed; retained local outputs: $cleanupPath"}
     }}
     if($gitAdded.Count){& git -C $root worktree prune}
 }

@@ -1,4 +1,4 @@
-// Real TSF/edit-lock regression in offscreen owned windows; no registration or desktop input.
+// Real TSF/edit-lock regression on a private desktop; no registration or desktop input.
 #define wmain previous_smoke_main
 #include "tsf_smoke.cpp"
 #undef wmain
@@ -15,6 +15,10 @@ COLORREF sampleBackground(HWND window) {
 int wmain(int argc,wchar_t** argv) {
     require(argc==3,701);
     wchar_t headless[2]{}; require(GetEnvironmentVariableW(L"SHANJIE_HEADLESS",headless,2)==1&&headless[0]==L'1',702);
+    auto desktopName=L"Shanjie.AddWord."+std::to_wstring(GetCurrentProcessId());
+    auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+    require(desktop!=nullptr&&SetThreadDesktop(desktop),703);
+    std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),704);
     auto dll=LoadLibraryW(argv[1]);require(dll!=nullptr,705);
     auto get=(HRESULT(WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(get!=nullptr,706);

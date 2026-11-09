@@ -1,5 +1,6 @@
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
+. "$PSScriptRoot/preserve-output.ps1"
 
 function Get-ReleaseIdentity([string]$ProjectRoot) {
     $version=(Get-Content -LiteralPath "$ProjectRoot/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json).version
@@ -92,4 +93,33 @@ function Assert-ReleaseAcceptance([string]$ProjectRoot,[string]$ReportPath,[swit
     [pscustomobject]@{identity=$identity;report_path=$ReportPath;report_sha256=(Get-FileHash -LiteralPath $ReportPath).Hash.ToLowerInvariant();candidate_id=$candidateId;installer=$installer;sha256=$candidateHash;local_release_verified=(!$CiArtifact)}
 }
 
-Export-ModuleMember -Function Get-ReleaseIdentity,Get-ReleaseArtifacts,Assert-ReleaseAcceptance
+function Complete-ReleaseArtifact([string]$ProjectRoot,[string]$ReportPath,[switch]$CiArtifact) {
+    if($CiArtifact -and $env:GITHUB_ACTIONS -ne 'true'){throw 'CI artifact export is available only inside GitHub Actions; it does not authorize a local formal release.'}
+    $accepted=$null
+    if($ReportPath){$accepted=Assert-ReleaseAcceptance -ProjectRoot $ProjectRoot -ReportPath $ReportPath -CiArtifact:$CiArtifact}
+    else{
+        $receipts=@(Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'build/reports') -Directory -Filter 'release-*' -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending)
+        foreach($directory in $receipts){
+            $path=Join-Path $directory.FullName 'report.json'
+            if(!(Test-Path -LiteralPath $path)){continue}
+            try{$accepted=Assert-ReleaseAcceptance -ProjectRoot $ProjectRoot -ReportPath $path -CiArtifact:$CiArtifact;break}
+            catch{Write-Verbose "Receipt cannot be reused: $($_.Exception.Message)"}
+        }
+        if(!$accepted){return}
+    }
+    # Validate the external receipt once, then promote that exact candidate.
+    # Copy errors stay outside receipt discovery and never trigger another RELEASE.
+    $setup=Join-Path $ProjectRoot 'dist/Shanjie-Windows-Setup.exe'
+    Preserve-Output $setup
+    Copy-Item -LiteralPath $accepted.installer -Destination $setup -Force
+    if((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant() -cne $accepted.sha256){throw 'Promoted installer does not match the verified candidate.'}
+    Set-Content -LiteralPath "$setup.sha256" -Value "$($accepted.sha256)  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
+    $marker=[ordered]@{schema=1;status=if($accepted.local_release_verified){'verified-local-release'}else{'github-actions-artifact'};local_release_verified=$accepted.local_release_verified;commit=$accepted.identity.commit;version=$accepted.identity.version;architectures=@('x64','x86');installer_sha256=$accepted.sha256;candidate_id=$accepted.candidate_id;report=$accepted.report_path;report_sha256=$accepted.report_sha256;created_utc=[DateTimeOffset]::UtcNow.ToString('O')}
+    $markerPath=Join-Path $ProjectRoot 'dist/release.json'
+    [IO.File]::WriteAllText("$markerPath.tmp",($marker|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath "$markerPath.tmp" -Destination $markerPath -Force
+    Write-Host "Verified artifact: $setup ($($marker.status))"
+    return $accepted
+}
+
+Export-ModuleMember -Function Get-ReleaseIdentity,Get-ReleaseArtifacts,Assert-ReleaseAcceptance,Complete-ReleaseArtifact

@@ -179,10 +179,10 @@ try {
     if($Level -eq 'RELEASE'){$sourceStart=Get-ReleaseIdentity $root}
     $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null}}else{Get-ChangedPathList $BaseRef}
     $changedPaths=@($changeSet.Paths)
-    if ($changeSet.Error) { $forceFull=$true;$notes.Add($changeSet.Error+' Conservative full test selection is active.') }
+    if ($changeSet.Error) { $forceFull=$true;$notes.Add($changeSet.Error) }
     foreach($path in $changedPaths){Classify-ChangedPath $path}
     $codeChanges=@($changedPaths | Where-Object { !(Test-DocumentationOnly $_) })
-    if ($changedPaths.Count -and !$codeChanges.Count) { $skipTests=$true }
+    if ($Level -in @('FAST','AFFECTED') -and $changedPaths.Count -and !$codeChanges.Count) { $skipTests=$true }
     if (!$changedPaths.Count -and !$changeSet.Error -and $Level -eq 'AFFECTED') { $skipTests=$true;$notes.Add('No changed paths were found; selected no affected tests.') }
     if ($forceFull -and $Level -eq 'AFFECTED') { $notes.Add('Impact could not be bounded safely; expanded selection to FULL.') }
     if ($Level -eq 'FAST' -and !$skipTests) {

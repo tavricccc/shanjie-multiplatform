@@ -57,7 +57,10 @@ $original=$record|ConvertTo-Json -Depth 15
 $proof=Assert-ReleaseAcceptance $fixture $reportPath
 if(!$proof.local_release_verified -or $proof.sha256 -cne $hash){throw 'A complete matching receipt should be accepted.'}
 $junitTime=(Get-Item -LiteralPath $reports[0].junit).LastWriteTimeUtc
-$null=Assert-ReleaseAcceptance $fixture $reportPath
+$null=Complete-ReleaseArtifact $fixture $reportPath
+$marker=Get-Content "$fixture/dist/release.json" -Raw|ConvertFrom-Json
+if(!$marker.local_release_verified -or $marker.installer_sha256 -cne $hash -or (Get-FileHash "$fixture/dist/Shanjie-Windows-Setup.exe").Hash.ToLowerInvariant() -cne $hash){throw 'Promotion must publish the exact accepted candidate and marker.'}
+$null=Complete-ReleaseArtifact $fixture
 if((Get-Item -LiteralPath $reports[0].junit).LastWriteTimeUtc -ne $junitTime){throw 'Receipt reuse must not rerun tests.'}
 
 function Assert-Rejected([string]$Name,[scriptblock]$Change) {
@@ -65,7 +68,7 @@ function Assert-Rejected([string]$Name,[scriptblock]$Change) {
     & $Change $changed
     [IO.File]::WriteAllText($reportPath,($changed|ConvertTo-Json -Depth 15))
     $rejected=$false
-    try{$null=Assert-ReleaseAcceptance $fixture $reportPath}catch{$rejected=$true}
+    try{$null=Complete-ReleaseArtifact $fixture $reportPath}catch{$rejected=$true}
     finally{[IO.File]::WriteAllText($reportPath,$original)}
     if(!$rejected){throw "Guard accepted invalid receipt: $Name"}
 }
