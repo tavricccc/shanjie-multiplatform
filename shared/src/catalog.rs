@@ -56,6 +56,11 @@ pub fn safe_name(s:&str,max:usize)->bool {
         &&s.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c))&&!s.contains("..")
 }
 fn fail<T>(s:&str)->Result<T>{Err(s.into())}
+// Receipts retain their original repository as part of their immutable bundle ID.
+// New downloads are routed to the mirror by the downloader, not by rewriting receipts.
+fn trusted_repository(repository:&str)->bool {
+    matches!(repository,"tavricccc/shanjie-upstream-backup"|"Nanako0129/shanjie")
+}
 pub fn asset_capability(a:&Asset)->Result<Option<&'static str>> {
     let cap=match (a.role.as_str(),a.format_magic.as_str(),a.filename.as_str()) {
         ("bigram","SJLM0001","bigram.sjlm")=>Some("lm.sjlm1"),
@@ -80,7 +85,7 @@ pub fn validate(m:&Model)->Result<()> {
     let mut names=BTreeSet::new();let mut roles=BTreeSet::new();let mut caps=BTreeSet::from(["map.sjwm2"]);
     let hashes:BTreeSet<_>=m.assets.iter().map(|a|a.sha256.as_str()).collect();
     for a in &m.assets {
-        if a.repository!="tavricccc/shanjie-upstream-backup"||!safe_name(&a.release,96)||!safe_name(&a.filename,120)
+        if !trusted_repository(&a.repository)||!safe_name(&a.release,96)||!safe_name(&a.filename,120)
             ||!crate::models::digest_ok(&a.sha256)||a.sha256!=a.sha256.to_ascii_lowercase()
             ||a.size==0||a.size>1073741824||!names.insert(a.filename.as_str())
             ||!roles.insert(a.role.as_str())||a.requires_assets.len()>16 {return fail("模型附件來源或身份無效。");}
@@ -137,7 +142,7 @@ pub fn parse(bytes:&[u8])->Result<Catalog>{
     // The list as a whole is signed by its revision; one entry this build cannot check only drops that entry.
     c.models.retain(|m|if m.required_capabilities.iter().all(|x|CAPABILITIES.contains(&x.as_str())){validate(m).is_ok()}
         else {m.id==identity(m)&&m.advisory_revision==advisory_revision(m)
-            &&m.assets.iter().all(|a|a.repository=="tavricccc/shanjie-upstream-backup"&&safe_name(&a.filename,120)&&safe_name(&a.release,96))});
+            &&m.assets.iter().all(|a|trusted_repository(&a.repository)&&safe_name(&a.filename,120)&&safe_name(&a.release,96))});
     Ok(c)
 }
 #[cfg(test)]
@@ -157,5 +162,30 @@ mod tests {
         let mut list:Value=serde_json::from_slice(&signed(serde_json::json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[]}))).unwrap();
         list["models"]=serde_json::json!([model("added","bigram","bigram.sjlm")]);
         assert!(parse(&serde_json::to_vec(&list).unwrap()).is_err());
+    }
+    fn receipt(repository:&str)->Model {
+        let mut m:Model=serde_json::from_value(model("pending","bigram","bigram.sjlm")).unwrap();
+        m.assets[0].repository=repository.into();
+        m.id=identity(&m);m.advisory_revision=advisory_revision(&m);m
+    }
+    #[test]
+    fn legacy_and_mirror_receipts_validate_without_changing_their_identity(){
+        let old=receipt("Nanako0129/shanjie");let mirror=receipt("tavricccc/shanjie-upstream-backup");
+        let old_json=serde_json::to_vec(&old).unwrap();
+        assert_ne!(old.id,mirror.id,"repository remains part of the immutable identity");
+        assert!(validate(&old).is_ok()&&validate(&mirror).is_ok());
+        assert_eq!(serde_json::to_vec(&old).unwrap(),old_json,"validation must not migrate a receipt");
+        let list=json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[old,mirror]});
+        assert_eq!(parse(&signed(list)).unwrap().models.len(),2,"legacy offline catalogs still validate");
+    }
+    #[test]
+    fn legacy_compatibility_does_not_accept_other_sources_or_rewritten_receipts(){
+        assert!(validate(&receipt("untrusted/shanjie")).is_err());
+        assert!(validate(&receipt("nanako0129/shanjie-other")).is_err());
+        let mut rewritten=receipt("Nanako0129/shanjie");
+        rewritten.assets[0].repository="tavricccc/shanjie-upstream-backup".into();
+        assert!(validate(&rewritten).is_err(),"changing the source does not preserve the bundle identity");
+        let list=json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[receipt("untrusted/shanjie")]});
+        assert!(parse(&signed(list)).unwrap().models.is_empty());
     }
 }
