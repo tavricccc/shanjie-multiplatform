@@ -46,7 +46,7 @@ public sealed partial class ContributorsView : UserControl
             identity.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 56, Height = 56, Fill = portraitBrush });
             var caption = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             caption.Children.Add(new TextBlock { Text = person.Name, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            caption.Children.Add(new TextBlock { Text = $"@{person.Login} · {person.Contributions:N0} 次提交", Style = body });
+            caption.Children.Add(new TextBlock { Text = $"@{person.Login}", Style = body });
             Grid.SetColumn(caption, 1); identity.Children.Add(caption);
             details.Children.Add(identity);
             details.Children.Add(new TextBlock { Text = person.Summary, Style = body });
@@ -74,13 +74,7 @@ public sealed partial class ContributorsView : UserControl
             link.ContextFlyout = preview;
             Profiles.Add((link, preview));
 
-            var row = new Grid { ColumnSpacing = 8 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(link);
-            var count = new TextBlock { Text = $"{person.Contributions:N0} 次提交", Style = body, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(count, 1); row.Children.Add(count);
-            list.Children.Add(row);
+            list.Children.Add(link);
         }
         list.Children.Add(new TextBlock { Text = $"依 GitHub 提交數排序 · 統計至 {Contributors.Catalog.UpdatedAt.Replace('-', '/')}", Style = note });
         Content = list;
