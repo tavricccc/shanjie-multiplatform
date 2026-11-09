@@ -1,9 +1,13 @@
-// Synthetic keyboard state on an owned TSF thread; never sends desktop input.
+// Synthetic keyboard state on a private TSF desktop; never sends desktop input.
 #define wmain old_smoke_main
 #include "tsf_smoke.cpp"
 #undef wmain
 int wmain(int argc,wchar_t** argv) {
     require(argc==3,901);std::wstring scenario=argv[2];
+    auto desktopName=L"Shanjie.English."+std::to_wstring(GetCurrentProcessId());
+    auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+    require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+    std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
     BYTE original[256]{};require(GetKeyboardState(original),902);
     struct Restore {BYTE* state;~Restore(){SetKeyboardState(state);}} restore{original};
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),903);
