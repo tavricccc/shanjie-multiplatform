@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[string]$ReuseBaselineReport,[switch]$KeepWorktrees)
+param([string]$Commit='HEAD',[string]$BaselineCommit,[string]$OutputRoot=$env:SHANJIE_BENCHMARK_ROOT,[Alias('ReuseBaselineReport')][string]$ResumeReport,[switch]$KeepWorktrees)
 $ErrorActionPreference='Stop'
 if(!$IsWindows){throw 'This benchmark requires a Windows host with MSVC, Windows SDK, Rust, PowerShell 7, and .NET 10.'}
 $root=Split-Path $PSScriptRoot -Parent
@@ -41,19 +41,33 @@ $measurements=[ordered]@{}
 $summary=$null
 $benchmarkFailure=$null
 $comparisonPath=Join-Path $benchmarkRoot 'comparison.json'
-$reusedBaseline=$null
-if($ReuseBaselineReport){
-    $reusedBaseline=(Resolve-Path -LiteralPath $ReuseBaselineReport).Path
-    $prior=Get-Content -LiteralPath $reusedBaseline -Raw|ConvertFrom-Json
-    if($prior.schema -ne 1 -or $prior.baseline_commit -ne $baseline){throw 'Reusable baseline must use the same resolved pre-migration commit and benchmark schema.'}
-    foreach($name in 'baseline_cold','baseline_warm'){
-        $saved=$prior.measurements.$name
-        if(!$saved -or $saved.status -ne 'passed' -or $saved.flow -ne 'baseline' -or $saved.report.commit -ne $baseline -or !$saved.coverage_ids.Count -or $saved.report.raw_verify_seconds -le 0 -or $saved.report.ci_unit_seconds -le 0 -or !(Test-Path -LiteralPath $saved.report_path) -or !(Test-Path -LiteralPath $saved.log_path)){
-            throw "Reusable $name must retain its successful equal-scope measurement, component timings, archived report and log."
+$resumedFrom=$null
+$reusedMeasurements=[ordered]@{}
+if($ResumeReport){
+    $resumedFrom=(Resolve-Path -LiteralPath $ResumeReport).Path
+    $prior=Get-Content -LiteralPath $resumedFrom -Raw|ConvertFrom-Json
+    if($prior.schema -ne 1 -or $prior.status -ne 'failed' -or $prior.baseline_commit -ne $baseline){throw 'Resume requires an interrupted benchmark with the same pre-migration commit and schema.'}
+    # A benchmark-driver or documentation fix does not change either measured
+    # entry point. Any other source change requires new candidate measurements.
+    $runtimeChanges=@(& git -C $root diff --name-only $prior.commit $resolved -- . ':(exclude)scripts/benchmark-verification.ps1' ':(exclude)docs' ':(exclude)README.md' ':(exclude)AGENTS.md')
+    $candidateUnchanged=(!$LASTEXITCODE -and !$runtimeChanges.Count)
+    foreach($flow in 'baseline','legacy','ctest'){
+        if($flow -ne 'baseline' -and !$candidateUnchanged){continue}
+        $pair=@("${flow}_cold","${flow}_warm")
+        if(@($pair|Where-Object{$prior.measurements.$_.status -eq 'passed'}).Count -ne 2){continue}
+        foreach($name in $pair){
+            $saved=$prior.measurements.$name
+            $expectedFlow=if($flow -eq 'ctest'){'full'}else{$flow}
+            if($saved.flow -ne $expectedFlow -or !$saved.coverage_ids.Count -or $saved.wall_seconds -le 0 -or !(Test-Path -LiteralPath $saved.report_path) -or !(Test-Path -LiteralPath $saved.log_path)){
+                throw "Reusable $name must retain its successful measurement, case IDs, archived report and log."
+            }
+            if($flow -eq 'baseline' -and ($saved.report.commit -ne $baseline -or $saved.report.raw_verify_seconds -le 0 -or $saved.report.ci_unit_seconds -le 0)){throw 'Original baseline component timings or commit are missing.'}
+            $measurements[$name]=$saved
+            $reusedMeasurements[$name]=[ordered]@{comparison=$resumedFrom;commit=if($flow -eq 'baseline'){$baseline}else{$prior.commit}}
         }
-        $measurements[$name]=$saved
     }
-    Write-Host "Reusing unchanged baseline cold/warm measurements from $reusedBaseline; keep the same host, toolchain and desktop controls."
+    if(!$measurements.Contains('baseline_warm')){throw 'Resume requires both successful original baseline measurements.'}
+    Write-Host "Reusing completed measurements ($($measurements.Keys -join ', ')) from $resumedFrom; keep the same host, toolchain and desktop controls."
 }
 $previousThreads=$env:RUST_TEST_THREADS
 # Keep ordinary suite scheduling. The old mixed suite has its own serial flag;
@@ -189,10 +203,11 @@ $units.Stop()
     $artifactLog=Join-Path $artifactBuild (Split-Path $log -Leaf)
     if(Test-Path -LiteralPath $log){Copy-Item -LiteralPath $log -Destination $artifactLog -Force}
     $report=$null
-    if($Flow -ne 'baseline'){try { $report=Get-Report $Worktree $level $started } catch { if(!$exit){throw} }}
+    $reportFailure=$null
+    if($Flow -ne 'baseline'){try { $report=Get-Report $Worktree $level $started } catch { $reportFailure=$_.Exception.Message }}
     $coverage=@()
     $coverageError=$null
-    if(!$exit){try{$coverage=@(Get-RunCoverage $Worktree $started $log $(if($report){$report.Report}else{$null}) (Join-Path $runArtifacts 'evidence'))}catch{$coverageError=$_.Exception.Message}}
+    if(!$exit -and !$reportFailure){try{$coverage=@(Get-RunCoverage $Worktree $started $log $(if($report){$report.Report}else{$null}) (Join-Path $runArtifacts 'evidence'))}catch{$coverageError=$_.Exception.Message}}
     if($Flow -eq 'baseline'){
         $components=if(Test-Path -LiteralPath $componentsPath){Get-Content -LiteralPath $componentsPath -Raw|ConvertFrom-Json}else{$null}
         if($components){Copy-Item -LiteralPath $componentsPath -Destination $artifactBuild -Force}
@@ -214,9 +229,9 @@ $units.Stop()
         $archivedReportPath=Join-Path $artifactWorktree $relativeReport
         $report=[pscustomobject]@{Path=$archivedReportPath;Report=(Get-Content -LiteralPath $archivedReportPath -Raw|ConvertFrom-Json)}
     }
-    $measurements[$Name]=[pscustomobject]@{flow=$Flow;cache_state=$RunKind;status=if($exit){'failed'}else{'passed'};wall_seconds=[Math]::Round($watch.Elapsed.TotalSeconds,3);coverage_ids=$coverage;report_path=if($report){$report.Path}else{$null};log_path=$artifactLog;report=if($report){$report.Report}else{$null}}
+    $measurements[$Name]=[pscustomobject]@{flow=$Flow;cache_state=$RunKind;status=if($exit -or $reportFailure){'failed'}else{'passed'};wall_seconds=[Math]::Round($watch.Elapsed.TotalSeconds,3);coverage_ids=$coverage;failure=$reportFailure;report_path=if($report){$report.Path}else{$null};log_path=$artifactLog;report=if($report){$report.Report}else{$null}}
     if($exit){throw "$Name failed with exit $exit; archived log: $artifactLog"}
-    if(!$report){throw "$Name completed without a timing report; archived log: $artifactLog"}
+    if(!$report){throw "$Name ended without a timing report: $reportFailure; archived log: $artifactLog"}
     if($coverageError){$measurements[$Name].status='not-comparable';throw "Coverage could not be read for $Name`: $coverageError"}
     foreach($prefix in 'rust:shanjie_shell:','rust:shanjie_windows:','core:','english:','submission:','private:x64:compat:','private:x64:popup:','word:','tsf:standard:','tsf:cold:','tsf:zhuyin-only:','data:'){
         if(!@($coverage | Where-Object { $_.StartsWith($prefix) }).Count){$measurements[$Name].status='not-comparable';throw "Coverage evidence is missing $prefix in $Name; the run is not comparable."}
@@ -225,8 +240,9 @@ $units.Stop()
 }
 try {
     $worktrees=[ordered]@{}
-    if(!$reusedBaseline){$worktrees.baseline=$baselineRoot}
-    $worktrees.legacy=$legacyRoot;$worktrees.ctest=$ctestRoot
+    if(!$measurements.Contains('baseline_warm')){$worktrees.baseline=$baselineRoot}
+    if(!$measurements.Contains('legacy_warm')){$worktrees.legacy=$legacyRoot}
+    if(!$measurements.Contains('ctest_warm')){$worktrees.ctest=$ctestRoot}
     foreach($name in $worktrees.Keys){
         $worktree=$worktrees[$name]
         $workCommit=if($name -eq 'baseline'){$baseline}else{$resolved}
@@ -236,14 +252,18 @@ try {
         & git -C $worktree submodule update --init --recursive *> (Join-Path $artifactsRoot "$name-submodules.log")
         if($LASTEXITCODE){throw "Could not initialize $name pinned submodule."}
     }
-    if(!$reusedBaseline){
+    if(!$measurements.Contains('baseline_warm')){
         Invoke-Run 'baseline_cold' $baselineRoot baseline cold
         Invoke-Run 'baseline_warm' $baselineRoot baseline warm
     }
-    Invoke-Run 'legacy_cold' $legacyRoot legacy cold
-    Invoke-Run 'legacy_warm' $legacyRoot legacy warm
-    Invoke-Run 'ctest_cold' $ctestRoot full cold
-    Invoke-Run 'ctest_warm' $ctestRoot full warm
+    if(!$measurements.Contains('legacy_warm')){
+        Invoke-Run 'legacy_cold' $legacyRoot legacy cold
+        Invoke-Run 'legacy_warm' $legacyRoot legacy warm
+    }
+    if(!$measurements.Contains('ctest_warm')){
+        Invoke-Run 'ctest_cold' $ctestRoot full cold
+        Invoke-Run 'ctest_warm' $ctestRoot full warm
+    }
 
     $expected=$measurements.baseline_cold.coverage_ids
     foreach($name in $measurements.Keys){
@@ -333,7 +353,8 @@ try {
         schema=1
         commit=$resolved
         baseline_commit=$baseline
-        baseline_reused_from=$reusedBaseline
+        resumed_from=$resumedFrom
+        reused_measurements=$reusedMeasurements
         status='measured'
         comparable_scope='Pre-migration verify.ps1 plus its original CI shared/windows unit suites, current legacy verify.ps1, and CTest FULL x64. All include the same unit, core, mixed-input, data, TSF, add-word, English-key, submission and private-desktop cases.'
         coverage=[ordered]@{
@@ -362,7 +383,7 @@ try {
             baseline_warm_saved_seconds=[Math]::Round($baselineWarm-$ctestWarm,3)
             baseline_warm_speedup_percent=[Math]::Round(100*($baselineWarm-$ctestWarm)/$baselineWarm,2)
             baseline_scope='Unmodified verify.ps1 from baseline_commit plus its original CI shared/windows unit suites versus candidate CTest FULL; product sources, data, models, pins, and every observed case/configuration ID must match.'
-            same_commit_scope='The legacy_* versus ctest_* fields compare the two candidate entry points and therefore share the candidate caching improvements.'
+            same_commit_scope='The legacy_* versus ctest_* fields compare candidate entry points with identical runtime source inputs and share caching improvements. Resumed measurements retain their original commit provenance; only benchmark-driver or documentation changes may reuse candidate results.'
             cold_saved_seconds=[Math]::Round($coldSaved,3)
             cold_speedup_percent=if($legacyCold){[Math]::Round(100*$coldSaved/$legacyCold,2)}else{$null}
             warm_saved_seconds=[Math]::Round($warmSaved,3)
@@ -392,7 +413,8 @@ try {
             schema=1
             commit=$resolved
             baseline_commit=$baseline
-            baseline_reused_from=$reusedBaseline
+            resumed_from=$resumedFrom
+            reused_measurements=$reusedMeasurements
             status='failed'
             failure=$benchmarkFailure
             measurements=$measurements
