@@ -35,19 +35,23 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
 } }
 if ($CandidateHostOnly) { return }
 # A saved downloaded model survives closing and reopening the settings: separate processes, isolated profile, a package the scan really validates.
-# A WinUI process can load the installed input method, which then starts its own core on the test profile.
-# A core's pipe name covers its executable and profile, so this stop reaches only that core, never the user's.
-function Get-OutsideCores { Get-CimInstance Win32_Process -Filter "Name='shanjie-core.exe'" | Where-Object { $_.ExecutablePath -notlike "$root*" } }
-$coresBefore = @(Get-OutsideCores | ForEach-Object ProcessId)
-function Stop-CoresOnProfile([string]$profileRoot) {
-    $saved = $env:LOCALAPPDATA, $env:SHANJIE_TEST_PROFILE
-    $env:LOCALAPPDATA = [IO.Path]::GetFullPath($profileRoot); $env:SHANJIE_TEST_PROFILE = '1'
+# Set isolation before XAML starts: the OS may load an installed IME before
+# OnLaunched sets its profile. Keep that IME's core in this process as well.
+function Invoke-UiFixture([string[]]$Arguments) {
+    $start=[Diagnostics.ProcessStartInfo]::new("$root/dist/ui/Shanjie.UI.exe")
+    $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+    $profile=[IO.Path]::Combine($Arguments[1],'profile')
+    $null=New-Item -ItemType Directory -Path $profile -Force
+    $start.Environment['LOCALAPPDATA']=$profile
+    $start.Environment['SHANJIE_TEST_PROFILE']='1'
+    $start.Environment['SHANJIE_TEST_ROOT']=$profile
+    $start.Environment['SHANJIE_CORE_LOCAL']='1'
+    foreach($argument in $Arguments){$start.ArgumentList.Add($argument)}
+    $process=[Diagnostics.Process]::Start($start)
     try {
-        Get-OutsideCores | Where-Object ProcessId -notin $coresBefore | ForEach-Object ExecutablePath | Sort-Object -Unique | ForEach-Object {
-            Start-Process -FilePath $_ -ArgumentList '--stop' -WindowStyle Hidden -Wait
-        }
-    } finally { $env:LOCALAPPDATA, $env:SHANJIE_TEST_PROFILE = $saved }
-    Start-Sleep -Milliseconds 500
+        if(!$process.WaitForExit(180000)){$process.Kill($true);$process.WaitForExit(5000)|Out-Null;throw "WinUI fixture timed out: $($Arguments[0])"}
+        if($process.ExitCode){throw "WinUI fixture failed: $($Arguments[0]), exit $($process.ExitCode)"}
+    } finally {$process.Dispose()}
 }
 $modelOutput = Join-Path $uiRoot ('model-startup/' + [guid]::NewGuid().ToString('N'))
 $modelFolder = Join-Path $modelOutput 'profile/Shanjie/Models/fixture-model'
@@ -59,61 +63,43 @@ $bigram = $assets | Where-Object role -eq 'bigram'; $classes = $assets | Where-O
    model_sha256 = $bigram.sha256; classes_sha256 = $classes.sha256; model_size = $bigram.size; classes_size = $classes.size
    map_sha256 = (Get-FileHash "$modelFolder/bigram.winmap" -Algorithm SHA256).Hash.ToLowerInvariant() } | ConvertTo-Json | Set-Content "$modelFolder/model.json" -Encoding utf8NoBOM
 (Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^model_id=.*','model_id=fixture-model' | Set-Content "$modelOutput/profile/Shanjie/profile.ini" -Encoding utf8NoBOM
-try {
-    foreach ($phase in 'first-open','reopen') {
-        Invoke-Timed -Name "WinUI saved model startup ($phase)" -Category 'ui.model-startup' -Details @{phase=$phase;profile="$modelOutput/profile"} -Action {
-            $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-model-startup',('"' + $modelOutput + '"'),$phase -WindowStyle Hidden -PassThru
-            $process.WaitForExit()
-            $result = Get-Content "$modelOutput/result-$phase.txt" -Raw
-            if ($result -ne 'PASS') { throw "Saved model after reopening: $result" }
-        }
+foreach ($phase in 'first-open','reopen') {
+    Invoke-Timed -Name "WinUI saved model startup ($phase)" -Category 'ui.model-startup' -Details @{phase=$phase;profile="$modelOutput/profile"} -Action {
+        Invoke-UiFixture @('--verify-model-startup',$modelOutput,$phase)
+        $result = Get-Content "$modelOutput/result-$phase.txt" -Raw
+        if ($result -ne 'PASS') { throw "Saved model after reopening: $result" }
     }
-} finally {
-    try { Stop-CoresOnProfile "$modelOutput/profile" } finally { if(Test-Path -LiteralPath $modelOutput){Remove-Item -LiteralPath $modelOutput -Recurse -Force} }
 }
 Write-Host 'Saved model kept across settings restarts.'
 # Quick Setup shows once: separate processes on one isolated profile, like reopening the settings and upgrading.
 $quickOutput = Join-Path $uiRoot ('quick-setup/' + [guid]::NewGuid().ToString('N'))
-try {
-    foreach ($phase in 'first-open','reopen','after-upgrade') {
-        if ($phase -eq 'after-upgrade') { Set-Content "$quickOutput/profile/Shanjie/quick-setup.txt" 'shown 0.0.0-older' -Encoding utf8NoBOM }
-        Invoke-Timed -Name "WinUI Quick Setup persistence ($phase)" -Category 'ui.quick-setup' -Details @{phase=$phase;profile="$quickOutput/profile"} -Action {
-            $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickOutput + '"'),$phase -WindowStyle Hidden -PassThru
-            $process.WaitForExit()
-            $result = Get-Content "$quickOutput/result-$phase.txt" -Raw
-            if ($result -ne 'PASS') { throw "Quick Setup $phase`: $result" }
-        }
+foreach ($phase in 'first-open','reopen','after-upgrade') {
+    if ($phase -eq 'after-upgrade') { Set-Content "$quickOutput/profile/Shanjie/quick-setup.txt" 'shown 0.0.0-older' -Encoding utf8NoBOM }
+    Invoke-Timed -Name "WinUI Quick Setup persistence ($phase)" -Category 'ui.quick-setup' -Details @{phase=$phase;profile="$quickOutput/profile"} -Action {
+        Invoke-UiFixture @('--verify-quick-setup',$quickOutput,$phase)
+        $result = Get-Content "$quickOutput/result-$phase.txt" -Raw
+        if ($result -ne 'PASS') { throw "Quick Setup $phase`: $result" }
     }
-} finally {
-    try { Stop-CoresOnProfile "$quickOutput/profile" } finally { if(Test-Path -LiteralPath $quickOutput){Remove-Item -LiteralPath $quickOutput -Recurse -Force} }
 }
 Write-Host 'Quick Setup showed once across reopening and upgrading.'
 # Quick Setup's decisions, saved files, keys, demos and screenshots (each step, mid-transition and the finish), on its own profile.
 $quickReview = Join-Path $uiRoot 'quick-setup-flow'
-if (Test-Path $quickReview) { Remove-Item -LiteralPath $quickReview -Recurse -Force }
 Invoke-Timed -Name 'WinUI Quick Setup flow' -Category 'ui.quick-setup-flow' -Details @{profile="$quickReview/profile"} -Action {
-    try {
-        $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickReview + '"'),'flow' -WindowStyle Hidden -PassThru
-        $process.WaitForExit()
-        $result = Get-Content "$quickReview/result-flow.txt" -Raw
-        if ($result -ne 'PASS') { throw "Quick Setup flow: $result" }
-    } finally { Stop-CoresOnProfile "$quickReview/profile" }
+    Invoke-UiFixture @('--verify-quick-setup',$quickReview,'flow')
+    $result = Get-Content "$quickReview/result-flow.txt" -Raw
+    if ($result -ne 'PASS') { throw "Quick Setup flow: $result" }
 }
 Write-Host "Quick Setup flow checks passed: $quickReview/quick-setup"
 $output = Join-Path $uiRoot 'final-review'
 Invoke-Timed -Name 'WinUI profile and visual verification' -Category 'ui.verify' -Details @{profile="$output/profile"} -Action {
-    try {
-        $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
-        $process.WaitForExit()
-        if ((Get-Content "$output/result.txt" -Raw) -ne 'PASS') { throw 'WinUI loading, profile persistence or visual capture failed.' }
-    } finally { Stop-CoresOnProfile "$output/profile" }
+    Invoke-UiFixture @('--verify-ui',$output)
+    if ((Get-Content "$output/result.txt" -Raw) -ne 'PASS') { throw 'WinUI loading, profile persistence or visual capture failed.' }
 }
 Write-Host "WinUI profile/capture checks passed: $output"
 # Setup and uninstall pages, rendered offscreen with sample progress; nothing is installed.
 $setupOutput = Join-Path $uiRoot 'setup-review'
 Invoke-Timed -Name 'WinUI setup pages' -Category 'ui.setup-pages' -Details @{output=$setupOutput} -Action {
-    $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-setup',('"' + $setupOutput + '"') -WindowStyle Hidden -PassThru
-    $process.WaitForExit()
+    Invoke-UiFixture @('--verify-setup',$setupOutput)
     if ((Get-Content "$setupOutput/result.txt" -Raw) -ne 'PASS') { throw 'WinUI setup pages failed.' }
 }
 Write-Host "WinUI setup page checks passed: $setupOutput"
