@@ -79,9 +79,9 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup
             } | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) }) + @('profiles/windows.ini','profiles/shanjie.ini','MODEL-CATALOG.json','MODEL-SOURCES.json','NuGet.Config','scripts/build.ps1')
             $uiKey = Get-ContentFingerprint -Root $root -Paths $uiSourcePaths -Values @($dotnetVersion,'Release','x64','dotnet publish')
             $uiCacheManifest = Join-Path $root 'build/ui-publish-cache.json'
-            $existingUiPaths = if (Test-Path -LiteralPath $uiOutput) {
-                @(Get-ChildItem -LiteralPath $uiOutput -File -Recurse | Where-Object Name -ne 'shanjie_windows.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
-            } else { @() }
+            $existingUiPaths = @(if (Test-Path -LiteralPath $uiOutput) {
+                Get-ChildItem -LiteralPath $uiOutput -File -Recurse | Where-Object Name -ne 'shanjie_windows.dll' | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) }
+            })
             $uiPublishMiss = !(Test-ContentCache -Root $root -ManifestPath $uiCacheManifest -Key $uiKey -Paths $existingUiPaths)
             if ($uiPublishMiss) {
                 Preserve-Output $uiOutput

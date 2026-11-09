@@ -102,6 +102,17 @@ Remove-Item Function:ctest
 $cache=Join-Path $ResultRoot 'empty-cache.json'
 [IO.File]::WriteAllText($cache,'{"key":"test","files":{}}')
 Assert-Check (!(Test-ContentCache -Root $ResultRoot -ManifestPath $cache -Key 'test' -Paths @())) 'Empty UI output is a cache miss even with a receipt'
+# Evaluate the build driver's actual assignment: an empty array returned through
+# an if pipeline becomes null unless the assignment itself collects the output.
+$buildAst=[System.Management.Automation.Language.Parser]::ParseFile("$root/scripts/build.ps1",[ref]$tokens,[ref]$errors)
+$uiAssignment=$buildAst.Find({param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$existingUiPaths'},$true)
+$uiOutput=Join-Path $ResultRoot 'missing-ui-output'
+. ([scriptblock]::Create($uiAssignment.Extent.Text))
+Assert-Check ($null -ne $existingUiPaths -and $existingUiPaths.Count -eq 0) 'A clean checkout produces an empty UI file array, not null'
+Assert-Check (!(Test-ContentCache -Root $ResultRoot -ManifestPath $cache -Key 'test' -Paths $existingUiPaths)) 'A clean checkout reaches the UI publish cache miss'
+$null=New-Item -ItemType Directory -Path $uiOutput -Force
+. ([scriptblock]::Create($uiAssignment.Extent.Text))
+Assert-Check ($null -ne $existingUiPaths -and $existingUiPaths.Count -eq 0) 'An empty UI output directory also preserves the array'
 $missingInputFailed=$false
 try{$null=Get-ContentFingerprint -Root $ResultRoot -Paths @('missing-input')}catch{$missingInputFailed=$true}
 Assert-Check $missingInputFailed 'Missing required fingerprint input is an error'
