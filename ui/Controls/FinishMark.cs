@@ -35,7 +35,7 @@ internal sealed partial class FinishMark : UserControl
         burst = compositor.CreateContainerVisual(); burst.Size = new Vector2(Size); burst.Opacity = 0;
         bool contrast = Motion.HighContrast;
         Color accent = Motion.AccentColor;
-        Color mark = contrast ? new Windows.UI.ViewManagement.UISettings().UIElementColor(Windows.UI.ViewManagement.UIElementType.HighlightText) : Microsoft.UI.Colors.White;
+        Color mark = contrast ? new Windows.UI.ViewManagement.UISettings().UIElementColor(Windows.UI.ViewManagement.UIElementType.HighlightText) : Motion.OnAccent.Color;
         if (!contrast)
         {
             var light = compositor.CreateRadialGradientBrush();

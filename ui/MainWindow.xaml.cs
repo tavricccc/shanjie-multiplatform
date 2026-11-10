@@ -11,12 +11,14 @@ public sealed partial class MainWindow : UserControl
         InitializeComponent(); Bindings.Initialize();
         ContentScroll.ViewChanged += (_, _) => ContributorsList.ClosePreviews();
         Host = new Glass.GlassWindow(this, "善解設定", 840, 680, resizable: true);
+        appearance = new(this, Host, Vm); Host.Closed += (_, _) => appearance.Dispose();
         Host.SetCaption(AppTitleBar, Head);
         navHighlight = new Controls.SlidingHighlight(NavLayer, 12); ShowSection(0); ApplyTheme();
         ((FrameworkElement)Nav.Children[0]).SizeChanged += (_, _) => { if (!navPlaced) { navPlaced = true; navHighlight.MoveTo((FrameworkElement)Nav.Children[section], false); } };
         Vm.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(Vm.Theme)) ApplyTheme();
             if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
+            if (e.PropertyName is nameof(Vm.AccentMode) or nameof(Vm.AccentColor) or nameof(Vm.PureBlack) or nameof(Vm.AnimationMode)) appearance.Apply();
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，Tab 與 → 展開表格，關閉即時預測、選字後聯想及善解的額外標點／聲調操作；Esc、候選讀音項與符號鍵盤等仍有差異，見專案文件。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
@@ -32,7 +34,13 @@ public sealed partial class MainWindow : UserControl
     internal void Close() => Host.Close();
     private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
     private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
-    private void ApplyTheme() => Root.RequestedTheme = (ElementTheme)Vm.Theme;
+    readonly AppearanceController appearance;
+    private void ApplyTheme() { RequestedTheme = Root.RequestedTheme = (ElementTheme)Vm.Theme; appearance.Apply(); }
+    private void AccentPicked(object sender, ColorChangedEventArgs args) => Vm.AccentColor = $"#{args.NewColor.R:X2}{args.NewColor.G:X2}{args.NewColor.B:X2}";
+    private void OpenAccentPicker(object sender, RoutedEventArgs args)
+    {
+        if (SettingsViewModel.TryAccent(Vm.AccentColor,out uint rgb)) AccentPicker.Color = AppearanceController.ColorOf(rgb);
+    }
     internal FrameworkElement CaptureElement => Root;
     internal void SetPredictionForVerification(bool value) => PredictionToggle.SetToggleForVerification(value);
     internal void SetModelForVerification(int value) => ModelSelector.SelectedIndex = value;

@@ -1,7 +1,15 @@
+function Test-VerificationDocumentation([string]$Path) {
+    return ($Path -match '^(docs/|LICENSES/|\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
+}
+
 function Get-VerificationImpact([string]$Path) {
+    if(Test-VerificationDocumentation $Path){return [pscustomobject]@{Full=$false;Labels=@();Reason='Documentation-only change; no build or tests.'}}
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
+        '^(scripts/(release|test_release)\.py|\.github/workflows/release\.yml|scripts/verify-(changed|selection)\.ps1|tests/verify_selection\.ps1)$' {
+            $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
+        }
         '^(windows/Cargo\.(toml|lock)|shared/Cargo\.(toml|lock)|platform/|upstream/|data/|profiles/|MODEL-|UPSTREAM\.json)' {
             $full = $true; $reason = 'Core, model, profile, dependency, or upstream change.'; break
         }
@@ -11,17 +19,29 @@ function Get-VerificationImpact([string]$Path) {
         '^shared/src/(input|spacing)\.rs$' {
             $labels = @('shared','windows','tsf','interaction'); $reason = 'Shared key decisions affect TSF and engine interaction.'; break
         }
+        '^shared/src/appearance\.rs$' {
+            $full=$true;$labels=@('windows','tsf','ui','mode');$reason='Shared appearance policy affects native and WinUI rendering.';break
+        }
         '^shared/' {
             $full = $true; $reason = 'Shared protocol, dictionary, model, or module changes affect downstream input behavior.'; break
         }
         '^windows/src/(profile|bridge)\.rs$' {
             $labels = @('windows','tsf','ui'); $reason = 'Profile and bridge changes affect refresh, TSF, and WinUI persistence.'; break
         }
-        '^windows/src/(candidate|native|font|glass)\.rs$' {
+        '^windows/src/(candidate|native|font|glass|appearance)\.rs$' {
             $labels = @('windows','tsf','ui','mode'); $reason = 'Native UI changes affect candidate, mode, and TSF behavior.'; break
         }
         '^windows/src/(word_|dictionary_store|selection_)' {
             $labels = @('windows','tsf','word','ui'); $reason = 'Dictionary and selection changes affect word entry and popup behavior.'; break
+        }
+        '^windows/src/installer(\.rs|/)|^windows/src/runtime_log\.rs$' {
+            $labels=@('windows');$reason='Installer and diagnostic logic use the Windows unit suite.';break
+        }
+        '^windows/src/mixed_regression\.rs$' {
+            $labels=@('windows','english','models');$reason='Mixed-input regressions and native English/digit cases.';break
+        }
+        '^windows/src/tsf/service\.rs$' {
+            $full=$true;$labels=@('windows','tsf','ui','mode');$reason='TSF service lifecycle and appearance cross native and WinUI boundaries.';break
         }
         '^windows/src/tsf/' {
             $labels = @('windows','tsf'); $reason = 'TSF changes require the isolated input regression matrix.'; break
@@ -29,9 +49,10 @@ function Get-VerificationImpact([string]$Path) {
         '^windows/src/' {
             $full = $true; $reason = 'Windows engine, broker, lifecycle, installation, or unmapped module change.'; break
         }
-        '^tests/english_keys\.cpp$|^scripts/verify-english-keys\.ps1$' { $labels = @('english'); $reason = 'English-key regression harness.'; break }
+        '^tests/english_keys\.cpp$|^scripts/verify-english-keys\.ps1$' { $labels = @('english','models'); $reason = 'English-key and mixed-input regression harnesses.'; break }
         '^tests/submission\.cpp$|^scripts/verify-submission\.ps1$' { $labels = @('submission'); $reason = 'Submission regression harness.'; break }
-        '^tests/add_word_popup\.cpp$|^scripts/verify-add-word\.ps1$' { $labels = @('word'); $reason = 'Add-word regression harness.'; break }
+        '^tests/add_word_popup\.cpp$|^scripts/verify-add-word\.ps1$' { $labels = @('word','private-desktop'); $reason = 'Add-word and popup lifecycle regression harnesses.'; break }
+        '^tests/popup_lifecycle\.cpp$' { $labels=@('word','private-desktop');$reason='Popup lifecycle and add-word regressions.';break }
         '^tests/(tsf_compat|popup_lifecycle)\.cpp$|^scripts/verify-private-desktop\.ps1$' { $labels = @('private-desktop'); $reason = 'Private-desktop regression harness.'; break }
         '^tests/tsf_smoke\.cpp$' { $labels = @('smoke'); $reason = 'TSF smoke harness.'; break }
         '^tests/candidate_host_smoke\.cpp$|^ui/|^scripts/verify-ui\.ps1$' { $labels = @('ui'); $reason = 'WinUI and candidate-host behavior.'; break }
@@ -42,9 +63,25 @@ function Get-VerificationImpact([string]$Path) {
     [pscustomobject]@{ Full = $full; Labels = $labels; Reason = $reason }
 }
 
+# Compatibility for upstream's pure planner. Both entry points use this module's
+# one impact policy; the old script/Steps scheduler is replaced by CTest levels.
+function Select-VerificationPlan([string[]]$Paths) {
+    $labels=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $reasons=@();$full=$false;$code=$false
+    foreach($path in @($Paths|Where-Object{$_}|ForEach-Object{$_.Replace('\','/')}|Sort-Object -Unique)){
+        $impact=Get-VerificationImpact $path
+        if(!(Test-VerificationDocumentation $path)){$code=$true}
+        $full=$full -or $impact.Full
+        foreach($label in $impact.Labels){[void]$labels.Add($label)}
+        $reasons+=,[pscustomobject]@{Path=$path;Reason=$impact.Reason}
+    }
+    if($code){[void]$labels.Add($(if($full){'full'}else{'fast'}))}
+    [pscustomobject]@{Full=$full;Skip=(!$code);Labels=@($labels|Sort-Object);Reasons=$reasons}
+}
+
 function Get-EnglishKeyCases {
     # Mode bits: 1 raw-key mixing, 2 upstream English; these are mutually exclusive choices.
-    $cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order'){$cases+=,@($mode,$scenario,1,1)}}
+    $cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order','digit-navigation'){$cases+=,@($mode,$scenario,1,1)}}
     foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
     foreach($scenario in 'shift','shift-caps'){$cases+=,@(2,$scenario,1,1)}
     $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
@@ -91,6 +128,22 @@ function Get-HarnessCasePlan([object[]]$Rows) {
                     selected=$row.selected; reason=$row.reason; status='not-run'; attempts=@(); flaky=$false
                 }
             }
+        } elseif($row.name -match '^release\.ui\.startup\.(clean|reopen|different-directory)$') {
+            $phase=$Matches[1]
+            [pscustomobject]@{
+                name="$($row.name)/$phase";parent=$row.name;preset=$row.preset;category='ui.startup'
+                parameters=@{architecture='x64';phase=$phase}
+                selected=$row.selected;reason=$row.reason;status='not-run';attempts=@();flaky=$false
+            }
+        } elseif($row.name -match '^release\.ui\.disabled\.keyboard([123])$') {
+            $keyboard=[int]$Matches[1]
+            foreach($phase in 'initial','reopen'){
+                [pscustomobject]@{
+                    name="$($row.name)/$phase";parent=$row.name;preset=$row.preset;category='ui.disabled'
+                    parameters=@{architecture='x64';keyboard=$keyboard;phase=$phase}
+                    selected=$row.selected;reason=$row.reason;status='not-run';attempts=@();flaky=$false
+                }
+            }
         } elseif($row.name -match '\.submission\.(.+)\.(x64|x86)$') {
             $mode=$Matches[1];$architecture=$Matches[2]
             foreach($keyboard in 1,2) {
@@ -116,4 +169,4 @@ function Assert-FixedCiSelection([object[]]$Rows) {
     if($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual).Count){throw 'CI must contain exactly the fixed lightweight baseline; no missing tests or FULL expansion is allowed.'}
 }
 
-Export-ModuleMember -Function Get-VerificationImpact,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection
+Export-ModuleMember -Function Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection

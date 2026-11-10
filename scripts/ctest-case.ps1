@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
@@ -45,7 +45,7 @@ try {
                     if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
                 }
             }
-            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels }
+            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
             'runtime-payload' {
@@ -89,7 +89,9 @@ try {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
                 & "$PSScriptRoot/verify-ui.ps1" -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
-            'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }
             'package' { & "$PSScriptRoot/package.ps1" -UseExistingBuild -CandidateId $runId }
         }
     } finally { Pop-Location }

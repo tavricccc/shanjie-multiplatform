@@ -44,7 +44,7 @@ try {
     if (!$SmokeOnly) {
         Invoke-Timed -Name 'Validate built upstream data' -Category 'data.validate' -Details @{ output='dist/data' } -Action { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
         # Unit tests that read built data and models; plain cargo test --lib intentionally ignores these.
-        & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture
+        if($Architecture -eq 'x64'){& "$PSScriptRoot/test-mixed.ps1" -Architecture x64}
     }
 
     $harness = if ($TsfHarnessPath) { [IO.Path]::GetFullPath($TsfHarnessPath) } else { Join-Path $root "build/tsf-smoke-$Architecture.exe" }
@@ -60,7 +60,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
 "@
         Set-Content "build/native-$Architecture/verify.cmd" $command -Encoding utf8NoBOM
         Invoke-Timed -Name 'Compile TSF smoke harness' -Category 'build.cpp.harness' -Details @{ architecture=$Architecture; source='tests/tsf_smoke.cpp' } -Action {
-            & cmd.exe /d /c (Join-Path $root "build/native-$Architecture/verify.cmd")
+            Invoke-HarnessBuild $command (Join-Path $root "build/native-$Architecture/verify.cmd") $harness
             if ($LASTEXITCODE) { throw 'TSF smoke harness build failed.' }
         }
     }

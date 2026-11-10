@@ -1,33 +1,41 @@
 ---
 name: 善解 Windows
-description: WinUI 3 原生設定與 Rust 同程序候選窗
+description: WinUI 3 玻璃設定與 Rust 同程序候選窗；個人外觀可選系統／自訂強調色、深色純黑與動畫政策
 colors:
-  candidate-selected-background: "#006EE6"
+  candidate-selected-background: "#5874C9"
   candidate-selected-foreground: "#FFFFFF"
-  candidate-background: "#FFFFFF"
-  candidate-border: "#D3D3D8"
-  candidate-foreground: "#222225"
-  candidate-label: "#65656E"
-  candidate-dark-background: "#202020"
-  candidate-dark-border: "#505055"
-  candidate-dark-foreground: "#F5F5F7"
-  candidate-dark-label: "#B8B8C2"
+  candidate-background: "#F8F8FA"
+  candidate-border: "#000000"
+  candidate-foreground: "#141418"
+  candidate-label: "#141418"
+  candidate-dark-background: "#1C1C20"
+  candidate-dark-border: "#FFFFFF"
+  candidate-dark-foreground: "#FFFFFF"
+  candidate-dark-label: "#FFFFFF"
+opacity:
+  candidate-background: 0.97
+  candidate-border: 0.08
+  candidate-foreground: 0.92
+  candidate-label: 0.62
+  candidate-number: 0.42
+  candidate-dark-background: 0.97
+  candidate-dark-border: 0.08
+  candidate-dark-foreground: 0.94
+  candidate-dark-label: 0.64
+  candidate-dark-number: 0.4
 typography:
   chinese:
-    fontFamily: Microsoft JhengHei UI
+    fontFamily: Noto Sans when installed; otherwise system Traditional Chinese UI font
   candidate:
-    fontFamily: Microsoft JhengHei UI
+    fontFamily: Noto Sans when installed; otherwise Microsoft JhengHei UI
     fontSize: 16 DIP
     fontWeight: 400
   candidate-label:
-    fontFamily: Segoe UI
+    fontFamily: Noto Sans when installed; otherwise Segoe UI
     fontSize: 9 DIP
     fontWeight: 400
 spacing:
-  form: 12 DIP
-  section: 12 DIP
-  content: 20 DIP
-  candidate-surface: 3 DIP
+  candidate-surface: 5 DIP
   candidate-item-gap: 2 DIP
   candidate-leading: 4 DIP
   candidate-label-gap: 6 DIP
@@ -53,7 +61,8 @@ components:
     padding: "{spacing.candidate-surface}"
   mixed-reading-hint:
     backgroundColor: "{colors.candidate-selected-background}"
-    textColor: "{colors.candidate-selected-foreground}"
+    backgroundOpacity: 0.14 in light theme; 0.3 in dark theme
+    textColor: "{colors.candidate-selected-background}"
     typography: "{typography.candidate}"
   mode-indicator:
     width: 28 DIP
@@ -62,28 +71,30 @@ components:
 ---
 
 
-# Design System: 善解 Windows
+# 善解 Windows 設計系統
 
 ## Overview
 
-**Creative North Star: "原生設定，善解膠囊候選"**
+**設計方向：霧藍玻璃設定與輕量候選窗。**
 
-設定程式沿用 WinUI 3 原生控制項與系統主題。候選窗依上游 macOS 版（`CandidateCells.swift`、`InputController.swift`）的膠囊比例：不透明底、細邊線、小序號、藍色選取。中英混打在正文保留原始按鍵，下方以藍底白字提示注音。目標是好讀、低資源、不打斷文件焦點。架構與尺寸規格見 [ARCHITECTURE.md](ARCHITECTURE.md)。
+設定、安裝與更新畫面使用 WinUI 3、自訂玻璃視窗與共用的霧藍主題；候選窗由 Rust 在宿主程序內繪製，採接近不透明的圓角底、細邊線、小序號、霧藍選取與柔和陰影。原鍵混打在 App 組字區保留原始按鍵，組字面板以霧藍字與淡色底提示注音。目標是好讀、低資源、不打斷文件焦點。架構見 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+本文的色值與比例以目前原始碼為準：候選窗在 [`candidate.rs`](../windows/src/candidate.rs)，設定介面資源在 [`Sj.xaml`](../ui/Themes/Sj.xaml)，字型選擇在 [`font.rs`](../windows/src/font.rs)。以上藍色示例是預設外觀；可改用 Windows 強調色或自訂 HEX，預設藍的選取文字為白色，改用其他顏色時自動依對比選黑或白。深色可選不透明純黑；高對比優先採系統色。動畫可跟隨系統、強制開啟或關閉。
 
 ## Colors
 
-候選窗的底、字、序號、選取全部不透明（alpha 1）。設定程式用 Windows 原生主題資源。
+上方色表列 RGB，透明度另列於 `opacity`；候選窗的一般底面 alpha 為 0.97，文字、序號、邊線及提示各有透明度。設定程式使用 `Sj*` ThemeResource 與共用玻璃視窗，並保留 WinUI 控制項的互動與可及性語意。
 
-- **選取藍**：`candidate-selected-background` 配 `candidate-selected-foreground`，用於目前候選與混打注音提示。
+- **霧藍**：候選預設使用霧藍底配白字，改色後文字依對比選黑或白；混打注音提示使用可讀的強調色與淡色底，依深淺主題調整底色透明度。
 - **淺色**：`candidate-background`、`candidate-border`、`candidate-foreground`、`candidate-label`。
-- **深色**：`candidate-dark-*` 四色；選取藍與白字共用。
-- **設定程式**：`SolidBackgroundFillColorBaseBrush`、`LayerFillColorDefaultBrush`、`TextFillColorSecondaryBrush` 等 ThemeResource；AccentButtonStyle 與 NavigationView 保留系統 accent。
+- **深色**：`candidate-dark-*` 四色；選取強調色與自動對比文字共用。
+- **設定程式**：`SjText*Brush`、`SjStrokeBrush`、`SjFill*Brush` 等主題資源；強調色預設霧藍 `#5874C9`，可改為跟隨 Windows 或自訂 HEX，與候選窗、加詞浮層共用（`ui/AppearanceController.cs`）。
 
 **The Candidate Palette Rule.** 「介面與選字框主題」對應 `appearance.theme`：0 跟隨 Windows（讀 `AppsUseLightTheme`），1 淺色，2 深色，同時套用到設定程式、候選窗與加詞浮層。高對比時整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT`、`COLOR_HIGHLIGHTTEXT`，邊線用 window text 色。
 
 ## Typography
 
-設定程式用 Microsoft JhengHei UI，標題用 TitleTextBlockStyle／SubtitleTextBlockStyle。候選字詞用 `candidate`，序號與聯想的 Shift 標記用 `candidate-label`，都是正常字重。
+已安裝時優先用 Noto Sans 家族，依序尋找 TC、CJK TC、HK、CJK HK 及 Noto Sans。沒有可用家族時，WinUI 保留系統字型；候選字詞用 Microsoft JhengHei UI，序號與聯想的 Shift 標記用 Segoe UI，都是正常字重。標題與說明使用 `Sj.xaml` 的樣式。
 
 候選字級可調 14–32 DIP；序號為字級 × 9／16，最小 8 DIP，其他內距與幾何按字級／16 縮放。
 
@@ -91,11 +102,11 @@ components:
 
 ## Layout
 
-設定程式初始 840×680 DIP，NavigationView 展開寬度 208 DIP，內容 Padding 20,16,20,20、MaxWidth 800、表單間距 12 DIP。內容可捲動，InfoBar 與儲存列固定在內容外。開關為同列左標籤、右 ToggleSwitch，MinHeight 40 DIP，並提供 AutomationProperties.Name。
+設定程式初始 840×680 DIP，左側導覽寬 216 DIP，使用自訂導覽列與選取高亮；右側內容可捲動，狀態列與儲存列固定在內容外。設定分組用 `SettingCard`，每列用 `SettingRow`；開關為左標籤、右側狀態文字與自訂 `Switch`，並提供 AutomationProperties.Name。實際間距與最小尺寸以 `MainWindow.xaml` 及控制項實作為準。
 
-候選窗一律直式，每頁最多九項，一列一個候選。預設字級下選取膠囊 24 DIP、外框至少 30 DIP，字體需要時加高。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
+候選窗收合時一律直式，每頁最多九項；展開時為三欄多列，依工作區可用高度捲動。預設字級下候選列至少 24 DIP，上下各留 5 DIP，只有一列候選且沒有組字面板時底面至少 34 DIP，字體需要時加高；陰影另有外側空間。被動預測不預留序號空間。候選與 caret 間距為 `candidate-caret-gap`；下方空間不足時改放上方，位置限制在目前螢幕工作區內。
 
-**The Natural Width Rule.** 字詞依自然寬度量測，各列共用最寬一項的寬度，有候選時至少 112 DIP（字級 16），單字清單才不會變成細條。只有組字面板時沒有下限，寬度就是文字加內距，打字時隨內容伸縮。只有單項超過可用寬度才用 character ellipsis 省略。
+**The Natural Width Rule.** 字詞依自然寬度量測，直式清單共用最寬一項的寬度，格狀清單各欄分別量測；候選的最小寬度、組字面板與工作區限制由 `candidate.rs::fit_view` 決定。只有組字面板時，寬度隨文字與內距伸縮。超過可用寬度時用 character ellipsis 省略。
 
 中英模式提示用 `mode-indicator`，透明視窗、零內距，與 caret 間距為 `mode-caret-gap`，依所在螢幕 DPI 繪製，1400 ms、下一次輸入或失焦時隱藏。
 
@@ -107,7 +118,7 @@ components:
 
 ## Shapes
 
-設定控制項沿用 Windows App SDK 預設圓角與互動狀態。候選底面圓角半徑為表面高度的一半；邊線 0.5 DIP、內縮 0.25 DIP，半徑為（表面高度 − 0.5）／2。選取膠囊半徑為列高的一半，反白涵蓋整項，不用左側 selection indicator。
+設定控制項使用 `Sj.xaml` 與 `ui/Controls/` 的共用圓角、互動狀態及動畫。候選底面圓角半徑為 14 DIP × 字級／16；邊線 0.5 DIP、內縮 0.25 DIP。選取高亮涵蓋整項並在候選之間滑動，不另加左側 selection indicator。
 
 ## Components
 
@@ -129,10 +140,10 @@ components:
 - **換頁**：舊頁 240 ms 往反方向滑出並淡出，新頁的各部分（小標、標題、說明、卡片、註記、示範）每 40 ms 依序從前進的方向滑入 44 點並淡入，Smooth 曲線；上一步時方向相反。進度膠囊以 Glide 曲線滑到新位置。
 - **選擇**：外框從原本的卡片滑到新卡片（320 ms Glide），勾選以彈簧放大，卡片輕壓一下；示範換成新答案時整個場景淡入上移。
 - **示範**：候選窗從游標側淡入放大、選取膠囊在項目間滑動、換頁與展開淡入、中／A 提示彈出、送出的字落進文字框。
-- **完成**：霧藍圓環從頂端順時針畫出，內部填滿並彈起，白色勾分兩筆畫出，徽章再輕彈一次；同時背後的光暈亮起，一圈光往外擴散淡去，十幾顆霧藍、淡藍與一點淡金的小點向外飄散消失；標題與試打區隨後依序升起。約 2 秒。
+- **完成**：霧藍圓環從頂端順時針畫出，內部填滿並彈起，對比色勾分兩筆畫出，徽章再輕彈一次；同時背後的光暈亮起，一圈光往外擴散淡去，十幾顆霧藍、淡藍與一點淡金的小點向外飄散消失；標題與試打區隨後依序升起。約 2 秒。
 - **交回設定**：流程 280 ms 淡出並微縮，設定頁的導覽與內容依序滑入。
 
-Windows 關閉「動畫效果」時以上全部立即到位，示範停在關鍵畫面。高對比時外框、勾選與進度改用系統醒目色，不畫光暈與小點。
+動畫預設跟隨 Windows，也可強制開啟或關閉；動畫政策關閉時以上全部立即到位，示範停在關鍵畫面。高對比時外框、勾選與進度改用系統醒目色，不畫光暈與小點。
 
 示範場景裡的候選窗沿用 `candidate.rs` 的配色與比例，字級略小以放得下；格狀與直向清單會截短。組字面板的標記與真實視窗相同：微弱的藍色底，游標在句尾時不標。
 
@@ -142,7 +153,7 @@ Windows 關閉「動畫效果」時以上全部立即到位，示範停在關鍵
 
 ### 混打注音提示
 
-原鍵混打時，原始按鍵（如 `gj`）留在組字區，`mixed-reading-hint` 顯示 `ㄕㄨ`：同一個候選視窗與尺寸，藍底白字，沒有序號，不能點選。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`。
+原鍵混打時，原始按鍵（如 `gj`）留在 App 組字區，組字面板的 `mixed-reading-hint` 以霧藍字與淡色底顯示 `ㄕㄨ`，沒有序號，不能點選。只有提示列時用候選字級；上方提示與候選同時顯示時，提示列字級縮小。聲調完成後轉中文，Enter 保留原文。來源：`platform/smart_input_windows.rs`、`windows/src/candidate.rs`。
 
 ### 圖示與中英模式提示
 
@@ -150,19 +161,19 @@ Windows 關閉「動畫效果」時以上全部立即到位，示範停在關鍵
 
 ### 解除安裝詢問
 
-原生 MessageBox：「是」刪除全部善解資料，「否」移除程式與設定、保留詞庫與學習，「取消」不解除安裝（預設選項）。文案在 `windows/src/installer.rs`。
+一般入口為 `Shanjie.UI.exe --uninstall` 的 WinUI 畫面，預設勾選「保留個人詞庫與選字學習」；另一選項是「一併移除個人詞庫、學習與設定」，明示直接刪除且無法復原。開始執行前可取消，實際移除由 manager 經 UAC 執行。來源：`ui/SetupWindow.xaml`。命令列沒有指定資料處理選項時，manager 另有「是／否／取消」的原生確認框（`windows/src/installer.rs`）。
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** 設定程式用 ThemeResource，保留原生控制項狀態、共用草稿與固定儲存列。
-- **Do** 候選窗與設定程式共用主題偏好，保持不透明底與 0.5 DIP 細邊線；高對比改讀系統色。
+- **Do** 設定程式使用共用 `Sj*` ThemeResource 與控制項，保留可及性語意、共用草稿與固定儲存列。
+- **Do** 候選窗與設定程式共用主題偏好，保持接近不透明底與 0.5 DIP 細邊線；高對比使用不透明系統色。
 - **Do** 候選窗維持單一 NOACTIVATE HWND，以 sequence 驗證滑鼠選取。
 
 ### Don't:
 
-- **Don't** 在候選窗加入毛玻璃、半透明正文、背景 HWND、陰影、動畫、WebView 或子程序。
+- **Don't** 在 TSF 候選窗加入系統背景模糊、額外背景 HWND、WebView 或子程序；陰影與動畫維持同一視窗的 bitmap 繪製。
 - **Don't** 恢復九欄格狀排列，或提供任意詞類表選單。
 
 介面沒有使用生成影像；素材來源見 `ui/Assets/PROVENANCE.md` 與 `assets/mode/README.md`。

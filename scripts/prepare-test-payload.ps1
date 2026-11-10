@@ -25,7 +25,8 @@ Invoke-Timed -Name "Prepare isolated CTest runtime payload ($Architecture)" -Cat
         if($destinationItem.Length -eq (Get-Item -LiteralPath $dll).Length){$cacheHit=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -eq $sourceHash}
     }
     if(!$cacheHit){Copy-Item -LiteralPath $dll -Destination $destination -Force}
-    foreach($name in 'data','tools') {
+    Copy-TestTools -Source "$root/dist/tools" -Destination "$payload/tools"
+    foreach($name in 'data') {
         $link=Join-Path $payload $name
         $target=[IO.Path]::GetFullPath((Join-Path $root "dist/$name"))
         $item=Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
@@ -42,4 +43,4 @@ Invoke-Timed -Name "Prepare isolated CTest runtime payload ($Architecture)" -Cat
     }
     Write-Host "Runtime payload DLL cache $(if($cacheHit){'hit'}else{'miss'}): $payload/$Architecture."
 }
-Write-Host "Isolated CTest payload ready: $payload (data/tools are read-only targets under dist/)."
+Write-Host "Isolated CTest payload ready: $payload (read-only data junction and private tool copies)."

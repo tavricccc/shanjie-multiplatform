@@ -68,6 +68,8 @@
 
 所有一般驗收統一由 `scripts/test.ps1` 和 CTest 管理。本機 AFFECTED 依 `scripts/test-plan.psm1` 的影響規則選測；規則無法明確判斷時擴大到 FULL。GitHub Actions 使用固定 CI 集合，沒有這項擴大機制。變更影響表與 CTest 案例清冊見 [docs/TESTING.md](docs/TESTING.md)。
 
+上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。明確要求 x86 時對應雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
+
 | 時機／變更 | 跑 | 用途 |
 | --- | --- | --- |
 | 自動 PR／手動輕量 CI | `pwsh -File scripts/test.ps1 -Level CI -CiSafe` | 固定必要基線，不分析分支差異、不擴大至 FULL、不建置產品 |
@@ -89,6 +91,8 @@ pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 `-RetryFailures` 只對失敗 CTest 項目最多重跑一次；必要 fixture 由 CTest 重新加入。兩次 JUnit／日誌各自保留，JSON 的 `attempts` 與 `flaky_tests` 保留首次失敗。英文鍵與提交測試的全部模式／鍵盤／按鍵組合由同一份清冊產生執行計畫與 `subcases` 結果；未執行不算通過。每次分級驗收都在 `build/reports/<run>/report.json` 記錄層級、選中與未選測試的原因、結果、耗時、快取資訊與 JUnit 位置；CTest 原始日誌和 JUnit XML 也保存在同一個 ignored build 目錄。回報必須列出實際跑過與未跑的測試及原因。不得把未執行的 Windows／TSF 測試說成通過。
 
 `scripts/verify.ps1` 與 `scripts/test-core.ps1` 保留作為舊入口、核心除錯與 benchmark 對照；日常與 PR 驗收使用上列分級入口。上游核心測試原有的記憶體使用限制排程仍保留，混打測試的快取身分斷言使用獨立 Cargo 程序，避免其他案例淘汰它正在比對的快取；`engine_lm` 與 `engine_replay` 延遲斷言仍各自序列執行。CTest 對模型使用、核心 fixture 與 UI 工作加鎖；私人桌面案例各用獨立 profile，不註冊輸入法、不切換桌面、不讀寫真實使用者資料。
+
+保留上游 #100 的核心通過結果快取與只同步變更內容：AFFECTED／直接呼叫 `test-core.ps1` 可重用完全一致的 executable、參數、資料、模型及日誌；報告須明列重用、沒有重跑斷言。FULL／RELEASE 及 benchmark 必須實際執行核心斷言，不能將結果快取命中當成同覆蓋率加速。直接使用 `test-core.ps1 -Rerun` 可強制執行。保留 #96 的工具私人副本與 WinUI 啟動前隔離；截圖只在 `verify-ui.ps1 -Visual` 要求時產生。
 
 ### 建置與 Rust
 

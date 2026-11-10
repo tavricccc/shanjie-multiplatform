@@ -213,7 +213,7 @@ public sealed partial class TypingDemo : UserControl
     /// The real window's item height and label size, at a slightly smaller word size so nine fit.
     UIElement ListView(DemoList list, Color text, Color number)
     {
-        var selectedText = Brush(Colors.White); var accent = Motion.Accent;
+        var selectedText = Motion.OnAccent; var accent = Motion.Accent;
         Border Item(int i)
         {
             bool selected = i == list.Selected;

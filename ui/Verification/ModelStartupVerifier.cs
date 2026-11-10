@@ -2,7 +2,7 @@ namespace Shanjie_UI.Verification;
 /// <summary>A fresh settings process with a saved downloaded model; scripts/verify-ui.ps1 prepares the isolated profile and runs it twice.</summary>
 internal static class ModelStartupVerifier
 {
-    internal const string Id = "fixture-model";
+    internal static string Id => Environment.GetEnvironmentVariable("SHANJIE_MODEL_STARTUP_ID") ?? "fixture-model";
     internal static async Task Run(MainWindow settings, string phase)
     {
         void Check(bool ok, string what)
@@ -22,9 +22,15 @@ internal static class ModelStartupVerifier
         await Task.Delay(200);
         Check(settings.ShownModelForVerification == Id && settings.Vm.ModelId == Id, "the saved model is not shown");
         Check(!settings.Vm.HasChanges, "start-up left unsaved changes");
+        if (phase != "first-open") {
+            Check(settings.Vm.AccentMode==2 && settings.Vm.AccentColor=="#42D6A4" && settings.Vm.PureBlack && settings.Vm.Theme==2 && settings.Vm.AnimationMode==1,"appearance did not survive a fresh settings process");
+        }
         settings.Vm.RefreshModels(settings.Vm.AvailableModels.Where(m => m.Id != Models.ModelCatalog.Builtin).ToList());
         await Task.Delay(100);
         Check(settings.ShownModelForVerification == Id && !settings.Vm.HasChanges, "a rescan changed the selection");
+        if (phase == "first-open") {
+            settings.Vm.AccentMode=2; settings.Vm.AccentColor="#42D6A4";settings.Vm.PureBlack=true;settings.Vm.Theme=2;settings.Vm.AnimationMode=1;
+        }
         // Saving an unrelated setting keeps the model.
         settings.Vm.Demote = !settings.Vm.Demote;
         Check(settings.Vm.HasChanges, "the unrelated change was not noticed");

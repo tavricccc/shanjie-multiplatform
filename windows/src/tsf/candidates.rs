@@ -25,6 +25,7 @@ pub struct Candidates {
     pub revision: Cell<u64>,
     caret: Cell<RECT>,
     pub theme: Cell<u32>,
+    pub appearance: Cell<crate::appearance::Appearance>,
     pub size: Cell<u32>,
     pub anchor_right: Cell<bool>,
     pub reading_panel: Cell<bool>,
@@ -58,6 +59,7 @@ pub unsafe fn new(
         revision: Cell::new(0),
         caret: Cell::new(RECT::default()),
         theme: Cell::new(theme),
+        appearance: Cell::new(crate::appearance::Appearance::default()),
         size: Cell::new(size),
         anchor_right: Cell::new(true),
         reading_panel: Cell::new(false),
@@ -233,6 +235,7 @@ impl Candidates {
             *host = Some(Host::start(self.window.get(), owner)?);
         }
         if let Some(host) = host.as_mut() {
+            host.appearance = self.appearance.get();
             host.anchor_right = self.anchor_right.get();
             host.publish(
                 self.snapshot.borrow().clone(),

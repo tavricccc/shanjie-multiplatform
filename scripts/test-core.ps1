@@ -5,7 +5,7 @@
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 function Get-MemoryUse {
@@ -44,6 +44,27 @@ function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArgum
     }
     foreach ($job in $failed) { Write-Host "---- $($job.Name)"; Get-Content $job.Log, "$($job.Log).err" }
     if ($failed) { throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')" }
+}
+function Sync-ChangedFiles([string]$Source, [string]$Destination) {
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $wanted = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $written = 0
+    foreach ($file in Get-ChildItem -LiteralPath $Source -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]\.deleted_files[\\/]' }) {
+        $relative = [IO.Path]::GetRelativePath($Source, $file.FullName); [void]$wanted.Add($relative)
+        $target = Join-Path $Destination $relative
+        if ((Test-Path -LiteralPath $target) -and (Get-Item -LiteralPath $target).Length -eq $file.Length -and
+            [Linq.Enumerable]::SequenceEqual([IO.File]::ReadAllBytes($target), [IO.File]::ReadAllBytes($file.FullName))) { continue }
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force; $written++
+    }
+    $existing = Get-ChildItem -LiteralPath $Destination -Force | Where-Object Name -notin 'target', '.deleted_files', 'Cargo.lock', '.source-cache.json' |
+        ForEach-Object { if ($_.PSIsContainer) { Get-ChildItem -LiteralPath $_.FullName -Recurse -File } else { $_ } }
+    foreach ($stale in $existing | Where-Object {
+            $relative = [IO.Path]::GetRelativePath($Destination, $_.FullName)
+            $relative -notmatch '[\\/]\.deleted_files[\\/]' -and !$wanted.Contains($relative) }) {
+        Preserve-Output $stale.FullName; $written++
+    }
+    $written
 }
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/export-upstream.ps1"
@@ -200,10 +221,8 @@ try {
     if (!$testTreeCacheHit) {
         $stage = Start-TestStage -Name 'Prepare isolated core test tree' -Category 'core.prepare'
         try {
-            foreach ($relative in $testPaths) {
-                $path = Join-Path $tree $relative
-                if (Test-Path -LiteralPath $path) { Preserve-Output $path }
-            }
+            $finalTree=$tree
+            $tree=Join-Path $base ('.stage-'+[guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $tree -Force | Out-Null
             Copy-Item "$root/build/core/src","$root/build/core/Cargo.toml" $tree -Recurse -Force
             Copy-Item "$upstream/core/tests" $tree -Recurse -Force
@@ -243,7 +262,11 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
             [IO.File]::WriteAllText($learn, $unixOnly.Replace($content, "#[cfg(unix)]`n`$1fn `$2("), [Text.UTF8Encoding]::new($false))
             Preserve-Output (Join-Path $tree 'tests/learn_store.rs')
             & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $tree 'tests')
+            $written=Sync-ChangedFiles $tree $finalTree
+            Preserve-Output $tree
+            $tree=$finalTree
             Save-ContentCache -Root $tree -ManifestPath $testManifest -Key $testKey -Paths $testPaths
+            Write-Host "Upstream test tree: $written file(s) changed."
             Complete-TestStage -Stage $stage -Status 'passed' -Details @{ cache='miss'; upstream_commit=$upstreamPin }
         } catch {
             Complete-TestStage -Stage $stage -Status 'failed' -Details @{ cache='miss'; upstream_commit=$upstreamPin } -ErrorMessage $_.Exception.Message
@@ -266,6 +289,20 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
+    if(!@($binaries).Count){throw 'Cargo returned no upstream core test executables.'}
+    # Preserve #100's passing-result reuse, keyed by the actual executables,
+    # arguments and isolated input contents. CTest FULL/RELEASE explicitly pass -Rerun.
+    $key=Get-CoreTestRunKey -Binaries @($binaries) -ResourceRoot $resources -ModelRoot $modelFixture -Arguments $skipArguments -MemoryLimit $MemoryLimit
+    $passed=Join-Path $base "passed/$key.json"
+    $resultCacheHit=Test-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
+    $cacheStage=Start-TestStage -Name 'Validate upstream passing-result cache' -Category 'core.result-cache'
+    Complete-TestStage -Stage $cacheStage -Details @{cache=if($resultCacheHit -and !$Rerun){'hit'}else{'miss'};key=$key;receipt=$passed;forced=[bool]$Rerun;binaries=@($binaries).Count}
+    if($resultCacheHit -and !$Rerun){
+        Write-Host "CACHED upstream tests: identical binaries, arguments, data, models and retained logs ($key). Assertions were not re-executed; use -Rerun to force them."
+        return
+    }
+    # An explicit rerun that fails must invalidate a previous passing receipt too.
+    if(Test-Path -LiteralPath $passed){Preserve-Output $passed}
     # Both suites assert per-key latency. Isolate them from other binaries and
     # from each other's test cases; parallel decoding is not a latency baseline.
     $latency = @('engine_lm','engine_replay')
@@ -273,4 +310,5 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     foreach ($name in $latency) {
         Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree ($skipArguments + @('--test-threads=1')) $MemoryLimit
     }
+    Save-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
 } finally { Pop-Location }

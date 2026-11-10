@@ -4,14 +4,27 @@ public partial class App : Application
 {
     private object? window;
     private SettingsInstance? instance;
-    public App() => InitializeComponent();
+    public App()
+    {
+        UnhandledException += (_, args) => StartupDiagnostics.Write(args.Exception, "unhandled-ui");
+        InitializeComponent();
+    }
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         // Pop-ups (drop-downs, tool tips) do not inherit the window's font; they read the theme font. Resources are
         // only available once the app has launched.
         if (Glass.GlassWindow.Font is { } font) Resources["ContentControlThemeFontFamily"] = font;
         var arguments = Environment.GetCommandLineArgs();
-        if (arguments.Length == 4 && arguments[1] is "--verify-models" or "--verify-model-v2")
+        if (arguments.Length == 3 && arguments[1] == "--verify-startup")
+        {
+            string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(output, "profile"));
+            Environment.SetEnvironmentVariable("SHANJIE_TEST_PROFILE", "1");
+            try { Verification.StartupVerifier.Resources(output); var main = new MainWindow(); window = main; await Verification.StartupVerifier.Run(main, output); File.WriteAllText(Path.Combine(output, "result.txt"), "PASS"); }
+            catch (Exception error) { File.WriteAllText(Path.Combine(output, "result.txt"), StartupDiagnostics.Describe(error, "verify-startup")); }
+            Environment.Exit(File.ReadAllText(Path.Combine(output, "result.txt")) == "PASS" ? 0 : 1);
+        }
+        else if (arguments.Length == 4 && arguments[1] is "--verify-models" or "--verify-model-v2")
         {
             string output=Path.GetFullPath(arguments[2]);Directory.CreateDirectory(output);
             Environment.SetEnvironmentVariable("LOCALAPPDATA",Path.Combine(output,"profile"));
@@ -116,7 +129,7 @@ public partial class App : Application
                 var setup = new SetupWindow(uninstall); window = setup; setup.Host.Show(); await setup.LoadStatus();
                 if (arguments.Length == 3) await setup.InstallUpdate();
             }
-            catch (Exception error) { SettingsInstance.MessageBox(0, error.Message, uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始", 0x10); Exit(); }
+            catch (Exception error) { StartupDiagnostics.Report(error, uninstall ? "uninstall" : "setup", uninstall ? "解除安裝善解未能開始" : "安裝善解未能開始"); Exit(); }
         }
         else if (arguments.Length is 2 or 3 && arguments[1] == "--check-update")
         {
@@ -140,7 +153,7 @@ public partial class App : Application
                 main.Host.Show();
                 if (!about) Setup.UpdateNotice.CheckInBackground();
             }
-            catch (Exception error) { SettingsInstance.MessageBox(0,error.Message,"善解設定未能開啟",0x10); instance?.Dispose(); Exit(); }
+            catch (Exception error) { StartupDiagnostics.Report(error,"settings","善解設定未能開啟"); instance?.Dispose(); Exit(); }
         }
     }
 }

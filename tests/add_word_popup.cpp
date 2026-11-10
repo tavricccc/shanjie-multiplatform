@@ -76,7 +76,8 @@ int wmain(int argc,wchar_t** argv) {
     if(theme==0)RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
     HIGHCONTRASTW contrast{sizeof(contrast)};SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(contrast),&contrast,0);
     auto background=contrast.dwFlags&HCF_HIGHCONTRASTON?GetSysColor(COLOR_WINDOW):theme==2||(theme==0&&light==0)?RGB(0x1c,0x1c,0x20):RGB(0xf8,0xf8,0xfa);
-    require(sampleBackground(popup)==background,759);require(sampleBackground(GetDlgItem(popup,10))==background,760);
+    auto accent=contrast.dwFlags&HCF_HIGHCONTRASTON?GetSysColor(COLOR_HIGHLIGHT):RGB(0x58,0x74,0xc9);
+    require(sampleBackground(popup)==background,759);require(sampleBackground(GetDlgItem(popup,10))==accent,760);
     captureNative(popup,std::filesystem::path(argv[2])/L"add-word.bmp",false,true);
     keyboard(VK_LCONTROL);down('A');keyboard(0);
     int sequence[]={'C','J','O','6','R','U','8',VK_SPACE};for(int vk:sequence)down(vk);

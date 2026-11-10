@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "recorded_local": "2026-11-10T01:49:03.6763262+08:00",
-  "branch": "refactor/ctest-verification",
+  "branch": "refactor/ctest-upstream-integration",
   "code_checkpoint": "688f1cb72024c5c48c129d77b3df38041a0b62e5",
   "latest_fix_update": {
     "base_commit": "8c5d0030bd4b98f12055b21a043c203acd6617c2",
-    "source_ref": "HEAD containing this update; resolve with git rev-parse HEAD. code_checkpoint remains the historical Windows checkpoint.",
+    "source_ref": "80c019dd2d900299b8dc2a905eccb2f04d49f97d; historical P2 validation, superseded by latest_integration for current Windows follow-up.",
     "changes": [
       "Pin product Cargo --target-dir to the existing worktree windows/target root for x64 and x86",
       "Collect both sides of committed, staged and unstaged moves using git diff --no-renames"
@@ -16,7 +16,12 @@
       "parser_errors": 0,
       "portable_checks_passed": 34,
       "cargo_mode": "Mock command/output fixtures with CARGO_TARGET_DIR and stale products; no Rust or MSVC compilation",
-      "real_git_cases": ["staged", "committed", "unstaged", "documentation-only"],
+      "real_git_cases": [
+        "staged",
+        "committed",
+        "unstaged",
+        "documentation-only"
+      ],
       "original_build_and_test_drivers_rejected": true,
       "windows_acceptance_run": false,
       "benchmark_run": false
@@ -26,7 +31,9 @@
       "Resume only CTest cold and warm on the original Windows host using the existing ResumeReport and HistoricalLegacyReport",
       "Complete RELEASE on the final clean HEAD; include native x64/x86 output-path verification with an isolated CARGO_TARGET_DIR",
       "Reuse only the matching new RELEASE receipt for guarded local candidate promotion"
-    ]
+    ],
+    "commit": "80c019dd2d900299b8dc2a905eccb2f04d49f97d",
+    "follow_up_superseded_by": "latest_integration; preserve this block as historical P2 results"
   },
   "current_head_release_verified": false,
   "benchmark_complete": false,
@@ -166,5 +173,88 @@
     "contains_raw_local_paths": true
   },
   "raw_reports_in_git": false,
-  "cloud_can_run_windows_acceptance": false
+  "cloud_can_run_windows_acceptance": false,
+  "original_branch": "refactor/ctest-verification",
+  "latest_integration": {
+    "base_ctest_commit": "80c019dd2d900299b8dc2a905eccb2f04d49f97d",
+    "upstream_repository": "tavricccc/shanjie-multiplatform",
+    "upstream_main_commit": "4794ab3c54f9edb018885112381ad9c8341c07bc",
+    "source_ref": "HEAD containing this integration; resolve with git rev-parse HEAD",
+    "version": "0.16.0-beta.2",
+    "original_ctest_branch_preserved": true,
+    "main_modified": false,
+    "changes": [
+      "Merge upstream main without changing product behavior or the fixed core submodule",
+      "Preserve #86 release transactions, same-source manifests, run-attempt artifacts and publication conditions",
+      "Preserve #96 private tool copies and startup/disabled UI assertions, with prelaunch profile and in-process core isolation",
+      "Preserve #100 legacy harness cache, changed-byte source sync, validated core pass cache and opt-in screenshots",
+      "Use one CTest change-impact policy via compatibility entries; retain mapped UI cases on AFFECTED full expansion",
+      "Register digit-navigation in both modes/architectures and six independent startup/disabled CTest rows",
+      "Force core assertions for FULL/RELEASE and equal-execution benchmarks; allow explicit passing-result reuse only outside those comparisons"
+    ],
+    "ci": {
+      "fixed_rows": [
+        "fast.infrastructure",
+        "fast.upstream-data",
+        "fast.prepare-core",
+        "fast.rust.shared",
+        "fast.rust.windows"
+      ],
+      "product_build": false,
+      "model_download": false,
+      "branch_push_trigger": false,
+      "new_linux_workflow": false,
+      "upstream_linux_release_job_unchanged": true,
+      "windows_runner_executed_here": false
+    },
+    "cloud_validation": {
+      "powershell": "7.5.4",
+      "parser_files": 63,
+      "parser_errors": 0,
+      "integration_checks": 34,
+      "selection_cases": 19,
+      "path_regression_checks": 34,
+      "python_release_transaction_tests": 13,
+      "plan_only": "verify-changed -Base upstream/main -DryRun delegates to CTest planner; planned status, no CMake/build/test execution",
+      "windows_native_tests_run": false,
+      "benchmark_run": false,
+      "yaml_workflows_parsed": 3,
+      "static_ci_and_release_boundaries": "passed; release/linux/publish jobs equal upstream, daily CI remains fixed five",
+      "historical_measurements_equal_original_branch": true,
+      "directory_link_migration_fixture": "passed using temporary file links; Windows junction self-check added but not executed here",
+      "warm_receipt_archive_fixture": "passed against actual branch AST in temporary external workspace; no benchmark run",
+      "full_infrastructure_script_run": false
+    },
+    "static_inventory_expected": {
+      "full_x64": 87,
+      "release_x64": 99,
+      "release_x86": 84,
+      "release_total": 183,
+      "english_combinations_per_arch": 32,
+      "submission_combinations_per_arch": 77,
+      "ui_startup_and_disabled_subcases": 9,
+      "release_subcases": 227,
+      "windows_configure_or_execution_verified": false
+    },
+    "benchmark": {
+      "completed_measurements_preserved": true,
+      "prior_four_valid_for_integrated_scope": false,
+      "reason": "Upstream product and regression inputs changed; old four runs remain historical and must not be mixed with integrated results or overwritten.",
+      "old_resume_requires_original_product_scope": true,
+      "matching_new_baseline": "4794ab3c54f9edb018885112381ad9c8341c07bc",
+      "new_comparison_not_started": true,
+      "speedup": "not-measured",
+      "warm_core_assertions": "Archive result receipts only in newly executed baseline/legacy worktrees; retain compilation/model caches. Imported completed runs and their evidence are untouched."
+    },
+    "windows_pending": [
+      "MSVC incremental harnesses and x64/x86 artifact separation; migrate known former tools junction safely",
+      "Native Rust/core/models/TSF/private-desktop suites including both digit-navigation modes",
+      "WinUI startup clean/reopen/different-directory and disabled controls for keyboards 1/3/2, initial/reopen",
+      "AFFECTED validated core-result reuse versus forced FULL/RELEASE execution and invalidation",
+      "FULL 87 and complete RELEASE 183 with all 227 subcases on final clean HEAD",
+      "Real DLL/tool/staticlib paths with an isolated CARGO_TARGET_DIR in the same RELEASE run",
+      "Windows CI fixed baseline and existing release job CiSafe; skipped interactive cases require local Windows",
+      "Preserve old four benchmarks; any new integrated performance comparison needs matching product scope and separate evidence"
+    ]
+  }
 }

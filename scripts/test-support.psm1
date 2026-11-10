@@ -1,4 +1,33 @@
 Set-StrictMode -Version Latest
+. "$PSScriptRoot/preserve-output.ps1"
+
+# The private executable path is part of the core IPC identity. Data may be shared
+# read-only, but fixture tools must be real copies rather than a dist/tools junction.
+function Copy-TestTools([string]$Source,[string]$Destination) {
+    $project=Split-Path $PSScriptRoot -Parent
+    $Source=[IO.Path]::GetFullPath($Source);$Destination=[IO.Path]::GetFullPath($Destination)
+    $build=[IO.Path]::GetFullPath((Join-Path $project 'build'))+[IO.Path]::DirectorySeparatorChar
+    if(!$Destination.StartsWith($build,[StringComparison]::OrdinalIgnoreCase)){throw 'Private fixture tools must remain under this worktree build/.'}
+    $item=Get-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+    if($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){
+        if([IO.Path]::GetFullPath([string]$item.Target) -ne $Source){throw 'Refusing to replace an unexpected fixture tool link.'}
+        # Preserve-Output deliberately rejects links. Move only this recognized
+        # former tools junction itself; never traverse or remove its dist target.
+        $archive=Join-Path (Split-Path $Destination -Parent) '.deleted_files'
+        $null=New-Item -ItemType Directory -Path $archive -Force
+        Move-Item -LiteralPath $Destination -Destination (Join-Path $archive ('tools-link-'+[guid]::NewGuid().ToString('N')))
+    }
+    $null=New-Item -ItemType Directory -Path $Destination -Force
+    $names=@()
+    foreach($file in Get-ChildItem -LiteralPath $Source -File){
+        $names+=$file.Name
+        $target=Join-Path $Destination $file.Name
+        $existing=Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+        if($existing -and ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Refusing to overwrite a linked fixture tool.'}
+        if(!$existing -or (Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath $target).Hash){Copy-Item -LiteralPath $file.FullName -Destination $target -Force}
+    }
+    foreach($stale in Get-ChildItem -LiteralPath $Destination -File|Where-Object Name -NotIn $names){Preserve-Output $stale.FullName}
+}
 
 function Get-RelativeFileEntries {
     param(
@@ -54,6 +83,14 @@ function Get-ContentFingerprint {
     foreach ($value in $Values) { [void]$builder.Append("value").Append("`0").Append($value).Append("`n") }
     $bytes = [Text.Encoding]::UTF8.GetBytes($builder.ToString())
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
+
+function Get-CoreTestRunKey([object[]]$Binaries,[string]$ResourceRoot,[string]$ModelRoot,[string[]]$Arguments,[int]$MemoryLimit) {
+    $inputs=@(foreach($binary in $Binaries|Sort-Object Name){"$($binary.Name)=$((Get-FileHash -LiteralPath $binary.Path).Hash)"})
+    $inputs+=@("arguments=$($Arguments -join ' ')","threads=$env:RUST_TEST_THREADS","memory_limit=$MemoryLimit","processors=$([Environment]::ProcessorCount)")
+    $inputs+=Get-ContentFingerprint -Root $ResourceRoot -Paths @('data','eval')
+    $inputs+=Get-ContentFingerprint -Root $ModelRoot -Paths @('.')
+    [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs -join "`n"))).ToLowerInvariant()
 }
 
 function Test-ContentCache {
@@ -294,4 +331,4 @@ function Get-ExclusiveTestTimings([object[]]$Events) {
     }
 }
 
-Export-ModuleMember -Function Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings
+Export-ModuleMember -Function Get-CoreTestRunKey,Copy-TestTools,Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings

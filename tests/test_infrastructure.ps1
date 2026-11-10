@@ -8,6 +8,27 @@ if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/test-infrastructure-'+[guid
 $null=New-Item -ItemType Directory -Path $ResultRoot -Force
 function Assert-Check([bool]$Condition,[string]$Name){if(!$Condition){throw "FAIL $Name"}}
 & "$PSScriptRoot/verification_paths.ps1" -ResultRoot (Join-Path $ResultRoot 'verification-paths')
+& "$PSScriptRoot/ctest_integration.ps1" -ResultRoot (Join-Path $ResultRoot 'ctest-integration')
+& "$PSScriptRoot/verify_selection.ps1"
+# This existing Windows-only infrastructure test also exercises migration from
+# the original CTest payload junction without traversing or modifying its target.
+$toolSource=Join-Path $ResultRoot 'tools-source'
+$toolCopy=Join-Path $ResultRoot 'tools-migration'
+$null=New-Item -ItemType Directory -Path $toolSource -Force
+[IO.File]::WriteAllText("$toolSource/core.exe",'private copy fixture')
+$null=New-Item -ItemType Junction -Path $toolCopy -Target $toolSource
+Copy-TestTools $toolSource $toolCopy
+Assert-Check (!((Get-Item $toolCopy).Attributes -band [IO.FileAttributes]::ReparsePoint)) 'Former tools junction becomes a real private directory'
+Assert-Check ((Get-Content "$toolSource/core.exe" -Raw) -eq 'private copy fixture') 'Tools migration leaves the junction target intact'
+$unexpected=Join-Path $ResultRoot 'unexpected-tools-link'
+$null=New-Item -ItemType Junction -Path $unexpected -Target $toolSource
+$rejected=$false
+try{Copy-TestTools $toolCopy $unexpected}catch{$rejected=$true}
+Assert-Check $rejected 'An unexpected tools junction is refused'
+Invoke-Timed -Name 'Release transaction self-tests (in-memory API)' -Category 'test.release-transactions' -Action {
+    & python "$root/scripts/test_release.py"
+    if($LASTEXITCODE){throw 'Release transaction self-tests failed.'}
+}
 
 foreach($path in 'CMakeLists.txt','.github/workflows/ci.yml','scripts/test-support.psm1','shared/Cargo.toml','shared/src/protocol.rs','windows/src/broker.rs') {
     Assert-Check (Get-VerificationImpact $path).Full "$path must expand AFFECTED to FULL"
@@ -28,7 +49,7 @@ foreach($badRows in @(@{rows=@($ciRows[0..3])},@{rows=@($ciRows)+@([pscustomobje
 }
 
 $english=Get-EnglishKeyCases
-Assert-Check ($english.Count -eq 30) 'Preserve all 30 English mode/layout combinations'
+Assert-Check ($english.Count -eq 32) 'Preserve all 32 English mode/layout combinations, including digit navigation'
 Assert-Check ((Get-SubmissionCases 1).Count -eq 52) 'Preserve all 52 Standard submission combinations'
 Assert-Check ((Get-SubmissionCases 2).Count -eq 25) 'Preserve all 25 Eten submission combinations'
 $rows=@(

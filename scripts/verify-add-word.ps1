@@ -34,7 +34,7 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/add_word_popup.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@
     Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-    Invoke-Timed -Name "Compile add-word harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/add_word_popup.cpp'} -Action { & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log";if($LASTEXITCODE){throw "Add-word TSF harness compile failed: $arch"} }
+    Invoke-Timed -Name "Compile add-word harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/add_word_popup.cpp'} -Action { Invoke-HarnessBuild $command "$out/compile.cmd" $exe "$out/compile.log";if($LASTEXITCODE){throw "Add-word TSF harness compile failed: $arch"} }
     }
     $previous=$env:LOCALAPPDATA; $previousTest=$env:SHANJIE_TEST_PROFILE; $previousHeadless=$env:SHANJIE_HEADLESS;$previousTheme=$env:SHANJIE_TEST_POPUP_THEME;$previousModel=$env:SHANJIE_TEST_POPUP_MODEL
     try {

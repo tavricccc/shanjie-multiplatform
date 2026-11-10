@@ -663,9 +663,10 @@ impl Engine {
         // The Windows punctuation, literal and mixed policies would otherwise keep its tail as an
         // unfinished reading (1 then Ctrl+\ showing ㄅ、 instead of 1、).
         if self.drun.is_some() {
-            // Enter and Down treat a lone key shown as its digit as that digit token, leaving
-            // its Zhuyin symbol selectable in the opened candidate list.
-            if matches!(key.kind, KeyKind::Enter | KeyKind::Down) && self.lone_digit().is_some() {
+            // Commit, candidate opening and cursor movement preserve the displayed digit.
+            // Its Zhuyin symbol remains selectable in the opened candidate list.
+            if matches!(key.kind, KeyKind::Enter | KeyKind::Down | KeyKind::Left | KeyKind::Right | KeyKind::Home | KeyKind::End)
+                && self.lone_digit().is_some() {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
             }
@@ -903,6 +904,15 @@ impl Engine {
                     self.mixed_raw.clear();
                     self.mixed_shifted_end = 0;
                     return self.key_original(key);
+                }
+                KeyKind::Left | KeyKind::Right | KeyKind::Home | KeyKind::End
+                    if self.mixed_raw.bytes().all(|ch| ch.is_ascii_digit()) => {
+                    // The view shows raw digits over an unfinished reading. Make those
+                    // digits editable before handing navigation back to the core.
+                    let prefix = self.insert_windows_literal("")?.commit;
+                    let mut out = self.key_original(key)?;
+                    out.commit = prefix + &out.commit;
+                    return Ok(out);
                 }
                 _ => {}
             }

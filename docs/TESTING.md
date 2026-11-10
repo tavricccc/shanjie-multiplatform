@@ -13,6 +13,8 @@ pwsh -File scripts/test.ps1 -Level RELEASE
 
 `FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準；分支已含廣泛變更時，`-BaseRef HEAD` 可只檢查目前工作樹，正式整合仍須 FULL。只有明確的文件檔可自動略過；程式碼檔不靠行首正則式判斷純註解。FAST 保持快速基線，AFFECTED 才依影響加選或擴大至 FULL。明確指定 FULL／RELEASE 時，一律執行完整集合，不套用文件略過規則。
 
+影響規則只維護一份。上游 `verify-changed.ps1 -Base <ref>` 轉交 AFFECTED，`-DryRun` 對應 `test.ps1 -PlanOnly`，不執行 CMake、建置或測試，報告狀態為 `planned`；它列出變更原因與要求的標籤，實際 CTest 清冊仍須 Windows configure。`verify-changed.ps1 -Architecture x86` 保守對應雙架構 RELEASE；`-UseExistingBuild` 不繞過快取驗證。`verify-selection.ps1` 的純選測 API 改回傳 CTest `Full`／`Labels`／`Skip`／`Reasons`，不保留第二套 Steps／Suites 排程。移動檔案以原、新兩個路徑判斷，移入 docs 不會掩蓋原本的程式碼變更。
+
 GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢；不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史、不傳輸大型 target／模型快取，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
 
 PR 指向 main 時，開啟、更新提交與重新開啟會跑輕量 CI；`workflow_dispatch` 也只跑相同集合。一般開發分支 push、本機編譯、commit 或 CTest 都不觸發 Actions。完整驗收在本機執行；未另加自動或手動 FULL workflow。既有 release workflow 仍只在 main 的版本檔變更或明確手動啟動時執行，手動預設僅驗證，發布仍受原本的版本、相依 job 與模式檢查約束。
@@ -40,9 +42,9 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | FULL | FULL 標籤的全部 x64 測試案例及產品建置 | PR、整合前完整 x64 驗收 |
 | RELEASE | x64 FULL、x86 TSF／混打／Rust 檢查、兩架構候選 host、輸入互動與 mode harness、WinUI 驗收和安裝包校驗 | 正式發布前 |
 
-影響規則集中在 `scripts/test-plan.psm1`。profile／bridge 對應 TSF、設定更新與 WinUI；shared 輸入政策對應 TSF 與引擎互動；原生候選／模式元件對應 TSF、UI 與 mode。其餘 Windows／shared 共用邏輯、核心、模型、依賴及不明影響會擴大至 FULL；專用 harness 選相應案例。無關 WinUI 的 AFFECTED 可略過 UI publish。CI 的固定集合不使用這些選測規則。
+影響規則集中在 `scripts/test-plan.psm1`。profile／bridge 對應 TSF、設定更新與 WinUI；shared 輸入政策對應 TSF 與引擎互動；原生候選／模式／appearance 元件對應 TSF、UI 與 mode。shared appearance 與 TSF service 保守擴大 FULL，並保留已映射的 UI 回歸。其餘 Windows／shared 共用邏輯、核心、模型、依賴及不明影響會擴大至 FULL；專用 harness 選相應案例。選測與 Python 發布交易邏輯對應 framework 自檢，installer／runtime log 對應 Windows 單元測試。無關 WinUI 的 AFFECTED 可略過 UI publish。CI 的固定集合不使用這些選測規則。
 
-每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 30 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 32 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
 
 計時事件含 stage ID、parent ID、原始包含子階段耗時及 `exclusive_duration_ms`。後者扣除子階段區間聯集，避免巢狀重複加總；平行工作的合計仍可能大於 wall-clock。探測程序使用有期限的等待並只清理自己啟動的程序；CTest 另設每項 timeout。
 
@@ -53,20 +55,21 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | 舊流程／測試 | CTest 案例 | 保留的驗證與條件 |
 | --- | --- | --- |
 | `verify-upstream-data.ps1` | `fast.upstream-data`, `full.dist-data` | 上游詞庫、詞包、模型清冊及建置後檔案完整性 |
-| 測試框架本身 | `fast.infrastructure` | 影響分類、fixture、完整子案例、重試歷程、空快取、必要輸入、探測 timeout 與計時階層 |
+| 測試框架本身 | `fast.infrastructure` | 影響分類（含上游 19 情境）、fixture、完整子案例、重試歷程、空快取、必要輸入、探測 timeout 與計時階層；另含 Cargo／移動路徑、整合快取自檢與上游 13 個 Python 發布交易測試（FakeGitHub，無網路發布） |
 | `prepare-core.ps1`、Rust `shared/windows --lib` | `fast.prepare-core`, `fast.rust.*` | 與 CI 相同的 core overlay 與 Rust 單元測試 |
 | `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；原本依實體記憶體排程與 `engine_lm`／`engine_replay` 序列延遲斷言不變 |
 | ignored `mixed_regression` | `full.mixed-regression.x64` | 使用建置模型與資料執行混打、數字回歸 |
 | `tests/tsf_smoke.cpp` | standard、cold 各一項 | 真實 TSF context、標準 profile 與無模型冷啟動；不註冊輸入法 |
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
-| `verify-english-keys.ps1` | 19 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言 |
+| `verify-english-keys.ps1` | 20 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言；加入上游兩種模式的 digit-navigation |
 | `verify-submission.ps1` | 21 個 mode 項目及 `input-digits` 項目 | 每項提交、取消、焦點、忙碌與退休流程斷言；數字輸入保留所有原始組合 |
 | `verify-private-desktop.ps1` | 18 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
 | `verify-interaction.ps1`、`verify-mode.ps1` | `release.interaction.x64`、`release.mode.x64`、`release.mode.x86` | 隔離 profile 的引擎互動回歸、兩架構離屏模式列／圖示 smoke；不送出桌面輸入 |
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
+| 上游 WinUI 啟動／停用控制項回歸 | `release.ui.startup.{clean,reopen,different-directory}`、`release.ui.disabled.keyboard{1,3,2}` | 獨立啟動路徑、已有 profile、不同工作目錄；標準／善解／倚天停用設定的初次與重開檢查，保留非標準鍵盤的鄰鍵列斷言 |
 
-CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
+依目前來源清冊，FULL 為 87 個 x64 項目，RELEASE 為 x64 99＋x86 84＝183 個項目、227 個參數子案例；這是靜態計數，整合版尚未在 Windows 執行。實際清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
 
 ### 專用驗收（不屬於舊 `verify.ps1` FULL 清冊）
 
@@ -86,20 +89,21 @@ CTest 清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準�
 
 ## 重複工作與隔離
 
-- C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本仍保留原編譯 fallback。
-- Cargo target 保留既有增量 fingerprint；上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取。
+- C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本的編譯 fallback 保留上游 #100 的 `Invoke-HarnessBuild` 快取，不再反覆編譯相同內容。
+- Cargo target 保留既有增量 fingerprint；產品 build 明確指定工作樹的 `windows/target`，外部 `CARGO_TARGET_DIR` 不會讓複製 DLL／工具／staticlib 的路徑失配。上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取，失效時也只同步位元組有變的檔案，不破壞未修改來源的時間戳。
+- 保留 #100 的核心通過結果快取：直接呼叫 `test-core.ps1` 或 AFFECTED 可重用相同 executable、參數、執行緒／記憶體限制、資料、模型及輸出日誌的成功結果，報告明示 `core_result_reused`。FULL／RELEASE 和直接 CTest 強制 `-Rerun`，每次實際執行核心斷言；失敗的明確重跑會先讓舊成功收據失效。`test-core.ps1 -Rerun` 可手動強制執行。
 - Windows Rust 單元測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink；測試範圍與斷言均保留。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
-- 測試 payload 僅建立在 `build/cmake/`，其中 `data`、`tools` 是指向 `dist/` 的唯讀 junction；測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
+- 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/` 的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
 - 英文鍵、提交、加詞視窗與非視覺 TSF smoke 在不切換的私人測試桌面執行，隔離目前桌面的實際 Alt／Ctrl／Shift 與前景視窗變動；既有私人桌面案例也保持隔離。這不代表已驗證使用者正在操作的前景 App。
-- WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果與畫面保留在本次報告目錄。
+- WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果保留在本次報告目錄，停用設定重開前封存舊 PASS 輸出。截圖依 #100 預設不產生；需要視覺審查時明確使用 `verify-ui.ps1 -Visual`，必要斷言照常執行。
 
 ## 執行環境
 
 | 環境 | 可驗證內容 |
 | --- | --- |
-| Codex Cloud Linux | 原始碼與報告設計、JSON/YAML 等靜態檢查；沒有 MSVC、Windows SDK、WinUI、TSF runtime 時不得宣稱 Windows 測試通過 |
+| Codex Cloud Linux | PowerShell 語法解析、選測規則、檔案／mock 框架自檢、Python 發布交易單元測試與 JSON/YAML 靜態檢查；不執行產品建置或新增 Linux 驗收流程，不能宣稱 MSVC、WinUI、TSF、x64／x86 或 RELEASE 通過 |
 | GitHub Actions Windows | PR 與手動 ci 固定跑 CI 基線；不建置 WinUI 或產品。既有 Release job 才跑 RELEASE -CiSafe，略過的互動項目列為未執行，須本機補驗 |
 | Windows 本機 | FAST、AFFECTED、FULL、RELEASE 全部實際 Windows 測試；WinUI 驗收與候選 host 可使用本機 Windows／SDK |
 
@@ -119,6 +123,8 @@ pwsh -File scripts/release.ps1                      # 取得或重用有效驗�
 
 GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯出 CI artifact；標記明確表示它不是本機完整驗收。日常 PR 的固定輕量 CI 不變。本機正式入口不 push、建立 tag 或呼叫 GitHub Release，遠端動作另需授權。
 
+遠端發布保留上游 #86 的 `scripts/release.py`：先檢查平台產物、來源 manifest 與 SHA-256；只續作同來源草稿，發布過的 Release 不覆寫，artifact 名稱包含 run attempt。這套遠端發布交易與本機完整驗收收據各自保留原有防護，不用 CI-safe 產物冒充本機 RELEASE。既有 Linux 發布 job 原樣保留，本次未新增 Linux 工作。
+
 ## 新舊耗時比較
 
 同一台 Windows、同一 commit、相同完整覆蓋可在完成 commit 後執行：
@@ -126,6 +132,8 @@ GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯
 ```powershell
 pwsh -File scripts/benchmark-verification.ps1 -Commit HEAD
 ```
+
+本次整合後與舊四輪的產品來源不同，舊量測只作歷史參考，不能直接續接後宣稱公平加速。整合分支的匹配基準是此次上游 `4794ab3c54f9edb018885112381ad9c8341c07bc`；Windows 原機要量測新版時可明確加上 `-BaselineCommit 4794ab3c54f9edb018885112381ad9c8341c07bc`。這會建立新的量測集合，沒有覆寫舊四輪；Cloud 未執行任何輪次。歷史證據與待辦見 [CTEST_HANDOFF.md](CTEST_HANDOFF.md)。
 
 Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的原始 `verify.ps1` 加原 CI 的 shared／windows 單元測試、目前提交的相容 `verify.ps1`、目前提交的 CTest FULL。舊 verify 原本不含兩套一般單元測試；執行器以外部命令補上，保持原腳本不變，並分開記錄純 verify 與補充 CI 的耗時，再比較完整相同清冊。預設使用與目前提交共同、尚未採用 CTest 的 origin/main 祖先；無此基準時才用首次加入 CMakeLists.txt 的前一版，也可用 `-BaselineCommit <ref>` 指定。三份產品原始碼、詞庫、模型與 pin 必須一致；不同就拒絕宣稱驗收流程加速。工作副本與報告預設放在 `build/benchmark/`，空間不足時可用 `-OutputRoot <目錄>` 或 `SHANJIE_BENCHMARK_ROOT` 指定其他磁碟。
 
@@ -136,5 +144,7 @@ Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的�
 若要保留先前已完成的相容入口量測，避免重跑，可另加 `-HistoricalLegacyReport <保有成功 legacy_cold／legacy_warm 的 comparison.json>`。產品來源必須相同；這兩輪明確標為原 commit 的歷史參考，停用它們與目前 CTest 的加速百分比，不能當作目前 commit 已驗收。主要效能比較仍是原始 baseline 對目前 CTest FULL，實際案例與組態仍須完全一致。這不授權重用不同 commit 的 RELEASE 紀錄。
 
 「改造前 vs CTest」與「同提交相容入口 vs CTest」分開計算，不能把後者宣稱為整次改造效益。冷快取指全新專案輸出；Cargo registry／NuGet 下載快取與 OS 檔案快取可能已暖。六輪清除環境中的 `RUST_TEST_THREADS`，保留各入口正常的排程：Windows 單元測試單執行緒、舊混打入口自己的單執行緒設定、新入口的獨立快取身分程序，以及原有上游核心記憶體限制排程；不把整套上游測試一併串行化。報告列秒數、分鐘、冷暖差異與包含／自身分類耗時；未執行或覆蓋不等價時不宣稱改善。GitHub Runner 的 CI 耗時另看實際 Actions 紀錄，不能用本機暖快取時間替代。
+
+為保留 #100 的快取又維持相同執行覆蓋，baseline／legacy 的暖快取輪只封存該新量測工作樹的 `build/test/passed` 核心結果收據，仍保留編譯、模型與資料快取；CTest FULL 本身強制重跑核心斷言。AFFECTED 的結果重用收益不能列入此 FULL 比較。已從 ResumeReport 匯入的完成輪次不執行，也不碰其證據。
 
 舊版 harness 仍會讀取所在桌面的鍵盤狀態，量測應使用沒有實際鍵盤輸入干擾的 Windows 測試工作階段。桌面與其他控制條件須一致套用六輪，並隨量測環境記錄。

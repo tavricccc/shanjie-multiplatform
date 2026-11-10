@@ -3,6 +3,7 @@
 param([string]$ResultRoot)
 $ErrorActionPreference='Stop'
 $project=Split-Path $PSScriptRoot -Parent
+Import-Module "$project/scripts/test-plan.psm1" -ErrorAction Stop
 if(!$ResultRoot){$ResultRoot=Join-Path $project ('build/verification-paths-'+[guid]::NewGuid().ToString('N'))}
 if(Test-Path -LiteralPath $ResultRoot){throw 'Use a fresh verification-path fixture directory.'}
 $null=New-Item -ItemType Directory -Path $ResultRoot -Force

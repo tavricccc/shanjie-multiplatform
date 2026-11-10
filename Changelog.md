@@ -2,6 +2,15 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.0-beta.2（Windows pre-release）
+
+詳見 [0.16.0-beta.2 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.2.md)。
+
+- 新增 Windows／自訂強調色、深色純黑背景與獨立動畫選項。
+- 新增純注音輸出，改善數字與符號編輯、快打判斷及選字學習。
+- 更新內建會意模型，改善舊下載模型相容與模型選單。
+- 修正設定開啟失敗、初次停用選項未反灰，並加強加詞快捷鍵的恢復能力。
+
 ## 0.16.0-beta.1（Windows pre-release）
 
 詳見 [0.16.0-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.1.md)。

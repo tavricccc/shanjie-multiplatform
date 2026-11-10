@@ -4,7 +4,8 @@ param(
     [string]$BaseRef='origin/main',
     [ValidateRange(1,32)][int]$Jobs=4,
     [switch]$RetryFailures,
-    [switch]$CiSafe
+    [switch]$CiSafe,
+    [switch]$PlanOnly
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
@@ -21,6 +22,8 @@ $consoleLog=Join-Path $reportRoot 'console.log'
 Start-Transcript -Path $consoleLog -Force | Out-Null
 $previousRunId=$env:SHANJIE_TEST_RUN_ID
 $previousTimingsDirectory=$env:SHANJIE_TEST_TIMINGS_DIR
+$previousLevel=$env:SHANJIE_TEST_LEVEL
+$env:SHANJIE_TEST_LEVEL=$Level
 $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
 $whole=[Diagnostics.Stopwatch]::StartNew()
@@ -59,7 +62,7 @@ function Get-ChangedPathList([string]$Ref) {
     return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null }
 }
 function Test-DocumentationOnly([string]$Path) {
-    return ($Path -match '^(docs/|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
+    return (Test-VerificationDocumentation $Path)
 }
 function Classify-ChangedPath([string]$Path) {
     if (Test-DocumentationOnly $Path) { $pathReasons[$Path]='Documentation-only change; no build or tests.'; return }
@@ -193,14 +196,21 @@ try {
         if(!$changedPaths.Count -and !$changeSet.Error){$notes.Add('No changed paths were found; running the FAST smoke set.')}
     }
     if ($Level -eq 'AFFECTED' -and !$skipTests) {
-        if($forceFull){$requestedLabels.Clear();[void]$requestedLabels.Add('full')}
+        if($forceFull){[void]$requestedLabels.Add('full')}
         else{[void]$requestedLabels.Add('fast')}
         if(!$pathReasons.Contains('fast')){$pathReasons['fast']='FAST source coverage and Rust unit smoke checks run before the mapped regressions.'}
     }
-    if ($Level -eq 'FULL') { [void]$requestedLabels.Add('full') }
-    if ($Level -eq 'CI') { [void]$requestedLabels.Add('ci');$notes.Add('Fixed CI baseline: ignores change impact and never expands to FULL or builds the product.') }
-    if ($Level -eq 'RELEASE') { [void]$requestedLabels.Add('full');[void]$requestedLabels.Add('release') }
+    if ($Level -eq 'FULL') { $requestedLabels.Clear();[void]$requestedLabels.Add('full') }
+    if ($Level -eq 'CI') { $requestedLabels.Clear();[void]$requestedLabels.Add('ci');$notes.Add('Fixed CI baseline: ignores change impact and never expands to FULL or builds the product.') }
+    if ($Level -eq 'RELEASE') { $requestedLabels.Clear();[void]$requestedLabels.Add('full');[void]$requestedLabels.Add('release') }
     $skipTests = $skipTests -and $Level -in @('FAST','AFFECTED') -and !$forceFull
+    if($PlanOnly){
+        $overallStatus='planned'
+        $notes.Add('Plan only: CMake inventory, builds and tests were not executed.')
+        Write-Host "Requested CTest labels: $(@($requestedLabels) -join ', '); skip=$skipTests"
+        foreach($path in $changedPaths){Write-Host "$path : $($pathReasons[$path])"}
+        return
+    }
     $presets=@(if(!$skipTests){'windows-x64'})
     if($Level -eq 'RELEASE'){$presets+=@('windows-x86')}
     foreach($preset in $presets) {
@@ -272,6 +282,10 @@ try {
     }
     $timingEvents=@(Get-ChildItem -LiteralPath $eventsRoot -Filter '*.json' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
     $timings=@(Get-ExclusiveTestTimings $timingEvents | Sort-Object started_utc)
+    foreach($hit in $timings|Where-Object{ $_.category -eq 'core.result-cache' -and $_.details.cache -eq 'hit' }){
+        $notes.Add("Core assertions reused a verified passing result instead of executing again: $($hit.details.receipt)")
+        foreach($result in $testResults|Where-Object name -eq $hit.test_name){$result|Add-Member -NotePropertyName core_result_reused -NotePropertyValue $true}
+    }
     $caseRows=@(
         foreach($row in $selectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$true}}
         foreach($row in $unselectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$false}}
@@ -310,12 +324,13 @@ try {
         commit=if($sourceEnd){$sourceEnd.commit}else{(& git -C $root rev-parse HEAD)}
         worktree_dirty=if($sourceEnd){!$sourceEnd.clean}else{[bool](@(& git -C $root status --porcelain --untracked-files=normal).Count)}
         level=$Level
+        plan_only=[bool]$PlanOnly
         status=$overallStatus
         wall_seconds=[Math]::Round($whole.Elapsed.TotalSeconds,3)
         base_ref=$BaseRef
         changed_paths=$changedPaths
         impact_reasons=$pathReasons
-        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion.'}else{"$Level change-impact selection."}}
+        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;requested_labels=@($requestedLabels);notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion with additional mapped regressions retained.'}else{"$Level change-impact selection."}}
         results=$testResults
         subcases=$subcases
         flaky_tests=@($testResults | Where-Object flaky | ForEach-Object name)
@@ -338,6 +353,7 @@ try {
     Stop-Transcript | Out-Null
     $env:SHANJIE_TEST_RUN_ID=$previousRunId
     $env:SHANJIE_TEST_TIMINGS_DIR=$previousTimingsDirectory
+    $env:SHANJIE_TEST_LEVEL=$previousLevel
 }
 if($overallStatus -ne 'passed'){throw $failureMessage}
 if($Level -eq 'RELEASE' -and $CiSafe -and $env:GITHUB_ACTIONS -eq 'true'){

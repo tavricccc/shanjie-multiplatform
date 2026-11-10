@@ -184,6 +184,13 @@ function Invoke-Run([string]$Name,[string]$Worktree,[ValidateSet('baseline','leg
     foreach($key in 'SHANJIE_TEST_RUN_ID','SHANJIE_TEST_TIMINGS_DIR','SHANJIE_TEST_PARENT_STAGE_ID'){$timingEnvironment[$key]=[Environment]::GetEnvironmentVariable($key);[Environment]::SetEnvironmentVariable($key,$null)}
     try {
         Write-Host "Benchmark $Name started; live log: $log"
+        # #100 can reuse passing core results. Timing comparisons require the
+        # assertions to execute in both flows; keep compile/model caches warm.
+        if($RunKind -eq 'warm' -and $Flow -in @('baseline','legacy')){
+            # Bind cleanup to that detached worktree, including external drives.
+            . (Join-Path $Worktree 'scripts/preserve-output.ps1')
+            Preserve-Output (Join-Path $Worktree 'build/test/passed')
+        }
         if($Flow -eq 'baseline') {
             # The original verify entry did not include the two ordinary CI unit
             # suites. Add those commands externally without editing the baseline.
@@ -414,6 +421,7 @@ try {
             selective_affected='Not part of this equal-scope FULL comparison. Each AFFECTED report records its own selected rows and wall time; compare only with a FULL run for the full-suite baseline.'
             model='Cold and warm mean fresh versus reused project build/test outputs; shared NuGet/Cargo download caches and the machine file cache may already be warm.'
             rust_test_threads='Ambient RUST_TEST_THREADS is cleared. Windows unit suites use --test-threads=1 for their shared installer sink. Original verify keeps its own serial mixed-suite flag; the candidate isolates cache identity in a separate process. Upstream tests keep their normal thread counts and original memory-limited binary scheduler.'
+            core_result_cache='Timing runs execute core assertions: CTest FULL forces -Rerun; baseline/legacy warm passing-result receipts are archived before execution. Compilation/model caches remain warm. AFFECTED result-cache reuse is outside this equal-execution comparison.'
             category_model='Inclusive time contains child stages; exclusive time subtracts their interval union using parent IDs. Parallel work can exceed wall time. The uninstrumented baseline has no category breakdown.'
         }
         category_sums=$categorySums

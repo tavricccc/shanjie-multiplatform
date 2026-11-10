@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Scenarios,[string]$HarnessPath,[string]$PayloadRoot)
+param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Scenarios,[ValidateSet(0,1,2)][int[]]$MixedModes,[string]$HarnessPath,[string]$PayloadRoot)
 $ErrorActionPreference='Stop';$root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
@@ -15,7 +15,8 @@ if($PayloadRoot){
 }else{
  New-Item -ItemType Directory $payload -Force|Out-Null
  foreach($arch in $Architectures){New-Item -ItemType Directory "$payload/$arch" -Force|Out-Null;Copy-Item "$root/dist/$arch/Shanjie.dll" "$payload/$arch" -Force}
- foreach($name in 'data','tools'){New-Item -ItemType Junction -Path "$payload/$name" -Target "$root/dist/$name"|Out-Null}
+  New-Item -ItemType Junction -Path "$payload/data" -Target "$root/dist/data"|Out-Null
+  Copy-TestTools -Source "$root/dist/tools" -Destination "$payload/tools"
  Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 }
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
@@ -37,10 +38,11 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/english_keys.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
    Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-   Invoke-Timed -Name "Compile English-key harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/english_keys.cpp'} -Action { & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'} }
+   Invoke-Timed -Name "Compile English-key harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/english_keys.cpp'} -Action { Invoke-HarnessBuild $command "$out/compile.cmd" $exe "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'} }
   }
   foreach($case in $cases){
    if($Scenarios -and $case[1] -notin $Scenarios){continue}
+   if($PSBoundParameters.ContainsKey('MixedModes') -and $case[0] -notin $MixedModes){continue}
    $folder=Join-Path $out "mode$($case[0])-layout$($case[2])-$($case[1])";if(Test-Path $folder){throw 'Use a fresh result directory'}
    New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
    $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*',"keyboard=$($case[2])"
