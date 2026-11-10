@@ -64,6 +64,19 @@ def existing(api, config):
     release = api.request('GET', '/releases/tags/' + tag)
     if release and not release['draft']:
         return release  # Published releases are immutable, even after a complete rerun.
+    # The tag lookup never returns drafts (a draft has no tag yet), so find them in the list.
+    drafts = []
+    for page in range(1, 11):
+        items = api.request('GET', f'/releases?per_page=100&page={page}') or []
+        drafts += [r for r in items if r.get('draft') and r.get('tag_name') == config['tag']]
+        if len(items) < 100:
+            break
+    else:
+        raise ValueError('Too many releases to search for a draft')
+    if len(drafts) > 1:
+        raise ValueError('Several drafts share this tag; review them before publishing: '
+                         + ', '.join(str(d.get('id')) for d in drafts))
+    release = drafts[0] if drafts else None
     ref = api.request('GET', '/git/ref/tags/' + tag)
     if ref:
         obj = ref['object']

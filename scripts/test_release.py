@@ -1,10 +1,11 @@
 """Release transactions against an in-memory GitHub API; never contacts GitHub."""
-import copy, json, pathlib, tempfile, unittest
+import copy, json, pathlib, shutil, tempfile, unittest
 import release as r
 
 class FakeGitHub:
     def __init__(self):
         self.release = None
+        self.extra = []
         self.assets = []
         self.ref = None
         self.writes = []
@@ -13,12 +14,19 @@ class FakeGitHub:
         self.fail_publish = False
     def request(self, method, path, body=None):
         if method == 'GET':
-            if '/releases/tags/' in path: return copy.deepcopy(self.release)
+            # GitHub's tag lookup returns only published releases; drafts have no tag yet.
+            if '/releases/tags/' in path:
+                return copy.deepcopy(self.release) if self.release and not self.release['draft'] else None
+            if path.startswith('/releases?'):
+                page = int(path.split('page=')[-1]) if '&page=' in path else 1
+                items = [copy.deepcopy(r) for r in ([self.release] if self.release else []) + self.extra]
+                return items if page == 1 else []
             if '/git/ref/tags/' in path: return self.ref
             if '/assets?' in path: return copy.deepcopy(self.assets)
             raise AssertionError(path)
         self.writes.append((method, path, body))
         if method == 'POST':
+            if self.release: raise AssertionError('second draft created')
             self.release = dict(body, id=1)
         elif method == 'PATCH':
             if self.fail_publish: raise OSError('publication failed')
@@ -46,9 +54,11 @@ class ReleaseTests(unittest.TestCase):
         self.package.with_suffix('.exe.sha256').write_text(f'{r.filehash(self.package)}  {self.package.name}\n', encoding='utf-8')
         r.manifest(self.config, 'windows', self.package.parent)
     def archive(self):
-        archive = self.folder.parent / '.deleted_files'
-        archive.mkdir(exist_ok=True)
-        self.folder.rename(archive / self.folder.name)
+        # Scratch lives in the system temp folder; failed runs print its path for inspection.
+        if any(error for _, error in getattr(self._outcome, 'errors', []) if error):
+            print('Kept failed release test scratch:', self.folder)
+        else:
+            shutil.rmtree(self.folder)
     def test_verify_does_not_contact_or_mutate_github(self):
         self.api.request = lambda *args: self.fail('verify mode contacted GitHub')
         self.assertFalse(r.plan(self.api, self.config, True))
@@ -109,6 +119,19 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(self.api.writes), count)
         self.assertEqual(len(self.api.uploads), 2)
         self.assertTrue(self.api.release['draft'])
+    def test_draft_found_only_by_listing_is_resumed_not_recreated(self):
+        self.api.fail_upload = self.package.name + '.sha256'
+        with self.assertRaises(OSError): r.publish(self.api, self.config, self.folder)
+        self.api.fail_upload = None
+        r.publish(self.api, self.config, self.folder)  # the fake refuses a second POST
+        self.assertEqual(sum(m == 'POST' for m, _, _ in self.api.writes), 1)
+        self.assertFalse(self.api.release['draft'])
+    def test_two_drafts_for_one_tag_require_review(self):
+        body = 'notes ' + r.marker(self.config)
+        self.api.release = dict(id=1, draft=True, body=body, target_commitish=self.config['sha'], tag_name=self.config['tag'])
+        self.api.extra = [dict(self.api.release, id=2)]
+        with self.assertRaises(ValueError): r.publish(self.api, self.config, self.folder)
+        self.assertEqual(self.api.writes, [])
     def test_stable_channel_becomes_latest_only_after_verification(self):
         self.config['prerelease'] = False
         r.publish(self.api, self.config, self.folder)
