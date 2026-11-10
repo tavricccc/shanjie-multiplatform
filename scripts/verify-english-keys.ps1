@@ -33,7 +33,7 @@ $(Get-MsvcSetup $arch)
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/english_keys.cpp" /Fo"$out/features.obj" /Fe"$out/features.exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-  Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM;& cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'}
+  Invoke-HarnessBuild $command "$out/compile.cmd" "$out/features.exe" "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'}
   foreach($case in $cases){
    if($Scenarios -and $case[1] -notin $Scenarios){continue}
    if($MixedModes -and $case[0] -notin $MixedModes){continue}

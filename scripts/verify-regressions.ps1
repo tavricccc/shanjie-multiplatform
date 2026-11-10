@@ -39,8 +39,7 @@ $(Get-MsvcSetup $Architecture)
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/$name.cpp" /Fo"$out/$name.obj" /Fe"$harness" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib advapi32.lib
 "@
-    Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-    & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log"
+    Invoke-HarnessBuild $command "$out/compile.cmd" $harness "$out/compile.log"
     if($LASTEXITCODE){throw "$name harness compile failed: $Architecture ($out/compile.log)"}
     $cases=if($suite[1]){@{Cases=$suite[1]}}else{@{}}
     & "$PSScriptRoot/verify-private-desktop.ps1" -Payload $payload -Harness $harness -Output "$out/cases" @cases
