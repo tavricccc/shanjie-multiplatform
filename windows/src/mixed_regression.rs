@@ -3,6 +3,27 @@ use shanjie_core::{engine::{Engine,Layout,Key,KeyKind,ResetMode,MOD_SHIFT},lm::P
 use std::sync::Arc;
 
 #[test]
+fn raw_digit_navigation_preserves_editable_literal_and_cursor() {
+    for digit in "125890".chars() {
+        for (key, cursor) in [(KeyKind::Left, 0), (KeyKind::Home, 0), (KeyKind::Right, 1), (KeyKind::End, 1)] {
+            let lex = Arc::new(Lexicon::parse("ㄅ ㄅ -0.5\n").unwrap());
+            let mut e = Engine::with_lexicon(lex, Layout::Standard);
+            e.set_mixed_input(true);
+            e.set_windows_input_options(1 << 20 | 1 << 23);
+            assert_eq!(e.key(Key::ch(digit, 0)).unwrap().preedit, digit.to_string());
+            let out = e.key(Key::new(key)).unwrap();
+            assert_eq!(out.preedit, digit.to_string());
+            assert_eq!(out.cursor_utf16, cursor);
+            assert!(out.commit.is_empty() && !e.windows_phonetic_pending());
+            let text = if cursor == 0 { format!("x{digit}") } else { format!("{digit}x") };
+            assert_eq!(e.insert_windows_literal("x").unwrap().preedit, text);
+            assert_eq!(e.key(Key::new(KeyKind::Backspace)).unwrap().preedit, digit.to_string());
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, digit.to_string());
+        }
+    }
+}
+
+#[test]
 fn zhuyin_only_keeps_every_symbol_and_tone_in_typed_order() {
     for (layout, keys) in [
         (Layout::Standard, "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347"),
@@ -307,16 +328,17 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
             if mixed || english {
                 e.set_windows_input_options((1<<20)|(1<<23)|if keep_reading {1<<22} else {0});
                 for prefix in ["", "su3"] {
-                    for mark in ["%", "％", "，", "［"] {
+                    for (digits,mark) in [("99.9","%"),("99.9","％"),("99.9","，"),("99.9","［"),
+                        ("1","%"),("99.9","!"),("99.9","("),("99.9","$")] {
                         let before = {
                             let mut out = e.key(Key::new(KeyKind::Esc)).unwrap();
-                            for ch in format!("{prefix}99.9").chars() {
+                            for ch in format!("{prefix}{digits}").chars() {
                                 out = e.key(Key::ch(ch, 0)).unwrap();
                             }
                             out
                         };
                         if english { assert!(e.digits_typed().is_some()); }
-                        let want = format!("{}99.9{mark}", if prefix.is_empty() {""} else {"你"});
+                        let want = format!("{}{digits}{mark}", if prefix.is_empty() {""} else {"你"});
                         let out = e.insert_windows_punctuation(mark).unwrap();
                         assert!(out.commit.is_empty(), "{mixed}/{english} {want}: remains editable");
                         assert_eq!(out.preedit, want, "mixed={mixed}, english={english}, keep_reading={keep_reading}, before={}", before.preedit);
