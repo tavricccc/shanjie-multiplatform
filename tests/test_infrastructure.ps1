@@ -30,13 +30,17 @@ Invoke-Timed -Name 'Release transaction self-tests (in-memory API)' -Category 't
     if($LASTEXITCODE){throw 'Release transaction self-tests failed.'}
 }
 
-foreach($path in 'CMakeLists.txt','.github/workflows/ci.yml','scripts/test-support.psm1','shared/Cargo.toml','shared/src/protocol.rs','windows/src/broker.rs') {
+foreach($path in 'CMakeLists.txt','scripts/test-support.psm1','shared/Cargo.toml','shared/src/protocol.rs','windows/src/broker.rs') {
     Assert-Check (Get-VerificationImpact $path).Full "$path must expand AFFECTED to FULL"
 }
-foreach($path in 'windows/src/profile.rs','shared/src/profile.rs','windows/src/bridge.rs') {
+$impact=Get-VerificationImpact '.github/workflows/ci.yml'
+Assert-Check (!$impact.Full -and $impact.Labels.Count -eq 1 -and $impact.Labels[0] -eq 'test-framework') 'CI workflow changes select only lightweight framework self-tests'
+foreach($path in 'windows/src/profile.rs','shared/src/profile.rs') {
     $impact=Get-VerificationImpact $path
     foreach($label in 'windows','tsf','ui'){Assert-Check ($label -in $impact.Labels) "$path must cover $label"}
 }
+$impact=Get-VerificationImpact 'windows/src/bridge.rs'
+Assert-Check (!$impact.Full -and @(Compare-Object @('windows','candidate-host','tsf-compat') $impact.Labels).Count -eq 0) 'Native candidate bridge preserves its bounded candidate-host and TSF compatibility coverage'
 Assert-Check ('interaction' -in (Get-VerificationImpact 'shared/src/input.rs').Labels) 'Shared key policies need interaction coverage'
 Assert-Check ('mode' -in (Get-VerificationImpact 'windows/src/native.rs').Labels) 'Native changes need mode coverage'
 Assert-Check ('private-desktop' -in (Get-VerificationImpact 'tests/tsf_compat.cpp').Labels) 'Private-desktop harness mapping'
