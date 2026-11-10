@@ -37,6 +37,7 @@
 - 一個邏輯變更一個 commit（行為連同它的測試、UI 文字、README、Changelog 各自分開），以 `git add <檔案>` 分組，訊息用英文 `type: description`。完成並測試後直接 commit，不必先問。
 - push、開 PR、Release、安裝到實機、刪除使用者資料都先問。
 - 完整建置與 Release 只產生單檔安裝程式 `Shanjie-Windows-Setup.exe`；要使用者測試時一併建好它。輕量 CI 不建置安裝包。
+- **個人編譯與正式驗收分離：** 使用者僅要求編譯、確認產物或建立開發用候選包時，不得擅自啟動完整 FULL／RELEASE 驗證。涉及程式修改時，依變更範圍執行必要的 FAST／AFFECTED 測試；已完成且有效的相同驗證不得因 Markdown 舊指令而重複執行。只有準備 PR 整合、正式發布，或使用者明確要求時，才執行相應完整驗收。若 AFFECTED 計畫擴大為 FULL，而本次只授權編譯，先保留待驗項目，不因編譯需求直接啟動；正式產物仍須遵守下列發布防護。
 
 ### 本機正式發布防護
 
@@ -68,6 +69,8 @@
 
 所有一般驗收統一由 `scripts/test.ps1` 和 CTest 管理。本機 AFFECTED 依 `scripts/test-plan.psm1` 的影響規則選測；規則無法明確判斷時擴大到 FULL。GitHub Actions 使用固定 CI 集合，沒有這項擴大機制。變更影響表與 CTest 案例清冊見 [docs/TESTING.md](docs/TESTING.md)。
 
+日常未提交修改使用 `-ChangeScope Worktree`，單次提交使用 `-ChangeScope Commit`；兩者都包含 staged／unstaged／untracked 修改，但不代表整條分支已驗證。預設 `Branch -BaseRef origin/main` 保留上游累積比較語意，PR／整合用它或 FULL；不能靜默忽略分支中尚未驗證的舊變更。已含 CMake 重構的分支若因此擴大，先看 PlanOnly 的範圍與理由，再按本次目的明確選擇範圍。
+
 上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。明確要求 x86 時對應雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
 
 | 時機／變更 | 跑 | 用途 |
@@ -78,7 +81,15 @@
 | PR 或整合前 | `pwsh -File scripts/test.ps1 -Level FULL` | 完整 x64 驗收，保留上游核心、模型、TSF 與每項既有回歸斷言 |
 | Release 前 | `pwsh -File scripts/test.ps1 -Level RELEASE` | FULL、x86 回歸、離屏互動 harness、WinUI、候選 host 與安裝包檢查 |
 
-CTest 操作範例：
+### 條件式驗證與去重
+
+- **修改按鍵路徑或核心請求時，仍須額外執行 `pwsh -File scripts/measure-engine.ps1`。** 一般功能測試或核心內部延遲斷言不等於其 IPC／每鍵量測；未改這些路徑不需量測。
+- `ui/` 變更由 AFFECTED 的 `settings-ui`＋`candidate-host` 負責；原生候選變更依上游選 `candidate-host`＋`tsf-compat`，不擴成整套 WinUI。`platform/`／`prepare-core.ps1` 保留 Rust、core、混打、英文／提交與額外延遲量測，不一律擴 FULL。FULL 單獨不含全部 `release.ui.*`；缺少必要項目時，只透過 CTest 補缺項，不重跑舊 wrapper。
+- 去重依實際斷言、架構、參數、fixture、產物／來源與環境。以仍有效的 JSON／JUnit／子案例結果認列已通過項目；只有登記或選中、PlanOnly、跳過與失敗都不算完成。同一驗證不因不同腳本名稱再跑一次；部分涵蓋時，只補尚未驗證且確實必要的配置。無法拆分的工具先說明重複範圍，不直接啟動整套。
+- 其他專用 fixture、故障注入、舊版共存、視覺／實機與選用量測的目的、前置條件及選測參數見 [docs/TESTING.md](docs/TESTING.md#專用驗收與實際差集)。上游未訂逐檔強制規則者需依實際變更判斷，不能一律加跑。
+- 自動提示規則只在 `scripts/test-plan.psm1` 維護。新增或修改 Markdown 驗證要求時，須同步程式規則與 `tests/verify_selection.ps1`；PlanOnly 只能提示規則文件變動，**不會理解任意自然語言或自動把新條文轉為測試**。額外提示不是 PASS，也不改變 CI 固定集合。
+
+### CTest 操作
 
 ```powershell
 cmake --preset windows-x64

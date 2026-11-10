@@ -7,17 +7,32 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
-        '^(scripts/(release|test_release)\.py|\.github/workflows/release\.yml|scripts/verify-(changed|selection)\.ps1|tests/verify_selection\.ps1)$' {
+        '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/verify-(changed|selection)\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
-        '^(windows/Cargo\.(toml|lock)|shared/Cargo\.(toml|lock)|platform/|upstream/|data/|profiles/|MODEL-|UPSTREAM\.json)' {
+        '^(platform/|scripts/prepare-core\.ps1$)' {
+            $labels=@('rust','core','english','submission');$reason='Preserve upstream platform selection: Rust, core, mixed input, English/submission; latency is additional.';break
+        }
+        '^(windows/src/(word_helper|word_popup|selection_text)\.rs|windows/src/tsf/add_word\.rs|tests/(add_word_popup|popup_lifecycle)\.cpp|scripts/verify-add-word\.ps1)$' {
+            $labels=@('windows','word','popup-lifecycle');$reason='Preserve upstream add-word and popup lifecycle selection without unrelated TSF/UI suites.';break
+        }
+        '^(windows/src/(candidate|glass|appearance|font|bridge)\.rs|windows/src/tsf/candidates\.rs|tests/candidate_host_smoke\.cpp)$' {
+            $labels=@('windows','candidate-host','tsf-compat');$reason='Preserve upstream native candidate-host and TSF compatibility selection.';break
+        }
+        '^(windows/src/mixed_regression\.rs|tests/english_keys\.cpp|scripts/verify-english-keys\.ps1)$' {
+            $labels=@('rust','english');$reason='Preserve upstream Rust/mixed-input and English-key regression selection.';break
+        }
+        '^ui/|^scripts/verify-ui\.ps1$' {
+            $labels=@('settings-ui','candidate-host');$reason='Settings UI and native candidate host, without unrelated mode/TSF suites.';break
+        }
+        '^(windows/Cargo\.(toml|lock)|shared/Cargo\.(toml|lock)|upstream/|data/|profiles/|MODEL-|UPSTREAM\.json)' {
             $full = $true; $reason = 'Core, model, profile, dependency, or upstream change.'; break
         }
         '^shared/src/profile\.rs$' {
-            $labels = @('shared','windows','tsf','ui'); $reason = 'Shared profile changes affect input behavior and settings persistence.'; break
+            $full=$true;$labels=@('shared','windows','tsf','ui');$reason='Shared profile logic was unbounded upstream; preserve FULL and mapped settings persistence checks.';break
         }
         '^shared/src/(input|spacing)\.rs$' {
-            $labels = @('shared','windows','tsf','interaction'); $reason = 'Shared key decisions affect TSF and engine interaction.'; break
+            $full=$true;$labels=@('shared','windows','tsf','interaction');$reason='Shared input logic has no bounded upstream rule; preserve FULL plus mapped TSF and engine interaction.';break
         }
         '^shared/src/appearance\.rs$' {
             $full=$true;$labels=@('windows','tsf','ui','mode');$reason='Shared appearance policy affects native and WinUI rendering.';break
@@ -25,37 +40,30 @@ function Get-VerificationImpact([string]$Path) {
         '^shared/' {
             $full = $true; $reason = 'Shared protocol, dictionary, model, or module changes affect downstream input behavior.'; break
         }
-        '^windows/src/(profile|bridge)\.rs$' {
-            $labels = @('windows','tsf','ui'); $reason = 'Profile and bridge changes affect refresh, TSF, and WinUI persistence.'; break
+        '^windows/src/profile\.rs$' {
+            $full=$true;$labels=@('windows','tsf','ui');$reason='Unbounded Windows profile logic preserves FULL plus mapped UI persistence.';break
         }
-        '^windows/src/(candidate|native|font|glass|appearance)\.rs$' {
-            $labels = @('windows','tsf','ui','mode'); $reason = 'Native UI changes affect candidate, mode, and TSF behavior.'; break
+        '^windows/src/native\.rs$' {
+            $full=$true;$labels=@('windows','tsf','ui','mode');$reason='Unbounded native UI changes preserve FULL and native/WinUI checks.';break
         }
         '^windows/src/(word_|dictionary_store|selection_)' {
-            $labels = @('windows','tsf','word','ui'); $reason = 'Dictionary and selection changes affect word entry and popup behavior.'; break
+            $full=$true;$labels=@('windows','tsf','word','ui');$reason='Unbounded dictionary/selection changes preserve FULL plus mapped word/settings checks.';break
         }
         '^windows/src/installer(\.rs|/)|^windows/src/runtime_log\.rs$' {
             $labels=@('windows');$reason='Installer and diagnostic logic use the Windows unit suite.';break
-        }
-        '^windows/src/mixed_regression\.rs$' {
-            $labels=@('windows','english','models');$reason='Mixed-input regressions and native English/digit cases.';break
         }
         '^windows/src/tsf/service\.rs$' {
             $full=$true;$labels=@('windows','tsf','ui','mode');$reason='TSF service lifecycle and appearance cross native and WinUI boundaries.';break
         }
         '^windows/src/tsf/' {
-            $labels = @('windows','tsf'); $reason = 'TSF changes require the isolated input regression matrix.'; break
+            $full=$true;$labels=@('windows','tsf');$reason='Unmapped TSF lifecycle/key logic preserves upstream conservative FULL coverage and mapped TSF cases.';break
         }
         '^windows/src/' {
             $full = $true; $reason = 'Windows engine, broker, lifecycle, installation, or unmapped module change.'; break
         }
-        '^tests/english_keys\.cpp$|^scripts/verify-english-keys\.ps1$' { $labels = @('english','models'); $reason = 'English-key and mixed-input regression harnesses.'; break }
         '^tests/submission\.cpp$|^scripts/verify-submission\.ps1$' { $labels = @('submission'); $reason = 'Submission regression harness.'; break }
-        '^tests/add_word_popup\.cpp$|^scripts/verify-add-word\.ps1$' { $labels = @('word','private-desktop'); $reason = 'Add-word and popup lifecycle regression harnesses.'; break }
-        '^tests/popup_lifecycle\.cpp$' { $labels=@('word','private-desktop');$reason='Popup lifecycle and add-word regressions.';break }
-        '^tests/(tsf_compat|popup_lifecycle)\.cpp$|^scripts/verify-private-desktop\.ps1$' { $labels = @('private-desktop'); $reason = 'Private-desktop regression harness.'; break }
+        '^tests/tsf_compat\.cpp$|^scripts/verify-private-desktop\.ps1$' { $labels = @('private-desktop'); $reason = 'Private-desktop regression harness.'; break }
         '^tests/tsf_smoke\.cpp$' { $labels = @('smoke'); $reason = 'TSF smoke harness.'; break }
-        '^tests/candidate_host_smoke\.cpp$|^ui/|^scripts/verify-ui\.ps1$' { $labels = @('ui'); $reason = 'WinUI and candidate-host behavior.'; break }
         '^tests/mode_button_smoke\.cpp$|^tests/support/mode_indicator\.(cpp|h)$|^scripts/verify-mode\.ps1$' { $labels = @('mode'); $reason = 'Offscreen mode-indicator harness.'; break }
         '^tests/windows_interaction\.cpp$|^scripts/verify-interaction\.ps1$' { $labels = @('interaction'); $reason = 'Isolated Windows interaction harness.'; break }
         default { $full = $true; $reason = 'Build, test framework, CI, or unmapped change; use conservative FULL coverage.' }
@@ -65,6 +73,54 @@ function Get-VerificationImpact([string]$Path) {
 
 # Compatibility for upstream's pure planner. Both entry points use this module's
 # one impact policy; the old script/Steps scheduler is replaced by CTest levels.
+function Get-AdditionalVerificationPlan([string[]]$Paths,[string[]]$Labels,[switch]$CiSafe) {
+    $normalized=@($Paths|Where-Object{$_}|ForEach-Object{$_.Replace('\','/')}|Sort-Object -Unique)
+    $ruleDocuments=@($normalized|Where-Object{$_ -match '^(AGENTS\.md|docs/(TESTING|ARCHITECTURE|PERFORMANCE)\.md)$'})
+    if($ruleDocuments.Count){
+        [pscustomobject]@{id='markdown-rules';kind='review';status='not-run';command=$null;paths=$ruleDocuments;reason='Verification-rule Markdown changed: review added/changed requirements and synchronize test-plan.psm1 plus selection tests. This is a path-change notice, not natural-language interpretation. Documentation alone still causes no build/test; mentioning a script does not make it mandatory.'}
+    }
+    $paths=@($normalized|Where-Object{!(Test-VerificationDocumentation $_)})
+    if(!$paths.Count){return}
+    # These are advisories, never execution results or another CTest inventory.
+    # Only the upstream platform rule and known key/request modules require latency.
+    $keyPaths=@($paths|Where-Object{$_ -match '^(platform/|scripts/prepare-core\.ps1$|windows/src/(engine|input|broker)(\.rs$|/)|windows/src/tsf/(keys|resident|recovery|rerank)\.rs$|shared/src/(input|spacing|protocol)\.rs$)'})
+    if($keyPaths.Count){
+        [pscustomobject]@{id='engine-latency';kind='required-extra';status='not-run';command='pwsh -File scripts/measure-engine.ps1';paths=$keyPaths;reason='AGENTS.md requires latency measurement for key paths/core requests; functional CTest cases do not measure equivalent IPC/key latency. Requires matching x64 release library, dist data/core and MSVC; report the actual measurements.'}
+    }
+    $uiPaths=@($paths|Where-Object{$_ -match '^ui/|^scripts/verify-ui\.ps1$'})
+    if($uiPaths.Count){
+        $uiSelected=(!$CiSafe -and (@($Labels|Where-Object{$_ -in 'ui','release'}).Count -gt 0 -or ('settings-ui' -in $Labels -and 'candidate-host' -in $Labels)))
+        [pscustomobject]@{id='ui-acceptance';kind=if($uiSelected){'ctest-planned'}else{'ctest-needed'};status='not-run';command=if($uiSelected){$null}else{'ctest --preset windows-x64 -L "settings-ui|candidate-host" --output-on-failure'};paths=$uiPaths;reason=if($uiSelected){'UI checks are requested through CTest; credit only the actually selected/passing rows and subcases. Do not also run verify-ui.ps1 or its inactive -Benchmark switch.'}else{'The upstream UI requirement is not covered by these labels or CI-safe execution. Prepare the matching product/CMake harnesses; use -R for any remaining subset if some UI cases already passed. FULL alone does not include release.ui.*. Do not rerun the whole legacy UI script.'}}
+    }
+    $candidatePaths=@($paths|Where-Object{$_ -match '^windows/src/(candidate|glass|appearance|font|bridge)\.rs$|^windows/src/tsf/candidates\.rs$|^tests/candidate_host_smoke\.cpp$'})
+    if($candidatePaths.Count){
+        $candidateSelected=(!$CiSafe -and @($Labels|Where-Object{$_ -in 'candidate-host','ui','release'}).Count -gt 0)
+        [pscustomobject]@{id='candidate-acceptance';kind=if($candidateSelected){'ctest-planned'}else{'ctest-needed'};status='not-run';command=if($candidateSelected){$null}else{'ctest --preset windows-x64 -L candidate-host --output-on-failure'};paths=$candidatePaths;reason='Upstream candidate changes need the native candidate-host probe, not a duplicate full WinUI script. Credit actual matching results; if missing, prepare the corresponding harness/product and run only the missing CTest candidate-host rows.'}
+    }
+    if(@($Labels|Where-Object{$_ -in 'full','release','tsf','tsf-compat','english','submission','word','private-desktop'}).Count){
+        [pscustomobject]@{id='legacy-regressions';kind='ctest-planned';status='not-run';command=$null;paths=@();reason='Use the selected CTest core/TSF/English/submission/private-desktop rows and parameter subcases instead of also running verify.ps1 or verify-regressions.ps1. A requested label is not proof of execution; unselected, skipped or failed required cases still need the missing CTest rows.'}
+    }
+    # Upstream only says "related verify-*.ps1" for these modules; it gives no
+    # mandatory per-file matrix. Dependencies below identify review candidates,
+    # not a claim that all their cases are required or absent from CTest.
+    $rules=@(
+        @{id='input-features';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
+        @{id='profile-refresh';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
+        @{id='core-recovery';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. Upstream core-suite and submission busy tests are different fixtures, not proof of these reliability-check cases.'}
+        @{id='dictionary-store';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
+        @{id='profile-coexistence';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
+        @{id='update-probes';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
+        @{id='no-admin-wrapper';pattern='^scripts/verify-no-admin\.ps1$';scope='verify-no-admin.ps1 is a composite wrapper, not an extra assertion suite. Matching successful RELEASE cases in the same non-elevated environment need no wrapper rerun; use CTest for any missing required cases. A different privilege/environment claim still needs separate evidence.'}
+    )
+    foreach($rule in $rules){
+        $affected=@($paths|Where-Object{$_ -match $rule.pattern})
+        if($affected.Count){[pscustomobject]@{id=$rule.id;kind='review';status='not-run';command=$null;paths=$affected;reason=$rule.scope}}
+    }
+    if(!$keyPaths.Count -and @($paths|Where-Object{$_ -match '^scripts/measure-engine\.ps1$|^tests/engine_perf\.cpp$'}).Count){
+        [pscustomobject]@{id='engine-measurement-tool';kind='optional';status='not-run';command='pwsh -File scripts/measure-engine.ps1';paths=$paths;reason='Only the measurement tool changed; collect new latency samples if needed. This is not a functional CTest result; -Learning is an optional 8000-row learning fixture.'}
+    }
+}
+
 function Select-VerificationPlan([string[]]$Paths) {
     $labels=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reasons=@();$full=$false;$code=$false
@@ -76,7 +132,7 @@ function Select-VerificationPlan([string[]]$Paths) {
         $reasons+=,[pscustomobject]@{Path=$path;Reason=$impact.Reason}
     }
     if($code){[void]$labels.Add($(if($full){'full'}else{'fast'}))}
-    [pscustomobject]@{Full=$full;Skip=(!$code);Labels=@($labels|Sort-Object);Reasons=$reasons}
+    [pscustomobject]@{Full=$full;Skip=(!$code);Labels=@($labels|Sort-Object);Reasons=$reasons;AdditionalVerification=@(Get-AdditionalVerificationPlan -Paths $Paths -Labels @($labels))}
 }
 
 function Get-EnglishKeyCases {
@@ -169,4 +225,4 @@ function Assert-FixedCiSelection([object[]]$Rows) {
     if($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual).Count){throw 'CI must contain exactly the fixed lightweight baseline; no missing tests or FULL expansion is allowed.'}
 }
 
-Export-ModuleMember -Function Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection
+Export-ModuleMember -Function Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection

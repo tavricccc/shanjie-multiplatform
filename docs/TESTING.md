@@ -6,14 +6,24 @@ Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Car
 
 ```powershell
 pwsh -File scripts/test.ps1 -Level FAST
-pwsh -File scripts/test.ps1 -Level AFFECTED
+pwsh -File scripts/test.ps1 -Level AFFECTED -ChangeScope Worktree
 pwsh -File scripts/test.ps1 -Level FULL
 pwsh -File scripts/test.ps1 -Level RELEASE
 ```
 
 `FAST` 與 `AFFECTED` 讀取 `origin/main` 到目前 HEAD 的差異，也包含 staged、unstaged 和未追蹤檔案。可以用 `-BaseRef <ref>` 指定比較基準；分支已含廣泛變更時，`-BaseRef HEAD` 可只檢查目前工作樹，正式整合仍須 FULL。只有明確的文件檔可自動略過；程式碼檔不靠行首正則式判斷純註解。FAST 保持快速基線，AFFECTED 才依影響加選或擴大至 FULL。明確指定 FULL／RELEASE 時，一律執行完整集合，不套用文件略過規則。
 
-影響規則只維護一份。上游 `verify-changed.ps1 -Base <ref>` 轉交 AFFECTED，`-DryRun` 對應 `test.ps1 -PlanOnly`，不執行 CMake、建置或測試，報告狀態為 `planned`；它列出變更原因與要求的標籤，實際 CTest 清冊仍須 Windows configure。`verify-changed.ps1 -Architecture x86` 保守對應雙架構 RELEASE；`-UseExistingBuild` 不繞過快取驗證。`verify-selection.ps1` 的純選測 API 改回傳 CTest `Full`／`Labels`／`Skip`／`Reasons`，不保留第二套 Steps／Suites 排程。移動檔案以原、新兩個路徑判斷，移入 docs 不會掩蓋原本的程式碼變更。
+比較範圍須明確：`-ChangeScope Branch`（預設）使用 `-BaseRef ...HEAD` 的 merge-base 差異，保留上游 `verify-changed` 累積比較；`Commit` 只取 `HEAD^..HEAD`；`Worktree` 不取已提交差異。三者都加上 staged／unstaged／untracked 檔案，報告記錄 `change_scope`／`change_range`，PlanOnly 顯示來源。`-BaseRef` 只用於 Branch，原本 `-BaseRef HEAD` 的用法保留。窄範圍不會自動認列較早的分支提交；找不到基準或無法比較仍保守 FULL。
+
+```powershell
+pwsh -File scripts/test.ps1 -Level AFFECTED -ChangeScope Worktree -PlanOnly # 日常未提交修改
+pwsh -File scripts/test.ps1 -Level AFFECTED -ChangeScope Commit -PlanOnly   # 最後一筆提交＋未提交修改
+pwsh -File scripts/verify-changed.ps1 -Base origin/main -ChangeScope Branch -DryRun # 全分支整合
+```
+
+影響規則只維護一份。上游 `verify-changed.ps1 -Base <ref>` 轉交 AFFECTED，`-DryRun` 對應 `test.ps1 -PlanOnly`，不執行 CMake、建置或測試，報告狀態為 `planned`；它列出變更原因、要求的標籤與額外驗證提示，實際 CTest 清冊仍須 Windows configure。`verify-changed.ps1 -Architecture x86` 保守對應雙架構 RELEASE；`-UseExistingBuild` 不繞過快取驗證。`verify-selection.ps1` 的純選測 API 回傳 CTest `Full`／`Labels`／`Skip`／`Reasons`／`AdditionalVerification`，不保留第二套 Steps／Suites 排程。移動檔案以原、新兩個路徑判斷，移入 docs 不會掩蓋原本的程式碼變更。
+
+僅編譯、確認產物或建立開發候選包，不自動啟動 FULL／RELEASE；修改程式依必要範圍執行 FAST／AFFECTED，先以 PlanOnly 檢查是否擴大。正式發布仍使用有同提交完整收據防護的 `release.ps1`，開發候選包不等於正式發布完成。
 
 GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢；不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史、不傳輸大型 target／模型快取，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
 
@@ -42,7 +52,25 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | FULL | FULL 標籤的全部 x64 測試案例及產品建置 | PR、整合前完整 x64 驗收 |
 | RELEASE | x64 FULL、x86 TSF／混打／Rust 檢查、兩架構候選 host、輸入互動與 mode harness、WinUI 驗收和安裝包校驗 | 正式發布前 |
 
-影響規則集中在 `scripts/test-plan.psm1`。profile／bridge 對應 TSF、設定更新與 WinUI；shared 輸入政策對應 TSF 與引擎互動；原生候選／模式／appearance 元件對應 TSF、UI 與 mode。shared appearance 與 TSF service 保守擴大 FULL，並保留已映射的 UI 回歸。其餘 Windows／shared 共用邏輯、核心、模型、依賴及不明影響會擴大至 FULL；專用 harness 選相應案例。選測與 Python 發布交易邏輯對應 framework 自檢，installer／runtime log 對應 Windows 單元測試。無關 WinUI 的 AFFECTED 可略過 UI publish。CI 的固定集合不使用這些選測規則。
+影響規則集中在 `scripts/test-plan.psm1`。恢復上游已有的細粒度規則：platform／prepare-core 選 Rust、core、混打、英文／提交；英文改動仍含混打；加詞只選 word／popup；原生候選選 candidate-host／tsf-compat；WinUI 選 settings-ui／candidate-host。新增的標籤只拆分既有案例，不新增或刪除斷言。installer／runtime log 保持 Windows 單元測試，CI／選測／發布交易腳本由輕量 framework 自檢負責。
+
+上游未界定影響的 shared／TSF／profile 共用邏輯、模型、資料、依賴與未知路徑仍保守 FULL；保留需要的 UI／interaction 附加集合，避免把原本的未知 fallback 改成漏測。CMake 重構若仍在 Branch 差異內也會合理擴大，不能悄悄忽略；日常用 Worktree 或 Commit 明確限定範圍。CI 固定集合不使用影響規則。
+
+下列是目前 x64 清冊的 AFFECTED 計畫數，包含固定 FAST 基線與必要 fixture，不代表已執行，也不換算成速度提升。`tests/ctest_integration.ps1` 在已有組態時，使用實際 CTest inventory 與同一選取函式核對，未組態時明示該檢查未執行。
+
+| 變更範例 | 上游自動選測 | 本版 CTest 計畫（含 fixture） |
+| --- | --- | --- |
+| `ui/` | Rust＋settings UI／native host | 13 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
+| 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 27 項，保留混打，無無關 interaction／UI |
+| submission harness | Rust＋提交 | 28 項 |
+| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 50 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
+| 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 25 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 87 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 89 項 |
+| 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
+| CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
+
+`verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。本版沒有新增跨報告的全自動去重／收據合併系統；既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
 
 每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 32 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
 
@@ -69,23 +97,46 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
 | 上游 WinUI 啟動／停用控制項回歸 | `release.ui.startup.{clean,reopen,different-directory}`、`release.ui.disabled.keyboard{1,3,2}` | 獨立啟動路徑、已有 profile、不同工作目錄；標準／善解／倚天停用設定的初次與重開檢查，保留非標準鍵盤的鄰鍵列斷言 |
 
-依目前來源清冊，FULL 為 87 個 x64 項目，RELEASE 為 x64 99＋x86 84＝183 個項目、227 個參數子案例；這是靜態計數，整合版尚未在 Windows 執行。實際清冊以 `ctest --preset windows-x64 --show-only` 與 x86 preset 為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
+依目前來源清冊，FULL 為 87 個 x64 項目，RELEASE 為 x64 99＋x86 84＝183 個項目、227 個參數子案例。分組計數不代表某輪已執行；實際清冊與結果以兩個 preset 的 inventory、對應提交的 JSON／JUnit／子案例為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
 
-### 專用驗收（不屬於舊 `verify.ps1` FULL 清冊）
+### 專用驗收與實際差集
 
-以下既有腳本原本就不在完整 `verify.ps1` 呼叫樹中，保留作為需要專用 fixture 或歷史版本輸入的額外檢查，不能把它們說成 FULL 已執行。變更影響尚無法精確對應到單一 CTest 案例時，`scripts/test.ps1` 會保守擴大到 FULL；這些額外腳本仍需依下表明確啟動：
+核對基準為上游 `4794ab3` 的 AGENTS「驗證：做多少」、ARCHITECTURE「驗證」、PERFORMANCE「重跑」、原 `verify-selection.ps1`／`verify-changed.ps1`，以及各入口實際呼叫的 harness。上游明確規定按鍵路徑／核心請求須額外量測、UI 變更須 UI 驗收；其餘七支工具沒有逐檔必跑表，只有 shared／Windows 邏輯須執行「相關 verify」的通則。以下依實際依賴提示審查範圍，不臆造七支一律必跑的規則。
 
-| 入口 | 驗證內容與條件 | 隔離／限制 |
+認列及補測順序：
+
+1. 先核對仍有效的原始結果：來源／產物、斷言、架構、模式／鍵盤／按鍵／預期值、profile／模型、核心類型與權限／桌面環境。相同案例已成功就認列，不因舊 Markdown 命令再跑另一個 wrapper。
+2. CTest 已登記或本次要求某標籤，不代表已執行。以本次實際 selection、JUnit、JSON、subcases 與嘗試結果確認；必要缺項用 CTest 的 `-R`／`-L` 補跑，不重新執行整支舊入口。需先準備該架構的產品及 CMake harness；`ui` 檢查還需 WinUI 輸出。CiSafe 略過不算成功。
+3. 部分重疊時只補必要差集。支援 scenario／case／架構的工具須選最小範圍；沒有篩選器或證據未包含足夠配置時，先人工列出差異與不可避免的重複，不能自動啟動整套，也不能直接宣稱完整涵蓋。
+4. 功能正確性不能取代延遲樣本；不同 resident／行程內核心、故障、舊 DLL、前景／離屏等條件也不能混為同一案例。一般成功結果去重不會繞過正式發布的同 commit 收據防護。
+
+| 原入口／原始條件 | 實際 CTest 對應與差異 | 最小獨立驗證及必要前置 |
 | --- | --- | --- |
-| `scripts/verify-input-features.ps1` | 約 86 組 Caps Lock、混打、符號、聲調、空白提交輸入；支援按 case index 縮小 | 私有 profile 與暫存 payload；預設同時編譯 x64、x86 harness |
-| `scripts/verify-profile-refresh.ps1` | 延遲 profile 更新、排隊輸入、焦點切換與 fault injection；架構、fault、scenario 可選 | 每項獨立 profile；會啟動隔離 core |
-| `scripts/verify-core-recovery.ps1` | pipe、fault、busy、restart、rerank、outstanding、capacity 等可靠性檢查 | 每項獨立 profile；會以測試 profile 對 core 發送停止請求 |
-| `scripts/verify-dictionary-store.ps1` | x64/x86 ABI 同時寫入、損壞檔修復與 SHA-256 名稱驗證 | 只寫入新的 build fixture，不讀寫使用者詞典 |
-| `scripts/verify-profile-coexistence.ps1` | 新舊 DLL schema 共存與舊版讀取期間的 profile 不回寫 | 必須明確提供舊版 package 路徑；證據只能寫入工作區 `build/` |
-| `scripts/verify-update.ps1` | TSF Caps Lock／焦點欄位、首次輸入延遲、標點組字與 resident core 檢查 | 建立兩架構 payload 與獨立 profile；不安裝或註冊輸入法 |
-| `scripts/verify-no-admin.ps1` | 無系統管理員的組合驗收 wrapper，包含 x64/x86、UI 與 package | 不執行 UAC 安裝；主要步驟由 RELEASE 覆蓋，不在 CTest 中再次巢狀呼叫整套流程 |
+| `verify.ps1`、`test-core.ps1`、`verify-regressions.ps1`；原完整驗收／相關邏輯 | 上表 `fast.*`、`full.*` 保留核心、混打、TSF／英文／提交／私人桌面；RELEASE 加 x86。已實際通過的相同案例不再跑舊入口 | 必要缺項用 CTest 選原生案例；原核心記憶體限制排程及延遲斷言保留 |
+| `verify-ui.ps1`；`ui/` 與原生候選介面變更 | WinUI 改動選 x64 `settings-ui`＋`candidate-host`；原生候選依上游只選 `candidate-host`＋`tsf-compat`。RELEASE 加 x86 host。FULL 的 87 項不含 UI 驗收 | 相同成功案例不再跑舊 UI 腳本；缺項用相應 CTest 標籤／`-R`，先建置相應產品／harness。native-only 不需要再驗整套 WinUI |
+| `verify-input-features.ps1`；相關輸入行為需審查 | 使用 `tests/submission.cpp`。`input-retain` 與 CTest `input-digits` 共用 71／72 號組字／提交斷言，但 profile 的 prediction、escape、shift、punctuation 等不同；`input-space-commit` 的 70 號空白提交斷言也不能以一般 input-digits 取代。不能只按同按鍵文字認定等價 | 既有匹配證據可認列；只對必要且未驗證配置用 `-Architectures`、零起算 `-CaseIndices`，需要對應 DLL、data／tools、MSVC。`-ResidentCore` 與預設行程內核心分開判斷 |
+| `verify-profile-refresh.ps1`；profile 通知／更新時序相關 | `tests/profile_refresh.cpp` 使用 resident core、prediction 故障注入及 normal／queued／latest／escape／focus／deadline。CTest submission refresh／refresh-twice 使用行程內核心，不能替代這個故障矩陣 | 只選受影響且無有效結果的 `-Architectures`、`-Scenarios`、`-Faults`；需要 DLL、dist core、MSVC 與獨立 profile |
+| `verify-core-recovery.ps1`；broker／復原／請求交付相關 | 呼叫 `shanjie-reliability-check.exe` 的 pipe／fault／busy／restart／ambiguous／rerank／outstanding／capacity；與上游 `full.core-suite`、submission busy 不是同一 fixture | 用 `-Architectures`、`-Cases` 選未覆蓋情境，須先有該架構 release reliability-check、dist 核心及資料；故障測試僅停止自己的隔離核心 |
+| `verify-dictionary-store.ps1`；詞典 ABI／發布儲存相關 | `tests/dictionary_store.cpp` 的 `sj_dictionary_save` 首次發布、截斷修復、SHA-256 檔名與 x64／x86 同時儲存；word-add／一般單元測試不等於此跨程序 ABI 目的 | 需兩架構 DLL 與 MSVC；新 build fixture，不碰私人詞典。無 case／架構篩選，需先說明剩餘必要內容與重複範圍，不自動重跑 |
+| `verify-profile-coexistence.ps1`；確有 profile 格式／遷移相容需求 | `tests/profile_coexistence.cpp` 同時讀新舊 DLL；目前版本 UI 保存不能取代舊 DLL 共存 | 必須提供 `-OldPackage`、正確 `-OldSchema`；用 `-Architecture` 限縮。沒有舊套件就是未驗，不能算 PASS；證據留在工作區 |
+| `verify-update.ps1`；Caps Lock／焦點／resident core 相關 | `tests/caps_lock.cpp` 與 `shanjie-core-check` 的 Caps Lock 矩陣、midword／fields／immediate／resident 模型；不是安裝升級測試。與 CTest English／smoke 只有部分行為相似，不能僅按名稱抵銷 | 先比對實際案例配置；需要兩架構 DLL、core-check、資料／模型、MSVC。只有 `-ExplicitCore` 等環境參數，沒有 scenario／架構篩選；若仍必要須明列無法拆分限制，不能自動跑整套 |
+| `verify-no-admin.ps1`；一般權限環境的組合工具 | 組合 core／TSF 雙架構、interaction、mode、UI、單元測試與候選封裝，沒有新增獨立斷言；RELEASE 具備對應案例 | 同普通權限／來源／參數環境中已成功的對應案例直接認列，勿再跑整個 wrapper；不同權限／環境須另核對，只以 CTest 補必要缺項。不驗 UAC 安裝 |
+| `measure-engine.ps1`；**改按鍵路徑或核心請求時必要** | `tests/engine_perf.cpp` 與 `tests/support/engine.cpp` 量 IPC／每鍵及核心資源；一般 TSF 功能與 upstream core 延遲斷言不等價，未納入 CTest | `pwsh -File scripts/measure-engine.ps1`；需 x64 release 靜態庫、dist core／data、MSVC；`-Learning` 是選用的 8000 筆合成資料條件。有效同條件測量可認列 |
+| `verify-ui.ps1 -Benchmark`；PERFORMANCE 的舊重跑範例 | 上游與目前都只有該參數宣告，沒有額外使用分支；實際仍是已映射的 UI 案例，不是另一份效能量測 | 相同成功 UI 結果不用重跑；若要新視覺目的才依 scenario 加 `-Visual`，不同目的需另外記錄 |
 
-這些路徑沒有被刪除或併入 FULL 測試數；`tests/caps_lock.cpp`、`tests/dictionary_store.cpp`、`tests/profile_refresh.cpp`、`tests/profile_coexistence.cpp`、`tests/engine_perf.cpp` 仍是其對應的獨立 harness。`verify-profile-coexistence` 需要外部舊版 package，`engine_perf.cpp` 是明確的效能量測 harness，兩者不適合每次完整回歸自動執行。
+### 計畫提示的能力與界線
+
+`test-plan.psm1` 是唯一程式化規則來源，`additional_verification`／`AdditionalVerification` 只提供以下提示，不自動執行，也不加入 CTest PASS 數量：
+
+- `ctest-planned`：相關驗證由所要求的 CTest 標籤負責，舊 wrapper 不再加跑。只是計畫；實際成功仍查結果。
+- `ctest-needed`：已確認的必要 UI 條件未被目前標籤／CiSafe 涵蓋，只補缺少的 CTest 項目。
+- `required-extra`：按鍵／核心請求的獨立延遲量測，CTest 沒有等價項目。
+- `review`：依專用 harness 的真實依賴提示人工核對必要差集／舊套件／環境，不代表所有情境都必跑。
+- `optional`：只修改量測工具時，可依需要取得新樣本；不是一般功能驗收。
+
+`verify-input-features.ps1 -CaseIndices 0` 必須只選第零組，不可把數值 0 當成沒有篩選而跑整套；選測回歸會檢查此邊界，預設未提供篩選時仍保留完整案例。
+
+路徑提示不是行級語意分析；其他檔案若實際改到按鍵／核心請求，仍適用 AGENTS 的正向規則。AGENTS、TESTING、ARCHITECTURE、PERFORMANCE 的變更會提示核對新增要求，**不會自動理解任意 Markdown 自然語言**。新增要求須同步唯一模組與選測回歸；只在 Markdown 提到某支腳本不會自動變成必跑命令。純文件仍略過建置／測試，CI 仍只執行固定五項。
 
 ## 重複工作與隔離
 

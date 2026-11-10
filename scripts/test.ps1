@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('CI','FAST','AFFECTED','FULL','RELEASE')][string]$Level,
     [string]$BaseRef='origin/main',
+    [ValidateSet('Branch','Commit','Worktree')][string]$ChangeScope='Branch',
     [ValidateRange(1,32)][int]$Jobs=4,
     [switch]$RetryFailures,
     [switch]$CiSafe,
@@ -43,23 +44,25 @@ $skipTests=$false
 $needsProduct=$false
 $skipSettingsBuild=$false
 $notes=[Collections.Generic.List[string]]::new()
+$additionalVerification=@()
 
 function Add-Label([string]$Label,[string]$Reason) {
     [void]$requestedLabels.Add($Label)
     $pathReasons[$Label]=$Reason
 }
-function Get-ChangedPathList([string]$Ref) {
-    $base=$Ref
-    if (!(git -C $root rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'." } }
+function Get-ChangedPathList([string]$Ref,[string]$Scope='Branch') {
+    $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
+    $range=if($Scope -eq 'Worktree'){$null}elseif($Scope -eq 'Commit'){"$base..HEAD"}else{"$base...HEAD"}
+    if (!(git -C $root rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'."; Range=$range; EffectiveBase=$base } }
     $items=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     # Treat moves as delete/add so both paths participate in impact and documentation checks.
-    $diff=@(git -C $root diff --no-renames --name-only "$base...HEAD" 2>$null)
-    if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'." } }
+    $diff=if($Scope -eq 'Worktree'){@()}else{@(git -C $root diff --no-renames --name-only $range 2>$null)}
+    if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'."; Range=$range; EffectiveBase=$base } }
     foreach($path in $diff){if($path){[void]$items.Add($path.Replace('\','/'))}}
     foreach($path in @(git -C $root diff --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
     foreach($path in @(git -C $root diff --cached --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
     foreach($path in @(git -C $root ls-files --others --exclude-standard)){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null }
+    return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null; Range=$range; EffectiveBase=$base }
 }
 function Test-DocumentationOnly([string]$Path) {
     return (Test-VerificationDocumentation $Path)
@@ -181,9 +184,10 @@ function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[
 
 try {
     if($Level -eq 'RELEASE'){$sourceStart=Get-ReleaseIdentity $root}
-    $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null}}else{Get-ChangedPathList $BaseRef}
+    $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null;Range=$null;EffectiveBase=$null}}else{Get-ChangedPathList $BaseRef $ChangeScope}
     $changedPaths=@($changeSet.Paths)
     if ($changeSet.Error) { $forceFull=$true;$notes.Add($changeSet.Error) }
+    if($Level -ne 'CI'){$notes.Add("Change scope=$ChangeScope; committed range=$($changeSet.Range); staged, unstaged and untracked paths are included. Narrow scopes do not validate older branch commits.")}
     foreach($path in $changedPaths){Classify-ChangedPath $path}
     $codeChanges=@($changedPaths | Where-Object { !(Test-DocumentationOnly $_) })
     if ($Level -in @('FAST','AFFECTED') -and $changedPaths.Count -and !$codeChanges.Count) { $skipTests=$true }
@@ -204,10 +208,19 @@ try {
     if ($Level -eq 'CI') { $requestedLabels.Clear();[void]$requestedLabels.Add('ci');$notes.Add('Fixed CI baseline: ignores change impact and never expands to FULL or builds the product.') }
     if ($Level -eq 'RELEASE') { $requestedLabels.Clear();[void]$requestedLabels.Add('full');[void]$requestedLabels.Add('release') }
     $skipTests = $skipTests -and $Level -in @('FAST','AFFECTED') -and !$forceFull
+    if($Level -ne 'CI'){
+        $additionalVerification=@(Get-AdditionalVerificationPlan -Paths $changedPaths -Labels @($requestedLabels) -CiSafe:$CiSafe)
+        foreach($item in $additionalVerification){
+            Write-Host "[$($item.kind)] $($item.id): $($item.reason)"
+            if($item.command){Write-Host "  $($item.command)"}
+        }
+        if($additionalVerification.Count){Write-Host 'Advisories only: planned CTest rows and extra checks are not PASS results. Credit actual matching JUnit/JSON evidence; do not run legacy wrappers again for those cases.'}
+    }
     if($PlanOnly){
         $overallStatus='planned'
         $notes.Add('Plan only: CMake inventory, builds and tests were not executed.')
         Write-Host "Requested CTest labels: $(@($requestedLabels) -join ', '); skip=$skipTests"
+        Write-Host "Change scope: $ChangeScope; committed range: $($changeSet.Range); effective base: $($changeSet.EffectiveBase)"
         foreach($path in $changedPaths){Write-Host "$path : $($pathReasons[$path])"}
         return
     }
@@ -328,8 +341,11 @@ try {
         status=$overallStatus
         wall_seconds=[Math]::Round($whole.Elapsed.TotalSeconds,3)
         base_ref=$BaseRef
+        change_scope=$ChangeScope
+        change_range=$changeSet.Range
         changed_paths=$changedPaths
         impact_reasons=$pathReasons
+        additional_verification=$additionalVerification
         selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;requested_labels=@($requestedLabels);notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion with additional mapped regressions retained.'}else{"$Level change-impact selection."}}
         results=$testResults
         subcases=$subcases

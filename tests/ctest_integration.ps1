@@ -103,3 +103,38 @@ Check ((Sync-ChangedFiles $sourceTree $output) -eq 0) 'Changed-file sync does no
 Check ((Get-Item "$output/core.rs").LastWriteTimeUtc -eq $stamp) 'Unchanged source timestamps are preserved'
 Check ((Get-Content "$output/target/keep" -Raw) -eq 'incremental output') 'Cargo target outputs survive source sync'
 "PASS CTest integration: $checks checks; no Windows acceptance executed"
+
+# Use the configured inventory when available (including the lightweight CI
+# configure). This checks actual labels/fixtures without executing any test.
+$inventoryDirectory=Join-Path $project 'build/cmake/windows-x64'
+if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest -ErrorAction SilentlyContinue)){
+    $raw=& ctest --test-dir $inventoryDirectory -C Release --show-only=json-v1
+    if($LASTEXITCODE){throw 'Could not enumerate the configured CTest fixture'}
+    $inventory=($raw|Out-String)|ConvertFrom-Json
+    $tokens=$null;$errors=$null
+    $driver=[Management.Automation.Language.Parser]::ParseFile("$project/scripts/test.ps1",[ref]$tokens,[ref]$errors)
+    foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-SelectedTests'){
+        $function=$driver.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$false)
+        . ([scriptblock]::Create($function.Extent.Text))
+    }
+    $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
+    $scenarios=@(
+        @('ui','ui/View.xaml.cs',13),@('add-word','windows/src/word_helper.rs',22),
+        @('candidate','windows/src/candidate.rs',25),@('english','tests/english_keys.cpp',27),
+        @('submission','tests/submission.cpp',28),@('platform','platform/input_windows.rs',50),
+        @('shared','shared/src/lib.rs',87),@('shared-input','shared/src/input.rs',89),
+        @('docs','README.md',0),@('unknown','tools/unknown.txt',87),@('ci-workflow','.github/workflows/ci.yml',5)
+    )
+    foreach($scenario in $scenarios){
+        $policy=Select-VerificationPlan @($scenario[1])
+        $selection=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        Check ($selection.Selected.Count -eq $scenario[2]) "Configured $($scenario[0]) selection includes exactly its required cases/fixtures"
+        Check (@($selection.Selected.name|Sort-Object -Unique).Count -eq $selection.Selected.Count) "Configured $($scenario[0]) cases are selected once"
+        Write-Host "PLAN $($scenario[0]): $($selection.Selected.Count) rows (fixtures included), FULL=$($policy.Full)"
+    }
+    $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
+    Assert-FixedCiSelection $fixed.Selected
+    $full=Get-SelectedTests $inventory @('full') 'windows-x64'
+    Check ($full.Selected.Count -eq 87 -and $inventory.tests.Count -eq 99) 'Label refinements preserve the FULL and x64 RELEASE inventories'
+    Write-Host 'PASS configured selection inventory: 11 scenarios, unique rows, FULL 87, x64 RELEASE 99, fixed CI 5; no native execution'
+}else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}
