@@ -37,6 +37,13 @@ function Stop-CoresOnProfile([string]$profileRoot) {
     } finally { $env:LOCALAPPDATA, $env:SHANJIE_TEST_PROFILE = $saved }
     Start-Sleep -Milliseconds 500
 }
+# A hung settings process must fail the run instead of blocking it forever.
+function Wait-Settings($process, [int]$Seconds = 300) {
+    if (!$process.WaitForExit($Seconds * 1000)) {
+        $process.Kill(); Wait-Settings $process
+        throw "Settings verification process $($process.Id) did not exit within $Seconds s."
+    }
+}
 # Each launch must resolve this app's PRI even when this script inherits a packaged host's identity.
 foreach ($phase in 'clean','reopen','different-directory') {
     $startupOutput = Join-Path $ResultRoot "startup-$phase"
@@ -45,7 +52,7 @@ foreach ($phase in 'clean','reopen','different-directory') {
     $working = if ($phase -eq 'different-directory') { $ResultRoot } else { "$root/dist/ui" }
     try {
         $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-startup',('"' + $startupOutput + '"') -WorkingDirectory $working -WindowStyle Hidden -PassThru
-        $process.WaitForExit()
+        Wait-Settings $process
         if ($process.ExitCode -ne 0 -or (Get-Content "$startupOutput/result.txt" -Raw) -ne 'PASS') { throw "Settings startup $phase failed: $startupOutput/result.txt" }
     } finally { Stop-CoresOnProfile "$startupOutput/profile" }
 }
@@ -64,13 +71,14 @@ foreach ($keyboard in 1,3,2) {
         $fixture = $fixture -replace "(?m)^$($entry.Key)=.*", "$($entry.Key)=$($entry.Value)"
     }
     Set-Content "$disabledOutput/profile/Shanjie/profile.ini" $fixture -Encoding utf8NoBOM
-    foreach ($phase in 'initial','reopen') {
-        $process = Start-Process "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $disabledOutput + '"'),'disabled-settings' -WindowStyle Hidden -PassThru
-        $process.WaitForExit()
-        if ((Get-Content "$disabledOutput/result.txt" -Raw) -ne 'PASS') { throw "Initial disabled UI ($keyboard/$phase) failed: $disabledOutput/result.txt" }
-        if ($keyboard -ge 2 -and '鄰鍵打錯' -notin @(Get-Content "$disabledOutput/disabled-rows.txt")) { throw 'The nonstandard keyboard fixture fell back to Standard.' }
-    }
-    Stop-CoresOnProfile "$disabledOutput/profile"
+    try {
+        foreach ($phase in 'initial','reopen') {
+            $process = Start-Process "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $disabledOutput + '"'),'disabled-settings' -WindowStyle Hidden -PassThru
+            Wait-Settings $process
+            if ($process.ExitCode -ne 0 -or (Get-Content "$disabledOutput/result.txt" -Raw) -ne 'PASS') { throw "Initial disabled UI ($keyboard/$phase) failed: $disabledOutput/result.txt" }
+            if ($keyboard -ge 2 -and '鄰鍵打錯' -notin @(Get-Content "$disabledOutput/disabled-rows.txt")) { throw 'The nonstandard keyboard fixture fell back to Standard.' }
+        }
+    } finally { Stop-CoresOnProfile "$disabledOutput/profile" }
 }
 } finally {
     if ($null -ne $savedInstallation) { [IO.File]::WriteAllBytes($installation,$savedInstallation) }
@@ -88,7 +96,7 @@ $bigram = $assets | Where-Object role -eq 'bigram'; $classes = $assets | Where-O
 (Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^model_id=.*','model_id=fixture-model' | Set-Content "$modelOutput/profile/Shanjie/profile.ini" -Encoding utf8NoBOM
 foreach ($phase in 'first-open','reopen') {
     $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-model-startup',('"' + $modelOutput + '"'),$phase -WindowStyle Hidden -PassThru
-    $process.WaitForExit()
+    Wait-Settings $process
     $result = Get-Content "$modelOutput/result-$phase.txt" -Raw
     if ($result -ne 'PASS') { throw "Saved model after reopening: $result" }
 }
@@ -107,7 +115,7 @@ foreach($fixture in $ModelFixtures) {
         $env:SHANJIE_MODEL_STARTUP_ID=$id
         foreach($phase in 'first-open','reopen') {
             $process=Start-Process "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-model-startup',('"'+$legacyOutput+'"'),$phase -WindowStyle Hidden -PassThru
-            $process.WaitForExit()
+            Wait-Settings $process
             if((Get-Content "$legacyOutput/result-$phase.txt" -Raw)-ne 'PASS'){throw "Legacy model settings failed: $legacyOutput/result-$phase.txt"}
         }
         Stop-CoresOnProfile "$legacyOutput/profile"
@@ -119,7 +127,7 @@ $quickOutput = Join-Path $ResultRoot 'quick-setup'
 foreach ($phase in 'first-open','reopen','after-upgrade') {
     if ($phase -eq 'after-upgrade') { Set-Content "$quickOutput/profile/Shanjie/quick-setup.txt" 'shown 0.0.0-older' -Encoding utf8NoBOM }
     $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickOutput + '"'),$phase -WindowStyle Hidden -PassThru
-    $process.WaitForExit()
+    Wait-Settings $process
     $result = Get-Content "$quickOutput/result-$phase.txt" -Raw
     if ($result -ne 'PASS') { throw "Quick Setup $phase`: $result" }
 }
@@ -128,20 +136,20 @@ Write-Host 'Quick Setup showed once across reopening and upgrading.'
 # Quick Setup's decisions, saved files, keys, demos and screenshots (each step, mid-transition and the finish), on its own profile.
 $quickReview = Join-Path $ResultRoot 'quick-setup-review'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-quick-setup',('"' + $quickReview + '"'),'flow' -WindowStyle Hidden -PassThru
-$process.WaitForExit()
+Wait-Settings $process
 $result = Get-Content "$quickReview/result-flow.txt" -Raw
 Stop-CoresOnProfile "$quickReview/profile"
 if ($result -ne 'PASS') { throw "Quick Setup flow: $result" }
 Write-Host "Quick Setup flow checks passed: $quickReview/quick-setup"
 $output = Join-Path $ResultRoot 'final'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-ui',('"' + $output + '"') -WindowStyle Hidden -PassThru
-$process.WaitForExit()
+Wait-Settings $process
 if ((Get-Content "$output/result.txt" -Raw) -ne 'PASS') { throw 'WinUI loading, profile persistence or visual capture failed.' }
 Stop-CoresOnProfile "$output/profile"
 Write-Host "WinUI profile/capture checks passed: $output"
 # Setup and uninstall pages, rendered offscreen with sample progress; nothing is installed.
 $setupOutput = Join-Path $ResultRoot 'setup'
 $process = Start-Process -FilePath "$root/dist/ui/Shanjie.UI.exe" -ArgumentList '--verify-setup',('"' + $setupOutput + '"') -WindowStyle Hidden -PassThru
-$process.WaitForExit()
+Wait-Settings $process
 if ((Get-Content "$setupOutput/result.txt" -Raw) -ne 'PASS') { throw 'WinUI setup pages failed.' }
 Write-Host "WinUI setup page checks passed: $setupOutput"
