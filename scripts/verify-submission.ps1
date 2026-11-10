@@ -36,8 +36,7 @@ if errorlevel 1 exit /b 1
 cd /d "$out"
 cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/submission.cpp" /link /OUT:"$exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-  Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-  & cmd.exe /d /c "$out/compile.cmd" | Set-Content "$out/compile.log"
+  Invoke-HarnessBuild $command "$out/compile.cmd" $exe "$out/compile.log"
   if($LASTEXITCODE){throw "$arch submission harness build failed; see compile.log"}
   foreach($keyboard in $Keyboards) {
    $prefix=if($keyboard -eq 1){'SU3'}else{'NE3'}

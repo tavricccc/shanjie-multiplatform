@@ -1,7 +1,10 @@
 #Requires -Version 7
 param([switch]$Benchmark, [string]$ResultRoot = (Join-Path ([IO.Path]::GetTempPath()) ('shanjie-ui-' + [guid]::NewGuid().ToString('N'))),
-    [ValidateSet('x64','x86')][string[]]$Architectures = @('x64','x86'),[string[]]$ModelFixtures=@(),[switch]$SkipNative,[switch]$NativeOnly)
+    [ValidateSet('x64','x86')][string[]]$Architectures = @('x64','x86'),[string[]]$ModelFixtures=@(),[switch]$SkipNative,[switch]$NativeOnly,[switch]$Visual)
 $ErrorActionPreference = 'Stop'
+# Screenshots are for a person to look at; no assertion reads them. -Visual saves them under $ResultRoot.
+# Set or cleared on every run, so an earlier -Visual run in the same shell never carries over.
+if ($Visual) { $env:SHANJIE_VERIFY_VISUAL = '1' } else { Remove-Item Env:SHANJIE_VERIFY_VISUAL -ErrorAction Ignore }
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/msvc-command.ps1"
 . "$PSScriptRoot/preserve-output.ps1"
@@ -15,8 +18,7 @@ if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$architecture"
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/candidate_host_smoke.cpp" "$root/tests/support/candidate_host.cpp" "$root/tests/support/engine.cpp" "$root/windows/target/$(if ($architecture -eq 'x64') {'x86_64'} else {'i686'})-pc-windows-msvc/release/shanjie_windows.lib" /link /OUT:"$root/build/candidate-host-$architecture.exe" ole32.lib user32.lib gdi32.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib psapi.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib
 "@
-    Set-Content "$root/build/native-$architecture/ui-smoke.cmd" $command -Encoding utf8NoBOM
-    & cmd.exe /d /c "$root/build/native-$architecture/ui-smoke.cmd"
+    Invoke-HarnessBuild $command "$root/build/native-$architecture/ui-smoke.cmd" "$root/build/candidate-host-$architecture.exe"
     if ($LASTEXITCODE) { throw 'Candidate host harness build failed.' }
     & "$root/build/candidate-host-$architecture.exe" "$root/dist/$architecture/Shanjie.dll" "$ResultRoot/native/$architecture"
     if ($LASTEXITCODE) { throw "$architecture WinUI IPC failed." }

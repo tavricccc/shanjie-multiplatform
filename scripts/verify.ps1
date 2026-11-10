@@ -32,8 +32,7 @@ if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$Architecture"
 cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/tsf_smoke.cpp" /link /OUT:"$harness" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-    Set-Content "build/native-$Architecture/verify.cmd" $command -Encoding utf8NoBOM
-    & cmd.exe /d /c (Join-Path $root "build/native-$Architecture/verify.cmd")
+    Invoke-HarnessBuild $command (Join-Path $root "build/native-$Architecture/verify.cmd") $harness
     if ($LASTEXITCODE) { throw 'TSF smoke harness build failed.' }
     $arguments = @("$root/dist/$Architecture/Shanjie.dll")
     if ($Visual) { $arguments += '--visual' }
