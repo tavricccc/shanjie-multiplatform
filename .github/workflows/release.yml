@@ -43,7 +43,8 @@ jobs:
 
   windows:
     needs: release
-    runs-on: windows-latest
+    # Match the VS 2022 generator used by the local CMake presets.
+    runs-on: windows-2022
     timeout-minutes: 180
     outputs:
       artifact_name: windows-package-${{ github.run_attempt }}
