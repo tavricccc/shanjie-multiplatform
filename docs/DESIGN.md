@@ -88,7 +88,7 @@ components:
 - **霧藍**：候選預設使用霧藍底，文字依對比選黑或白；混打注音提示使用可讀的強調色與淡色底，依深淺主題調整底色透明度。
 - **淺色**：`candidate-background`、`candidate-border`、`candidate-foreground`、`candidate-label`。
 - **深色**：`candidate-dark-*` 四色；選取強調色與自動對比文字共用。
-- **設定程式**：`SjText*Brush`、`SjStrokeBrush`、`SjFill*Brush` 等主題資源；主要強調色為固定霧藍 `#5874C9`，一般主題尚未提供跟隨系統強調色或自訂顏色。
+- **設定程式**：`SjText*Brush`、`SjStrokeBrush`、`SjFill*Brush` 等主題資源；強調色預設霧藍 `#5874C9`，可改為跟隨 Windows 或自訂 HEX，與候選窗、加詞浮層共用（`ui/AppearanceController.cs`）。
 
 **The Candidate Palette Rule.** 「介面與選字框主題」對應 `appearance.theme`：0 跟隨 Windows（讀 `AppsUseLightTheme`），1 淺色，2 深色，同時套用到設定程式、候選窗與加詞浮層。高對比時整組改讀 `GetSysColor` 的 `COLOR_WINDOW`、`COLOR_WINDOWTEXT`、`COLOR_HIGHLIGHT`、`COLOR_HIGHLIGHTTEXT`，邊線用 window text 色。
 
