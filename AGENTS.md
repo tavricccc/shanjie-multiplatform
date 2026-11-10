@@ -58,7 +58,7 @@
 
 ## 驗證：做多少
 
-依改到的地方挑，不必每次全跑：
+依改到的地方挑，不必每次全跑。`scripts/verify-changed.ps1` 依這張表自動選擇（`-DryRun` 只列出計畫，規則在 `scripts/verify-selection.ps1`，表上沒有的路徑一律跑完整 `verify.ps1`）；改了下表就同步改規則與 `tests/verify_selection.ps1`：
 
 | 改到 | 跑 |
 | --- | --- |
