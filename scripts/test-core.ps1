@@ -4,7 +4,9 @@
 # from the documented Windows policies that prepare-test-contracts.ps1 adapts.
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
+# A run whose test binaries, arguments, upstream data and models are byte-identical to an earlier
+# passing run is skipped; -Rerun runs it anyway.
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
 $ErrorActionPreference = 'Stop'
 function Get-MemoryUse {
     $os = Get-CimInstance Win32_OperatingSystem
@@ -168,6 +170,17 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
+    # The binaries hold all code under test; the rest of the result depends on the arguments and the
+    # files the tests read (upstream data/eval at its commit, and the model files).
+    $inputs = @(foreach ($binary in $binaries | Sort-Object Name) { "$($binary.Name)=$((Get-FileHash -LiteralPath $binary.Path).Hash)" }) +
+        @("skip=$($skipArguments -join ' ')", "data=$(git -C $upstream rev-parse HEAD:data)", "eval=$(git -C $upstream rev-parse HEAD:eval)") +
+        @(Get-ChildItem -LiteralPath "$upstream/data/lm" -File | Sort-Object Name | ForEach-Object { "lm/$($_.Name)=$((Get-FileHash -LiteralPath $_.FullName).Hash)" })
+    $key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs -join "`n"))).Substring(0, 32).ToLowerInvariant()
+    $passed = Join-Path $base "passed/$key"
+    if (!$Rerun -and (Test-Path -LiteralPath $passed)) {
+        Write-Host "Upstream tests unchanged since a passing run ($key); skipped. Use -Rerun to run them."
+        return
+    }
     # Both suites assert per-key latency. Isolate them from other binaries and
     # from each other's test cases; parallel decoding is not a latency baseline.
     $latency = @('engine_lm','engine_replay')
@@ -175,4 +188,6 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     foreach ($name in $latency) {
         Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree ($skipArguments + @('--test-threads=1')) $MemoryLimit
     }
+    New-Item -ItemType Directory (Split-Path $passed -Parent) -Force | Out-Null
+    Set-Content -LiteralPath $passed ($inputs -join "`n") -Encoding utf8NoBOM
 } finally { Pop-Location }
