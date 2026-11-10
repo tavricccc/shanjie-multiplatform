@@ -32,7 +32,7 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 - **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 沿同一直排移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心與數字標籤仍以九項為一組；1–9 選取反白所在群組的候選。
 - **尺寸與字型**：字詞預設 16 DIP、序號 9 DIP，依個人字級（14–32）等比縮放；候選列至少 24 DIP，上下各留 5 DIP，與 caret 間距 6 DIP。已安裝時優先用 Noto Sans 家族；否則候選字用 Microsoft JhengHei UI，序號用 Segoe UI（`windows/src/font.rs`）。
-- **配色**：一般主題預設霧藍 `#5874C9`，可跟隨 Windows 強調色或選自訂 HEX；選取文字依對比選黑或白。淺色底為 `#F8F8FA`、深色底為 `#1C1C20`，底面 alpha 均為 0.97，字、邊線與標記另有透明度。深色可選不透明純黑，其他底面維持原色。共用政策在 `shared/src/appearance.rs`，Windows 系統色在 `windows/src/appearance.rs`，色值由 `candidate.rs::Palette` 管理；主題偏好與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`，高對比優先使用系統色。
+- **配色**：一般主題預設霧藍 `#5874C9`，可跟隨 Windows 強調色或選自訂 HEX；預設藍的選取文字為白色，其他強調色依對比選黑或白。淺色底為 `#F8F8FA`、深色底為 `#1C1C20`，底面 alpha 均為 0.97，字、邊線與標記另有透明度。深色可選不透明純黑，其他底面維持原色。共用政策在 `shared/src/appearance.rs`，Windows 系統色在 `windows/src/appearance.rs`，色值由 `candidate.rs::Palette` 管理；主題偏好與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`，高對比優先使用系統色。
 - **組字面板**（`[candidates] reading_panel`，預設關閉）：關閉時與上游相同，組字只在 App 內，沒有候選也沒有提示就不顯示面板，有候選時也不畫整句列（`shanjie_shell::input::panel_view`）。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。原鍵混打需要它，`Document::reading_panel()` 在這個模式下讀出為開，不改寫設定值；舊 `[candidates] reading` 仍由遷移刪除，與它無關。
 - **混打提示**：原鍵混打時，原始按鍵（如 `gj`）留在 App 組字區，組字面板以霧藍字與淡色底標出 `ㄕㄨ`，沒有序號、不能點選。顯示名稱集中在 `SettingsViewModel.RawKeyMixingName`；儲存的鍵仍是 `[input] mixed_input`。
 - **預測**：被動預測沒有序號與反白，按 Tab 進入後才出現。

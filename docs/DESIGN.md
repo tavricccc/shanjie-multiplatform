@@ -3,7 +3,7 @@ name: 善解 Windows
 description: WinUI 3 玻璃設定與 Rust 同程序候選窗；個人外觀可選系統／自訂強調色、深色純黑與動畫政策
 colors:
   candidate-selected-background: "#5874C9"
-  candidate-selected-foreground: "#000000"
+  candidate-selected-foreground: "#FFFFFF"
   candidate-background: "#F8F8FA"
   candidate-border: "#000000"
   candidate-foreground: "#141418"
@@ -79,13 +79,13 @@ components:
 
 設定、安裝與更新畫面使用 WinUI 3、自訂玻璃視窗與共用的霧藍主題；候選窗由 Rust 在宿主程序內繪製，採接近不透明的圓角底、細邊線、小序號、霧藍選取與柔和陰影。原鍵混打在 App 組字區保留原始按鍵，組字面板以霧藍字與淡色底提示注音。目標是好讀、低資源、不打斷文件焦點。架構見 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-本文的色值與比例以目前原始碼為準：候選窗在 [`candidate.rs`](../windows/src/candidate.rs)，設定介面資源在 [`Sj.xaml`](../ui/Themes/Sj.xaml)，字型選擇在 [`font.rs`](../windows/src/font.rs)。以上藍色示例是預設外觀；可改用 Windows 強調色或自訂 HEX，選取文字自動依對比選黑或白。深色可選不透明純黑；高對比優先採系統色。動畫可跟隨系統、強制開啟或關閉。
+本文的色值與比例以目前原始碼為準：候選窗在 [`candidate.rs`](../windows/src/candidate.rs)，設定介面資源在 [`Sj.xaml`](../ui/Themes/Sj.xaml)，字型選擇在 [`font.rs`](../windows/src/font.rs)。以上藍色示例是預設外觀；可改用 Windows 強調色或自訂 HEX，預設藍的選取文字為白色，改用其他顏色時自動依對比選黑或白。深色可選不透明純黑；高對比優先採系統色。動畫可跟隨系統、強制開啟或關閉。
 
 ## Colors
 
 上方色表列 RGB，透明度另列於 `opacity`；候選窗的一般底面 alpha 為 0.97，文字、序號、邊線及提示各有透明度。設定程式使用 `Sj*` ThemeResource 與共用玻璃視窗，並保留 WinUI 控制項的互動與可及性語意。
 
-- **霧藍**：候選預設使用霧藍底，文字依對比選黑或白；混打注音提示使用可讀的強調色與淡色底，依深淺主題調整底色透明度。
+- **霧藍**：候選預設使用霧藍底配白字，改色後文字依對比選黑或白；混打注音提示使用可讀的強調色與淡色底，依深淺主題調整底色透明度。
 - **淺色**：`candidate-background`、`candidate-border`、`candidate-foreground`、`candidate-label`。
 - **深色**：`candidate-dark-*` 四色；選取強調色與自動對比文字共用。
 - **設定程式**：`SjText*Brush`、`SjStrokeBrush`、`SjFill*Brush` 等主題資源；強調色預設霧藍 `#5874C9`，可改為跟隨 Windows 或自訂 HEX，與候選窗、加詞浮層共用（`ui/AppearanceController.cs`）。
