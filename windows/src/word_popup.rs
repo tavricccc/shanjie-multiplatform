@@ -8,13 +8,13 @@ enum Answer {
     Saved(std::result::Result<String,String>),
 }
 #[derive(Clone,Copy,PartialEq)]
-struct Colors { background:COLORREF,border:COLORREF,text:COLORREF }
+struct Colors { background:COLORREF,border:COLORREF,text:COLORREF,accent:COLORREF,selected:COLORREF }
 impl Colors {
-    fn read(theme:u32)->Result<Self> {
-        let p=crate::candidate::Palette::new(theme)?;
+    fn read(theme:u32,appearance:crate::appearance::Appearance)->Result<Self> {
+        let p=crate::candidate::Palette::with(theme,appearance)?;
         let color=|c:windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F|
             COLORREF((c.r*255.0).round() as u32|((c.g*255.0).round() as u32)<<8|((c.b*255.0).round() as u32)<<16);
-        Ok(Self{background:color(p.background),border:color(p.border),text:color(p.text)})
+        Ok(Self{background:color(p.background),border:color(p.border),text:color(p.text),accent:color(p.accent),selected:color(p.selected)})
     }
 }
 struct Panel {
@@ -29,6 +29,7 @@ struct Panel {
     inspection_control:HWND,
     font: HFONT,
     theme:u32,
+    appearance:crate::appearance::Appearance,
     colors:Colors,
     background:HBRUSH,
     border:HBRUSH,
@@ -60,6 +61,7 @@ struct Paint {font:HFONT,background:HBRUSH,border:HBRUSH,colors:Colors}
 struct Control {
     window:Cell<HWND>, closing:Cell<bool>, window_reference:Cell<bool>, id:usize, notify:HWND,
     anchor:Cell<RECT>,
+    appearance:Cell<crate::appearance::Appearance>,
 }
 impl Control {
     fn close(&self) {
@@ -97,18 +99,21 @@ impl Popup {
         unsafe {let _=PostMessageW(Some(self.control.window.get()),KEY,WPARAM(vk|((ctrl as usize)<<16)),LPARAM(ch.map_or(0,|c|c as isize+1)));}
     }
     pub fn set_theme(&self,theme:u32)->Result<()> {if self.control.closing.get(){return Ok(());}unsafe{PostMessageW(Some(self.control.window.get()),THEME,WPARAM(theme as usize),LPARAM(0))}}
-    pub unsafe fn open(owner:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND)->Result<Box<Self>> {
-        Self::open_with(owner,None,anchor,word,data,layout,theme,notify,std::env::var_os("SHANJIE_HEADLESS").is_some())
+    pub fn set_appearance(&self,theme:u32,appearance:crate::appearance::Appearance)->Result<()> {
+        self.control.appearance.set(appearance);self.set_theme(theme)
     }
-    pub unsafe fn open_helper(helper:HWND,source:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32)->Result<Box<Self>>{
-        Self::open_with(helper,Some(source),anchor,word,data,layout,theme,HWND::default(),std::env::var_os("SHANJIE_HEADLESS").is_some())
+    pub unsafe fn open(owner:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND,appearance:crate::appearance::Appearance)->Result<Box<Self>> {
+        Self::open_with(owner,None,anchor,word,data,layout,theme,notify,appearance,std::env::var_os("SHANJIE_HEADLESS").is_some())
     }
-    unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND,headless:bool)->Result<Box<Self>> {
-        let (sender,receiver)=mpsc::channel(); let colors=Colors::read(theme)?;
-        let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify,anchor:Cell::new(anchor)});
+    pub unsafe fn open_helper(helper:HWND,source:HWND,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,appearance:crate::appearance::Appearance)->Result<Box<Self>>{
+        Self::open_with(helper,Some(source),anchor,word,data,layout,theme,HWND::default(),appearance,std::env::var_os("SHANJIE_HEADLESS").is_some())
+    }
+    unsafe fn open_with(owner:HWND,source:Option<HWND>,anchor:RECT,word:String,data:PathBuf,layout:Layout,theme:u32,notify:HWND,appearance:crate::appearance::Appearance,headless:bool)->Result<Box<Self>> {
+        let (sender,receiver)=mpsc::channel(); let colors=Colors::read(theme,appearance)?;
+        let control=Rc::new(Control{window:Cell::new(HWND::default()),closing:Cell::new(false),window_reference:Cell::new(true),id:NEXT_ID.fetch_add(1,Ordering::Relaxed),notify,anchor:Cell::new(anchor),appearance:Cell::new(appearance)});
         let background=CreateSolidBrush(colors.background);let border=CreateSolidBrush(colors.border);
         let paint=Rc::new(Cell::new(Paint{font:HFONT::default(),background,border,colors}));
-        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),dpi:0,reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless,revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
+        let panel=Panel{window:HWND::default(),control:control.clone(),paint:paint.clone(),owner:source.unwrap_or(owner),standalone:source.is_some(),dpi:0,reading_control:HWND::default(),status:HWND::default(),inspection_control:HWND::default(),font:HFONT::default(),theme,appearance,colors,background,border,word,data,reading:String::new(),layout,replace:true,saving:false,headless,revision:0,checked_revision:None,check_due:None,checking:false,save_after_check:false,receiver,sender};
         if panel.background.is_invalid()||panel.border.is_invalid(){return Err(Error::from_thread());}
         let state=Rc::new(WindowState{panel:RefCell::new(panel),control:control.clone(),paint,_count:crate::tsf::Count::new()});
         let module=HINSTANCE(crate::tsf::module().0);
@@ -321,9 +326,9 @@ impl Panel {
             }
         }
     }
-    pub fn set_theme(&mut self,theme:u32)->Result<()> {self.theme=theme;unsafe{self.refresh_colors()}}
+    pub fn set_theme(&mut self,theme:u32)->Result<()> {self.theme=theme;self.appearance=self.control.appearance.get();unsafe{self.refresh_colors()}}
     unsafe fn refresh_colors(&mut self)->Result<()> {
-        let colors=Colors::read(self.theme)?;
+        let colors=Colors::read(self.theme,self.appearance)?;
         if colors!=self.colors {
             let background=CreateSolidBrush(colors.background);let border=CreateSolidBrush(colors.border);
             if background.is_invalid()||border.is_invalid(){if !background.is_invalid(){let _=DeleteObject(background.into());}if !border.is_invalid(){let _=DeleteObject(border.into());}return Err(Error::from_thread());}
@@ -339,8 +344,11 @@ impl Panel {
 }
 unsafe fn draw_button(paint:Paint,draw:&DRAWITEMSTRUCT) {
         let selected=draw.itemState.0&ODS_SELECTED.0!=0;
-        FillRect(draw.hDC,&draw.rcItem,if selected{paint.border}else{paint.background});FrameRect(draw.hDC,&draw.rcItem,paint.border);
-        let old_font=SelectObject(draw.hDC,paint.font.into());SetBkMode(draw.hDC,TRANSPARENT);SetTextColor(draw.hDC,paint.colors.text);
+        let primary=draw.CtlID==10;
+        let accent=if primary{CreateSolidBrush(paint.colors.accent)}else{HBRUSH::default()};
+        FillRect(draw.hDC,&draw.rcItem,if primary&&!accent.is_invalid(){accent}else if selected{paint.border}else{paint.background});FrameRect(draw.hDC,&draw.rcItem,paint.border);
+        if !accent.is_invalid(){let _=DeleteObject(accent.into());}
+        let old_font=SelectObject(draw.hDC,paint.font.into());SetBkMode(draw.hDC,TRANSPARENT);SetTextColor(draw.hDC,if primary{paint.colors.selected}else{paint.colors.text});
         let mut text=vec![0u16;GetWindowTextLengthW(draw.hwndItem) as usize+1];let n=GetWindowTextW(draw.hwndItem,&mut text);text.truncate(n as usize);
         let mut rect=draw.rcItem;DrawTextW(draw.hDC,&mut text,&mut rect,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_NOPREFIX);
         if draw.itemState.0&ODS_FOCUS.0!=0{let mut focus=draw.rcItem;let _=InflateRect(&mut focus,-3,-3);let _=DrawFocusRect(draw.hDC,&focus);}
@@ -431,7 +439,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
             let source=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP|WS_VISIBLE,-12000,-12000,100,100,None,None,None,None).unwrap();
             SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             let foreground=GetForegroundWindow();
-            let p=Popup::open_with(helper,Some(source),RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),Layout::Standard,0,HWND::default(),true).unwrap();
+            let p=Popup::open_with(helper,Some(source),RECT{left:0,top:0,right:100,bottom:30},"你好".into(),PathBuf::from("missing-fixture"),Layout::Standard,0,HWND::default(),Default::default(),true).unwrap();
             let window=p.window();let dpi=GetDpiForWindow(window) as i32;
             let mut rect=RECT::default();GetWindowRect(window,&mut rect).unwrap();
             assert_eq!((rect.right-rect.left,rect.bottom-rect.top),(440*dpi/96,294*dpi/96));
@@ -460,7 +468,7 @@ unsafe extern "system" fn procedure(window:HWND,message:u32,wp:WPARAM,lp:LPARAM)
         let source=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,w!("STATIC"),w!("回家"),WS_POPUP,-12000,-12000,300,100,None,None,Some(module),None).unwrap();
         for (i,theme) in [1,2,0,1,2,0].into_iter().enumerate(){
             let p=Popup::open_with(helper,Some(source),RECT{left:0,top:0,right:100,bottom:30},"回家".into(),
-                PathBuf::from("owned-missing-test-data"),Layout::Standard,theme,HWND::default(),true).unwrap();
+                PathBuf::from("owned-missing-test-data"),Layout::Standard,theme,HWND::default(),Default::default(),true).unwrap();
             let window=p.control.window.get();assert!(p.active());
             if i%2==0{
                 let button=GetDlgItem(Some(window),11).unwrap();

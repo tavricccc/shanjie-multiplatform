@@ -63,10 +63,21 @@
             <SolidColorBrush x:Key="SjStatusWarningStrokeBrush" Color="#4DF5B544"/>
             <SolidColorBrush x:Key="SjStatusErrorStrokeBrush" Color="#4DF07479"/>
         </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="SjText1Brush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="SjText2Brush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="SjText3Brush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="SjStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="SjFillHoverBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+            <SolidColorBrush x:Key="SjFillSelectedBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="SjFillControlBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+        </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
     <Color x:Key="SjAccentColor">#FF5874C9</Color>
     <SolidColorBrush x:Key="SjAccentBrush" Color="{StaticResource SjAccentColor}"/>
+    <SolidColorBrush x:Key="SjAccentForegroundBrush" Color="White"/>
+    <SolidColorBrush x:Key="SjAccentTextBrush" Color="#FF5874C9"/>
     <Color x:Key="SjDangerColor">#FFE5484D</Color>
     <SolidColorBrush x:Key="SjDangerBrush" Color="{StaticResource SjDangerColor}"/>
     <SolidColorBrush x:Key="SjSuccessBrush" Color="#FF2F9E5B"/>
@@ -81,7 +92,7 @@
     <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="SjFillSelectedBrush"/>
     <StaticResource x:Key="TextControlBorderBrush" ResourceKey="SjStrokeBrush"/>
     <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="SjStrokeBrush"/>
-    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SjAccentTextBrush"/>
     <StaticResource x:Key="TextControlForeground" ResourceKey="SjText1Brush"/>
     <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="SjText1Brush"/>
     <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="SjText1Brush"/>
@@ -98,6 +109,7 @@
     <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="SjAccentBrush"/>
     <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="SjAccentBrush"/>
     <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="SjAccentForegroundBrush"/>
     <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="SjFillControlBrush"/>
     <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="SjStrokeBrush"/>
     <StaticResource x:Key="RadioButtonOuterEllipseCheckedFill" ResourceKey="SjAccentBrush"/>
@@ -106,7 +118,9 @@
     <StaticResource x:Key="RadioButtonOuterEllipseStroke" ResourceKey="SjStrokeBrush"/>
     <StaticResource x:Key="ProgressBarForeground" ResourceKey="SjAccentBrush"/>
     <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="SjAccentBrush"/>
-    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="SjAccentBrush"/>
+    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="SjAccentTextBrush"/>
+    <StaticResource x:Key="HyperlinkButtonForegroundPointerOver" ResourceKey="SjAccentTextBrush"/>
+    <StaticResource x:Key="HyperlinkButtonForegroundPressed" ResourceKey="SjAccentTextBrush"/>
     <StaticResource x:Key="ScrollBarThumbFill" ResourceKey="SjText3Brush"/>
     <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
         <Setter Property="CornerRadius" Value="10"/><Setter Property="MinHeight" Value="32"/><Setter Property="FontSize" Value="12"/>
@@ -198,7 +212,7 @@
 
     <!-- Accent button for the one main action in a footer (settings 儲存): same size as a text button, accent fill -->
     <Style x:Key="SjAccentButton" TargetType="Button" BasedOn="{StaticResource SjTextButton}">
-        <Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource SjAccentForegroundBrush}"/><Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -225,7 +239,7 @@
     <Style x:Key="SjPrimaryButton" TargetType="Button">
         <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="12,0,12,0"/><Setter Property="CornerRadius" Value="10"/>
         <Setter Property="Background" Value="{StaticResource SjAccentBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="White"/><Setter Property="UseSystemFocusVisuals" Value="False"/>
+        <Setter Property="Foreground" Value="{StaticResource SjAccentForegroundBrush}"/><Setter Property="UseSystemFocusVisuals" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
