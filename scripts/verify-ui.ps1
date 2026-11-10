@@ -1,7 +1,10 @@
 #Requires -Version 7
 param([switch]$Benchmark, [string]$ResultRoot = (Join-Path ([IO.Path]::GetTempPath()) ('shanjie-ui-' + [guid]::NewGuid().ToString('N'))),
-    [ValidateSet('x64','x86')][string[]]$Architectures = @('x64','x86'),[string[]]$ModelFixtures=@(),[switch]$SkipNative,[switch]$NativeOnly)
+    [ValidateSet('x64','x86')][string[]]$Architectures = @('x64','x86'),[string[]]$ModelFixtures=@(),[switch]$SkipNative,[switch]$NativeOnly,[switch]$Visual)
 $ErrorActionPreference = 'Stop'
+# Screenshots are for a person to look at; no assertion reads them. -Visual saves them under $ResultRoot.
+# Set or cleared on every run, so an earlier -Visual run in the same shell never carries over.
+if ($Visual) { $env:SHANJIE_VERIFY_VISUAL = '1' } else { Remove-Item Env:SHANJIE_VERIFY_VISUAL -ErrorAction Ignore }
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/msvc-command.ps1"
 . "$PSScriptRoot/preserve-output.ps1"

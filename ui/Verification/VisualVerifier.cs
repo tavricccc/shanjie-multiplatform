@@ -10,6 +10,8 @@ internal static class VisualVerifier
     internal static async Task Capture(FrameworkElement element, string path)
     {
         element.UpdateLayout();
+        // Assertions read the controls, never these images; rendering one costs two passes and 600 ms.
+        if (Environment.GetEnvironmentVariable("SHANJIE_VERIFY_VISUAL") != "1") return;
         var bitmap = new RenderTargetBitmap(); await bitmap.RenderAsync(element);
         // An offscreen window needs a rendered frame before its native navigation transition settles.
         await Task.Delay(600); await bitmap.RenderAsync(element);

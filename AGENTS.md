@@ -63,10 +63,10 @@
 | 改到 | 跑 |
 | --- | --- |
 | 只有文件、Changelog、註解 | 不建置、不測試 |
-| `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔 |
+| `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔。測試執行檔、資料與模型都沒變且曾通過就會自動跳過，`-Rerun` 強制重跑 |
 | `shared/`、`windows/src` 的邏輯 | 對應 crate 的 `cargo test --lib`，加上相關的 `verify-*.ps1` |
 | 按鍵路徑或核心請求 | 再跑 `measure-engine.ps1` |
-| `ui/` | `verify-ui.ps1` |
+| `ui/` | `verify-ui.ps1`（預設不截圖，斷言照跑；要人眼看畫面才加 `-Visual`） |
 | 一輪變更完成、準備 commit 或發布 | x64 `verify.ps1` 一次；發布前或改到 x86 相關時加 `verify.ps1 -NativeOnly -Architecture x86` |
 
 ### 建置與 Rust
