@@ -289,8 +289,8 @@ impl Data {
                 PCWSTR(crate::wide(&path.parent().unwrap().to_string_lossy()).as_ptr()),
                 SW_SHOWNORMAL,
             );
-            if result.0 as isize <= 32 {
-                crate::runtime_log::io("settings.launch", &std::io::Error::from_raw_os_error(result.0 as i32));
+            if let Some(error) = crate::runtime_log::shell_execute_error(result.0 as isize) {
+                crate::runtime_log::io("settings.launch", &error);
             }
         }
     }
