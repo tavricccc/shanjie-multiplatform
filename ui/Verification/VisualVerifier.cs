@@ -10,6 +10,8 @@ internal static class VisualVerifier
     internal static async Task Capture(FrameworkElement element, string path)
     {
         element.UpdateLayout();
+        // Assertions read the controls, never these images; rendering one costs two passes and 600 ms.
+        if (Environment.GetEnvironmentVariable("SHANJIE_VERIFY_VISUAL") != "1") return;
         var bitmap = new RenderTargetBitmap(); await bitmap.RenderAsync(element);
         // An offscreen window needs a rendered frame before its native navigation transition settles.
         await Task.Delay(600); await bitmap.RenderAsync(element);
@@ -169,12 +171,83 @@ internal static class VisualVerifier
         settings.Vm.RefreshModels(installed.Where(m => m.Id != Models.ModelCatalog.Builtin)); settings.Vm.SelectModel(chosen);
         settings.AppWindow.Resize(new Windows.Graphics.SizeInt32(840, 680)); settings.Vm.Load();
     }
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (int i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+    }
+
+    private static async Task VerifyDisabledSettings(MainWindow settings, string output)
+    {
+        var disabled = new HashSet<string>();
+        var values = new Dictionary<Controls.SettingToggle, bool>();
+        void Check()
+        {
+            foreach (var row in Descendants(settings.CaptureElement).OfType<Controls.SettingRow>().Where(row => row.IsLoaded))
+            {
+                double opacity = row.IsEnabled ? 1 : 0.4;
+                foreach (var text in Descendants(row).OfType<Microsoft.UI.Xaml.Controls.TextBlock>()
+                    .Where(text => text.Text.Length > 0 && (text.Text == row.Label || text.Text == row.Description)))
+                    if (Math.Abs(text.Opacity - opacity) > 0.01)
+                        throw new InvalidDataException($"Initial disabled row is not dimmed: {row.Label}; opacity={text.Opacity}; enabled={row.IsEnabled}");
+                foreach (var control in Descendants(row).OfType<Microsoft.UI.Xaml.Controls.Control>())
+                {
+                    if (!row.IsEnabled && control.IsEnabled)
+                        throw new InvalidDataException("Disabled row contains an enabled control: " + row.Label);
+                    if ((control is Controls.Switch or Controls.Segmented) && Math.Abs(control.Opacity - (control.IsEnabled ? 1 : 0.4)) > 0.01)
+                        throw new InvalidDataException("Initial disabled control is not dimmed: " + row.Label);
+                    if (!control.IsEnabled && control is Controls.Switch toggle)
+                    {
+                        bool before = toggle.IsOn;
+                        var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(toggle);
+                        (peer?.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Toggle) as Microsoft.UI.Xaml.Automation.Provider.IToggleProvider)?.Toggle();
+                        if (toggle.IsOn != before || toggle.Focus(FocusState.Programmatic))
+                            throw new InvalidDataException("Disabled switch accepted an action or focus: " + row.Label);
+                    }
+                }
+                if (!row.IsEnabled)
+                {
+                    disabled.Add(row.Label);
+                    if (row is Controls.SettingToggle toggle)
+                    {
+                        if (values.TryGetValue(toggle, out bool value) && value != toggle.IsOn)
+                            throw new InvalidDataException("Disabled appearance changed a stored choice: " + row.Label);
+                        values[toggle] = toggle.IsOn;
+                    }
+                }
+            }
+        }
+        for (int page = 0; page <= MainWindow.Pages.About; page++)
+        {
+            settings.ShowSection(page); await Task.Delay(80); Check();
+        }
+        if (disabled.Count == 0) throw new InvalidDataException("The initial disabled-state fixture did not exercise dependent settings");
+        foreach (bool enabled in new[] { true, false, true, false })
+        {
+            settings.Vm.SpaceCommits = enabled; settings.Vm.ShiftToggle = enabled;
+            settings.Vm.AddWord = enabled; settings.Vm.SpaceOperates = enabled;
+            settings.Vm.Demote = enabled; settings.Vm.Learning = enabled;
+            await Task.Delay(80); Check();
+        }
+        settings.Vm.Load(); await Task.Delay(80); Check();
+        File.WriteAllLines(Path.Combine(output, "disabled-rows.txt"), disabled.Order());
+        settings.ShowSection(MainWindow.Pages.Composition); await Task.Delay(80);
+        await Capture(settings.CaptureElement, Path.Combine(output, "disabled-settings.png"));
+        settings.ShowSection(MainWindow.Pages.General);
+    }
+
     public static async Task Run(MainWindow settings, string output, string? feature = null)
     {
         // Keep verification away from the user's windows and never activate the test surfaces.
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false);
         await Task.Delay(500);
         Directory.CreateDirectory(Path.GetDirectoryName(Models.ProfileStore.Path)!);
+        if (feature is null or "disabled-settings") await VerifyDisabledSettings(settings, output);
+        if (feature == "disabled-settings") { settings.Close(); return; }
         if (feature is null or "zhuyin-mode") await VerifyZhuyinMode(settings, output);
         if (feature == "zhuyin-mode") { settings.Close(); return; }
         if (feature is "about-models" or "contributors" or "model-picker")
@@ -207,6 +280,30 @@ internal static class VisualVerifier
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Operation preset replaced personal model choice");
         }
         await VerifyModelRescans(settings); VerifyCatalogText(); await VerifyAboutModels(settings, output);
+        // Palette preview, invalid HEX rejection, personal choices surviving a preset, and persistence.
+        settings.Vm.AccentMode=2;settings.Vm.AccentColor="#FFFF00";settings.Vm.PureBlack=true;settings.Vm.Theme=2;settings.Vm.AnimationMode=1;
+        settings.Vm.Save();settings.Vm.Load();
+        if (settings.Vm.AccentMode!=2 || settings.Vm.AccentColor!="#FFFF00" || !settings.Vm.PureBlack || settings.Vm.AnimationMode!=1 || !Controls.Motion.Animated)
+            throw new InvalidDataException("Appearance save/reload failed");
+        if (!Controls.Motion.HighContrast && (Controls.Motion.Accent.Color.R!=255 || Controls.Motion.Accent.Color.G!=255 || Controls.Motion.OnAccent.Color.R!=0))
+            throw new InvalidDataException("Bright accent selection is unreadable or not applied");
+        byte[] validAppearance=File.ReadAllBytes(Models.ProfileStore.Path);settings.Vm.AccentColor="#zzzzzz";
+        bool rejectedHex=false;try{settings.Vm.Save();}catch(InvalidDataException){rejectedHex=true;}
+        if(!rejectedHex || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(validAppearance))throw new InvalidDataException("Invalid HEX changed saved settings");
+        settings.Vm.AccentColor="#FFFF00";settings.Vm.Preset(true);
+        if(settings.Vm.AccentMode!=2 || !settings.Vm.PureBlack || settings.Vm.AnimationMode!=1)throw new InvalidDataException("Preset replaced personal appearance");
+        settings.ShowAppearance();await Task.Delay(150);await Capture(settings.CaptureElement,Path.Combine(output,"settings-custom-black.png"));
+        foreach(bool systemMotion in new[]{false,true}) {
+            Controls.Motion.SystemAnimationsForVerification=systemMotion;
+            foreach(int mode in new[]{0,1,2}) {
+                settings.Vm.AnimationMode=mode;
+                if(Controls.Motion.Animated!=(mode==1 || mode==0 && systemMotion))throw new InvalidDataException("Animation policy ignored");
+            }
+        }
+        Controls.Motion.SystemAnimationsForVerification=null;
+        settings.Vm.AccentMode=1;settings.Vm.AnimationMode=0;settings.Vm.PureBlack=false;
+        await Task.Delay(150);await Capture(settings.CaptureElement,Path.Combine(output,"settings-system-accent.png"));
+        settings.Vm.AccentMode=0;settings.Vm.AccentColor="#5874C9";settings.Vm.Save();
         // The single right-arrow selector migrates old switches and persists all three choices in both modes.
         string beforeRight = File.ReadAllText(Models.ProfileStore.Path);
         var rightChoice = (Microsoft.UI.Xaml.Controls.ComboBox)settings.FindName("CandidateRightAction");

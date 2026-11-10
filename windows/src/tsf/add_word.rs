@@ -139,16 +139,16 @@ impl Data {
         let Some(selected)=self.word_selection.borrow_mut().take() else { self.diagnostic("word.blocked.no_selection",None,None,None); return; };
         if self.word_request.borrow().as_ref().is_some_and(|r|!self.word_current(r)) { self.close_word(); return; }
         if self.word_lookup.borrow().is_none() {if let Some(w)=self.state.borrow().watcher.as_ref(){w.word_poll(false);}}
-        let (layout,data,theme,notify)={
+        let (layout,data,theme,notify,appearance)={
             let s=self.state.borrow();
             if self.generation.get()!=selected.generation || s.context.as_ref()!=Some(&selected.context){return;}
             let keyboard=s.prefs.number("input","keyboard",0);
             let layout=crate::installation::layout(keyboard,s.profile_layout,crate::installation::available());
             let layout=if layout==1{shanjie_core::engine::Layout::Eten}else{shanjie_core::engine::Layout::Standard};
-            (layout,s.data.clone(),s.prefs.number("appearance","theme",0),s.watcher.as_ref().map_or(HWND::default(),|w|w.word_target()))
+            (layout,s.data.clone(),s.prefs.number("appearance","theme",0),s.watcher.as_ref().map_or(HWND::default(),|w|w.word_target()),crate::appearance::Appearance::from_document(&s.prefs))
         };
         let revision=self.word_revision.get();
-        match unsafe{crate::word_popup::Popup::open(selected.owner,selected.rect,selected.word,data,layout,theme,notify)} {
+        match unsafe{crate::word_popup::Popup::open(selected.owner,selected.rect,selected.word,data,layout,theme,notify,appearance)} {
             Ok(popup)=>{
                 if self.generation.get()!=selected.generation || self.word_revision.get()!=revision {return;}
                 // Drop the old command handle outside the Data borrow.

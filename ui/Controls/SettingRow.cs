@@ -30,9 +30,11 @@ public partial class SettingRow : UserControl
         description.Foreground = Motion.Resource("SjText3Brush");
         divider.BorderBrush = Motion.Resource("SjStrokeBrush");
         Content = divider;
-        Loaded += (_, _) => Layout();
-        IsEnabledChanged += (_, _) => label.Opacity = description.Opacity = IsEnabled ? 1 : 0.4;
+        Loaded += (_, _) => { Layout(); SyncEnabled(); };
+        IsEnabledChanged += (_, _) => SyncEnabled();
     }
+
+    void SyncEnabled() => label.Opacity = description.Opacity = IsEnabled ? 1 : 0.4;
 
     void Describe(string text) { description.Text = text; description.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible; }
 

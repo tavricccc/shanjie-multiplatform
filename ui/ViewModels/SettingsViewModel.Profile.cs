@@ -63,6 +63,9 @@ public partial class SettingsViewModel
             SymbolKeyboard = profile.Flag("shortcuts", "symbol_keyboard", Interaction == 0); CtrlBackslash = profile.Flag("shortcuts", "ctrl_backslash", Interaction == 1);
             ForgetCandidate = profile.Flag("shortcuts", "forget_candidate", false);
             Theme = profile.Number("appearance", "theme", 0); FontSize = profile.Number("appearance", "font_size", 16); ModeIndicator = profile.Flag("appearance", "mode_indicator", true); GlassTint = Math.Clamp(profile.Number("appearance", "glass_tint", 42), 0, 100);
+            AccentMode = Math.Max(0,Array.IndexOf(new[] { "default", "windows", "custom" },profile.Read("appearance","accent","default")));
+            AccentColor = profile.Read("appearance","accent_color","#5874C9"); PureBlack = profile.Flag("appearance","pure_black",false);
+            AnimationMode = Math.Max(0,Array.IndexOf(new[] { "system", "on", "off" },profile.Read("appearance","animation","system")));
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
             MixedTolerance = profile.Flag("input", "mixed_tolerance", false); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
@@ -137,6 +140,9 @@ public partial class SettingsViewModel
     }
     private void WriteDocument()
     {
+        if (CustomAccent && !TryAccent(AccentColor,out _)) throw new InvalidDataException("自訂顏色請填六位 HEX，例如 #5874C9。");
+        var appearance = ProfileDocument.Parse(AppearanceDocument());
+        foreach (var key in new[] { "accent", "accent_color", "pure_black", "animation" }) profile.Set("appearance",key,appearance.Read("appearance",key,""));
         profile.Set("profile", "interaction", Interaction == 0 ? "windows" : "shanjie");
         profile.Set("engine", "ranking", Rankings[Ranking]);
         var apps = string.Join(";", ChatApps.Split([';', ',', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).Distinct());

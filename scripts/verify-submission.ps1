@@ -13,7 +13,9 @@ foreach ($arch in $Architectures) {
  New-Item -ItemType Directory -Path "$payload/$arch" -Force | Out-Null
  Copy-Item "$DllRoot/$arch/Shanjie.dll" "$payload/$arch" -Force
 }
-foreach ($name in 'data','tools') { New-Item -ItemType Junction -Path "$payload/$name" -Target "$DllRoot/$name" | Out-Null }
+New-Item -ItemType Junction -Path "$payload/data" -Target "$DllRoot/data" | Out-Null
+New-Item -ItemType Directory -Path "$payload/tools" | Out-Null
+Get-ChildItem "$DllRoot/tools" -File | Copy-Item -Destination "$payload/tools"
 # Test both layouts independently of the user's installed keyboard selection.
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 $DllRoot = $payload
@@ -34,8 +36,7 @@ if errorlevel 1 exit /b 1
 cd /d "$out"
 cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/submission.cpp" /link /OUT:"$exe" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-  Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
-  & cmd.exe /d /c "$out/compile.cmd" | Set-Content "$out/compile.log"
+  Invoke-HarnessBuild $command "$out/compile.cmd" $exe "$out/compile.log"
   if($LASTEXITCODE){throw "$arch submission harness build failed; see compile.log"}
   foreach($keyboard in $Keyboards) {
    $prefix=if($keyboard -eq 1){'SU3'}else{'NE3'}

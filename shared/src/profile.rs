@@ -362,7 +362,7 @@ const PERSONAL: [(&str, &[&str]); 3] = [
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
     ),
-    ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint"]),
+    ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint", "accent", "accent_color", "pure_black", "animation"]),
 ];
 const CHOICES: [(&str, &str, &[&str]); 8] = [
     ("profile", "interaction", &["windows", "shanjie"]),

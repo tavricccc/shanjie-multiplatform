@@ -28,9 +28,31 @@ int wmain(int argc,wchar_t** argv) {
         LPARAM flags=LPARAM(1)|(LPARAM(MapVirtualKeyW(vk,MAPVK_VK_TO_VSC))<<16);
         require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&test)),915);
         if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),916);
+        if(required && !(test&&eaten)) {
+            struct Translated {unsigned kind,ch,modifiers;} translated{};
+            auto translate=(bool(__cdecl*)(size_t,intptr_t,Translated*))GetProcAddress(dll,"sj_translate");
+            bool available=translate&&translate(vk,flags,&translated);
+            std::printf("Key rejection: vk=%d shift=%d caps=%d test=%d eaten=%d layout=%p translated=%d kind=%u ch=%u modifiers=%u\n",vk,shift,caps,test,eaten,GetKeyboardLayout(0),available,translated.kind,translated.ch,translated.modifiers);
+            std::fflush(stdout);
+        }
         if(required)require(test&&eaten,917);
     };
-    if(scenario==L"english-symbol-order"){
+    if(scenario==L"digit-navigation"){
+        std::wstring committed;
+        for(auto digit:std::wstring(L"125890")){
+            for(int navigation:{VK_LEFT,VK_HOME,VK_RIGHT,VK_END}){
+                press(digit);require(store->text==committed+digit,973);
+                press(navigation,false,false,navigation==VK_LEFT||navigation==VK_HOME);
+                LONG position=(LONG)committed.size()+((navigation==VK_LEFT||navigation==VK_HOME)?0:1);
+                require(store->text==committed+digit && store->selection.acpStart==position && store->selection.acpEnd==position,974);
+                press('3');
+                auto edited=committed+((navigation==VK_LEFT||navigation==VK_HOME)?std::wstring(L"3")+digit:std::wstring(1,digit)+L"3");
+                require(store->text==edited,975);
+                press(VK_BACK);require(store->text==committed+digit,976);
+                press(VK_RETURN,false,false,false);committed+=digit;require(store->text==committed,977);
+            }
+        }
+    }else if(scenario==L"english-symbol-order"){
         std::wstring expected;
         for(auto mark:{std::pair{VK_ADD,L"+"},std::pair{VK_SPACE,L" "}}){
             for(auto ch:std::wstring(L"ABC"))press(ch,true);
@@ -39,6 +61,21 @@ int wmain(int argc,wchar_t** argv) {
             require(store->text==expected,961);
             press(VK_RETURN,false,false,false);require(store->text==expected,962);
         }
+        for(auto ch:std::wstring(L"99.9"))press(ch==L'.'?VK_OEM_PERIOD:ch);
+        require(store->text==expected+L"99.9",963);
+        press('5',true);expected+=L"99.9%";
+        require(store->text==expected,964);
+        press(VK_RETURN,false,false,false);require(store->text==expected,965);
+        auto committed=expected;
+        for(auto ch:std::wstring(L"99.9"))press(ch==L'.'?VK_OEM_PERIOD:ch);
+        press(VK_LEFT);press('5',true);
+        require(store->text==committed+L"99.%9" && store->selection.acpStart==(LONG)committed.size()+4,966);
+        press(VK_BACK);require(store->text==committed+L"99.9",967);
+        press(VK_ESCAPE);require(store->text==committed,968);
+        press('1');press('5',true);require(store->text==committed+L"1%",969);
+        press(VK_SPACE,true);require(store->text==committed+L"１％",970);
+        press(VK_SPACE,true);require(store->text==committed+L"1%",971);
+        press(VK_RETURN,false,false,false);expected=committed+L"1%";require(store->text==expected,972);
     }else if(scenario==L"standalone-tones"){
         for(int key:{'3','4','6','7'}){press(key);press(VK_RETURN,false,false,false);}
         require(store->text==L"ˇˋˊ˙",948);

@@ -40,13 +40,15 @@ public sealed partial class Switch : UserControl
         ElementCompositionPreview.SetIsTranslationEnabled(knob, true);
         knobVisual = ElementCompositionPreview.GetElementVisual(knob);
         onVisual = ElementCompositionPreview.GetElementVisual(on);
-        Loaded += (_, _) => { if (!placed) Place(); };
+        Loaded += (_, _) => { if (!placed) Place(); SyncEnabled(); };
         PointerPressed += (_, e) => { if (!IsEnabled) return; pressed = true; CapturePointer(e.Pointer); Stretch(true); e.Handled = true; };
-        PointerReleased += (_, e) => { if (!pressed) return; pressed = false; ReleasePointerCapture(e.Pointer); Stretch(false); IsOn = !IsOn; e.Handled = true; };
+        PointerReleased += (_, e) => { if (!pressed) return; pressed = false; ReleasePointerCapture(e.Pointer); Stretch(false); if (!IsEnabled) return; IsOn = !IsOn; e.Handled = true; };
         PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; Stretch(false); } };
-        KeyDown += (_, e) => { if (e.Key is VirtualKey.Space or VirtualKey.Enter) { IsOn = !IsOn; e.Handled = true; } };
-        IsEnabledChanged += (_, _) => Opacity = IsEnabled ? 1 : 0.4;
+        KeyDown += (_, e) => { if (IsEnabled && (e.Key is VirtualKey.Space or VirtualKey.Enter)) { IsOn = !IsOn; e.Handled = true; } };
+        IsEnabledChanged += (_, _) => SyncEnabled();
     }
+
+    void SyncEnabled() => Opacity = IsEnabled ? 1 : 0.4;
 
     void Place()
     {

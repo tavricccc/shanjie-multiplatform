@@ -4,7 +4,9 @@
 # from the documented Windows policies that prepare-test-contracts.ps1 adapts.
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
+# A run whose test binaries, arguments, upstream data and models are byte-identical to an earlier
+# passing run is skipped; -Rerun runs it anyway.
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
 $ErrorActionPreference = 'Stop'
 function Get-MemoryUse {
     $os = Get-CimInstance Win32_OperatingSystem
@@ -40,6 +42,29 @@ function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArgum
     foreach ($job in $failed) { Write-Host "---- $($job.Name)"; Get-Content $job.Log, "$($job.Log).err" }
     if ($failed) { throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')" }
 }
+# Mirrors $Source into $Destination, writing only files whose bytes differ and archiving files that
+# are gone. target/ and archives in the destination are never touched.
+function Sync-ChangedFiles([string]$Source, [string]$Destination) {
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $wanted = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $written = 0
+    foreach ($file in Get-ChildItem -LiteralPath $Source -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]\.deleted_files[\\/]' }) {
+        $relative = [IO.Path]::GetRelativePath($Source, $file.FullName); [void]$wanted.Add($relative)
+        $target = Join-Path $Destination $relative
+        if ((Test-Path -LiteralPath $target) -and (Get-Item -LiteralPath $target).Length -eq $file.Length -and
+            [Linq.Enumerable]::SequenceEqual([IO.File]::ReadAllBytes($target), [IO.File]::ReadAllBytes($file.FullName))) { continue }
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force; $written++
+    }
+    $existing = Get-ChildItem -LiteralPath $Destination -Force | Where-Object Name -notin 'target', '.deleted_files' |
+        ForEach-Object { if ($_.PSIsContainer) { Get-ChildItem -LiteralPath $_.FullName -Recurse -File } else { $_ } }
+    foreach ($stale in $existing | Where-Object {
+            $relative = [IO.Path]::GetRelativePath($Destination, $_.FullName)
+            $relative -notmatch '[\\/]\.deleted_files[\\/]' -and !$wanted.Contains($relative) }) {
+        Preserve-Output $stale.FullName; $written++
+    }
+    $written
+}
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/export-upstream.ps1"
 . "$PSScriptRoot/preserve-output.ps1"
@@ -66,8 +91,11 @@ try {
     # A separate checkout-shaped tree (test/core, test/data, test/eval), so the test patches below never reach
     # the core that is shipped and every path the tests take from CARGO_MANIFEST_DIR lands in upstream's files.
     $base = Join-Path $root 'build/test'
-    $tree = Join-Path $base 'core'
-    if (Test-Path -LiteralPath $tree) { Get-ChildItem -LiteralPath $tree -Exclude target,'.deleted_files' | ForEach-Object { Preserve-Output $_.FullName } }
+    # The tree is assembled in a fresh staging folder, then only files whose bytes changed are written
+    # into build/test/core. Unchanged files keep their timestamps, so cargo does not rebuild the core
+    # and every test binary on each run.
+    $final = Join-Path $base 'core'
+    $tree = Join-Path $base ('.stage-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tree -Force | Out-Null
     Copy-Item "$root/build/core/src","$root/build/core/Cargo.toml" $tree -Recurse -Force
     Copy-Item "$upstream/core/tests" $tree -Recurse -Force
@@ -130,6 +158,10 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     [IO.File]::WriteAllText($learn, $unixOnly.Replace($content, "#[cfg(unix)]`n`$1fn `$2("), [Text.UTF8Encoding]::new($false))
     foreach ($name in $excluded) { Preserve-Output (Join-Path $tree "tests/$name.rs") }
     & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $tree 'tests')
+    $written = Sync-ChangedFiles $tree $final
+    Remove-Item -LiteralPath $tree -Recurse -Force  # generated in this run; build/test/core holds the result
+    $tree = $final
+    Write-Host "Upstream test tree: $written file(s) changed."
     $selected = if ($Tests) { $Tests } else { Get-ChildItem -LiteralPath "$tree/tests" -Filter *.rs | ForEach-Object BaseName }
     $arguments = @(foreach ($test in $selected) { '--test'; $test }) + @(if (!$NoUnitTests) { '--lib' })
     # Build every test binary once, then run them side by side: each binary has few tests and they mostly
@@ -138,6 +170,17 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
+    # The binaries hold all code under test; the rest of the result depends on the arguments and the
+    # files the tests read (upstream data/eval at its commit, and the model files).
+    $inputs = @(foreach ($binary in $binaries | Sort-Object Name) { "$($binary.Name)=$((Get-FileHash -LiteralPath $binary.Path).Hash)" }) +
+        @("skip=$($skipArguments -join ' ')", "data=$(git -C $upstream rev-parse HEAD:data)", "eval=$(git -C $upstream rev-parse HEAD:eval)") +
+        @(Get-ChildItem -LiteralPath "$upstream/data/lm" -File | Sort-Object Name | ForEach-Object { "lm/$($_.Name)=$((Get-FileHash -LiteralPath $_.FullName).Hash)" })
+    $key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs -join "`n"))).Substring(0, 32).ToLowerInvariant()
+    $passed = Join-Path $base "passed/$key"
+    if (!$Rerun -and (Test-Path -LiteralPath $passed)) {
+        Write-Host "Upstream tests unchanged since a passing run ($key); skipped. Use -Rerun to run them."
+        return
+    }
     # Both suites assert per-key latency. Isolate them from other binaries and
     # from each other's test cases; parallel decoding is not a latency baseline.
     $latency = @('engine_lm','engine_replay')
@@ -145,4 +188,6 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     foreach ($name in $latency) {
         Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree ($skipArguments + @('--test-threads=1')) $MemoryLimit
     }
+    New-Item -ItemType Directory (Split-Path $passed -Parent) -Force | Out-Null
+    Set-Content -LiteralPath $passed ($inputs -join "`n") -Encoding utf8NoBOM
 } finally { Pop-Location }
