@@ -47,6 +47,11 @@ impl Appearance {
     pub fn accent(self, windows: u32) -> u32 {
         match self.accent { Accent::Default => DEFAULT_ACCENT, Accent::Windows => windows, Accent::Custom(rgb) => rgb }
     }
+    /// Text on the selection. The default blue keeps white text, as upstream does
+    /// (4.42:1); chosen colours pick whichever of black or white reads better.
+    pub fn selected_text(self, accent: u32) -> u32 {
+        if self.accent == Accent::Default { 0xffffff } else { foreground(accent) }
+    }
 }
 pub fn parse_hex(value: &str) -> Option<u32> {
     let hex = value.strip_prefix('#').unwrap_or(value);
@@ -95,6 +100,18 @@ mod tests {
         assert!(Animation::System.enabled(true));
         assert_eq!(Appearance::from_document(&Document::parse("[appearance]\naccent=windows\n").unwrap()).accent(0x123456), 0x123456);
         for invalid in ["#FFF", "#12345678", "xyzxyz", "#ZZ0000"] { assert_eq!(parse_hex(invalid), None); }
+    }
+    #[test]
+    fn default_blue_keeps_white_selection_text() {
+        let default = Appearance::default();
+        assert_eq!(default.selected_text(default.accent(0)), 0xffffff);
+        // The same blue chosen explicitly follows the contrast rule instead.
+        let custom = Appearance { accent: Accent::Custom(DEFAULT_ACCENT), ..Appearance::default() };
+        assert_eq!(custom.selected_text(DEFAULT_ACCENT), 0);
+        let yellow = Appearance { accent: Accent::Custom(0xffff00), ..Appearance::default() };
+        assert_eq!(yellow.selected_text(0xffff00), 0);
+        let windows = Appearance { accent: Accent::Windows, ..Appearance::default() };
+        assert_eq!(windows.selected_text(0x003e92), 0xffffff);
     }
     #[test]
     fn bright_dark_and_saturated_accents_remain_readable() {

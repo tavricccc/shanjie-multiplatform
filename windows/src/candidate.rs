@@ -86,7 +86,7 @@ impl Palette {
                     Some((&mut light as *mut u32).cast()), Some(&mut size));
             }
             let accent = appearance.accent(if matches!(appearance.accent,shanjie_shell::appearance::Accent::Windows){crate::appearance::system_accent()}else{crate::appearance::DEFAULT_ACCENT});
-            let selected = shanjie_shell::appearance::foreground(accent);
+            let selected = appearance.selected_text(accent);
             if theme == 2 || (theme == 0 && light == 0) {
                 return Ok(Self {
                     background: if appearance.pure_black { rgb(0) } else { rgba(0x1c1c20, 0.97) },
