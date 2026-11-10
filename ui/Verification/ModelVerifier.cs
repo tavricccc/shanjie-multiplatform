@@ -41,6 +41,18 @@ internal static class ModelVerifier
             using var offline=new HttpClient(new Replies(_=>new(HttpStatusCode.ServiceUnavailable)));
             ModelCatalog.VerifyWith(offline);var cached=await ModelCatalog.Online(CancellationToken.None);
             Check(cached.Rows.Any(r=>r.Spec?.Id==choice.Id&&r.Spec.Catalog?.Advisories.Count>0)&&cached.Status.Contains("快取"),"offline v2 list retains advisories");
+            string cache=Path.Combine(ModelCatalog.Folder,"catalog-v2-cache.json");
+            string validCache=await File.ReadAllTextAsync(cache);
+            try {
+                await File.WriteAllTextAsync(cache,"{ invalid cache");
+                var installed=ModelCatalog.Installed();settings.Vm.RefreshModels(installed);
+                Check(installed.Any(m=>m.Id==choice.Id)&&settings.Vm.ModelId==choice.Id,"valid downloaded bundle survives damaged note cache and list refresh");
+                var degraded=await ModelCatalog.Online(CancellationToken.None);
+                Check(!string.IsNullOrWhiteSpace(degraded.Status)&&settings.Vm.ModelId==choice.Id,"offline catalog failure does not reset selected bundle");
+                settings.Vm.Save();settings.Vm.Load();
+                Check(settings.Vm.ModelId==choice.Id,"saved selection survives reload with damaged note cache");
+            } finally { await File.WriteAllTextAsync(cache,validCache); }
+            Check(ModelCatalog.Installed().Any(m=>m.Id==choice.Id&&m.Catalog?.Advisories.Count>0),"valid cache restores advisory metadata without redownloading");
         }finally{ModelCatalog.VerifyWith(null);}
     }
     private sealed class ProgressLog(Action<string> write):IProgress<string>{public void Report(string text)=>write(text);}
