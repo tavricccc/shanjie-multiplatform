@@ -4,6 +4,7 @@ param([switch]$NativeOnly, [switch]$UseExistingBuild, [switch]$Visual, [switch]$
     [string[]]$CoreTests)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/msvc-command.ps1"
+. "$PSScriptRoot/preserve-output.ps1"
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
@@ -16,9 +17,13 @@ try {
     if (!(Test-Path dist/data/models/builtin/bigram.winmap)) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
     & "$PSScriptRoot/verify-upstream-data.ps1" -Dist
     # The unit tests that read the built data and model (dist/data); plain `cargo test --lib` ignores them.
-    # One thread: they share the process-wide model cache (four entries), so parallel loads evict each other's entries.
-    & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored mixed_regression --test-threads=1
-    if ($LASTEXITCODE) { throw 'The mixed-input and digit regressions failed against the built data.' }
+    # Both TIP architectures use the same x64 resident core. Run its data checks
+    # once in the x64 pass; an x86 MSVC environment cannot link x64 Rust tests.
+    # One thread avoids evicting each other's entries from the shared model cache.
+    if ($Architecture -eq 'x64') {
+        & cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc -- --ignored mixed_regression --test-threads=1
+        if ($LASTEXITCODE) { throw 'The mixed-input and digit regressions failed against the built data.' }
+    }
     $harness = Join-Path $root "build/tsf-smoke-$Architecture.exe"
     $command = @"
 @echo off
@@ -62,7 +67,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
                 $harnessExit = $LASTEXITCODE
             } finally {
                 if ($null -ne $savedInstallation) { [IO.File]::WriteAllBytes($installation,$savedInstallation) }
-                else { Remove-Item -LiteralPath $installation }
+                else { Preserve-Output $installation }
             }
         }
     } finally {

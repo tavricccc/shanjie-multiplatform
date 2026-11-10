@@ -2,21 +2,27 @@
 # The real-TSF regressions on owned windows and private desktops, against the built dist/ of one architecture:
 # Shift and the add-word popup, English, Caps Lock and Enter keys, focus handoff and add-word rejection, popup lifecycle.
 # No registration, foreground activation or desktop input; each case gets its own profile under build/.
-param([ValidateSet('x64','x86')][string]$Architecture='x64',[string]$ResultRoot)
+param([ValidateSet('x64','x86')][string]$Architecture='x64',[string]$ResultRoot,
+    [ValidateSet('add-word','english-keys','submission','tsf_compat','popup_lifecycle')][string[]]$Suites=@('add-word','english-keys','submission','tsf_compat','popup_lifecycle'))
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/msvc-command.ps1"
 $root=Split-Path $PSScriptRoot -Parent
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/regressions-'+[guid]::NewGuid().ToString('N'))}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot)
 if(Test-Path -LiteralPath $ResultRoot){throw 'Use a fresh result directory.'}
-& "$PSScriptRoot/verify-add-word.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/add-word"
-& "$PSScriptRoot/verify-english-keys.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/english-keys"
-& "$PSScriptRoot/verify-submission.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/submission"
+if('add-word' -in $Suites){& "$PSScriptRoot/verify-add-word.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/add-word"}
+if('english-keys' -in $Suites){& "$PSScriptRoot/verify-english-keys.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/english-keys"}
+if('submission' -in $Suites){& "$PSScriptRoot/verify-submission.ps1" -Architectures $Architecture -ResultRoot "$ResultRoot/submission"}
+if(!('tsf_compat' -in $Suites -or 'popup_lifecycle' -in $Suites)){Write-Host "PASS real-TSF regressions ($Architecture): $($Suites -join ', ')";return}
 # The private-desktop harnesses read an uninstalled payload laid out like the installed folder.
 $payload=[IO.Path]::GetFullPath("$ResultRoot/payload")
 New-Item -ItemType Directory "$payload/$Architecture" -Force|Out-Null
 Copy-Item "$root/dist/$Architecture/Shanjie.dll" "$payload/$Architecture" -Force
-foreach($name in 'data','tools'){New-Item -ItemType Junction -Path "$payload/$name" -Target "$root/dist/$name"|Out-Null}
+New-Item -ItemType Junction -Path "$payload/data" -Target "$root/dist/data"|Out-Null
+# The kernel resolves an executable through a junction to dist/tools. A physical
+# copy gives this payload its own verifiable process identity for safe cleanup.
+New-Item -ItemType Directory -Path "$payload/tools"|Out-Null
+Get-ChildItem "$root/dist/tools" -File|Copy-Item -Destination "$payload/tools"
 Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
 $lifecycle=@('cancel-command','cancel-deactivate','cancel-double','cancel-escape','cancel-focus-notification','cancel-keyboard-reading',
     'cancel-late','cancel-mouse','cancel-outside','cancel-owner-destroy','cancel-reentry','cancel-save','cancel-stale-notify',
@@ -24,6 +30,7 @@ $lifecycle=@('cancel-command','cancel-deactivate','cancel-double','cancel-escape
 # Every private desktop starts its own core from the payload; none of them may outlive the run.
 try{
 foreach($suite in @(@('tsf_compat',$null),@('popup_lifecycle',$lifecycle))){
+    if($suite[0] -notin $Suites){continue}
     $name=$suite[0];$out="$ResultRoot/$name";New-Item -ItemType Directory $out -Force|Out-Null
     $harness="$out/$name-$Architecture.exe"
     $command=@"
@@ -41,4 +48,4 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
 }finally{
     Get-Process shanjie-core -ErrorAction SilentlyContinue|Where-Object{$_.Path -and $_.Path.StartsWith($payload,'OrdinalIgnoreCase')}|Stop-Process -Force -ErrorAction SilentlyContinue
 }
-Write-Host "PASS real-TSF regressions ($Architecture)"
+Write-Host "PASS real-TSF regressions ($Architecture): $($Suites -join ', ')"
