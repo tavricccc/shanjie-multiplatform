@@ -31,8 +31,8 @@ $hash=(Get-FileHash -LiteralPath $installer).Hash.ToLowerInvariant()
 @{id=$candidateId;source=$identity;integrity_verified=$true;installer_sha256=$hash}|ConvertTo-Json -Depth 5|Set-Content "$candidateRoot/candidate.json" -Encoding utf8NoBOM
 $receiptRoot=Join-Path $fixture 'build/reports/release-fixture'
 $null=New-Item -ItemType Directory -Path $receiptRoot -Force
-$ctest=(Get-Command ctest -CommandType Application).Source
-$cmake=(Get-Command cmake -CommandType Application).Source.Replace('\','/')
+$ctest=(Get-Command ctest -CommandType Application | Select-Object -First 1).Source
+$cmake=(Get-Command cmake -CommandType Application | Select-Object -First 1).Source.Replace('\','/')
 $reports=@();$selected=@()
 foreach($arch in 'x64','x86'){
     $preset="windows-$arch"

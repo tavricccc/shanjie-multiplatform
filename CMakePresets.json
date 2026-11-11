@@ -1,15 +1,15 @@
 {
   "version": 6,
   "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 27,
+    "major": 4,
+    "minor": 2,
     "patch": 0
   },
   "configurePresets": [
     {
       "name": "windows-x64",
       "displayName": "Shanjie Windows x64 verification",
-      "generator": "Visual Studio 17 2022",
+      "generator": "Visual Studio 18 2026",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build/cmake/windows-x64",
       "cacheVariables": {
@@ -19,7 +19,7 @@
     {
       "name": "windows-x86",
       "displayName": "Shanjie Windows x86 verification",
-      "generator": "Visual Studio 17 2022",
+      "generator": "Visual Studio 18 2026",
       "architecture": "Win32",
       "binaryDir": "${sourceDir}/build/cmake/windows-x86",
       "cacheVariables": {

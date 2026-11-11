@@ -73,7 +73,7 @@
 
 ## 開發
 
-需要 PowerShell 7、Git、Rust MSVC、CMake 3.27、Visual Studio 2022（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
+需要 PowerShell 7、Git、Rust MSVC、CMake 4.2 以上、Visual Studio 2026（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
 
 ```powershell
 git submodule update --init

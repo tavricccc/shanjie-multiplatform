@@ -1,6 +1,6 @@
 # Windows 驗收流程
 
-Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Cargo 編譯和執行。Visual Studio 2022 的 x64、x86 Preset 使用不同 build 目錄與產物，不能共用架構相異的 harness。
+Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Cargo 編譯和執行。Visual Studio 2026 的 x64、x86 Preset 使用不同 build 目錄與產物，不能共用架構相異的 harness。
 
 ## 常用指令
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 4.2)
 project(ShanjieWindowsVerification LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC)

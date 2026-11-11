@@ -43,8 +43,8 @@ jobs:
 
   windows:
     needs: release
-    # Match the VS 2022 generator used by the local CMake presets.
-    runs-on: windows-2022
+    # Match the Visual Studio 2026 generator selected by the CMake presets.
+    runs-on: windows-2025
     timeout-minutes: 180
     outputs:
       artifact_name: windows-package-${{ github.run_attempt }}

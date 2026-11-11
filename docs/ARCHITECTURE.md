@@ -83,8 +83,8 @@ pwsh -File scripts/test.ps1 -Level AFFECTED
 pwsh -File scripts/test.ps1 -Level FULL
 pwsh -File scripts/test.ps1 -Level RELEASE
 pwsh -File scripts/release.ps1                     # 本機正式封裝：重用有效完整驗收，否則先跑 RELEASE
-cmake --preset windows-x64                                     # Visual Studio 2022 x64
-cmake --preset windows-x86                                     # Visual Studio 2022 x86
+cmake --preset windows-x64                                     # Visual Studio 2026 x64
+cmake --preset windows-x86                                     # Visual Studio 2026 x86
 ctest --preset windows-x64 --show-only
 ```
 

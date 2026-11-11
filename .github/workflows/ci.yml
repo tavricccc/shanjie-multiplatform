@@ -16,8 +16,8 @@ concurrency:
 
 jobs:
   unit-tests:
-    # CMake presets use the VS 2022 generator; windows-latest now uses VS 2026.
-    runs-on: windows-2022
+    # Run the lightweight CI baseline with the Visual Studio 2026 generator.
+    runs-on: windows-2025
     timeout-minutes: 30
     defaults:
       run:
@@ -36,6 +36,36 @@ jobs:
             $null = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors) { throw "$($file.Name): $($parseErrors.Message -join '; ')" }
           }
+      - name: Identify Cargo compilation cache
+        id: cargo-cache-key
+        env:
+          SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/config.toml', 'windows/Cargo.toml', 'windows/Cargo.lock', 'shared/Cargo.toml', 'upstream/shanjie/core/Cargo.toml', 'UPSTREAM.json', 'platform/**/*.rs', 'scripts/prepare-*.ps1') }}
+        run: |
+          $rust = (& rustc --version --verbose | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify rustc for the CI cache.' }
+          $cargo = (& cargo --version | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify Cargo for the CI cache.' }
+          if (!$env:ImageOS -or !$env:ImageVersion) { throw 'Runner image identity is required for the CI cache.' }
+          $identity = @($env:ImageOS, $env:ImageVersion, $rust, $cargo, $env:RUSTFLAGS, $env:CARGO_ENCODED_RUSTFLAGS, $env:SHANJIE_CARGO_CACHE_INPUTS) -join "`n"
+          $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity))).ToLowerInvariant()
+          "prefix=cargo-unit-vs2026-v1-${{ runner.os }}-${{ runner.arch }}-$digest" >> $env:GITHUB_OUTPUT
+          Write-Host "Runner image: $env:ImageOS $env:ImageVersion"
+          Write-Host $rust
+          Write-Host $cargo
+      - name: Cache Cargo compilation inputs and outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          # Preserve the two workspaces' native fingerprints and target separation.
+          # Do not cache generated core sources, workspace Cargo.lock files, results or CMake.
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            shared/target
+            windows/target
+          key: ${{ steps.cargo-cache-key.outputs.prefix }}-${{ github.sha }}
+          restore-keys: ${{ steps.cargo-cache-key.outputs.prefix }}-
+      # Cargo still validates its inputs and executes both suites on a cache hit.
       - name: Configure and run the fixed lightweight CTest baseline
         run: pwsh -File scripts/test.ps1 -Level CI -CiSafe
       - name: Upload machine-readable test reports and failure logs
