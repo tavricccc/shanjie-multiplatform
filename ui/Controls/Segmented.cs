@@ -35,12 +35,16 @@ public sealed partial class Segmented : UserControl
         highlight = new SlidingHighlight(layer, Radius - 2);
         KeyDown += (_, e) =>
         {
+            if (!IsEnabled) return;
             if (e.Key == VirtualKey.Left && SelectedIndex > 0) { SelectedIndex--; e.Handled = true; }
             if (e.Key == VirtualKey.Right && SelectedIndex < items.Count - 1) { SelectedIndex++; e.Handled = true; }
         };
-        IsEnabledChanged += (_, _) => Opacity = IsEnabled ? 1 : 0.4;
+        Loaded += (_, _) => SyncEnabled();
+        IsEnabledChanged += (_, _) => SyncEnabled();
         ActualThemeChanged += (_, _) => Text();
     }
+
+    void SyncEnabled() => Opacity = IsEnabled ? 1 : 0.4;
 
     void Build()
     {

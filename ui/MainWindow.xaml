@@ -189,6 +189,15 @@
                         <TextBlock Text="主題與提示" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingRow Label="介面與選字框主題"><controls:Segmented Options="跟隨 Windows|淺色|深色" SelectedIndex="{x:Bind Vm.Theme, Mode=TwoWay}" MinWidth="220"/></controls:SettingRow>
+                            <controls:SettingRow Label="強調色" Description="選字框、設定與加詞浮層共用；高對比模式優先使用系統色。" Stacked="True"><controls:Segmented Options="善解預設藍|跟隨 Windows|自訂顏色" SelectedIndex="{x:Bind Vm.AccentMode, Mode=TwoWay}"/></controls:SettingRow>
+                            <controls:SettingRow Label="自訂顏色" Description="六位 HEX（例如 #5874C9），也可以用色盤挑選。" Stacked="True">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBox Text="{x:Bind Vm.AccentColor, Mode=TwoWay}" Width="130" MaxLength="7" IsEnabled="{x:Bind Vm.CustomAccent, Mode=OneWay}" AutomationProperties.Name="自訂強調色 HEX"/>
+                                    <Button Content="選擇顏色" Click="OpenAccentPicker" IsEnabled="{x:Bind Vm.CustomAccent, Mode=OneWay}"><Button.Flyout><Flyout><ColorPicker x:Name="AccentPicker" ColorChanged="AccentPicked" IsAlphaEnabled="False" IsAlphaSliderVisible="False" IsAlphaTextInputVisible="False" IsHexInputVisible="True"/></Flyout></Button.Flyout></Button>
+                                </StackPanel>
+                            </controls:SettingRow>
+                            <controls:SettingToggle Label="深色使用純黑背景" Description="深色模式改用不透明的 #000000，保留控制項與邊框；淺色及高對比模式維持原有政策。" IsOn="{x:Bind Vm.PureBlack, Mode=TwoWay}"/>
+                            <controls:SettingRow Label="動畫" Description="強制開啟可在 Windows 關閉動畫時繼續播放善解動畫，不變更系統設定。" Stacked="True"><controls:Segmented Options="跟隨系統|強制開啟|關閉" SelectedIndex="{x:Bind Vm.AnimationMode, Mode=TwoWay}"/></controls:SettingRow>
                             <controls:SettingToggle Label="切換中英時顯示游標旁提示" IsOn="{x:Bind Vm.ModeIndicator, Mode=TwoWay}"/>
                             <controls:SettingRow Label="玻璃濃度" Description="越高越不透，背後的桌布越淡；套用到設定、安裝程式與選字框。Windows 關閉透明效果時改用不透明背景。"><controls:RangeSlider x:Name="GlassTintSlider" Minimum="0" Maximum="100" Step="1" Value="{x:Bind Vm.GlassTint, Mode=TwoWay}"/></controls:SettingRow>
                         </controls:SettingCard>

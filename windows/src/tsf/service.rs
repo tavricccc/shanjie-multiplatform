@@ -281,7 +281,7 @@ impl Data {
             .unwrap_or_else(|| self.state.borrow().binary.clone());
         let path = binary.join("ui/Shanjie.UI.exe");
         unsafe {
-            ShellExecuteW(
+            let result = ShellExecuteW(
                 None,
                 w!("open"),
                 PCWSTR(crate::wide(&path.to_string_lossy()).as_ptr()),
@@ -289,6 +289,9 @@ impl Data {
                 PCWSTR(crate::wide(&path.parent().unwrap().to_string_lossy()).as_ptr()),
                 SW_SHOWNORMAL,
             );
+            if let Some(error) = crate::runtime_log::shell_execute_error(result.0 as isize) {
+                crate::runtime_log::io("settings.launch", &error);
+            }
         }
     }
     pub fn set_mode(&self, chinese: bool) -> Result<()> {
@@ -826,6 +829,7 @@ impl Data {
             }
             if let Some(c) = &s.candidates {
                 c.data.theme.set(current.number("appearance", "theme", 0));
+                c.data.appearance.set(crate::appearance::Appearance::from_document(&current));
                 c.data
                     .size
                     .set(current.number("appearance", "font_size", 18));
@@ -835,7 +839,7 @@ impl Data {
                 c.data.reading_panel.set(current.reading_panel());
             }
         }
-        if let Some(popup)=self.word_popup.borrow().as_ref(){let _=popup.set_theme(current.number("appearance","theme",0));}
+        if let Some(popup)=self.word_popup.borrow().as_ref(){let _=popup.set_appearance(current.number("appearance","theme",0),crate::appearance::Appearance::from_document(&current));}
         self.prepare_engine()?;
         if self.state.borrow().engine.is_open() {
             let mut operations=std::collections::VecDeque::from(option_operations(&current));
@@ -1045,6 +1049,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 .anchor_right
                 .set(preferences.get("candidates", "anchor", "right") == "right");
             candidates.data.reading_panel.set(preferences.reading_panel());
+            candidates.data.appearance.set(crate::appearance::Appearance::from_document(&preferences));
             self.data.state.borrow_mut().candidates = Some(candidates);
             let keys: ITfKeystrokeMgr = thread.cast()?;
             keys.AdviseKeyEventSink(client, &self.to_interface::<ITfKeyEventSink>(), true)?;

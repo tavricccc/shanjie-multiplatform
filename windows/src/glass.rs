@@ -135,6 +135,8 @@ pub struct Glass {
     dpi: f32,
     dark: bool,
     solid: bool,
+    pure_black: bool,
+    high_contrast: bool,
     strength: f32,
     shown: bool,
 }
@@ -263,6 +265,8 @@ impl Glass {
             dpi: 1.0,
             dark: !dark(),
             solid: false,
+            pure_black: false,
+            high_contrast: false,
             strength: -1.0,
             shown: false,
         };
@@ -289,18 +293,31 @@ impl Glass {
     /// Applies the theme, Windows' transparency setting and the glass density (the tint layer's opacity, 0 to 1,
     /// 玻璃濃度). Does nothing when none changed.
     pub fn set_theme(&mut self, dark: bool, solid: bool, tint: f32) -> Result<()> {
+        let black = crate::profile::load(&crate::profile::path()).map(|p|p.flag("appearance","pure_black",false)).unwrap_or(false);
+        self.set_appearance(dark, solid, tint, black)
+    }
+    pub fn set_appearance(&mut self, dark: bool, solid: bool, tint: f32, pure_black: bool) -> Result<()> {
+        let high_contrast = crate::appearance::high_contrast();
+        let pure_black = dark && pure_black && !high_contrast;
+        let solid = solid || pure_black || high_contrast;
         let tint = tint.clamp(0.0, 1.0);
-        if self.dark == dark && self.solid == solid && self.strength == tint && self.material.Brush().is_ok() {
+        if !high_contrast && self.dark == dark && self.solid == solid && self.pure_black == pure_black && self.high_contrast == high_contrast && self.strength == tint && self.material.Brush().is_ok() {
             return Ok(());
         }
-        let material = self.dark != dark || self.solid != solid || self.material.Brush().is_err();
+        let material = high_contrast || self.dark != dark || self.solid != solid || self.pure_black != pure_black || self.high_contrast != high_contrast || self.material.Brush().is_err();
         self.dark = dark;
         self.solid = solid;
+        self.pure_black = pure_black;
+        self.high_contrast = high_contrast;
         self.strength = tint;
         let c = &self.compositor;
         if material {
             let brush: CompositionBrush = if solid {
-                c.CreateColorBrushWithColor(if dark { argb(1.0, 22, 22, 25) } else { argb(1.0, 249, 249, 250) })?.cast()?
+                let color = if high_contrast {
+                    let value=unsafe{windows::Win32::Graphics::Gdi::GetSysColor(windows::Win32::Graphics::Gdi::COLOR_WINDOW)};
+                    argb(1.0,value as u8,(value>>8) as u8,(value>>16) as u8)
+                } else if pure_black { argb(1.0,0,0,0) } else if dark { argb(1.0,22,22,25) } else { argb(1.0,249,249,250) };
+                c.CreateColorBrushWithColor(color)?.cast()?
             } else {
                 self.saturated_backdrop()?
             };
@@ -484,6 +501,10 @@ pub extern "C" fn sj_glass_window(glass: *mut Glass) -> isize {
 #[no_mangle]
 pub extern "C" fn sj_glass_theme(glass: *mut Glass, dark: bool, solid: bool, tint: f32) -> bool {
     unsafe { glass.as_mut() }.is_some_and(|g| g.set_theme(dark, solid, tint).is_ok())
+}
+#[no_mangle]
+pub extern "C" fn sj_glass_appearance(glass: *mut Glass, dark: bool, solid: bool, tint: f32, pure_black: bool) -> bool {
+    unsafe { glass.as_mut() }.is_some_and(|g|g.set_appearance(dark,solid,tint,pure_black).is_ok())
 }
 
 #[no_mangle]

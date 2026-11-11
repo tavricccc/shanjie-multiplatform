@@ -23,7 +23,14 @@ public sealed partial class SettingToggle : SettingRow
         Control = pair;
         toggle.RegisterPropertyChangedCallback(Switch.IsOnProperty, (_, _) => IsOn = toggle.IsOn);
         RegisterPropertyChangedCallback(LabelProperty, (_, _) => AutomationProperties.SetName(toggle, Label));
-        IsEnabledChanged += (_, _) => toggle.IsEnabled = IsEnabled;
+        Loaded += (_, _) => SyncEnabled();
+        IsEnabledChanged += (_, _) => SyncEnabled();
+    }
+
+    void SyncEnabled()
+    {
+        toggle.IsEnabled = IsEnabled;
+        state.Opacity = IsEnabled ? 1 : 0.4;
     }
 
     internal void SetToggleForVerification(bool value) => toggle.IsOn = value;

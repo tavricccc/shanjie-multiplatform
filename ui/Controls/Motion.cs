@@ -17,8 +17,11 @@ internal static class Motion
     internal static readonly (float, float, float, float) Smooth = (0.2f, 0, 0, 1), Spring = (0.34f, 1.36f, 0.64f, 1), Glide = (0.25f, 1.05f, 0.35f, 1), Exit = (0.4f, 0, 1, 1);
     /// Lets the harness check both states without changing the Windows setting.
     internal static bool? AnimationsForVerification { get; set; }
+    internal static bool? SystemAnimationsForVerification { get; set; }
     /// The Windows "Animation effects" setting.
-    internal static bool Animated => AnimationsForVerification ?? settings.AnimationsEnabled;
+    internal static int AnimationMode { get; set; }
+    internal static bool Animated => AnimationsForVerification ?? (AnimationMode switch { 1 => true, 2 => false, _ => SystemAnimationsForVerification ?? settings.AnimationsEnabled });
+    internal static SolidColorBrush OnAccent => (SolidColorBrush)Application.Current.Resources["SjAccentForegroundBrush"];
     internal static bool HighContrast => accessibility.HighContrast;
     internal static TimeSpan Duration(double ms) => TimeSpan.FromMilliseconds(Animated ? ms : 1);
     internal static CubicBezierEasingFunction Ease(Compositor c, (float, float, float, float) p) => c.CreateCubicBezierEasingFunction(new Vector2(p.Item1, p.Item2), new Vector2(p.Item3, p.Item4));
@@ -176,17 +179,16 @@ public static class StatusMotion
     }
 }
 
-/// <summary>Keyboard focus ring: 2 px accent at 45 % outside the control, only for Tab / arrow focus.</summary>
+/// <summary>Keyboard focus ring: 2 px readable accent outside the control, only for Tab / arrow focus.</summary>
 internal static class FocusRing
 {
     internal static void Attach(Control owner, Grid host, double radius)
     {
         owner.UseSystemFocusVisuals = false;
-        var accent = Motion.Accent.Color;
         var ring = new Border
         {
             Margin = new Thickness(-3), CornerRadius = new CornerRadius(radius + 3), BorderThickness = new Thickness(2), IsHitTestVisible = false, Visibility = Visibility.Collapsed,
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x73, accent.R, accent.G, accent.B)),
+            BorderBrush = Motion.Resource("SjAccentTextBrush"),
         };
         host.Children.Add(ring);
         owner.GotFocus += (_, _) => ring.Visibility = owner.FocusState == FocusState.Keyboard ? Visibility.Visible : Visibility.Collapsed;

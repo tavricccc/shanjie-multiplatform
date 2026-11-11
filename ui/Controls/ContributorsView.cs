@@ -31,9 +31,13 @@ public sealed partial class ContributorsView : UserControl
             var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             name.Children.Add(new GitHubMark { Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center });
             name.Children.Add(new TextBlock { Text = person.Name, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            if (person.Role.Length > 0)
+                name.Children.Add(new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), VerticalAlignment = VerticalAlignment.Center,
+                    Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+                    Child = new TextBlock { Text = person.Role, FontSize = 12, Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] } });
             name.Children.Add(new TextBlock { Text = $"@{person.Login}", Style = body, VerticalAlignment = VerticalAlignment.Center });
             var link = new HyperlinkButton { Content = name, NavigateUri = person.Profile, Padding = new Thickness(4, 8, 4, 8), HorizontalAlignment = HorizontalAlignment.Left };
-            AutomationProperties.SetName(link, $"{person.Name}，GitHub @{person.Login}");
+            AutomationProperties.SetName(link, person.Role.Length > 0 ? $"{person.Name}（{person.Role}），GitHub @{person.Login}" : $"{person.Name}，GitHub @{person.Login}");
             AutomationProperties.SetHelpText(link, person.Summary);
 
             var details = new StackPanel { Width = 300, Spacing = 12 };
@@ -45,8 +49,8 @@ public sealed partial class ContributorsView : UserControl
             portrait.ImageFailed += (_, _) => portraitBrush.ImageSource = new BitmapImage(person.Portrait);
             identity.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 56, Height = 56, Fill = portraitBrush });
             var caption = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-            caption.Children.Add(new TextBlock { Text = person.Name, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            caption.Children.Add(new TextBlock { Text = $"@{person.Login} · {person.Contributions:N0} 次提交", Style = body });
+            caption.Children.Add(new TextBlock { Text = person.Role.Length > 0 ? $"{person.Name} · {person.Role}" : person.Name, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            caption.Children.Add(new TextBlock { Text = $"@{person.Login}", Style = body });
             Grid.SetColumn(caption, 1); identity.Children.Add(caption);
             details.Children.Add(identity);
             details.Children.Add(new TextBlock { Text = person.Summary, Style = body });
@@ -74,13 +78,7 @@ public sealed partial class ContributorsView : UserControl
             link.ContextFlyout = preview;
             Profiles.Add((link, preview));
 
-            var row = new Grid { ColumnSpacing = 8 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(link);
-            var count = new TextBlock { Text = $"{person.Contributions:N0} 次提交", Style = body, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(count, 1); row.Children.Add(count);
-            list.Children.Add(row);
+            list.Children.Add(link);
         }
         list.Children.Add(new TextBlock { Text = $"依 GitHub 提交數排序 · 統計至 {Contributors.Catalog.UpdatedAt.Replace('-', '/')}", Style = note });
         Content = list;

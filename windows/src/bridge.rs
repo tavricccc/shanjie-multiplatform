@@ -70,6 +70,17 @@ pub unsafe extern "C" fn sj_document_json(content: *const c_char) -> *mut c_char
     }
 }
 #[no_mangle]
+pub unsafe extern "C" fn sj_appearance_colors(content: *const c_char, theme: u32) -> *mut c_char {
+    let result = (|| -> Result<String, Box<dyn std::error::Error>> {
+        let doc = Document::parse(text(content))?;
+        let p = crate::candidate::Palette::with(theme, crate::appearance::Appearance::from_document(&doc))?;
+        let rgb = |c: windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F|
+            ((c.r * 255.0).round() as u32) << 16 | ((c.g * 255.0).round() as u32) << 8 | (c.b * 255.0).round() as u32;
+        Ok(serde_json::json!({"accent":rgb(p.accent),"foreground":rgb(p.selected),"text":rgb(p.hint)}).to_string())
+    })();
+    match result { Ok(s) => CString::new(s).unwrap().into_raw(), Err(e) => {failure(e);ptr::null_mut()} }
+}
+#[no_mangle]
 pub unsafe extern "C" fn sj_profile_save(content: *const c_char) -> bool {
     let result = (|| -> profile::Result<()> {
         let document = Document::parse(text(content))?;

@@ -105,6 +105,17 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool BackspaceDeletes { get; set; }
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CustomAccent))] public partial int AccentMode { get; set; }
+    public bool CustomAccent => AccentMode == 2;
+    [ObservableProperty] public partial string AccentColor { get; set; } = "#5874C9";
+    [ObservableProperty] public partial bool PureBlack { get; set; }
+    [ObservableProperty] public partial int AnimationMode { get; set; }
+    internal static bool TryAccent(string value, out uint rgb)
+    {
+        string hex = value.StartsWith('#') ? value[1..] : value;
+        return uint.TryParse(hex, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out rgb) && hex.Length == 6;
+    }
+    internal string AppearanceDocument() => $"[appearance]\naccent={new[] { "default", "windows", "custom" }[Math.Clamp(AccentMode,0,2)]}\naccent_color={(TryAccent(AccentColor,out uint rgb) ? $"#{rgb:X6}" : "#5874C9")}\npure_black={(PureBlack ? 1 : 0)}\nanimation={new[] { "system", "on", "off" }[Math.Clamp(AnimationMode,0,2)]}\n";
     [ObservableProperty] public partial double FontSize { get; set; }
     /// <summary>Glass density (玻璃濃度): the tint layer's opacity in percent, default 42.</summary>
     [ObservableProperty] public partial double GlassTint { get; set; }

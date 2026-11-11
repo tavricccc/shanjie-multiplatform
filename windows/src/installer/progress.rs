@@ -93,17 +93,22 @@ mod tests {
         assert!(!raw.is_null() && raw as isize != -1);
         let mut server = unsafe { fs::File::from_raw_handle(raw) };
         connect(&name).unwrap();
-        step("Copy", "started", "");
-        count("Copy", 3, 9);
-        finish("succeeded", "已安裝");
+        // Other installer tests also emit progress through the process-wide sink.
+        // Correlate this fixture's lines instead of assuming it owns every step.
+        let stage=format!("Fixture-{}",std::process::id());
+        let message=format!("已安裝-{stage}");
+        step(&stage, "started", "");
+        count(&stage, 3, 9);
+        finish("succeeded", &message);
         *SINK.lock().unwrap() = None;
         let mut text = String::new();
         server.read_to_string(&mut text).unwrap();
         let lines: Vec<serde_json::Value> =
-            text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+            text.lines().map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+                .filter(|line|line["stage"]==stage||line["message"]==message).collect();
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[1]["done"], 3);
         assert_eq!(lines[2]["stage"], "Result");
-        assert_eq!(lines[2]["message"], "已安裝");
+        assert_eq!(lines[2]["message"], message);
     }
 }

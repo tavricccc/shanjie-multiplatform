@@ -254,6 +254,13 @@ impl Engine {
         if !self.run.is_empty() { commit.push_str(&self.end_run()?); }
         self.cands = None;
         self.clear_pred();
+        // Raw-key mixing displays a digit-only unfinished reading as literal digits.
+        // A later symbol must preserve those displayed digits, even before a decimal/run exists.
+        if self.mixed_input && !self.mixed_raw.is_empty()
+            && self.mixed_raw.bytes().all(|c| c.is_ascii_digit()) {
+            self.clear_pend();
+            self.mixed_latin = true;
+        }
         if self.windows_phonetic_pending() && !self.mixed_latin {
             if self.punctuation_keeps_reading {
                 // Symbols typed during a reading follow it until that reading is completed.

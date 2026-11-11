@@ -58,7 +58,7 @@ internal sealed partial class ChoiceCards : UserControl
         text.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Motion.Resource("SjText1Brush") });
         if (description.Length > 0) text.Children.Add(new TextBlock { Text = description, FontSize = 12.5, LineHeight = 19, TextWrapping = TextWrapping.Wrap, Foreground = Motion.Resource("SjText2Brush") });
         // An empty ring that the accent check covers when chosen.
-        var badge = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Motion.AccentColor), Opacity = 0, Child = new Icon { Glyph = "check", Width = 12, Height = 12, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White) } };
+        var badge = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Motion.AccentColor), Opacity = 0, Child = new Icon { Glyph = "check", Width = 12, Height = 12, Foreground = Motion.OnAccent } };
         var mark = new Grid { Width = 20, Height = 20, VerticalAlignment = VerticalAlignment.Center };
         mark.Children.Add(new Ellipse { Stroke = Motion.Resource("SjText3Brush"), StrokeThickness = 1.5 });
         mark.Children.Add(badge);

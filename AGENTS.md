@@ -58,15 +58,15 @@
 
 ## 驗證：做多少
 
-依改到的地方挑，不必每次全跑：
+依改到的地方挑，不必每次全跑。`scripts/verify-changed.ps1` 依這張表自動選擇（`-DryRun` 只列出計畫，規則在 `scripts/verify-selection.ps1`，表上沒有的路徑一律跑完整 `verify.ps1`）；改了下表就同步改規則與 `tests/verify_selection.ps1`：
 
 | 改到 | 跑 |
 | --- | --- |
 | 只有文件、Changelog、註解 | 不建置、不測試 |
-| `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔 |
+| `platform/`、prepare 腳本 | `test-core.ps1`；只動某個測試的 adapter 時用 `-Tests` 只跑那個檔。測試執行檔、資料與模型都沒變且曾通過就會自動跳過，`-Rerun` 強制重跑 |
 | `shared/`、`windows/src` 的邏輯 | 對應 crate 的 `cargo test --lib`，加上相關的 `verify-*.ps1` |
 | 按鍵路徑或核心請求 | 再跑 `measure-engine.ps1` |
-| `ui/` | `verify-ui.ps1` |
+| `ui/` | `verify-ui.ps1`（預設不截圖，斷言照跑；要人眼看畫面才加 `-Visual`） |
 | 一輪變更完成、準備 commit 或發布 | x64 `verify.ps1` 一次；發布前或改到 x86 相關時加 `verify.ps1 -NativeOnly -Architecture x86` |
 
 ### 建置與 Rust
@@ -84,6 +84,7 @@
 - **以版本號命名的一次性測試**：`features_090`、`features_0100`、`compat_0122` 與對應的 `verify-features-*.ps1` 後來都改名併入 `verify.ps1`。新回歸加進以功能命名的既有 harness，並由 `verify.ps1` 呼叫，不另開只跑一次的腳本。
 - **沒人讀的 fixture 與參數**：`tests/fixtures/classes-v5` 沒有任何測試引用、harness 的模型參數沒有用到，都已刪除。新增 fixture 必須有測試讀它。
 - **同一行為測兩次**：加詞浮層的唯讀與密碼欄在 `add_word_popup` 與 `tsf_compat` 各測一次，前者依賴真實桌面而時好時壞，已刪。一個行為只放在最適合的 harness。
+- **每改一小處就重跑整套驗證**：過去一次對話因此跑了 8 輪完整 `verify.ps1`（約 100 分鐘）。一輪變更全部改完，再跑一次驗證。過程中只跑改到那一處的單元測試或 `-Tests` 單一檔；驗證失敗時修完只重跑失敗的套件，最後整輪結束才跑一次完整驗證。不要在使用者安裝或使用輸入法時跑驗證。
 - **重跑已通過的套件求心安**：已通過的不再跑第二次；偶發失敗重跑一次，通過就查原因或記下，不連跑多次。
 - **替上游寫 Windows 測試**：上游的核心測試已在 Windows 上整套執行（`test-core.ps1`），只為 Windows 擴充寫測試，不改寫上游斷言。
 - **與改動無關的量測與擷取**：沒改到按鍵路徑不量延遲；沒改到介面不做截圖或離屏 render。

@@ -83,6 +83,7 @@ int wmain(int argc,wchar_t** argv) {
                     Sleep(1);
                 }
                 std::printf("Glide %s: %ld to %ld through %zu widths\n",name,from,to,seen.size());
+                std::fflush(stdout);
                 assert(seen.back() == to); assert(seen.size() >= 5);
                 // One way, give or take the curve's slight overshoot near the end.
                 for (size_t i = 1; i < seen.size(); ++i) assert(to > from ? seen[i] >= seen[i-1]-2 : seen[i] <= seen[i-1]+2);
