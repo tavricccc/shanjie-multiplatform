@@ -1,9 +1,23 @@
 #Requires -Version 7
-# -SkipVerify: for a quick test build only; the installer still checks SHA256SUMS.txt when it installs.
-param([switch]$UseExistingBuild, [switch]$SkipVerify)
+# Normal packaging creates a candidate. Only guarded promotion completes a local release.
+[CmdletBinding(DefaultParameterSetName='Candidate')]
+param(
+    [Parameter(ParameterSetName='Candidate')][switch]$UseExistingBuild,
+    [Parameter(ParameterSetName='Candidate')][switch]$SkipVerify,
+    [Parameter(ParameterSetName='Candidate')][ValidatePattern('^[0-9a-f]{32}$')][string]$CandidateId=[guid]::NewGuid().ToString('N'),
+    [Parameter(Mandatory,ParameterSetName='Promote')][switch]$Promote,
+    [Parameter(Mandatory,ParameterSetName='CiArtifact')][switch]$ExportCiArtifact,
+    [Parameter(Mandatory,ParameterSetName='Promote')][Parameter(Mandatory,ParameterSetName='CiArtifact')][string]$ReportPath
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . "$PSScriptRoot/preserve-output.ps1"
+Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+if($Promote -or $ExportCiArtifact){
+    $null=Complete-ReleaseArtifact -ProjectRoot $root -ReportPath $ReportPath -CiArtifact:$ExportCiArtifact
+    return
+}
+$candidateRoot=Join-Path $root "build/release-candidates/$CandidateId"
 # Recoverable build outputs are local maintenance data, never release content.
 function Copy-PayloadDirectory([string]$Source, [string]$Destination) {
     foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse) {
@@ -19,9 +33,8 @@ try {
     if (!$UseExistingBuild) {
         & "$PSScriptRoot/build.ps1"
     }
-    $output = Join-Path $root 'dist/package'
+    $output = Join-Path $candidateRoot 'package'
     if(!(Test-Path -LiteralPath "$root/dist/tools/shanjie-word-helper.exe")){throw 'Missing per-user add-word helper; refusing an incomplete package.'}
-    if ([IO.Path]::GetFullPath($output) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($root),'dist','package')) { throw 'Unexpected package output path.' }
     Preserve-Output $output
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     & "$PSScriptRoot/prepare-licenses.ps1"
@@ -55,9 +68,13 @@ try {
         if ($LASTEXITCODE) { throw 'Native package verification failed.' }
     }
     # The only distributed form is the single-file installer: the setup stub carrying this same verified package.
-    $setup = Join-Path $root 'dist/Shanjie-Windows-Setup.exe'
+    $setup = Join-Path $candidateRoot 'Shanjie-Windows-Setup.exe'
     Preserve-Output $setup
     & "$root/dist/setup/shanjie-pack.exe" "$root/dist/setup/安裝善解.exe" $output $setup
     if ($LASTEXITCODE) { throw 'Single-file installer packing failed.' }
-    Set-Content "$setup.sha256" "$((Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant())  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
+    $installerHash=(Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant()
+    Set-Content "$setup.sha256" "$installerHash  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
+    $candidate=[ordered]@{schema=1;id=$CandidateId;source=(Get-ReleaseIdentity $root);integrity_verified=(!$SkipVerify);installer_sha256=$installerHash;created_utc=[DateTimeOffset]::UtcNow.ToString('O')}
+    [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate.json'),($candidate|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
+    Write-Host "Candidate only: $setup. Complete local release with scripts/release.ps1."
 } finally { Pop-Location }

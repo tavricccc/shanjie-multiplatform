@@ -1,4 +1,4 @@
-// Real TSF/edit-lock regression in offscreen owned windows; no registration or desktop input.
+// Real TSF/edit-lock regression on a private desktop; no registration or desktop input.
 #define wmain previous_smoke_main
 #include "tsf_smoke.cpp"
 #undef wmain
@@ -15,6 +15,10 @@ COLORREF sampleBackground(HWND window) {
 int wmain(int argc,wchar_t** argv) {
     require(argc==3,701);
     wchar_t headless[2]{}; require(GetEnvironmentVariableW(L"SHANJIE_HEADLESS",headless,2)==1&&headless[0]==L'1',702);
+    auto desktopName=L"Shanjie.AddWord."+std::to_wstring(GetCurrentProcessId());
+    auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+    require(desktop!=nullptr&&SetThreadDesktop(desktop),703);
+    std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),704);
     auto dll=LoadLibraryW(argv[1]);require(dll!=nullptr,705);
     auto get=(HRESULT(WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(get!=nullptr,706);
@@ -86,7 +90,9 @@ int wmain(int argc,wchar_t** argv) {
     require(IsWindowVisible(popup),762);down(VK_RETURN);wait([&]{return !IsWindowVisible(popup);},745);
     require(store->text==L"回家"&&store->selection.acpStart==0&&store->selection.acpEnd==2,746);
     wchar_t local[32768];GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);auto folder=std::filesystem::path(local)/L"Shanjie";
-    bool saved=false;for(auto& file:std::filesystem::directory_iterator(folder)){if(file.path().filename().wstring().starts_with(L"dictionary-")){std::ifstream in(file.path(),std::ios::binary);std::string s((std::istreambuf_iterator<char>(in)),{});if(s.find("ㄏㄨㄟˊ-ㄐㄧㄚ\t回家")!=std::string::npos)saved=true;}}require(saved,747);
+    // Hiding the popup precedes the asynchronous dictionary write. Keep the
+    // content assertion, but wait for persistence rather than window state.
+    wait([&]{for(auto& file:std::filesystem::directory_iterator(folder)){if(file.path().filename().wstring().starts_with(L"dictionary-")){std::ifstream in(file.path(),std::ios::binary);std::string s((std::istreambuf_iterator<char>(in)),{});if(s.find("ㄏㄨㄟˊ-ㄐㄧㄚ\t回家")!=std::string::npos)return true;}}return false;},747);
     doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},748);down(VK_ESCAPE);wait([&]{return !IsWindowVisible(panel());},749);
     store->text=L"龘龘龘龘龘龘龘龘";store->selection.acpStart=0;store->selection.acpEnd=8;
     doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel())&&controlText(GetDlgItem(panel(),5)).find(L"目前模型：無完整詞條")!=std::wstring::npos;},764);

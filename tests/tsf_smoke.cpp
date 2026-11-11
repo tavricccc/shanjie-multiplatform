@@ -101,6 +101,12 @@ int wmain(int argc, wchar_t** argv) {
     bool original = argc == 3 && std::wstring(argv[2]) == L"--shanjie";
     bool cold = argc == 3 && std::wstring(argv[2]) == L"--cold-start";
     bool zhuyinOnly = argc == 3 && std::wstring(argv[2]) == L"--zhuyin-only";
+    if(!visual) {
+        auto desktopName=L"Shanjie.Smoke."+std::to_wstring(GetCurrentProcessId());
+        auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+        require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+        std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
+    }
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
     HMODULE dll = LoadLibraryW(argv[1]); require(dll != nullptr,3);
     auto factoryFn = (HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(factoryFn != nullptr,4);
