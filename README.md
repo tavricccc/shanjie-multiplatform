@@ -3,7 +3,7 @@
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，另外加了微軟注音鍵位、中英混打、雙 Ctrl 加詞與線上模型管理。
 
 - **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前版本 **0.14.0**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
-- **上游**：使用善解 v0.6.1 的核心、詞庫與整組模型。
+- **上游**：使用善解 v0.7.0 的核心、詞庫與整組模型。
 - **Linux**：IBus 版停在 0.12.1，已停止維護；`linux/` 的原始碼沒有再編譯或測試。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。
@@ -65,18 +65,22 @@
 - **組字面板**：「組字與提交」頁的選項，預設關閉，組字只顯示在 App 內，沒有候選時不顯示面板，與上游相同。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。
 - **純注音輸出**：「組字與提交」頁可切換，預設關閉。開啟後，標準／倚天注音逐鍵輸出符號與聲調，例如 `su3cl3` 得到「ㄋㄧˇㄏㄠˇ」，不自動轉成漢字或開啟候選、預測及聯想，也不加入選字學習。空白鍵輸入空格；方向鍵、刪除、Enter 提交與 Esc 沿用組字操作。切換時先提交現有組字；關閉後恢復原有輸入設定。拼音配置不啟用此模式，數字鍵盤仍直接輸入數字。
 - **加詞**：反白 1–32 個漢字後雙按 Ctrl，在詞旁確認讀音並加入個人詞庫；加入前會比對內建詞庫、個人詞庫與目前模型。
-- **模型**：內建會意 SJ-SR-8-15M 語意校正模型與上游 v0.6.1 的其餘完整配套（含口語模型），也可在設定中下載其他相容模型。配置名稱可換行，展開清單可捲動並標示目前選項。
+- **模型**：內建上游 v0.7.0 的完整模型配套（含會意 SJ-SR-8-15M 與常談），也可在設定中下載其他相容模型。配置名稱可換行，展開清單可捲動並標示目前選項。
 - **貢獻者**：「關於」頁列出貢獻者（原作者 Nanako0129 置頂並標示，其餘依 GitHub 提交數排序，不顯示次數），滑鼠移入姓名可看貢獻摘要，也可開啟個人頁面與提交紀錄。頭像先連線載入，失敗時使用隨程式附上的頭像；統計更新方式見[貢獻者資料](docs/CONTRIBUTORS.md)。
 - **上游功能**：資訊與 AI 詞包、模糊輸入、語意校正強度、中英文之間自動加空格、依 App 自動切換聊天／書面都可在設定中開關。
 
 個人設定在 `%LOCALAPPDATA%\Shanjie\profile.ini`。直接改檔後，按設定頁的「重新啟動輸入法」或重新啟用善解才會讀取；這個按鈕不會終止 App，也換不掉 App 已載入的舊版 DLL。
+
+美妝與保養詞包預設開啟，可在「選字」關閉；原鍵混打、純注音、右側候選與分段提交等 Windows 擴充保留。
+
+程式版本更新維持由 `tavricccc/shanjie-multiplatform` 提供；模型清單與附件優先原作者 `Nanako0129/shanjie`，讀取失敗才用 `tavricccc/shanjie-upstream-backup`。
 
 ## 開發
 
 需要 PowerShell 7、Git、Rust MSVC、CMake 4.2 以上、Visual Studio 2026（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
 
 ```powershell
-git submodule update --init
+pwsh -File scripts/sync-upstream.ps1  # 優先官方，無法讀取才改用鏡像
 pwsh -File scripts/package.ps1      # 建置測試用候選包，位於 build/release-candidates/
 pwsh -File scripts/release.ps1      # 完整 RELEASE 或重用有效紀錄，再產出正式安裝包
 pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建單一架構
@@ -99,7 +103,7 @@ CTest 測試分類、案例清冊、報告與基準比較方法見 [Windows 驗�
 
 ## 致謝
 
-- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。原 repo 已無法存取，程式碼與模型 Release 改由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供（內容與原作者發布者相同，著作權與授權仍屬原作者）。
+- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。程式碼與模型 Release 優先讀取原倉庫，無法讀取時才使用鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup)；附件仍核對大小與 SHA-256，著作權與授權不變。
 - [Pane](https://github.com/LBEILC/Pane)（LBEILC）：介面的視覺風格參考了它。
 - [Lucide](https://lucide.dev)：圖示。其他詞庫與演算法的授權見 `LICENSES/`。
 

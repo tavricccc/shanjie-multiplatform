@@ -40,6 +40,8 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 中英模式提示是另一個 NOACTIVATE 視窗，以 tiny-skia 繪製 `assets/mode/` 的圖示，顯示 1400 ms 或到下一次輸入。
 
+模型清單與附件優先讀取官方上游，讀取失敗才改讀鏡像，兩者皆失敗才使用離線清單快取；取消下載不觸發鏡像重試。收據中的來源與配套 ID 保持不變。
+
 ## 設定程式
 
 WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），分九頁：一般、中英混打與切換、快捷鍵與符號鍵、標點符號、組字與提交、選字、外觀、預測詞庫與學習、關於與相容性。
@@ -55,7 +57,7 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 - **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
 - **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
 - **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿；在最後一題按「套用」才經 `ProfileStore.Save` 寫入（暫存檔再整檔取代）並通知實例。
-  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
+  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`beauty_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
   - 保留我現在的設定：已存的 profile 加上實際改動的鍵；沒有差異就不寫。
   - 第一次寫入前把舊檔複製成 `profile.ini.before-quick-setup.bak`（只留一份，同一次流程再寫不覆蓋）；解除安裝時隨設定一起刪除。略過或關閉不碰檔案；個人詞典與學習資料是另外的檔案，不受影響。
   - 升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
