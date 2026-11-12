@@ -14,7 +14,7 @@ Windows 外觀新增 `[appearance] accent=default|windows|custom`、`accent_colo
 
 加詞常駐輔助程式定期核對已放開的非 Ctrl 按鍵，避免漏收放開事件後永久將雙 Ctrl 判為組合鍵；Ctrl 的按放序列仍由手勢處理。有限日誌記錄手勢阻擋、狀態核對、取詞開始／逾時與設定 Shell 啟動失敗等階段，不記錄按鍵值、反白字詞或文件內容。此回復路徑已隔離回歸，尚不代表已確認使用者遇到的所有浮層失效都出於同一原因。
 
-使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129）v0.7.0 後主線 `bf0bb4ef` 的核心與完整詞庫、v0.7.0 的模型配套。最新已發布版本仍是 v0.7.0，固定的主線 commit 以 `UPSTREAM.json` 為準。子模組初始化、模型清單與附件均優先官方，無法讀取才改用 [鏡像](https://github.com/tavricccc/shanjie-upstream-backup)；附件大小與 SHA-256 照常核對，既有收據的來源與 ID 不重寫。同名模型以實際讀取的模型名稱識別，跨來源／配套 ID 仍顯示已下載；附件或 release 有新版時保留舊版並提供更新，不因同名略過更新。各版變更見 [Changelog](Changelog.md)。
+使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129）v0.7.0 後主線 `f029c737` 的核心與完整詞庫、v0.7.0 的模型配套。最新已發布版本仍是 v0.7.0，固定的主線 commit 以 `UPSTREAM.json` 為準。子模組初始化、模型清單與附件均優先官方，無法讀取才改用 [鏡像](https://github.com/tavricccc/shanjie-upstream-backup)；附件大小與 SHA-256 照常核對，既有收據的來源與 ID 不重寫。同名模型以實際讀取的模型名稱識別，跨來源／配套 ID 仍顯示已下載；附件或 release 有新版時保留舊版並提供更新，不因同名略過更新。各版變更見 [Changelog](Changelog.md)。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。
 
