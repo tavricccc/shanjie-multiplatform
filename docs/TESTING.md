@@ -77,6 +77,14 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 
 計時事件含 stage ID、parent ID、原始包含子階段耗時及 `exclusive_duration_ms`。後者扣除子階段區間聯集，避免巢狀重複加總；平行工作的合計仍可能大於 wall-clock。探測程序使用有期限的等待並只清理自己啟動的程序；CTest 另設每項 timeout。
 
+## 驗證規則自檢
+
+固定 CI 的 `fast.infrastructure` 會從 CMake 已登記的 case ID 與 `ctest-case.ps1` 的實際 script delegate，核對所有 `scripts/verify*`、`test*`、`measure*` PowerShell 入口。未直接由 CTest 管理者沿用 `test-plan.psm1` 的唯一例外表，說明 dispatcher、舊 wrapper、fixture helper、必要額外量測或條件式專用驗證。新增入口未分類、刪除 delegate 的 CTest 登記或留下過期例外都使框架自檢失敗；不新增另一份測試排程或額外 CI job。
+
+在 Windows 已 configure 時，自檢另以實際 inventory／同一選測函式確認：按鍵與 profile 變更保留標準／善解 TSF、shared 單元及既有九宮格／全半形／反引號案例；profile 邏輯／範本還包含 WinUI。純範本變更不再只落入缺少善解／WinUI 的 FULL。這是已知驗證規則的回歸保護，不能證明任意函式分支都有測試；新行為仍需加入合適斷言。
+
+`report.json` 的 `verification_summary` 區分 CI／FAST 基線、選定集合通過、計畫與失敗；必要額外量測、未選中的必要 CTest 及已知 binary 覆蓋待審會列為 `pending`／`follow-up-required`，不能被選定集合的 `status=passed` 混作全部驗收完成。其他條件式專用工具列在 `conditional_reviews`，依實際差集判斷，不自動全跑。manager 的 `after-update` 通知失敗／日誌不由 `cargo test --lib` 或 package 的 `verify-package` 模式涵蓋，修改該 binary 會提示補針對性回歸。這份摘要不取代既有 RELEASE 的清冊、快照與產物雜湊防護。
+
 ## 舊流程覆蓋對照
 
 FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／windows Rust 單元測試。`verify.ps1` 留作相容及 benchmark 基準入口；CTests 不把它註冊成單一測試。

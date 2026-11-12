@@ -89,6 +89,12 @@
 - 其他專用 fixture、故障注入、舊版共存、視覺／實機與選用量測的目的、前置條件及選測參數見 [docs/TESTING.md](docs/TESTING.md#專用驗收與實際差集)。上游未訂逐檔強制規則者需依實際變更判斷，不能一律加跑。
 - 自動提示規則只在 `scripts/test-plan.psm1` 維護。新增或修改 Markdown 驗證要求時，須同步程式規則與 `tests/verify_selection.ps1`；PlanOnly 只能提示規則文件變動，**不會理解任意自然語言或自動把新條文轉為測試**。額外提示不是 PASS，也不改變 CI 固定集合。
 
+### 防止驗證規則遺漏
+
+- 新功能或行為修正須在同一變更加入相應回歸；歷史 PR 的具體提醒應落成適合的既有 harness／單元測試與選測規則，不要求日後逐一重讀舊 PR。新增 `verify*`／`test*`／`measure*` PowerShell 入口須有已註冊 CTest delegate，或在 `test-plan.psm1` 的 `Get-VerificationExceptions` 說明條件、用途與不等價範圍；`fast.infrastructure` 自動拒絕未分類入口、失去 CTest 登記的 delegate 與過期例外。
+- 候選按鍵、互動模式、profile 邏輯／範本變更，須保留 Windows／善解模式、舊選項遷移及明確使用者選項的對應測試。範本變更的 AFFECTED 包含 shared 單元、標準／善解 TSF 與 WinUI；CI 依實際 CTest 清冊檢查關鍵選測要求，FULL 本身仍只代表固定 x64 集合。以目前 main 已合入的預設與斷言為準，不把歷史評論中的舊預設重新套回產品。
+- `status=passed` 只代表該層選中的測試通過。報告 `verification_summary` 另列必要額外項目、已知覆蓋待審及條件式審查；有 pending 時不得宣稱變更已完成所有必要驗收。條件式審查不代表要把每支專用工具全部跑一遍。CI 五項成功也不代表任意新程式分支都有斷言；新行為仍須設計測試，無法自動判定者明列未驗與理由。
+
 ### CTest 操作
 
 ```powershell

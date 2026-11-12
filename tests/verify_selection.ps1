@@ -24,6 +24,7 @@ Expect 'platform' @('platform/smart_input_windows.rs') $false @('fast','rust','c
 Expect 'suites merge without duplicates' @('windows/src/word_popup.rs','tests/popup_lifecycle.cpp','tests/english_keys.cpp') $false @('fast','windows','word','popup-lifecycle','rust','english')
 Expect 'unlisted Windows service' @('windows/src/tsf/service.rs') $true @('full','windows','tsf','ui','mode')
 Expect 'shared appearance' @('shared/src/appearance.rs') $true @('full','windows','tsf','ui','mode')
+Expect 'profile templates require both interactions and UI' @('profiles/windows.ini','profiles/shanjie.ini') $true @('full','shared','windows','tsf','settings-ui','candidate-host')
 Expect 'upstream pin' @('UPSTREAM.json') $true @('full')
 Expect 'build script' @('scripts/build.ps1') $true @('full')
 Expect 'verify script' @('scripts/verify.ps1') $true @('full')
@@ -64,6 +65,17 @@ Check-Rule ($docs.Skip -and !$docs.Labels.Count -and $docs.AdditionalVerificatio
 Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('README.md') -Labels @()).Count -eq 0) 'Ordinary documentation has no supplemental test request'
 Check-Rule ((Get-AdditionalVerificationPlan -Paths @('scripts/measure-engine.ps1') -Labels @('full')|Where-Object id -eq 'engine-measurement-tool').kind -eq 'optional') 'Changing the measurement tool alone is an optional sample collection'
 
+$manager=Select-VerificationPlan @('windows/src/bin/shanjie-manager.rs')
+Check-Rule (@($manager.AdditionalVerification|Where-Object id -eq 'manager-binary-coverage').Count -eq 1) 'Manager command changes expose the --lib and after-update coverage boundary'
+$completion=Get-VerificationCompletion AFFECTED passed $latency $false
+Check-Rule ($completion.status -eq 'follow-up-required' -and $completion.follow_up_required -and @($completion.pending|Where-Object id -eq 'engine-latency').Count -eq 1) 'Passing selected tests cannot hide required latency follow-up'
+$completion=Get-VerificationCompletion AFFECTED passed $manager.AdditionalVerification $false
+Check-Rule ($completion.follow_up_required) 'Passing FULL does not clear the manager binary review'
+Check-Rule ((Get-VerificationCompletion CI passed @() $false).status -eq 'ci-baseline-passed') 'CI success states only its fixed baseline scope'
+Check-Rule ((Get-VerificationCompletion FAST passed @() $false).status -eq 'fast-baseline-passed') 'FAST success does not claim full acceptance'
+Check-Rule ((Get-VerificationCompletion AFFECTED passed @() $true).status -eq 'not-required') 'Documentation remains free of build/test requirements'
+Check-Rule ((Get-VerificationCompletion FULL failed @() $false).status -eq 'failed') 'Failed tests cannot become completed verification'
+
 $project=Split-Path $PSScriptRoot -Parent
 $tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile("$project/scripts/verify-ui.ps1",[ref]$tokens,[ref]$errors)
@@ -101,6 +113,7 @@ function Read-Planned([string]$Level,[string]$Scope='Branch',[string]$Ref='HEAD'
 $planned=Read-Planned AFFECTED
 Check-Rule ($planned.status -eq 'planned' -and !$planned.results.Count -and !$planned.subcases.Count -and !$planned.ctest.Count) 'Real PlanOnly never counts requested cases as executed'
 Check-Rule (@($planned.additional_verification|Where-Object kind -eq 'required-extra').Count -eq 1) 'Real PlanOnly prints and persists the required latency reminder'
+Check-Rule ($planned.verification_summary.status -eq 'planned' -and $planned.verification_summary.follow_up_required) 'PlanOnly persists pending work without claiming completion'
 & git -C $fixture add windows/src/input.rs
 & git -C $fixture -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm 'keep input unchanged for documentation scenario'
 if($LASTEXITCODE){throw 'Cannot prepare the documentation-only fixture'}

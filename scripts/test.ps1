@@ -386,6 +386,7 @@ try {
         changed_paths=$changedPaths
         impact_reasons=$pathReasons
         additional_verification=$additionalVerification
+        verification_summary=(Get-VerificationCompletion $Level $overallStatus $additionalVerification $skipTests)
         selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;requested_labels=@($requestedLabels);preset_labels=$presetLabels;notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion with additional mapped regressions retained.'}else{"$Level change-impact selection."}}
         results=$testResults
         subcases=$subcases
@@ -405,6 +406,7 @@ try {
     $json=Join-Path $reportRoot 'report.json'
     [IO.File]::WriteAllText($json,($report|ConvertTo-Json -Depth 18),[Text.UTF8Encoding]::new($false))
     Write-Host "Test report: $json"
+    Write-Host "Verification scope: $($report.verification_summary.status); follow-up required=$($report.verification_summary.follow_up_required)"
     Write-Host "Selected CTest rows: $($allSelected.Count); not selected: $($allOmitted.Count); elapsed: $($whole.Elapsed.TotalSeconds.ToString('F3'))s"
     Stop-Transcript | Out-Null
     $env:SHANJIE_TEST_RUN_ID=$previousRunId
