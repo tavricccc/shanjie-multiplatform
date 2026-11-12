@@ -75,6 +75,8 @@
 
 程式版本更新維持由 `tavricccc/shanjie-multiplatform` 提供；模型清單與附件優先原作者 `Nanako0129/shanjie`，讀取失敗才用 `tavricccc/shanjie-upstream-backup`。
 
+已下載配套與內建同版或較新時，設定不再提示改用內建。相容配套索引落後時，清單保留通過原生驗證的已安裝模型，並直接依上游發布資料顯示新版本或同標籤的檔案更新；尚待確認的配套會明確標示。
+
 ## 開發
 
 需要 PowerShell 7、Git、Rust MSVC、CMake 4.2 以上、Visual Studio 2026（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。

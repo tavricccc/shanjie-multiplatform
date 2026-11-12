@@ -2,6 +2,10 @@
 
 Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄的整組模型（id `builtin`）：會意更新為 SJ-SR-8-15M，其餘維持上游 v0.6.1 配套；核心 pin 維持 `UPSTREAM.json`。`source` 指向隨版本庫保存的原始附件，`pinned_sha256` 記錄核心 pin 的原有模型雜湊。
 
+模型查詢與下載沿用 Windows `v0.15.4-beta.5` 的原作者路徑：發布清單為 `https://api.github.com/repos/Nanako0129/shanjie/releases?per_page=100&page={page}`，附件為 `https://github.com/Nanako0129/shanjie/releases/download/{tag}/{filename}`。各項讀取失敗時才改查同一路徑下的 `tavricccc/shanjie-upstream-backup`；程式版本更新仍由 `tavricccc/shanjie-multiplatform` 提供。
+
+Windows 維護的相容索引用來確認配套與提供備註，不取代原作者發布清單。索引落後或不可讀時，保留已驗證的安裝收據，直接顯示上游新版本或同標籤檔案更新並標示待驗；不能因此切換鏡像，也不能把尚未驗證的附件當成可用配套。
+
 ## 上線與日常操作
 
 工作流程：`.github/workflows/model-catalog-maintenance.yml`。每日 UTC 01:23（臺灣 09:23）執行；亦可在 Actions 選 **Run workflow**：
