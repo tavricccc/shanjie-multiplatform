@@ -15,12 +15,22 @@ public static partial class ModelCatalog
     public static string ListTime(DateTimeOffset? generated,bool cached)=>generated is not {} at?"清單更新時間：未知／尚未取得"
         :$"清單更新時間：{at.ToOffset(TimeSpan.FromHours(8)):yyyy/MM/dd HH:mm}（臺灣時間 UTC+8）"+(cached?"・快取":"");
     public static string Notes(ModelEntry? entry)=>entry is null?"尚無此配套的評測／備註資料。":string.Join("\n\n",entry.Advisories.Select(a=>a.Title+"\n"+a.Body));
-    private static bool SameSources(ModelEntry m,ModelSpec s)=>m.Assets.All(a=>a.Role is "bigram" or "classes")
-        &&m.Assets.SingleOrDefault(a=>a.Role=="bigram")?.Sha256==s.ModelSha256
-        &&(m.Assets.SingleOrDefault(a=>a.Role=="classes")?.Sha256??"")==s.ClassesSha256;
+    private static bool SameSources(ModelEntry m,ModelSpec s)=>s.Catalog is {} saved
+        ?m.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>(a.Role,a.Sha256)).ToHashSet()
+            .SetEquals(saved.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>(a.Role,a.Sha256)))
+        :m.Assets.All(a=>a.Role is "bigram" or "classes")
+            &&m.Assets.SingleOrDefault(a=>a.Role=="bigram")?.Sha256==s.ModelSha256
+            &&(m.Assets.SingleOrDefault(a=>a.Role=="classes")?.Sha256??"")==s.ClassesSha256;
     /// The catalog's entry for the package's own set: the same model files (license notices are not part of it).
-    private static bool IsBuiltin(ModelEntry m)=>m.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256).ToHashSet()
-        .SetEquals(BuiltinAssets.Value.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>a.Sha256));
+    private static bool IsBuiltin(ModelEntry m)=>m.Assets.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>(a.Role,a.Release,a.Sha256)).ToHashSet()
+        .SetEquals(BuiltinAssets.Value.Where(a=>a.Role is not ("license" or "attribution")).Select(a=>(a.Role,a.Release,a.Sha256)));
+    internal static (string Family,int Generation)? ReleaseVersion(string release)
+    {
+        var match=System.Text.RegularExpressions.Regex.Match(release,@"^(sj-[a-z]+|model|classes)-v?([0-9]+)(?:-|$)");
+        if(!match.Success||!int.TryParse(match.Groups[2].Value,out int generation))return null;
+        string family=match.Groups[1].Value switch {"model"=>"sj-lm","classes"=>"sj-wc",var value=>value};
+        return (family,generation);
+    }
     private static Dictionary<string,ModelEntry> CachedNotes()=>CachedNotes(Path.Combine(Folder,"catalog-v2-cache.json"));
     /// A cache that cannot be read or fails validation only costs the notes; it says nothing about the downloaded models.
     internal static Dictionary<string,ModelEntry> CachedNotes(string path)
@@ -48,7 +58,7 @@ public static partial class ModelCatalog
             list=JsonSerializer.Deserialize<ModelList>(verified,Json)??throw new InvalidDataException("清單無內容。");
             // The signed original is cached: entries this build drops would no longer match its revision.
             await File.WriteAllTextAsync(path+".download",raw,token);File.Move(path+".download",path,true);
-            status+=" 自動維護清單已更新。";
+            status+=" 相容配套索引已讀取。";
         }
         catch(Exception error)when(error is IOException or System.Net.Http.HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
         {
@@ -62,24 +72,42 @@ public static partial class ModelCatalog
             catch(Exception cache)when(cache is IOException or JsonException or InvalidDataException)
             {status+=error is InvalidDataException?" 自動維護清單未通過驗證（"+error.Message+"），仍可使用既有模型。":" 自動維護清單暫時無法取得，仍可使用既有模型。";}
         }
-        if(list is null)return legacy with {Status=status};
+        var installed=await Task.Run(Installed,token);
+        // A maintained index can lag behind releases and already verified receipts.
+        // Keep those receipts visible without inventing compatibility for new files.
+        var models=(list?.Models??[]).ToList();
+        foreach(var choice in installed)
+            if(choice.InstalledSpec?.Catalog is {} saved&&models.All(m=>m.Id!=saved.Id))models.Add(saved);
         var rows=legacy.Rows.Where(r=>r.Spec is not null
-            ?r.Spec.Id==Builtin||!list.Models.Any(m=>SameSources(m,r.Spec))
-            :!list.Models.Any(m=>m.Assets.Any(a=>a.Role=="bigram"&&a.Release==r.Name))).ToList();
-        var builtinNotes=list.Models.FirstOrDefault(IsBuiltin);
+            ?r.Spec.Id==Builtin||!models.Any(m=>SameSources(m,r.Spec))
+            :!models.Any(m=>m.Assets.Any(a=>a.Role=="bigram"&&a.Release==r.Name))).ToList();
+        var builtinNotes=models.FirstOrDefault(IsBuiltin);
         int builtinIndex=rows.FindIndex(r=>r.Spec?.Id==Builtin);
         if(builtinIndex>=0&&builtinNotes is not null)rows[builtinIndex]=rows[builtinIndex] with{Spec=BuiltinSpec with{Catalog=builtinNotes}};
-        var installed=await Task.Run(Installed,token);
-        foreach(var m in list.Models)
+        foreach(var m in models.OrderByDescending(IsBuiltin))
         {
-            if(IsBuiltin(m))continue;
             bool supported=Supported(m);
             bool source=m.Assets.All(a=>releases.Any(r=>r.TagName==a.Release&&!r.Draft&&r.Assets.Any(x=>x.Name==a.Filename&&x.Size==a.Size&&x.Digest=="sha256:"+a.Sha256&&IsUpstreamAssetUrl(x.BrowserDownloadUrl,a.Release,a.Filename))));
             var spec=Spec(m);var downloaded=FindInstalled(spec,installed);bool update=downloaded is not null&&HasUpdate(downloaded.InstalledSpec!,spec);
-            string state=downloaded is not null?(!supported?"已下載・新版需要更新核心／格式支援":update?"已下載・可更新":"已下載"):!supported?"需要更新核心／格式支援":source?"可下載":"來源附件暫時無法核對";
+            if(IsBuiltin(m)&&downloaded is null)continue;
+            string state=downloaded is not null?(!supported?"已下載・新版需要更新核心／格式支援":update?"已下載・可更新":IsBuiltin(m)?"已下載・與內建相同":"已下載"):!supported?"需要更新核心／格式支援":source?"可下載":"來源附件暫時無法核對";
             rows.Add(new(m.Name,state,spec,supported&&(source||downloaded is not null&&!update),string.Join("、",m.Advisories.Select(a=>a.Title)),downloaded is null?"下載":update?"更新":"選用"));
         }
-        return new(rows,status,DateTimeOffset.TryParse(list.GeneratedAt,CultureInfo.InvariantCulture,DateTimeStyles.None,out var at)?at:null,cached);
+        int pending=0;
+        var known=models.SelectMany(m=>m.Assets).Select(a=>(a.Filename,a.Release,a.Sha256)).Concat(BuiltinAssets.Value.Select(a=>(a.Filename,a.Release,a.Sha256))).ToList();
+        foreach(var release in releases.Where(r=>!r.Draft&&rows.All(row=>row.Name!=r.TagName)))
+        {
+            if(ReleaseVersion(release.TagName) is not {} version)continue;
+            bool newer=release.Assets.Any(a=>System.Text.RegularExpressions.Regex.IsMatch(a.Name,@"\.sj[a-z0-9]+$")
+                &&version.Generation>known.Where(k=>k.Filename==a.Name).Select(k=>ReleaseVersion(k.Release))
+                    .Where(v=>v?.Family==version.Family).Select(v=>v!.Value.Generation).DefaultIfEmpty(0).Max());
+            bool revised=release.Assets.Any(a=>a.Digest is not null&&known.Any(k=>k.Filename==a.Name&&k.Release==release.TagName)
+                &&known.Where(k=>k.Filename==a.Name&&k.Release==release.TagName).All(k=>a.Digest!="sha256:"+k.Sha256));
+            if(!newer&&!revised)continue;
+            rows.Add(new(release.TagName,release.Prerelease?"上游預覽模型・待配套驗證":revised?"上游模型已更新・待配套驗證":"上游新模型・待配套驗證",null,false));pending++;
+        }
+        if(pending>0)status+=$" 另偵測到 {pending} 個上游新模型，配套相容性尚待驗證。";
+        return new(rows,status,DateTimeOffset.TryParse(list?.GeneratedAt,CultureInfo.InvariantCulture,DateTimeStyles.None,out var at)?at:null,cached);
     }
     private static async Task<ModelChoice> DownloadBundle(ModelSpec spec,IProgress<string> progress,CancellationToken token)
     {

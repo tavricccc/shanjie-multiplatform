@@ -139,7 +139,7 @@ public static partial class ModelCatalog
                 releases=JsonSerializer.Deserialize<List<Release>>(await File.ReadAllTextAsync(cache,token),Json)??[];
                 status=$"無法更新線上清單；顯示 {File.GetLastWriteTime(cache):yyyy/MM/dd HH:mm} 的快取。";
             }
-            else return new([],"目前無法連線取得清單；內建及已下載模型仍可使用。請稍後重試。");
+            else status="目前無法連線取得清單；內建及已下載模型仍可使用。請稍後重試。";
         }
         var known=Known();
         // Optional project-maintained compatibility metadata can add data versions without a binary update.

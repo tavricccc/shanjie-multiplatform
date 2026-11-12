@@ -28,6 +28,7 @@ internal static class VisualVerifier
     {
         var installed = settings.Vm.AvailableModels.ToList();
         Models.ModelChoice a = new("fixture-a", "測試配套 A（已下載）"), b = new("fixture-b", "測試配套 B（已下載）");
+        b=b with{InstalledSpec=Models.ModelCatalog.Known()[0]};
         settings.Vm.RefreshModels([a, b]); settings.Vm.SelectModel(b.Id); settings.Vm.DictionaryText = "ㄇㄠ 貓";
         string draft = settings.Vm.DictionaryText; byte[] saved = File.ReadAllBytes(Models.ProfileStore.Path);
         async Task Expect(string id, string what)

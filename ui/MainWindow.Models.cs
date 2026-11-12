@@ -62,8 +62,20 @@ public sealed partial class MainWindow
         try{if(File.Exists(note)){notice=$"這版不再支援先前選用的模型「{File.ReadAllText(note).Trim()}」，已改用內建的{ModelCatalog.BuiltinName}。";File.Delete(note);}}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){}
         var chosen=Vm.AvailableModels.FirstOrDefault(m=>m.Id==Vm.ModelId);
-        if(notice.Length==0&&chosen is not null&&chosen.Id!=ModelCatalog.Builtin)
-            notice=$"目前使用「{chosen.Name}」。內建模型已是{ModelCatalog.BuiltinName}；要改用，在「模型配置」選內建後儲存。";
+        if(notice.Length==0&&chosen is not null&&chosen.Id!=ModelCatalog.Builtin&&chosen.InstalledSpec is {} saved)
+        {
+            var parts=saved.Catalog?.Assets.Select(a=>(a.Role,a.Release))
+                ??new[]{(Role:"bigram",Release:saved.ModelRelease),(Role:"classes",Release:saved.ClassesRelease)};
+            bool older=false,newer=false;
+            foreach(var part in parts)
+            {
+                var builtin=ModelCatalog.BuiltinAssets.Value.FirstOrDefault(a=>a.Role==part.Role);
+                if(builtin is not null&&ModelCatalog.ReleaseVersion(part.Release) is {} selectedVersion
+                    &&ModelCatalog.ReleaseVersion(builtin.Release) is {} builtinVersion&&selectedVersion.Family==builtinVersion.Family)
+                {older|=selectedVersion.Generation<builtinVersion.Generation;newer|=selectedVersion.Generation>builtinVersion.Generation;}
+            }
+            if(older&&!newer)notice=$"目前使用「{chosen.Name}」。內建模型已有較新配套 {ModelCatalog.BuiltinName}；要改用，在「模型配置」選內建後儲存。";
+        }
         if(notice.Length==0)return;
         Vm.Status=string.IsNullOrWhiteSpace(Vm.Status)?notice:Vm.Status+"\n"+notice;ShowLoadFeedback();
     }

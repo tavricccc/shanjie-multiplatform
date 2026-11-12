@@ -12,14 +12,22 @@ internal static class ModelVerifier
         settings.AppWindow.Move(new Windows.Graphics.PointInt32(-12000,-12000));settings.AppWindow.Show(false);
         string log=Path.Combine(output,"models-v2.log");void Check(bool ok,string what){if(!ok)throw new InvalidDataException(what);File.AppendAllText(log,"PASS "+what+Environment.NewLine);}
         var catalog=JsonSerializer.Deserialize<ModelList>(await File.ReadAllTextAsync(Path.Combine(fixtures,"fixture-v2.json")),ModelCatalog.Json)!;
+        var future=JsonSerializer.Deserialize<ModelList>(await File.ReadAllTextAsync(Path.Combine(fixtures,"future-v2.json")),ModelCatalog.Json)!.Models.Single();
+        string futureRelease=future.Assets.Single(a=>a.Role=="semantic").Release;
         var selected=catalog.Models.First(m=>m.Assets.Any(a=>a.Role=="semantic")&&m.Advisories.Count>0);
         var files=catalog.Models.SelectMany(m=>m.Assets).DistinctBy(a=>a.Sha256).ToList();
-        var requests=new List<string>();bool mirrorOnly=false;
+        var requests=new List<string>();bool mirrorOnly=false,staleIndex=false,newRelease=false,indexUnavailable=false,revisedRelease=false;
         using var client=new HttpClient(new Replies(request=>{
             string url=request.RequestUri!.AbsoluteUri;requests.Add(url);
             if(mirrorOnly&&url.Contains("/Nanako0129/shanjie/"))return new(HttpStatusCode.ServiceUnavailable);
-            if(url==ModelCatalog.V2Endpoint)return new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,"fixture-v2.json")))};
-            if(url.Contains("/releases?"))return new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,"upstream-releases.json")))};
+            if(url==ModelCatalog.V2Endpoint)return indexUnavailable?new(HttpStatusCode.ServiceUnavailable):new(HttpStatusCode.OK){Content=new StringContent(File.ReadAllText(Path.Combine(fixtures,staleIndex?"stale-v2.json":"fixture-v2.json")))};
+            if(url.Contains("/releases?"))
+            {
+                var releases=JsonSerializer.Deserialize<List<Release>>(File.ReadAllText(Path.Combine(fixtures,"upstream-releases.json")),ModelCatalog.Json)!;
+                if(revisedRelease){var release=releases.Single(r=>r.TagName==selected.Assets.Single(a=>a.Role=="semantic").Release);int index=release.Assets.FindIndex(a=>a.Name=="tinylm.sjtl");release.Assets[index]=release.Assets[index] with{Digest="sha256:"+new string('f',64)};}
+                if(newRelease){var semantic=selected.Assets.Single(a=>a.Role=="semantic");releases.Add(new(futureRelease,false,false,[new("tinylm.sjtl",semantic.Size,"sha256:"+semantic.Sha256,$"https://github.com/Nanako0129/shanjie/releases/download/{futureRelease}/tinylm.sjtl")]));}
+                return new(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(releases,ModelCatalog.Json))};
+            }
             if(url.EndsWith("/main/MODEL-CATALOG.json"))return new(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(new Compatibility(1,ModelCatalog.Known()),ModelCatalog.Json))};
             var a=files.FirstOrDefault(a=>ModelCatalog.UpstreamRepositories.Any(repository=>url==$"https://github.com/{repository}/releases/download/{a.Release}/{a.Filename}"));
             return a is null?new(HttpStatusCode.NotFound):new(HttpStatusCode.OK){Content=new StreamContent(File.OpenRead(Path.Combine(fixtures,"assets",a.Sha256)))};
@@ -64,6 +72,32 @@ internal static class ModelVerifier
             var legacyUpdate=legacy with {ModelRelease="model-v7-fixture-refresh"};
             var legacyUpdated=await ModelCatalog.Download(legacyUpdate,new ProgressLog(_=>{}),CancellationToken.None);
             Check(legacyUpdated.Id!=legacyFirst.Id&&ModelCatalog.FindInstalled(legacyUpdate,ModelCatalog.Installed())?.Id==legacyUpdated.Id,"same-name legacy release updates get a new usable revision");
+            mirrorOnly=false;
+            var complete=catalog.Models.Single(m=>m.Name=="與內建同版的完整配套");
+            var completeSpec=spec with{Id=complete.Id,Name=complete.Name,Catalog=complete};
+            var completeChoice=await ModelCatalog.Download(completeSpec,new ProgressLog(_=>{}),CancellationToken.None);
+            settings.Vm.RefreshModels(ModelCatalog.Installed());settings.Vm.SelectModel(completeChoice.Id);
+            settings.Vm.Status="";settings.ShowModelNotice();
+            Check(settings.Vm.Status.Length==0,"a downloaded full SR-8 equivalent does not recommend switching to the built-in set");
+            var futureChoice=new ModelChoice(future.Id,future.Name){InstalledSpec=completeSpec with{Id=future.Id,Name=future.Name,Catalog=future}};
+            settings.Vm.RefreshModels(ModelCatalog.Installed().Append(futureChoice));settings.Vm.SelectModel(futureChoice.Id);
+            settings.Vm.Status="";settings.ShowModelNotice();
+            Check(settings.Vm.Status.Length==0,"a newer selected model does not recommend downgrading to the built-in set");
+            settings.Vm.RefreshModels(ModelCatalog.Installed());settings.Vm.SelectModel(completeChoice.Id);
+            staleIndex=true;newRelease=true;revisedRelease=true;requests.Clear();
+            var stale=await ModelCatalog.Online(CancellationToken.None);
+            Check(stale.Rows.Any(r=>r.Spec?.Id==complete.Id&&r.Available&&r.State.Contains("與內建相同")),"a stale compatibility index retains the verified full installed model");
+            Check(stale.Rows.Any(r=>r.Name==futureRelease&&r.State.Contains("上游新模型")&&!r.Available),"new upstream model releases remain visible before compatibility metadata catches up");
+            Check(stale.Rows.Any(r=>r.Name==main.Release)==false&&stale.Rows.Any(r=>r.Name==selected.Assets.Single(a=>a.Role=="semantic").Release&&r.State.Contains("已更新")),"same-tag upstream weight updates are detected while the existing model remains downloaded");
+            Check(!requests.Any(url=>url.Contains("/tavricccc/shanjie-upstream-backup/")),"a stale compatibility index does not trigger the mirror while upstream is reachable");
+            string indexCache=Path.Combine(ModelCatalog.Folder,"catalog-v2-cache.json");
+            File.Move(indexCache,indexCache+".saved");indexUnavailable=true;requests.Clear();
+            try{
+                var missing=await ModelCatalog.Online(CancellationToken.None);
+                Check(missing.Rows.Any(r=>r.Spec?.Id==complete.Id&&r.Available),"verified installed models survive an unavailable compatibility service with no index cache");
+                Check(!requests.Any(url=>url.Contains("/tavricccc/shanjie-upstream-backup/")),"an unavailable compatibility service does not redirect a reachable upstream to the mirror");
+            }finally{File.Move(indexCache+".saved",indexCache,true);indexUnavailable=false;staleIndex=false;newRelease=false;revisedRelease=false;}
+            await ModelCatalog.Online(CancellationToken.None);
             settings.Vm.RefreshModels(ModelCatalog.Installed());string original=settings.Vm.ModelId;int prompts=0;
             await settings.SelectModelWithConfirmation(choice,()=>{prompts++;return Task.FromResult(false);});
             Check(prompts==1&&settings.Vm.ModelId==original&&settings.Vm.DictionaryText==draft&&settings.Vm.HasChanges,"cancel keeps original model and unrelated unsaved draft");
