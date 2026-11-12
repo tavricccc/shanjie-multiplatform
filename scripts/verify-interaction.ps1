@@ -1,7 +1,8 @@
 #Requires -Version 7
-param([string]$HarnessPath,[string]$ResultRoot)
+param([string]$HarnessPath,[string]$ResultRoot,[string]$RuntimeRoot)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'verify-interaction'
@@ -41,7 +42,7 @@ try{
     # Fixture lexicons use local core; resident IPC has a separate integration test.
     $env:SHANJIE_CORE_LOCAL='1'
     Invoke-Timed -Name 'Windows interaction regression (x64)' -Category 'interaction.engine' -Details @{architecture='x64';profile=$env:LOCALAPPDATA} -Action {
-        & $exe "$root/dist/data"
+        & $exe "$RuntimeRoot/data"
         if($LASTEXITCODE){throw "Interaction checks failed: $LASTEXITCODE"}
     }
 }finally{$env:LOCALAPPDATA=$previousLocal;$env:SHANJIE_CORE_LOCAL=$previousCore;$env:SHANJIE_TEST_PROFILE=$previousTest}

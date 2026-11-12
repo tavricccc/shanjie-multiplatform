@@ -6,15 +6,22 @@ param(
     [ValidateRange(1,32)][int]$Jobs=4,
     [switch]$RetryFailures,
     [switch]$CiSafe,
-    [switch]$PlanOnly
+    [switch]$PlanOnly,
+    [ValidateSet('x64','x86')][string]$Architecture='x64'
 )
 $ErrorActionPreference='Stop'
+if($Architecture -eq 'x86' -and $Level -notin 'AFFECTED','RELEASE'){throw '-Architecture x86 is supported by AFFECTED/RELEASE; CI, FAST and FULL use the x64 baseline.'}
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
 $version=(Get-Content -LiteralPath "$root/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json).version
-$sourceStart=$null;$sourceEnd=$null;$releaseData=$null
+$sourceStart=$null;$sourceEnd=$null;$releaseData=$null;$snapshot=$null;$packagingPermit=$null
+$requestedLevel=$Level
+$changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null;Range=$null;EffectiveBase=$null}}else{Get-VerificationChanges $root $BaseRef $ChangeScope}
+# Only genuinely unbounded x86 impact needs dual-architecture release acceptance.
+# Determine the effective level before naming the report/receipt directory.
+if($Level -eq 'AFFECTED' -and $Architecture -eq 'x86' -and ($changeSet.Error -or (Select-VerificationPlan $changeSet.Paths).Full)){$Level='RELEASE'}
 $runId=[guid]::NewGuid().ToString('N')
 $reportRoot=Join-Path $root "build/reports/$($Level.ToLowerInvariant())-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$($runId.Substring(0,8))"
 $eventsRoot=Join-Path $reportRoot 'events'
@@ -24,6 +31,13 @@ Start-Transcript -Path $consoleLog -Force | Out-Null
 $previousRunId=$env:SHANJIE_TEST_RUN_ID
 $previousTimingsDirectory=$env:SHANJIE_TEST_TIMINGS_DIR
 $previousLevel=$env:SHANJIE_TEST_LEVEL
+$previousSnapshotId=$env:SHANJIE_RELEASE_SNAPSHOT_ID
+$previousSnapshotHash=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256
+$previousPermit=$env:SHANJIE_RELEASE_PACKAGING_PERMIT
+# A nested test invocation must not inherit another run's sealed inputs/permit.
+$env:SHANJIE_RELEASE_SNAPSHOT_ID=$null
+$env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$null
+$env:SHANJIE_RELEASE_PACKAGING_PERMIT=$null
 $env:SHANJIE_TEST_LEVEL=$Level
 $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
@@ -51,18 +65,7 @@ function Add-Label([string]$Label,[string]$Reason) {
     $pathReasons[$Label]=$Reason
 }
 function Get-ChangedPathList([string]$Ref,[string]$Scope='Branch') {
-    $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
-    $range=if($Scope -eq 'Worktree'){$null}elseif($Scope -eq 'Commit'){"$base..HEAD"}else{"$base...HEAD"}
-    if (!(git -C $root rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'."; Range=$range; EffectiveBase=$base } }
-    $items=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    # Treat moves as delete/add so both paths participate in impact and documentation checks.
-    $diff=if($Scope -eq 'Worktree'){@()}else{@(git -C $root diff --no-renames --name-only $range 2>$null)}
-    if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'."; Range=$range; EffectiveBase=$base } }
-    foreach($path in $diff){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    foreach($path in @(git -C $root diff --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    foreach($path in @(git -C $root diff --cached --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    foreach($path in @(git -C $root ls-files --others --exclude-standard)){if($path){[void]$items.Add($path.Replace('\','/'))}}
-    return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null; Range=$range; EffectiveBase=$base }
+    Get-VerificationChanges $root $Ref $Scope
 }
 function Test-DocumentationOnly([string]$Path) {
     return (Test-VerificationDocumentation $Path)
@@ -149,7 +152,7 @@ function Invoke-CmakeBuild([string]$Preset,[object[]]$Tests) {
         Complete-TestStage -Stage $stage -Details @{preset=$Preset;targets=$targets;cache='CMake incremental build'}
     } catch { $status='failed';$errorMessage=$_.Exception.Message;Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;targets=$targets} -ErrorMessage $errorMessage;throw }
 }
-function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests) {
+function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests,[string]$ReportTag='') {
     if (!$Tests.Count) { return }
     $names=@($Tests | ForEach-Object name)
     $regex='^(' + (($names | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
@@ -160,12 +163,12 @@ function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[
     $env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
     try {
         for($attempt=1;$attempt -le $(if($RetryFailures){2}else{1});$attempt++) {
-            $suffix=if($attempt -eq 1){''}else{'-retry'}
+            $suffix=$(if($ReportTag){"-$ReportTag"})+$(if($attempt -gt 1){'-retry'})
             $log=Join-Path $reportRoot "ctest-$Preset$suffix.log"
             $junit=Join-Path $reportRoot "junit-$Preset$suffix.xml"
             $ctestArguments=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--test-output-size-passed','0','--test-output-size-failed','0','--output-log',$log,'--output-junit',$junit,'--parallel',"$Jobs",'--no-tests=error')
             if($attempt -eq 1){$ctestArguments+=@('-R',$regex)}else{$ctestArguments+='--rerun-failed'}
-            $script:ctestReports += [pscustomobject]@{preset=$Preset;attempt=$attempt;log=$log;junit=$junit;tests=$names}
+            $script:ctestReports += [pscustomobject]@{preset=$Preset;attempt=$attempt;log=$log;junit=$junit;tests=$names;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
             $env:SHANJIE_CTEST_ATTEMPT="$attempt"
             & ctest @ctestArguments
             $ctestExit=$LASTEXITCODE
@@ -183,8 +186,11 @@ function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[
 }
 
 try {
-    if($Level -eq 'RELEASE'){$sourceStart=Get-ReleaseIdentity $root}
-    $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null;Range=$null;EffectiveBase=$null}}else{Get-ChangedPathList $BaseRef $ChangeScope}
+    if($Level -eq 'RELEASE'){
+        $sourceStart=Get-ReleaseIdentity $root
+        if(!$PlanOnly -and !$sourceStart.clean){throw 'Commit the intended source first; RELEASE requires a clean commit before building its snapshot.'}
+    }
+    if($Level -ne $requestedLevel){$notes.Add('Unbounded x86 impact: expanded AFFECTED to dual-architecture RELEASE; packaging still requires both architectures to pass.')}
     $changedPaths=@($changeSet.Paths)
     if ($changeSet.Error) { $forceFull=$true;$notes.Add($changeSet.Error) }
     if($Level -ne 'CI'){$notes.Add("Change scope=$ChangeScope; committed range=$($changeSet.Range); staged, unstaged and untracked paths are included. Narrow scopes do not validate older branch commits.")}
@@ -216,6 +222,10 @@ try {
         }
         if($additionalVerification.Count){Write-Host 'Advisories only: planned CTest rows and extra checks are not PASS results. Credit actual matching JUnit/JSON evidence; do not run legacy wrappers again for those cases.'}
     }
+    $presetLabels=[ordered]@{}
+    foreach($preset in @('windows-x64')+@($(if($Level -eq 'RELEASE' -or ($Level -eq 'AFFECTED' -and $Architecture -eq 'x86')){'windows-x86'}))|Where-Object{$_}){
+        $presetLabels[$preset]=@(if(!$skipTests){Get-VerificationPresetLabels $Level $Architecture $preset @($requestedLabels)})
+    }
     if($PlanOnly){
         $overallStatus='planned'
         $notes.Add('Plan only: CMake inventory, builds and tests were not executed.')
@@ -226,9 +236,22 @@ try {
     }
     $presets=@(if(!$skipTests){'windows-x64'})
     if($Level -eq 'RELEASE'){$presets+=@('windows-x86')}
+    if(!$skipTests -and $Level -eq 'AFFECTED' -and $Architecture -eq 'x86'){$presets+=@('windows-x86')}
+    if($Level -eq 'RELEASE'){
+        # Build both architectures before freezing any input or linking harnesses.
+        Invoke-Timed -Name 'Build both release architectures' -Category 'build.product' -Details @{architecture='all'} -Action {
+            & "$PSScriptRoot/build.ps1" -Architecture all
+            & "$PSScriptRoot/prepare-licenses.ps1"
+        }
+        $snapshot=Invoke-Timed -Name 'Seal dual-architecture release snapshot' -Category 'release.snapshot' -Action {New-ReleaseSnapshot $root $runId $sourceStart}
+        $env:SHANJIE_RELEASE_SNAPSHOT_ID=$snapshot.id
+        $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$snapshot.sha256
+        $needsProduct=$true
+    }
     foreach($preset in $presets) {
         Invoke-Timed -Name "CMake configure ($preset)" -Category 'build.cmake.configure' -Details @{preset=$preset} -Action {
-            & cmake --preset $preset
+            $nativeRoot=if($snapshot){Join-Path $snapshot.root 'native'}else{''}
+            & cmake --preset $preset "-DSHANJIE_RELEASE_NATIVE_ROOT=$nativeRoot"
             if($LASTEXITCODE){throw "CMake configure failed for $preset."}
         }
     }
@@ -237,8 +260,7 @@ try {
         $binaryDirectory=Join-Path $root "build/cmake/$preset"
         $inventory=Get-CtestInventory $binaryDirectory
         $inventoryByPreset[$preset]=$inventory
-        $labels=@($requestedLabels)
-        if($Level -eq 'RELEASE' -and $preset -eq 'windows-x86'){$labels=@('release')}
+        $labels=@(Get-VerificationPresetLabels $Level $Architecture $preset @($requestedLabels))
         if($skipTests){$labels=@()}
         $selection=Get-SelectedTests $inventory $labels $preset
         if($Level -eq 'CI'){Assert-FixedCiSelection $selection.Selected}
@@ -254,26 +276,46 @@ try {
         if ($skipSettingsBuild) { $notes.Add('AFFECTED product prerequisites omit WinUI publish because no changed path or selected interactive UI case needs it; FULL and RELEASE still include WinUI publish.') }
     }
 
-    if($Level -eq 'FULL' -or $Level -eq 'RELEASE' -or ($Level -eq 'AFFECTED' -and $forceFull)) {
-        $architecture=if($Level -eq 'RELEASE'){'all'}else{'x64'}
-        Invoke-Timed -Name "Build $architecture release product" -Category 'build.product' -Details @{architecture=$architecture;incremental='Cargo, WinUI, model and data receipts'} -Action {
-            & "$PSScriptRoot/build.ps1" -Architecture $architecture
+    if($Level -eq 'RELEASE'){
+        $notes.Add('Both product architectures were built and sealed before CMake configuration. All release tests and packaging use that snapshot.')
+    } elseif($Level -eq 'FULL' -or ($Level -eq 'AFFECTED' -and $forceFull)) {
+        $buildArchitecture='x64'
+        Invoke-Timed -Name "Build $buildArchitecture release product" -Category 'build.product' -Details @{architecture=$buildArchitecture;incremental='Cargo, WinUI, model and data receipts'} -Action {
+            & "$PSScriptRoot/build.ps1" -Architecture $buildArchitecture
         }
         $needsProduct=$true
     } elseif($needsProduct) {
-        Invoke-Timed -Name 'Build x64 product prerequisites' -Category 'build.product' -Details @{architecture='x64';incremental='Cargo, WinUI, model and data receipts'} -Action {
-            if ($skipSettingsBuild) { & "$PSScriptRoot/build.ps1" -Architecture x64 -SkipSettings }
-            else { & "$PSScriptRoot/build.ps1" -Architecture x64 }
+        $buildArchitecture=if($Architecture -eq 'x86' -and $Level -eq 'AFFECTED'){'all'}else{'x64'}
+        Invoke-Timed -Name "Build $buildArchitecture product prerequisites" -Category 'build.product' -Details @{architecture=$buildArchitecture;incremental='Cargo, WinUI, model and data receipts'} -Action {
+            if ($skipSettingsBuild) { & "$PSScriptRoot/build.ps1" -Architecture $buildArchitecture -SkipSettings }
+            else { & "$PSScriptRoot/build.ps1" -Architecture $buildArchitecture }
         }
     }
 
     if(!$skipTests) {
         foreach($preset in $presets) {
-            $selected=@($selectedByPreset[$preset])
+            $selected=@($selectedByPreset[$preset]|Where-Object name -NE 'release.package')
             if(!$selected.Count){continue}
+            if($snapshot){$null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles}
             Invoke-CmakeBuild $preset $selected
             Invoke-CtestSelection $preset (Join-Path $root "build/cmake/$preset") $selected
+            if($snapshot){
+                $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
+                Assert-ReleaseRuntimeFixture $snapshot (Join-Path $root "build/cmake/$preset/test-payload-$($snapshot.id)") $preset.Substring(8)
+            }
         }
+    }
+    if($snapshot){
+        $prepackRows=@($selectedByPreset.Values|ForEach-Object{$_}|Where-Object name -NE 'release.package')
+        $prepackCases=@($prepackRows|ForEach-Object{[pscustomobject]@{name=$_.name;preset=$_.preset;selected=$true;reason=$_.reason}})
+        $prepackTimings=@(Get-ChildItem -LiteralPath $eventsRoot -Filter '*.json'|ForEach-Object{Get-Content -LiteralPath $_.FullName -Raw|ConvertFrom-Json})
+        $permitRecord=[ordered]@{schema=4;level='RELEASE';status='tests-passed';ci_safe=[bool]$CiSafe;ctest=$ctestReports;results=@(Read-CtestResults $ctestReports);selection=@{selected=$prepackRows};subcases=@(Read-HarnessCaseResults $prepackCases $prepackTimings);release=@{architectures=@('x64','x86');candidate_id=$runId;snapshot_sha256=$snapshot.sha256}}
+        $packagingPermit=New-ReleasePackagingPermit $root (Join-Path $reportRoot 'packaging-permit.json') $permitRecord
+        $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$packagingPermit.path
+        $packageRows=@($selectedByPreset['windows-x64']|Where-Object name -EQ 'release.package')
+        if($packageRows.Count -ne 1){throw 'RELEASE inventory must contain exactly one deferred package test.'}
+        Invoke-CtestSelection 'windows-x64' (Join-Path $root 'build/cmake/windows-x64') $packageRows -ReportTag 'package'
+        $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
     }
 } catch {
     $overallStatus='failed'
@@ -303,16 +345,7 @@ try {
         foreach($row in $selectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$true}}
         foreach($row in $unselectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$false}}
     )
-    $subcases=@(Get-HarnessCasePlan $caseRows)
-    foreach($subcase in $subcases | Where-Object selected) {
-        $events=@($timings | Where-Object { $_.test_name -eq $subcase.parent -and $_.category -eq $subcase.category })
-        foreach($key in $subcase.parameters.Keys){$events=@($events | Where-Object { $_.details.$key -ceq $subcase.parameters[$key] })}
-        $subcase.attempts=@($events | Sort-Object attempt,started_utc | ForEach-Object { [pscustomobject]@{attempt=$_.attempt;status=$_.status;duration_ms=$_.duration_ms;error=$_.error} })
-        if($subcase.attempts.Count){
-            $subcase.status=$subcase.attempts[-1].status
-            $subcase.flaky=$subcase.status -eq 'passed' -and [bool](@($subcase.attempts | Where-Object status -eq 'failed').Count)
-        }else{$subcase.reason='Selected combination did not reach execution; inspect its parent CTest result and logs.'}
-    }
+    $subcases=@(Read-HarnessCaseResults $caseRows $timings)
     if($overallStatus -eq 'passed' -and @($subcases | Where-Object { $_.selected -and $_.status -ne 'passed' }).Count){
         $overallStatus='failed';$failureMessage='Some selected harness combinations did not pass or did not run; see subcases.'
     }
@@ -327,16 +360,23 @@ try {
     if($Level -eq 'RELEASE'){
         try {
             $sourceEnd=Get-ReleaseIdentity $root
-            $releaseData=[ordered]@{source_start=$sourceStart;source_end=$sourceEnd;architectures=@('x64','x86');candidate_id=$runId;artifacts=$null}
-            if($overallStatus -eq 'passed'){$releaseData.artifacts=Get-ReleaseArtifacts $root $runId $ctestReports}
+            if($overallStatus -eq 'passed' -and (!$sourceStart.clean -or !$sourceEnd.clean -or $sourceStart.commit -cne $sourceEnd.commit -or $sourceStart.version -cne $sourceEnd.version)){throw 'Release source changed during acceptance.'}
+            $releaseData=[ordered]@{source_start=$sourceStart;source_end=$sourceEnd;architectures=@('x64','x86');candidate_id=$runId;snapshot_sha256=$snapshot.sha256;packaging_permit=$packagingPermit.path;artifacts=$null}
+            if($overallStatus -eq 'passed'){
+                $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
+                Assert-ReleasePackageCopy $snapshot (Join-Path $root "build/release-candidates/$runId/package")
+                $releaseData.artifacts=Get-ReleaseArtifacts $root $runId $ctestReports $packagingPermit.path
+            }
         }catch{$overallStatus='failed';$failureMessage=$_.Exception.Message}
     }
     $report=[ordered]@{
-        schema=3
+        schema=if($Level -eq 'RELEASE'){4}else{3}
         version=$version
         commit=if($sourceEnd){$sourceEnd.commit}else{(& git -C $root rev-parse HEAD)}
         worktree_dirty=if($sourceEnd){!$sourceEnd.clean}else{[bool](@(& git -C $root status --porcelain --untracked-files=normal).Count)}
         level=$Level
+        requested_level=$requestedLevel
+        architecture=$Architecture
         plan_only=[bool]$PlanOnly
         status=$overallStatus
         wall_seconds=[Math]::Round($whole.Elapsed.TotalSeconds,3)
@@ -346,7 +386,7 @@ try {
         changed_paths=$changedPaths
         impact_reasons=$pathReasons
         additional_verification=$additionalVerification
-        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;requested_labels=@($requestedLabels);notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion with additional mapped regressions retained.'}else{"$Level change-impact selection."}}
+        selection=[ordered]@{selected=$allSelected;not_selected=$allOmitted;requested_labels=@($requestedLabels);preset_labels=$presetLabels;notes=@($notes);reason=if($Level -eq 'CI'){'Fixed CI baseline; no impact expansion.'}elseif($skipTests){'Documentation-only or no changes.'}elseif($forceFull -and $Level -eq 'AFFECTED'){'Conservative FULL expansion with additional mapped regressions retained.'}else{"$Level change-impact selection."}}
         results=$testResults
         subcases=$subcases
         flaky_tests=@($testResults | Where-Object flaky | ForEach-Object name)
@@ -370,6 +410,9 @@ try {
     $env:SHANJIE_TEST_RUN_ID=$previousRunId
     $env:SHANJIE_TEST_TIMINGS_DIR=$previousTimingsDirectory
     $env:SHANJIE_TEST_LEVEL=$previousLevel
+    $env:SHANJIE_RELEASE_SNAPSHOT_ID=$previousSnapshotId
+    $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$previousSnapshotHash
+    $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$previousPermit
 }
 if($overallStatus -ne 'passed'){throw $failureMessage}
 if($Level -eq 'RELEASE' -and $CiSafe -and $env:GITHUB_ACTIONS -eq 'true'){

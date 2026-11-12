@@ -18,10 +18,11 @@ pwsh -File scripts/test.ps1 -Level RELEASE
 ```powershell
 pwsh -File scripts/test.ps1 -Level AFFECTED -ChangeScope Worktree -PlanOnly # 日常未提交修改
 pwsh -File scripts/test.ps1 -Level AFFECTED -ChangeScope Commit -PlanOnly   # 最後一筆提交＋未提交修改
+pwsh -File scripts/verify-changed.ps1 -Architecture x86 -ChangeScope Worktree -DryRun # x86 選測計畫
 pwsh -File scripts/verify-changed.ps1 -Base origin/main -ChangeScope Branch -DryRun # 全分支整合
 ```
 
-影響規則只維護一份。上游 `verify-changed.ps1 -Base <ref>` 轉交 AFFECTED，`-DryRun` 對應 `test.ps1 -PlanOnly`，不執行 CMake、建置或測試，報告狀態為 `planned`；它列出變更原因、要求的標籤與額外驗證提示，實際 CTest 清冊仍須 Windows configure。`verify-changed.ps1 -Architecture x86` 保守對應雙架構 RELEASE；`-UseExistingBuild` 不繞過快取驗證。`verify-selection.ps1` 的純選測 API 回傳 CTest `Full`／`Labels`／`Skip`／`Reasons`／`AdditionalVerification`，不保留第二套 Steps／Suites 排程。移動檔案以原、新兩個路徑判斷，移入 docs 不會掩蓋原本的程式碼變更。
+影響規則只維護一份。上游 `verify-changed.ps1 -Base <ref>` 轉交 AFFECTED，`-DryRun` 對應 `test.ps1 -PlanOnly`，不執行 CMake、建置或測試，報告狀態為 `planned`；它列出變更原因、要求的標籤與額外驗證提示，實際 CTest 清冊仍須 Windows configure。`verify-changed.ps1 -Architecture x86`（或 `test.ps1 -Level AFFECTED -Architecture x86`）先套用同一影響規則：純文件跳過全部建置、測試與封裝；有界變更保留共用 x64 FAST 基線並執行對應 x86 回歸，settings／core 等共用檢查仍在 x64 執行；未知影響或無法比較才擴大至雙架構 RELEASE。`selection.preset_labels` 記錄架構分配，`requested_level` 與 `level` 區分請求及後備層級；`-UseExistingBuild` 不繞過快取驗證。`verify-selection.ps1` 的純選測 API 回傳 CTest `Full`／`Labels`／`Skip`／`Reasons`／`AdditionalVerification`，不保留第二套 Steps／Suites 排程。移動檔案以原、新兩個路徑判斷，移入 docs 不會掩蓋原本的程式碼變更。
 
 僅編譯、確認產物或建立開發候選包，不自動啟動 FULL／RELEASE；修改程式依必要範圍執行 FAST／AFFECTED，先以 PlanOnly 檢查是否擴大。正式發布仍使用有同提交完整收據防護的 `release.ps1`，開發候選包不等於正式發布完成。
 
@@ -146,7 +147,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 - Windows Rust 單元測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink；測試範圍與斷言均保留。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
-- 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/` 的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
+- 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/`（RELEASE 時指向本次快照）的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
 - 英文鍵、提交、加詞視窗與非視覺 TSF smoke 在不切換的私人測試桌面執行，隔離目前桌面的實際 Alt／Ctrl／Shift 與前景視窗變動；既有私人桌面案例也保持隔離。這不代表已驗證使用者正在操作的前景 App。
 - WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果保留在本次報告目錄，停用設定重開前封存舊 PASS 輸出。截圖依 #100 預設不產生；需要視覺審查時明確使用 `verify-ui.ps1 -Visual`，必要斷言照常執行。
 
@@ -166,11 +167,15 @@ pwsh -File scripts/test.ps1 -Level RELEASE          # 建置、完整驗收與�
 pwsh -File scripts/release.ps1                      # 取得或重用有效驗收，再提升正式產物
 ```
 
-候選包位於 `build/release-candidates/<id>/`。`package.ps1` 不呼叫 test.ps1；RELEASE 的封裝項目只產生並校驗候選包，因此沒有循環依賴。FAST／AFFECTED／FULL 不要求正式發布紀錄。
+RELEASE 在建置前要求乾淨工作樹與一致版本；先提交預期來源，`-PlanOnly` 仍可查看未提交變更的後備計畫。完成雙架構產品建置後，將 DLL、UI、工具、資料、授權、封裝來源／packer 與兩架構 staticlib 複製至 `build/release-snapshots/<id>/`，以 commit、版本與 `snapshot.json` 的 SHA-256 綁定並設唯讀。複製前後核對來源與快照內容，拒絕混合建置或連結輸入。CMake harness 連結快照 staticlib；TSF 使用本次獨立 payload／工具副本及快照資料 junction；混打測試只在測試模組指定快照資料。WinUI 的可變 `installed.json` 留在私人 fixture，不寫入快照或使用者安裝。
+
+x64、x86 的所有非封裝測試與參數子案例均通過後，才建立 `packaging-permit.json`；沿用正式收據的同一份 CTest／JUnit／JSON／子案例覆蓋檢查，只暫時排除 `release.package` 本身。接著單獨執行該 CTest 項目，從同一快照複製封裝內容、校驗、產生單檔候選安裝包。它有獨立的 `junit-windows-x64-package.xml`，不覆寫前一輪 x64 JUnit。直接用 CTest 執行封裝項目而沒有匹配快照與雙架構證據會失敗；正式驗收請使用 RELEASE 入口。
+
+候選包位於 `build/release-candidates/<id>/`。`package.ps1` 不呼叫 test.ps1；RELEASE 的封裝項目只產生並校驗候選包，因此沒有循環依賴。FAST／AFFECTED／FULL 不要求正式發布紀錄；未知 x86 影響擴大至 RELEASE 時例外。獨立 `package.ps1` 仍可建立開發候選包，但沒有快照與雙架構封裝許可時不能用於正式提升。快照與封裝副本會增加本機磁碟需求，保留在 ignored `build/` 供收據重用，勿刪除仍需提升的候選快照。
 
 本機正式入口先要求工作樹乾淨、Cargo／lock／WinUI／channel 四處版本一致。驗收紀錄必須是相同 commit、版本及兩架構的完整 RELEASE：逐項對照目前 CTest 清冊與原始 JUnit、JSON 結果和全部英文／提交子案例，不能只有 `status=passed`。CI-safe、跳過、未完成或缺少架構都會被拒絕。
 
-紀錄保存驗收前後原始碼身分，以及所有出貨建置檔、候選安裝包、候選 metadata 和 JUnit 的 SHA-256。提升前重新核對，驗收後更動原始碼、版本或產物就失效。有效紀錄可重用，不重跑整套。`package.ps1 -Promote -ReportPath <report.json>` 也會執行同一防護，不能直接繞過；它把已驗證的候選包複製至 `dist/Shanjie-Windows-Setup.exe`，確認複製後雜湊，再寫 `dist/release.json` 的本機完整驗收標記。
+RELEASE 收據 schema 4 保存驗收前後原始碼身分、固定快照、雙架構封裝許可、候選封裝內容／安裝包、候選 metadata 和 JUnit 的 SHA-256。提升前重新核對，任一架構失敗、缺少必要證據或更動來源、版本、快照／候選產物均失效；schema 3 等沒有快照的舊收據必須重新驗收。後續一般建置改寫 `dist/` 不會取代快照裡已測過的檔案。有效紀錄可重用，不重跑整套。`package.ps1 -Promote -ReportPath <report.json>` 也會執行同一防護，不能直接繞過；它把已驗證的候選包複製至 `dist/Shanjie-Windows-Setup.exe`，確認複製後雜湊，再寫 `dist/release.json` 的本機完整驗收標記。
 
 GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯出 CI artifact；標記明確表示它不是本機完整驗收。日常 PR 的固定輕量 CI 不變。本機正式入口不 push、建立 tag 或呼叫 GitHub Release，遠端動作另需授權。
 

@@ -3,9 +3,10 @@ param(
     [ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),
     [string]$HarnessPath,
     [string]$CaptureRoot
-)
+,[string]$RuntimeRoot)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'verify-mode'
@@ -40,7 +41,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         }
     }
     Invoke-Timed -Name "Mode surface smoke ($architecture)" -Category 'ui.mode-smoke' -Details @{architecture=$architecture;capture_root=$capture} -Action {
-        & $exe "$root/dist/$architecture/Shanjie.dll" $capture
+        & $exe "$RuntimeRoot/$architecture/Shanjie.dll" $capture
         if($LASTEXITCODE){throw "$architecture mode surface failed."}
     }
 }

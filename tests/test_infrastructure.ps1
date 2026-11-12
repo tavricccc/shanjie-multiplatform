@@ -4,6 +4,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$root/scripts/test-support.psm1" -ErrorAction Stop
 Import-Module "$root/scripts/test-plan.psm1" -ErrorAction Stop
+Import-Module "$root/scripts/release-support.psm1" -ErrorAction Stop
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/test-infrastructure-'+[guid]::NewGuid().ToString('N'))}
 $null=New-Item -ItemType Directory -Path $ResultRoot -Force
 function Assert-Check([bool]$Condition,[string]$Name){if(!$Condition){throw "FAIL $Name"}}
@@ -72,8 +73,11 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile("$root/scripts/te
 $Level='RELEASE';$skipTests=$false
 # Evaluate the driver's real preset assignments on the RELEASE path. A scalar
 # assignment followed by += silently concatenated the two architecture names.
-foreach($assignment in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$presets'},$false)){
-    . ([scriptblock]::Create($assignment.Extent.Text))
+$Architecture='x64'
+$assignment=$ast.Find({param($node)$node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$presets' -and $node.Right.Extent.Text -like '*windows-x64*'},$false)
+. ([scriptblock]::Create($assignment.Extent.Text))
+foreach($branch in $ast.FindAll({param($node)$node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match '^if\([^\n]+\)\{\$presets\+='},$false)){
+    . ([scriptblock]::Create($branch.Extent.Text))
 }
 Assert-Check ($presets.Count -eq 2 -and $presets[0] -ceq 'windows-x64' -and $presets[1] -ceq 'windows-x86') 'RELEASE retains two separate architecture presets'
 foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-SelectedTests','Invoke-CtestSelection') {
@@ -123,8 +127,33 @@ $stable=$results | Where-Object name -eq 'stable'
 Assert-Check ($stable.attempts.Count -eq 1) 'Passed rows are not retried'
 Assert-Check ($retried.status -eq 'passed' -and $retried.flaky -and $retried.attempts.Count -eq 2) 'A retry pass retains the first failure'
 Assert-Check ($retried.attempts[0].failure -eq 'first failure') 'First failure text remains available'
+$firstJUnit=$script:ctestReports[0].junit
+$firstBytes=[IO.File]::ReadAllText($firstJUnit)
+$RetryFailures=$false
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='release.package'}) -ReportTag 'package'
+Assert-Check ($script:ctestReports[-1].junit -ne $firstJUnit -and [IO.File]::ReadAllText($firstJUnit) -ceq $firstBytes) 'Deferred package has its own JUnit and retains architecture evidence'
 Remove-Item Function:ctest
 & "$root/tests/release_guard.ps1" -ResultRoot (Join-Path $ResultRoot 'release-guard')
+# Windows fixture plumbing: the real TSF payload must use sealed bytes and data,
+# while its private executable path continues to isolate the core IPC identity.
+$guardSource=Join-Path $ResultRoot 'release-guard/source'
+$sealed=Get-ChildItem "$guardSource/build/release-snapshots" -Directory|Select-Object -First 1
+$snapshot=Get-ReleaseSnapshot $guardSource $sealed.Name (Get-FileHash "$($sealed.FullName)/snapshot.json").Hash.ToLowerInvariant()
+$privatePayload=Join-Path $root ('build/cmake/release-guard-payload-'+[guid]::NewGuid().ToString('N'))
+& "$root/scripts/prepare-test-payload.ps1" -Architecture x86 -RuntimeRoot $snapshot.runtime_root -PayloadRoot $privatePayload
+Assert-ReleaseRuntimeFixture $snapshot $privatePayload x86
+$privateDll=Join-Path $privatePayload 'x86/Shanjie.dll'
+(Get-Item -LiteralPath $privateDll).IsReadOnly=$false
+[IO.File]::AppendAllText($privateDll,'different tested DLL')
+$rejected=$false
+try{Assert-ReleaseRuntimeFixture $snapshot $privatePayload x86}catch{$rejected=$true}
+Assert-Check $rejected 'A private runtime copy differing from the sealed package DLL is rejected'
+Copy-ReleaseFiles "$($snapshot.runtime_root)/x86/Shanjie.dll" $privateDll
+Move-Item -LiteralPath "$privatePayload/data" -Destination "$privatePayload/sealed-data-link"
+$null=New-Item -ItemType Junction -Path "$privatePayload/data" -Target "$guardSource/dist/data"
+$rejected=$false
+try{Assert-ReleaseRuntimeFixture $snapshot $privatePayload x86}catch{$rejected=$true}
+Assert-Check $rejected 'Live dist data cannot replace the frozen runtime data junction'
 $cache=Join-Path $ResultRoot 'empty-cache.json'
 [IO.File]::WriteAllText($cache,'{"key":"test","files":{}}')
 Assert-Check (!(Test-ContentCache -Root $ResultRoot -ManifestPath $cache -Key 'test' -Paths @())) 'Empty UI output is a cache miss even with a receipt'

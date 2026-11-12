@@ -1,9 +1,10 @@
 #Requires -Version 7
 param([switch]$Benchmark,[Alias('Architectures')][ValidateSet('x64','x86')][string[]]$Architecture=@('x64','x86'),
     [Alias('NativeOnly')][switch]$CandidateHostOnly,[Alias('SkipNative')][switch]$SkipCandidateHost,[string]$HarnessPath,[Alias('ResultRoot')][string]$OutputRoot,
-    [ValidateSet('all','general','startup','disabled')][string]$Scenario='all',[string[]]$Phases,[ValidateSet(1,2,3)][int[]]$Keyboards=@(1,3,2),[string[]]$ModelFixtures=@(),[switch]$Visual)
+    [ValidateSet('all','general','startup','disabled')][string]$Scenario='all',[string[]]$Phases,[ValidateSet(1,2,3)][int[]]$Keyboards=@(1,3,2),[string[]]$ModelFixtures=@(),[switch]$Visual,[string]$RuntimeRoot)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'verify-ui'
@@ -34,7 +35,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
     }
     }
     Invoke-Timed -Name "Candidate-host WinUI IPC ($architecture)" -Category 'ui.candidate-host' -Details @{architecture=$architecture} -Action {
-        & $candidateHarness "$root/dist/$architecture/Shanjie.dll" "$uiRoot/native/$architecture"
+        & $candidateHarness "$RuntimeRoot/$architecture/Shanjie.dll" "$uiRoot/native/$architecture"
         if ($LASTEXITCODE) { throw "$architecture WinUI IPC failed." }
     }
 } }
@@ -42,8 +43,8 @@ if ($CandidateHostOnly) { return }
 # A saved downloaded model survives closing and reopening the settings: separate processes, isolated profile, a package the scan really validates.
 # Set isolation before XAML starts: the OS may load an installed IME before
 # OnLaunched sets its profile. Keep that IME's core in this process as well.
-function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$root/dist/ui",[string]$ModelId) {
-    $start=[Diagnostics.ProcessStartInfo]::new("$root/dist/ui/Shanjie.UI.exe")
+function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$RuntimeRoot/ui",[string]$ModelId) {
+    $start=[Diagnostics.ProcessStartInfo]::new("$RuntimeRoot/ui/Shanjie.UI.exe")
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
     $profile=[IO.Path]::Combine($Arguments[1],'profile')
     $null=New-Item -ItemType Directory -Path $profile -Force
@@ -68,7 +69,7 @@ if($Scenario -in 'all','startup'){
         $startupOutput=Join-Path $uiRoot "startup-$phase"
         $null=New-Item -ItemType Directory -Path "$startupOutput/profile/Shanjie" -Force
         if($phase -ne 'clean'){Copy-Item "$root/profiles/windows.ini" "$startupOutput/profile/Shanjie/profile.ini"}
-        $working=if($phase -eq 'different-directory'){$uiRoot}else{"$root/dist/ui"}
+        $working=if($phase -eq 'different-directory'){$uiRoot}else{"$RuntimeRoot/ui"}
         Invoke-Timed -Name "WinUI startup ($phase)" -Category 'ui.startup' -Details @{architecture='x64';phase=$phase} -Action {
             Invoke-UiFixture -Arguments @('--verify-startup',$startupOutput) -WorkingDirectory $working
             if((Get-Content "$startupOutput/result.txt" -Raw) -ne 'PASS'){throw "Settings startup $phase failed."}
@@ -77,10 +78,10 @@ if($Scenario -in 'all','startup'){
     if($Scenario -eq 'startup'){return}
 }
 if($Scenario -in 'all','disabled'){
-    $installation=Join-Path $root 'dist/installed.json'
+    $installation=Join-Path $RuntimeRoot 'installed.json'
     $savedInstallation=if(Test-Path -LiteralPath $installation){[IO.File]::ReadAllBytes($installation)}else{$null}
     try {
-        # Only generated dist metadata changes; the interactive-ui CTest lock serializes these fixtures.
+        # Only generated fixture metadata changes; the interactive-ui CTest lock serializes these fixtures.
         [IO.File]::WriteAllText($installation,'{"version":"verification-fixture","keyboards":3}')
         foreach($keyboard in $Keyboards){
             $disabledOutput=Join-Path $uiRoot "disabled-keyboard-$keyboard"
@@ -110,7 +111,7 @@ if($Scenario -in 'all','disabled'){
 $modelOutput = Join-Path $uiRoot ('model-startup/' + [guid]::NewGuid().ToString('N'))
 $modelFolder = Join-Path $modelOutput 'profile/Shanjie/Models/fixture-model'
 New-Item -ItemType Directory -Path $modelFolder -Force | Out-Null
-Copy-Item "$root/dist/data/models/builtin/bigram.winmap","$root/dist/data/models/builtin/classes.sjc" $modelFolder
+Copy-Item "$RuntimeRoot/data/models/builtin/bigram.winmap","$RuntimeRoot/data/models/builtin/classes.sjc" $modelFolder
 $assets = (Get-Content "$root/MODEL-SOURCES.json" -Raw | ConvertFrom-Json).builtin.assets
 $bigram = $assets | Where-Object role -eq 'bigram'; $classes = $assets | Where-Object role -eq 'classes'
 @{ id = 'fixture-model'; name = 'Fixture model'; model_release = $bigram.release; classes_release = $classes.release

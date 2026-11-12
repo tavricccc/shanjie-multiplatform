@@ -2,9 +2,10 @@
 # Everything the pinned upstream ships (lexicon files, word packs, models) must ship here and be on by upstream's default.
 # A new or changed upstream item fails this check until it is wired in; nothing is silently left out or switched off.
 # Static checks always run; -Dist also compares the built dist/data and dist model folder with upstream (run after a build).
-param([switch]$Dist)
+param([switch]$Dist,[string]$RuntimeRoot)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 $upstream = Join-Path $root 'upstream/shanjie/data'
 $failures = [Collections.Generic.List[string]]::new()
 function Fail([string]$message) { $failures.Add($message) }
@@ -54,7 +55,7 @@ if ($prepareData -notmatch 'data/lexicon/\*') { Fail 'prepare-data.ps1 must copy
 if ($Dist) {
     # Compare with the pinned Git blobs: the shipped data comes from them, and the checkout may have other line endings.
     function Same-AsUpstream([string]$built, [string]$path) { (git -C (Join-Path $root 'upstream/shanjie') rev-parse "HEAD:data/$path") -eq (git hash-object --no-filters $built) }
-    $data = Join-Path $root 'dist/data'
+    $data = Join-Path $RuntimeRoot 'data'
     foreach ($file in Get-ChildItem (Join-Path $upstream 'lexicon') -File) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }

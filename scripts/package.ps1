@@ -5,6 +5,8 @@ param(
     [Parameter(ParameterSetName='Candidate')][switch]$UseExistingBuild,
     [Parameter(ParameterSetName='Candidate')][switch]$SkipVerify,
     [Parameter(ParameterSetName='Candidate')][ValidatePattern('^[0-9a-f]{32}$')][string]$CandidateId=[guid]::NewGuid().ToString('N'),
+    [Parameter(ParameterSetName='Candidate')][string]$SnapshotHash,
+    [Parameter(ParameterSetName='Candidate')][string]$PackagingPermitPath,
     [Parameter(Mandatory,ParameterSetName='Promote')][switch]$Promote,
     [Parameter(Mandatory,ParameterSetName='CiArtifact')][switch]$ExportCiArtifact,
     [Parameter(Mandatory,ParameterSetName='Promote')][Parameter(Mandatory,ParameterSetName='CiArtifact')][string]$ReportPath
@@ -18,15 +20,11 @@ if($Promote -or $ExportCiArtifact){
     return
 }
 $candidateRoot=Join-Path $root "build/release-candidates/$CandidateId"
-# Recoverable build outputs are local maintenance data, never release content.
-function Copy-PayloadDirectory([string]$Source, [string]$Destination) {
-    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse) {
-        $relative = [IO.Path]::GetRelativePath($Source,$file.FullName)
-        if ($relative -match '(^|[\\/])\.deleted_files([\\/]|$)') { continue }
-        $target = Join-Path $Destination $relative
-        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
-        Copy-Item -LiteralPath $file.FullName -Destination $target -Force
-    }
+$snapshot=$null;$permit=$null
+if($SnapshotHash -or $PackagingPermitPath){
+    if(!$UseExistingBuild -or $SkipVerify){throw 'A RELEASE snapshot requires existing builds and full package integrity verification.'}
+    $permit=Assert-ReleasePackagingPermit $root $PackagingPermitPath $CandidateId $SnapshotHash
+    $snapshot=$permit.snapshot
 }
 Push-Location $root
 try {
@@ -34,30 +32,16 @@ try {
         & "$PSScriptRoot/build.ps1"
     }
     $output = Join-Path $candidateRoot 'package'
-    if(!(Test-Path -LiteralPath "$root/dist/tools/shanjie-word-helper.exe")){throw 'Missing per-user add-word helper; refusing an incomplete package.'}
+    $runtimeRoot=if($snapshot){$snapshot.runtime_root}else{Join-Path $root 'dist'}
+    if(!(Test-Path -LiteralPath "$runtimeRoot/tools/shanjie-word-helper.exe")){throw 'Missing per-user add-word helper; refusing an incomplete package.'}
     Preserve-Output $output
-    New-Item -ItemType Directory -Path $output -Force | Out-Null
-    & "$PSScriptRoot/prepare-licenses.ps1"
-    foreach ($arch in @('x64','x86')) {
-        New-Item -ItemType Directory -Path "$output/$arch" -Force | Out-Null
-        Copy-Item "$root/dist/$arch/Shanjie.dll" "$output/$arch" -Force
+    if($snapshot){
+        Copy-ReleaseFiles $snapshot.runtime_root $output
+        Assert-ReleasePackageCopy $snapshot $output
+    }else{
+        & "$PSScriptRoot/prepare-licenses.ps1"
+        Copy-ReleasePackageInputs $root $runtimeRoot $output
     }
-    foreach ($name in 'data','LICENSES') { Copy-PayloadDirectory "$root/dist/$name" "$output/$name" }
-    Copy-Item "$root/UPSTREAM.json","$root/README.md","$root/Changelog.md" $output -Force
-    # Command-line alternatives to the setup window stay out of the package root.
-    New-Item -ItemType Directory -Path "$output/scripts" -Force | Out-Null
-    Copy-Item "$PSScriptRoot/install.ps1","$PSScriptRoot/uninstall.ps1","$PSScriptRoot/install.cmd","$PSScriptRoot/uninstall.cmd","$PSScriptRoot/profiles.ps1" "$output/scripts" -Force
-    Copy-Item "$PSScriptRoot/apply-profile.ps1","$PSScriptRoot/apply-windows.cmd","$PSScriptRoot/apply-shanjie.cmd" "$output/scripts" -Force
-    Copy-Item "$PSScriptRoot/settings.cmd","$PSScriptRoot/重新選擇鍵盤.cmd" "$output/scripts" -Force
-    Copy-Item "$root/profiles" $output -Recurse -Force
-    Copy-PayloadDirectory "$root/dist/ui" "$output/ui"
-    New-Item -ItemType Directory -Path "$output/tools" -Force | Out-Null
-    Get-ChildItem "$root/dist/tools" -File | Copy-Item -Destination "$output/tools" -Force
-    Copy-Item "$root/dist/setup/安裝善解.exe" $output -Force
-    Copy-Item "$root/UPSTREAM-CHANGES.md" $output -Force
-    Copy-PayloadDirectory "$root/docs" "$output/docs"
-    Copy-Item "$root/MODEL-SOURCES.json","$root/MODEL-CATALOG.json" $output -Force
-    Copy-Item "$root/安裝說明.txt" $output -Force
     $hashes = Get-ChildItem $output -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = [System.IO.Path]::GetRelativePath($output,$_.FullName)
         "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $relative"
@@ -70,11 +54,18 @@ try {
     # The only distributed form is the single-file installer: the setup stub carrying this same verified package.
     $setup = Join-Path $candidateRoot 'Shanjie-Windows-Setup.exe'
     Preserve-Output $setup
-    & "$root/dist/setup/shanjie-pack.exe" "$root/dist/setup/安裝善解.exe" $output $setup
+    $packagingRoot=if($snapshot){Join-Path $snapshot.root 'packaging'}else{Join-Path $root 'dist/setup'}
+    if($snapshot){Assert-ReleasePackageCopy $snapshot $output}
+    & "$packagingRoot/shanjie-pack.exe" "$packagingRoot/安裝善解.exe" $output $setup
     if ($LASTEXITCODE) { throw 'Single-file installer packing failed.' }
+    if($snapshot){
+        $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
+        Assert-ReleasePackageCopy $snapshot $output
+        $null=Assert-ReleasePackagingPermit $root $PackagingPermitPath $CandidateId $SnapshotHash
+    }
     $installerHash=(Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant()
     Set-Content "$setup.sha256" "$installerHash  Shanjie-Windows-Setup.exe" -Encoding utf8NoBOM
-    $candidate=[ordered]@{schema=1;id=$CandidateId;source=(Get-ReleaseIdentity $root);integrity_verified=(!$SkipVerify);installer_sha256=$installerHash;created_utc=[DateTimeOffset]::UtcNow.ToString('O')}
+    $candidate=[ordered]@{schema=2;id=$CandidateId;snapshot_id=$snapshot.id;snapshot_sha256=$snapshot.sha256;packaging_permit_sha256=$permit.sha256;source=(Get-ReleaseIdentity $root);integrity_verified=(!$SkipVerify);installer_sha256=$installerHash;created_utc=[DateTimeOffset]::UtcNow.ToString('O')}
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate.json'),($candidate|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
     Write-Host "Candidate only: $setup. Complete local release with scripts/release.ps1."
 } finally { Pop-Location }

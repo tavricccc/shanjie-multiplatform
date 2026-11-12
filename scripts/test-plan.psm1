@@ -1,3 +1,31 @@
+# Resolve changes once for every architecture; --no-renames keeps both sides of
+# moves, including source files moved under docs/.
+function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
+    $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
+    $range=if($Scope -eq 'Worktree'){$null}elseif($Scope -eq 'Commit'){"$base..HEAD"}else{"$base...HEAD"}
+    if (!(git -C $ProjectRoot rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'."; Range=$range; EffectiveBase=$base } }
+    $items=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    # Treat moves as delete/add so both paths participate in impact and documentation checks.
+    $diff=if($Scope -eq 'Worktree'){@()}else{@(git -C $ProjectRoot diff --no-renames --name-only $range 2>$null)}
+    if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'."; Range=$range; EffectiveBase=$base } }
+    foreach($path in $diff){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot diff --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot diff --cached --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot ls-files --others --exclude-standard)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null; Range=$range; EffectiveBase=$base }
+}
+
+# x64 hosts the common suites/tools; an x86 affected run adds only the mapped
+# x86 regressions. Unknown impact is expanded to RELEASE by the caller.
+function Get-VerificationPresetLabels([string]$Level,[string]$Architecture,[string]$Preset,[string[]]$Labels) {
+    if($Level -eq 'RELEASE' -and $Preset -eq 'windows-x86'){return @('release')}
+    if($Level -ne 'AFFECTED' -or $Architecture -ne 'x86'){return @($Labels)}
+    if($Preset -eq 'windows-x64'){
+        return @('fast')+@($Labels|Where-Object{$_ -in 'core','shared','data','interaction','settings-ui'})
+    }
+    return @($Labels|Where-Object{$_ -notin 'fast','full','release','core','shared','data','interaction','settings-ui'})
+}
+
 function Test-VerificationDocumentation([string]$Path) {
     return ($Path -match '^(docs/|LICENSES/|\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
 }
@@ -219,10 +247,24 @@ function Get-HarnessCasePlan([object[]]$Rows) {
     }
 }
 
+function Read-HarnessCaseResults([object[]]$CaseRows,[object[]]$Timings) {
+    $subcases=@(Get-HarnessCasePlan $caseRows)
+    foreach($subcase in $subcases | Where-Object selected) {
+        $events=@($timings | Where-Object { $_.test_name -eq $subcase.parent -and $_.category -eq $subcase.category })
+        foreach($key in $subcase.parameters.Keys){$events=@($events | Where-Object { $_.details.$key -ceq $subcase.parameters[$key] })}
+        $subcase.attempts=@($events | Sort-Object attempt,started_utc | ForEach-Object { [pscustomobject]@{attempt=$_.attempt;status=$_.status;duration_ms=$_.duration_ms;error=$_.error} })
+        if($subcase.attempts.Count){
+            $subcase.status=$subcase.attempts[-1].status
+            $subcase.flaky=$subcase.status -eq 'passed' -and [bool](@($subcase.attempts | Where-Object status -eq 'failed').Count)
+        }else{$subcase.reason='Selected combination did not reach execution; inspect its parent CTest result and logs.'}
+    }
+    return $subcases
+}
+
 function Assert-FixedCiSelection([object[]]$Rows) {
     $expected=@('fast.infrastructure','fast.upstream-data','fast.prepare-core','fast.rust.shared','fast.rust.windows')
     $actual=@($Rows|ForEach-Object name)
     if($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual).Count){throw 'CI must contain exactly the fixed lightweight baseline; no missing tests or FULL expansion is allowed.'}
 }
 
-Export-ModuleMember -Function Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection
+Export-ModuleMember -Function Get-VerificationChanges,Get-VerificationPresetLabels,Read-HarnessCaseResults,Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection

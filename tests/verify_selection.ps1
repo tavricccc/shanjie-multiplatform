@@ -83,18 +83,18 @@ Check-Rule (!(& $skipCase)) 'Omitting the feature filter preserves the original 
 # Real Git + PlanOnly fixture: no SDK, product build, model, core or UI process.
 $fixture=Join-Path $project ('build/conditional-plan-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path "$fixture/scripts","$fixture/windows/src","$fixture/build" -Force
-foreach($name in 'test.ps1','test-plan.psm1','test-support.psm1','release-support.psm1','preserve-output.ps1'){Copy-Item "$project/scripts/$name" "$fixture/scripts/$name"}
+foreach($name in 'test.ps1','test-plan.psm1','test-support.psm1','release-support.psm1','preserve-output.ps1','verify-changed.ps1'){Copy-Item "$project/scripts/$name" "$fixture/scripts/$name"}
 [IO.File]::WriteAllText("$fixture/RELEASE-CHANNEL.json",'{"version":"fixture"}')
 [IO.File]::WriteAllText("$fixture/.gitignore",'build/')
 & git -C $fixture init -q -b fixture
 & git -C $fixture -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false add .
 & git -C $fixture -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm fixture
 if($LASTEXITCODE){throw 'Cannot initialize the conditional-plan fixture'}
-function Read-Planned([string]$Level,[string]$Scope='Branch',[string]$Ref='HEAD'){
+function Read-Planned([string]$Level,[string]$Scope='Branch',[string]$Ref='HEAD',[string]$Architecture='x64'){
     $log=Join-Path $fixture ("build/$Level-$Scope-"+[guid]::NewGuid().ToString('N')+'.log')
-    & (Get-Command pwsh -CommandType Application|Select-Object -First 1).Source -NoProfile -File "$fixture/scripts/test.ps1" -Level $Level -BaseRef $Ref -ChangeScope $Scope -PlanOnly *> $log
+    & (Get-Command pwsh -CommandType Application|Select-Object -First 1).Source -NoProfile -File "$fixture/scripts/test.ps1" -Level $Level -BaseRef $Ref -ChangeScope $Scope -Architecture $Architecture -PlanOnly *> $log
     if($LASTEXITCODE){throw "PlanOnly $Level failed; see $log"}
-    $directory=Get-ChildItem "$fixture/build/reports" -Directory -Filter "$($Level.ToLowerInvariant())-*"|Sort-Object LastWriteTime -Descending|Select-Object -First 1
+    $directory=Get-ChildItem "$fixture/build/reports" -Directory -Filter "*-*"|Sort-Object LastWriteTime -Descending|Select-Object -First 1
     Get-Content (Join-Path $directory.FullName 'report.json') -Raw|ConvertFrom-Json
 }
 [IO.File]::WriteAllText("$fixture/windows/src/input.rs",'// changed input fixture')
@@ -132,4 +132,31 @@ Check-Rule ($commitPlan.changed_paths.Count -eq 1 -and $commitPlan.changed_paths
 $workPlan=Read-Planned AFFECTED Worktree
 Check-Rule ($workPlan.changed_paths.Count -eq 3 -and 'tests/english_keys.cpp' -in $workPlan.changed_paths -and 'ui/View.xaml' -in $workPlan.changed_paths -and 'docs/notes.md' -in $workPlan.changed_paths -and 'full' -notin $workPlan.selection.requested_labels) 'Worktree scope includes staged, unstaged and untracked changes, without older branch commits'
 Check-Rule ($workPlan.change_scope -eq 'Worktree' -and !$workPlan.change_range -and $workPlan.status -eq 'planned' -and !$workPlan.results.Count) 'A narrow scope is recorded explicitly and never claims branch acceptance or PASS'
+# Use the compatibility entry itself for x86 documentation: no PlanOnly flag,
+# no compilers/build script in the fixture, and no CTest invocation is possible.
+& git -C $fixture add .
+& git -C $fixture -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm 'checkpoint bounded paths'
+[IO.File]::WriteAllText("$fixture/README.md",'documentation only')
+$docsLog=Join-Path $fixture 'build/x86-docs.log'
+& (Get-Command pwsh -CommandType Application|Select-Object -First 1).Source -NoProfile -File "$fixture/scripts/verify-changed.ps1" -Architecture x86 -Base HEAD -ChangeScope Worktree *> $docsLog
+Check-Rule ($LASTEXITCODE -eq 0) 'x86 verify-changed documentation really skips without build tools'
+$docsReport=Get-ChildItem "$fixture/build/reports" -Directory|Sort-Object LastWriteTime -Descending|Select-Object -First 1|ForEach-Object{Get-Content (Join-Path $_.FullName 'report.json') -Raw|ConvertFrom-Json}
+Check-Rule ($docsReport.level -eq 'AFFECTED' -and $docsReport.architecture -eq 'x86' -and !$docsReport.selection.selected.Count -and !$docsReport.results.Count -and !$docsReport.ctest.Count -and !$docsReport.release) 'x86 documentation does not build, test, package, or create a release receipt'
+[IO.File]::AppendAllText("$fixture/tests/english_keys.cpp",'// x86 regression')
+$x86Plan=Read-Planned AFFECTED Worktree HEAD x86
+Check-Rule ($x86Plan.level -eq 'AFFECTED' -and 'english' -in $x86Plan.selection.preset_labels.'windows-x86' -and 'rust' -in $x86Plan.selection.preset_labels.'windows-x86' -and 'release' -notin $x86Plan.selection.requested_labels) 'x86 English changes select x86 English and mixed regressions, without RELEASE/package'
+Check-Rule (@($x86Plan.selection.preset_labels.'windows-x64').Count -eq 1 -and $x86Plan.selection.preset_labels.'windows-x64'[0] -eq 'fast') 'Bounded x86 changes retain only the common x64 FAST baseline'
+$submission=Select-VerificationPlan @('tests/submission.cpp')
+Check-Rule ((@(Get-VerificationPresetLabels AFFECTED x86 windows-x86 $submission.Labels) -join ',') -eq 'submission') 'x86 submission changes select the actual x86 submission group'
+$uiPlan=Select-VerificationPlan @('ui/View.xaml')
+Check-Rule ('settings-ui' -in @(Get-VerificationPresetLabels AFFECTED x86 windows-x64 $uiPlan.Labels) -and 'candidate-host' -in @(Get-VerificationPresetLabels AFFECTED x86 windows-x86 $uiPlan.Labels)) 'x86 UI changes preserve x64 settings acceptance and x86 native candidate host'
+# Unknown x86 changes retain the strongest fallback. Supply the ordinary version
+# identity so PlanOnly can report RELEASE without running a product build.
+$null=New-Item -ItemType Directory -Path "$fixture/ui","$fixture/windows" -Force
+[IO.File]::WriteAllText("$fixture/windows/Cargo.toml","[package]`nversion = `"fixture`"`n")
+[IO.File]::WriteAllText("$fixture/windows/Cargo.lock","[[package]]`nname = `"shanjie-windows`"`nversion = `"fixture`"`n")
+[IO.File]::WriteAllText("$fixture/ui/Shanjie.UI.csproj",'<Project><PropertyGroup><Version>fixture</Version></PropertyGroup></Project>')
+[IO.File]::WriteAllText("$fixture/unknown.bin",'unknown impact')
+$fallback=Read-Planned AFFECTED Worktree HEAD x86
+Check-Rule ($fallback.level -eq 'RELEASE' -and $fallback.requested_level -eq 'AFFECTED' -and 'full' -in $fallback.selection.preset_labels.'windows-x64' -and 'release' -in $fallback.selection.preset_labels.'windows-x86' -and !$fallback.results.Count -and $fallback.status -eq 'planned') 'Unknown x86 impact expands to dual-architecture RELEASE without claiming acceptance'
 Write-Host "PASS supplemental verification: $checks checks; no native verification executed"

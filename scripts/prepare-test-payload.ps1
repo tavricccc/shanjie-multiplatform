@@ -1,7 +1,8 @@
 #Requires -Version 7
-param([Parameter(Mandatory)][ValidateSet('x64','x86')][string]$Architecture,[Parameter(Mandatory)][string]$PayloadRoot)
+param([Parameter(Mandatory)][ValidateSet('x64','x86')][string]$Architecture,[Parameter(Mandatory)][string]$PayloadRoot,[string]$RuntimeRoot)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 $null=Initialize-TestTimings -ProjectRoot $root -Name 'test-payload'
 $buildRoot=[IO.Path]::GetFullPath((Join-Path $root 'build/cmake'))
@@ -9,8 +10,8 @@ $payload=[IO.Path]::GetFullPath($PayloadRoot)
 if (!$payload.StartsWith($buildRoot+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to prepare a fixture outside build/cmake: $payload"
 }
-$dll=Join-Path $root "dist/$Architecture/Shanjie.dll"
-foreach($path in @($dll,(Join-Path $root 'dist/tools/shanjie-core.exe'),(Join-Path $root 'dist/data'))) {
+$dll=Join-Path $RuntimeRoot "$Architecture/Shanjie.dll"
+foreach($path in @($dll,(Join-Path $RuntimeRoot 'tools/shanjie-core.exe'),(Join-Path $RuntimeRoot 'data'))) {
     if (!(Test-Path -LiteralPath $path)) { throw "Runtime payload input is missing: $path" }
 }
 Invoke-Timed -Name "Prepare isolated CTest runtime payload ($Architecture)" -Category 'test.prepare.payload' -Details @{architecture=$Architecture;root=$payload} -Action {
@@ -25,10 +26,10 @@ Invoke-Timed -Name "Prepare isolated CTest runtime payload ($Architecture)" -Cat
         if($destinationItem.Length -eq (Get-Item -LiteralPath $dll).Length){$cacheHit=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -eq $sourceHash}
     }
     if(!$cacheHit){Copy-Item -LiteralPath $dll -Destination $destination -Force}
-    Copy-TestTools -Source "$root/dist/tools" -Destination "$payload/tools"
+    Copy-TestTools -Source "$RuntimeRoot/tools" -Destination "$payload/tools"
     foreach($name in 'data') {
         $link=Join-Path $payload $name
-        $target=[IO.Path]::GetFullPath((Join-Path $root "dist/$name"))
+        $target=[IO.Path]::GetFullPath((Join-Path $RuntimeRoot $name))
         $item=Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
         if ($item) {
             if (!($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or [IO.Path]::GetFullPath([string]$item.Target) -ne $target) {

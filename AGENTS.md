@@ -71,7 +71,7 @@
 
 日常未提交修改使用 `-ChangeScope Worktree`，單次提交使用 `-ChangeScope Commit`；兩者都包含 staged／unstaged／untracked 修改，但不代表整條分支已驗證。預設 `Branch -BaseRef origin/main` 保留上游累積比較語意，PR／整合用它或 FULL；不能靜默忽略分支中尚未驗證的舊變更。已含 CMake 重構的分支若因此擴大，先看 PlanOnly 的範圍與理由，再按本次目的明確選擇範圍。
 
-上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。明確要求 x86 時對應雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
+上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。`-Architecture x86` 也先依同一規則選測：純文件不建置、不測試、不封裝；有界變更執行對應 x86 回歸與共用 x64 基線，未知影響才保守擴大到雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
 
 | 時機／變更 | 跑 | 用途 |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 
 - FAST／AFFECTED 由 CTest 呼叫 Cargo 原生測試；FAST 是快速基線，AFFECTED 依變更再選相關回歸；Rust 測試框架仍由 Cargo 管理，不另造一套。
 - `build.ps1`、Cargo、NuGet／dotnet、模型與資料準備都有內容或工具鏈驗證過的增量快取；不要只因產物存在就跳過驗證。
-- Release 單檔安裝包由 RELEASE 驗收建立並校驗；一般修改不強制打包。
+- RELEASE 先建置 x64／x86，再建立與乾淨 commit、版本及 SHA-256 綁定的唯讀產物快照；兩架構測試與最終封裝必須使用該快照的 DLL、工具、資料與建置輸入。兩架構全部必要 JUnit／JSON／子案例通過後才執行 `release.package`；快照或候選包變更使收據失效，舊版無快照收據不能授權發布。一般修改不強制打包。
 - 全域 `~/.cargo/config.toml` 已設定：registry 快取每日自動 GC、dev/test 只留行號除錯資訊、相依套件 `opt-level = 1`。不要在 repo 裡設 `target-dir`（腳本寫死 `windows/target`）。
 - 清掉 30 天沒用的 target：`pwsh -File ~/.cargo/clean-stale-targets.ps1 -WhatIf` 先預覽。
 

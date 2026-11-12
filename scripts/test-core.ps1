@@ -5,7 +5,7 @@
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80)
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot)
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 function Get-MemoryUse {
@@ -67,6 +67,7 @@ function Sync-ChangedFiles([string]$Source, [string]$Destination) {
     $written
 }
 $root = Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 . "$PSScriptRoot/export-upstream.ps1"
 . "$PSScriptRoot/preserve-output.ps1"
 $upstream = Join-Path $root 'upstream/shanjie'
@@ -82,7 +83,7 @@ try {
     $modelSources = @{}
     $modelCheck = Start-TestStage -Name 'Validate upstream core model inputs' -Category 'models.validate'
     try {
-        if (!(Test-Path -LiteralPath "$root/dist/data/models/builtin/bigram.winmap")) { throw 'The prepared built-in model output is missing.' }
+        if (!(Test-Path -LiteralPath "$RuntimeRoot/data/models/builtin/bigram.winmap")) { throw 'The prepared built-in model output is missing.' }
         $upstreamModelRows = Get-Content -LiteralPath "$upstream/data/models.tsv"
         foreach ($asset in $manifest.builtin.assets) {
             $source = Join-Path $root "build/model/$($asset.release)-$($asset.filename)"
