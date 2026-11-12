@@ -26,7 +26,7 @@ pwsh -File scripts/verify-changed.ps1 -Base origin/main -ChangeScope Branch -Dry
 
 僅編譯、確認產物或建立開發候選包，不自動啟動 FULL／RELEASE；修改程式依必要範圍執行 FAST／AFFECTED，先以 PlanOnly 檢查是否擴大。正式發布仍使用有同提交完整收據防護的 `release.ps1`，開發候選包不等於正式發布完成。
 
-`release.ui.models` 在獨立 profile 及離線模型 fixture 驗證原作者優先、讀取失敗改用鏡像、同名模型跨來源沿用與新版更新；附件大小、雜湊與原生收據仍實際核對，不代表正式來源網路或實機安裝驗收。
+`release.ui.models` 在獨立 profile 及離線模型 fixture 驗證原作者優先、讀取失敗改用鏡像、同名模型跨來源沿用與新版更新，也檢查模型說明卡片的標題／內文，以及兩種視窗尺寸下捲到底的備註與提示範圍；附件大小、雜湊與原生收據仍實際核對，不代表正式來源網路或實機安裝驗收。
 
 CI 與 Release 的子模組初始化共用 `scripts/sync-upstream.ps1`，官方讀取失敗才改用鏡像，固定 commit 不變。
 
