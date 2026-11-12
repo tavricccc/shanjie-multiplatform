@@ -1,3 +1,31 @@
+# Resolve changes once for every architecture; --no-renames keeps both sides of
+# moves, including source files moved under docs/.
+function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
+    $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
+    $range=if($Scope -eq 'Worktree'){$null}elseif($Scope -eq 'Commit'){"$base..HEAD"}else{"$base...HEAD"}
+    if (!(git -C $ProjectRoot rev-parse --verify --quiet $base 2>$null)) { return [pscustomobject]@{ Paths=@(); Error="Cannot resolve base ref '$base'."; Range=$range; EffectiveBase=$base } }
+    $items=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    # Treat moves as delete/add so both paths participate in impact and documentation checks.
+    $diff=if($Scope -eq 'Worktree'){@()}else{@(git -C $ProjectRoot diff --no-renames --name-only $range 2>$null)}
+    if ($LASTEXITCODE) { return [pscustomobject]@{ Paths=@(); Error="Cannot compare HEAD with '$base'."; Range=$range; EffectiveBase=$base } }
+    foreach($path in $diff){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot diff --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot diff --cached --no-renames --name-only)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    foreach($path in @(git -C $ProjectRoot ls-files --others --exclude-standard)){if($path){[void]$items.Add($path.Replace('\','/'))}}
+    return [pscustomobject]@{ Paths=@($items | Sort-Object); Error=$null; Range=$range; EffectiveBase=$base }
+}
+
+# x64 hosts the common suites/tools; an x86 affected run adds only the mapped
+# x86 regressions. Unknown impact is expanded to RELEASE by the caller.
+function Get-VerificationPresetLabels([string]$Level,[string]$Architecture,[string]$Preset,[string[]]$Labels) {
+    if($Level -eq 'RELEASE' -and $Preset -eq 'windows-x86'){return @('release')}
+    if($Level -ne 'AFFECTED' -or $Architecture -ne 'x86'){return @($Labels)}
+    if($Preset -eq 'windows-x64'){
+        return @('fast')+@($Labels|Where-Object{$_ -in 'core','shared','data','interaction','settings-ui'})
+    }
+    return @($Labels|Where-Object{$_ -notin 'fast','full','release','core','shared','data','interaction','settings-ui'})
+}
+
 function Test-VerificationDocumentation([string]$Path) {
     return ($Path -match '^(docs/|LICENSES/|\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
 }
@@ -24,6 +52,9 @@ function Get-VerificationImpact([string]$Path) {
         }
         '^ui/|^scripts/verify-ui\.ps1$' {
             $labels=@('settings-ui','candidate-host');$reason='Settings UI and native candidate host, without unrelated mode/TSF suites.';break
+        }
+        '^profiles/.*\.ini$' {
+            $full=$true;$labels=@('shared','windows','tsf','settings-ui','candidate-host');$reason='Profile defaults affect both interactions, migrations and embedded WinUI presets; FULL alone omits the required Shanjie/UI cases.';break
         }
         '^(windows/Cargo\.(toml|lock)|shared/Cargo\.(toml|lock)|upstream/|data/|profiles/|MODEL-|UPSTREAM\.json)' {
             $full = $true; $reason = 'Core, model, profile, dependency, or upstream change.'; break
@@ -71,6 +102,26 @@ function Get-VerificationImpact([string]$Path) {
     [pscustomobject]@{ Full = $full; Labels = $labels; Reason = $reason }
 }
 
+# Only entries without a direct registered CTest delegate belong here. This is
+# the existing supplemental policy, shared with the lightweight inventory check.
+function Get-VerificationExceptions {
+    @(
+        @{id='input-features';script='verify-input-features.ps1';category='conditional';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
+        @{id='profile-refresh';script='verify-profile-refresh.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
+        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. Upstream core-suite and submission busy tests are different fixtures, not proof of these reliability-check cases.'}
+        @{id='dictionary-store';script='verify-dictionary-store.ps1';category='conditional';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
+        @{id='profile-coexistence';script='verify-profile-coexistence.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
+        @{id='update-probes';script='verify-update.ps1';category='conditional';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
+        @{id='no-admin-wrapper';script='verify-no-admin.ps1';category='wrapper';pattern='^scripts/verify-no-admin\.ps1$';scope='verify-no-admin.ps1 is a composite wrapper, not an extra assertion suite. Matching successful RELEASE cases in the same non-elevated environment need no wrapper rerun; use CTest for any missing required cases. A different privilege/environment claim still needs separate evidence.'}
+        @{id='engine-measurement';script='measure-engine.ps1';category='required-extra';pattern=$null;scope='IPC/key latency is required for key/core-request changes; core-suite and TSF correctness are not equivalent.'}
+        @{id='test-entry';script='test.ps1';category='dispatcher';pattern=$null;scope='Canonical CMake/CTest planner and report entry, not another assertion suite.'}
+        @{id='changed-entry';script='verify-changed.ps1';category='dispatcher';pattern=$null;scope='Compatibility entry delegates to test.ps1 and the shared impact policy.'}
+        @{id='selection-api';script='verify-selection.ps1';category='dispatcher';pattern=$null;scope='Pure compatibility API imports test-plan.psm1; exercised by fast.infrastructure.'}
+        @{id='regression-wrapper';script='verify-regressions.ps1';category='wrapper';pattern=$null;scope='Legacy suite wrapper; individual TSF/English/submission/private-desktop CTest rows retain its assertions.'}
+        @{id='model-fixture-helper';script='test-models.ps1';category='helper';pattern=$null;scope='Public model fixture helper used by verify-update.ps1, not an independent test entry.'}
+    )
+}
+
 # Compatibility for upstream's pure planner. Both entry points use this module's
 # one impact policy; the old script/Steps scheduler is replaced by CTest levels.
 function Get-AdditionalVerificationPlan([string[]]$Paths,[string[]]$Labels,[switch]$CiSafe) {
@@ -103,18 +154,14 @@ function Get-AdditionalVerificationPlan([string[]]$Paths,[string[]]$Labels,[swit
     # Upstream only says "related verify-*.ps1" for these modules; it gives no
     # mandatory per-file matrix. Dependencies below identify review candidates,
     # not a claim that all their cases are required or absent from CTest.
-    $rules=@(
-        @{id='input-features';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
-        @{id='profile-refresh';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
-        @{id='core-recovery';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. Upstream core-suite and submission busy tests are different fixtures, not proof of these reliability-check cases.'}
-        @{id='dictionary-store';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
-        @{id='profile-coexistence';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
-        @{id='update-probes';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
-        @{id='no-admin-wrapper';pattern='^scripts/verify-no-admin\.ps1$';scope='verify-no-admin.ps1 is a composite wrapper, not an extra assertion suite. Matching successful RELEASE cases in the same non-elevated environment need no wrapper rerun; use CTest for any missing required cases. A different privilege/environment claim still needs separate evidence.'}
-    )
+    $rules=@(Get-VerificationExceptions|Where-Object pattern)
     foreach($rule in $rules){
         $affected=@($paths|Where-Object{$_ -match $rule.pattern})
         if($affected.Count){[pscustomobject]@{id=$rule.id;kind='review';status='not-run';command=$null;paths=$affected;reason=$rule.scope}}
+    }
+    $managerPaths=@($paths|Where-Object{$_ -eq 'windows/src/bin/shanjie-manager.rs'})
+    if($managerPaths.Count){
+        [pscustomobject]@{id='manager-binary-coverage';kind='coverage-review';status='not-run';command=$null;paths=$managerPaths;reason='Cargo --lib does not execute the manager binary. CTest package verification covers verify-package, not after-update notification failure/logging or real installation. Review the changed command and add a targeted regression for new behavior; do not claim FULL proves those branches.'}
     }
     if(!$keyPaths.Count -and @($paths|Where-Object{$_ -match '^scripts/measure-engine\.ps1$|^tests/engine_perf\.cpp$'}).Count){
         [pscustomobject]@{id='engine-measurement-tool';kind='optional';status='not-run';command='pwsh -File scripts/measure-engine.ps1';paths=$paths;reason='Only the measurement tool changed; collect new latency samples if needed. This is not a functional CTest result; -Learning is an optional 8000-row learning fixture.'}
@@ -219,10 +266,30 @@ function Get-HarnessCasePlan([object[]]$Rows) {
     }
 }
 
+function Read-HarnessCaseResults([object[]]$CaseRows,[object[]]$Timings) {
+    $subcases=@(Get-HarnessCasePlan $caseRows)
+    foreach($subcase in $subcases | Where-Object selected) {
+        $events=@($timings | Where-Object { $_.test_name -eq $subcase.parent -and $_.category -eq $subcase.category })
+        foreach($key in $subcase.parameters.Keys){$events=@($events | Where-Object { $_.details.$key -ceq $subcase.parameters[$key] })}
+        $subcase.attempts=@($events | Sort-Object attempt,started_utc | ForEach-Object { [pscustomobject]@{attempt=$_.attempt;status=$_.status;duration_ms=$_.duration_ms;error=$_.error} })
+        if($subcase.attempts.Count){
+            $subcase.status=$subcase.attempts[-1].status
+            $subcase.flaky=$subcase.status -eq 'passed' -and [bool](@($subcase.attempts | Where-Object status -eq 'failed').Count)
+        }else{$subcase.reason='Selected combination did not reach execution; inspect its parent CTest result and logs.'}
+    }
+    return $subcases
+}
+
+function Get-VerificationCompletion([string]$Level,[string]$Status,[object[]]$AdditionalVerification,[bool]$NoTestsRequired) {
+    $pending=@($AdditionalVerification|Where-Object{$_.kind -in 'required-extra','ctest-needed','coverage-review'})
+    $summary=if($Status -ne 'passed'){$Status}elseif($NoTestsRequired){'not-required'}elseif($Level -eq 'CI'){'ci-baseline-passed'}elseif($pending.Count){'follow-up-required'}elseif($Level -eq 'FAST'){'fast-baseline-passed'}else{'selected-tests-passed'}
+    [pscustomobject]@{status=$summary;executed_scope=$Level;selected_tests_status=$Status;follow_up_required=(!$NoTestsRequired -and $pending.Count -gt 0);pending=@($pending|Select-Object id,kind,status,paths,reason);conditional_reviews=@($AdditionalVerification|Where-Object kind -eq 'review');meaning='Selected test results do not prove coverage of arbitrary code branches. Resolve required extras and relevant reviews separately; never infer whole-change acceptance from CI/CTest PASS alone.'}
+}
+
 function Assert-FixedCiSelection([object[]]$Rows) {
     $expected=@('fast.infrastructure','fast.upstream-data','fast.prepare-core','fast.rust.shared','fast.rust.windows')
     $actual=@($Rows|ForEach-Object name)
     if($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual).Count){throw 'CI must contain exactly the fixed lightweight baseline; no missing tests or FULL expansion is allowed.'}
 }
 
-Export-ModuleMember -Function Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection
+Export-ModuleMember -Function Get-VerificationExceptions,Get-VerificationCompletion,Get-VerificationChanges,Get-VerificationPresetLabels,Read-HarnessCaseResults,Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection

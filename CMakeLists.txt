@@ -25,6 +25,10 @@ if(CMAKE_VS_PLATFORM_NAME STREQUAL "Win32")
   set(SHANJIE_RUST_TARGET i686-pc-windows-msvc)
 endif()
 set(SHANJIE_NATIVE_DIR "${SHANJIE_ROOT}/windows/target/${SHANJIE_RUST_TARGET}/release")
+set(SHANJIE_RELEASE_NATIVE_ROOT "" CACHE PATH "Sealed RELEASE static libraries; empty for ordinary incremental builds")
+if(SHANJIE_RELEASE_NATIVE_ROOT)
+  set(SHANJIE_NATIVE_DIR "${SHANJIE_RELEASE_NATIVE_ROOT}/${SHANJIE_ARCH}")
+endif()
 
 function(shanjie_keep_assertions target)
   # CMake's Release flags define NDEBUG; these harnesses use assert() as test assertions.

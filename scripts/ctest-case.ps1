@@ -24,7 +24,25 @@ $previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
 $env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
 $status = 'passed'
 $failure = $null
+$snapshot=$null
+$runtimeRoot=Join-Path $root 'dist'
+$uiRuntimeRoot=$null
 try {
+    if($env:SHANJIE_RELEASE_SNAPSHOT_ID){
+        Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+        $snapshot=Get-ReleaseSnapshot $root $env:SHANJIE_RELEASE_SNAPSHOT_ID $env:SHANJIE_RELEASE_SNAPSHOT_SHA256
+        $runtimeRoot=$snapshot.runtime_root
+        if($PayloadRoot){$PayloadRoot="$PayloadRoot-$($snapshot.id)"}
+        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models'){
+            # WinUI temporarily changes installed.json; only a private fixture may
+            # be mutable. Its DLL/tools/UI bytes are checked against the seal.
+            $uiRuntimeRoot=Join-Path $resultRoot 'runtime'
+            foreach($name in 'x64','x86','ui','tools'){Copy-ReleaseFiles "$runtimeRoot/$name" "$uiRuntimeRoot/$name"}
+            $null=New-Item -ItemType Junction -Path "$uiRuntimeRoot/data" -Target "$runtimeRoot/data"
+            Assert-ReleasePayload $snapshot $uiRuntimeRoot @('x64','x86','ui','tools')
+        }
+    }
+    $uiArguments=@{RuntimeRoot=if($uiRuntimeRoot){$uiRuntimeRoot}else{$runtimeRoot}}
     Push-Location $root
     try {
         switch ($CaseId) {
@@ -45,12 +63,12 @@ try {
                     if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
                 }
             }
-            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
-            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture }
-            'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
+            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
+            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" }
+            'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }
-                & "$PSScriptRoot/prepare-test-payload.ps1" -Architecture $Architecture -PayloadRoot $PayloadRoot
+                & "$PSScriptRoot/prepare-test-payload.ps1" -Architecture $Architecture -PayloadRoot $PayloadRoot -RuntimeRoot $runtimeRoot
             }
             'tsf-smoke-standard' {
                 & "$PSScriptRoot/verify.ps1" -SmokeOnly -NativeOnly -SmokeCase standard -Interaction $Interaction -Architecture $Architecture -TsfHarnessPath $HarnessPath -ResultRoot $resultRoot -PayloadRoot $PayloadRoot
@@ -79,17 +97,23 @@ try {
             }
             'mode-smoke' {
                 if (!$HarnessPath) { throw 'Mode smoke CTest row requires its CMake-built executable.' }
-                & "$PSScriptRoot/verify-mode.ps1" -Architectures $Architecture -HarnessPath $HarnessPath -CaptureRoot (Join-Path $resultRoot 'capture')
+                & "$PSScriptRoot/verify-mode.ps1" -RuntimeRoot $runtimeRoot -Architectures $Architecture -HarnessPath $HarnessPath -CaptureRoot (Join-Path $resultRoot 'capture')
             }
             'interaction' {
                 if (!$HarnessPath) { throw 'Interaction CTest row requires its CMake-built executable.' }
-                & "$PSScriptRoot/verify-interaction.ps1" -HarnessPath $HarnessPath -ResultRoot (Join-Path $resultRoot 'fixture')
+                & "$PSScriptRoot/verify-interaction.ps1" -RuntimeRoot $runtimeRoot -HarnessPath $HarnessPath -ResultRoot (Join-Path $resultRoot 'fixture')
             }
             'candidate-host' {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
-                & "$PSScriptRoot/verify-ui.ps1" -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
+                & "$PSScriptRoot/verify-ui.ps1" @uiArguments -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
-            'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
+            'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }
+            'package' {
+                if(!$snapshot){throw 'RELEASE packaging requires the sealed snapshot and both architectures test evidence; use package.ps1 for a development candidate.'}
+                & "$PSScriptRoot/package.ps1" -UseExistingBuild -CandidateId $runId -SnapshotHash $snapshot.sha256 -PackagingPermitPath $env:SHANJIE_RELEASE_PACKAGING_PERMIT
+            }
             'ui-models' {
                 $fixtures=Join-Path $resultRoot 'fixtures'
                 & python "$root/tests/model_sources_fixture.py" $fixtures
@@ -97,9 +121,9 @@ try {
                 $output=Join-Path $resultRoot 'ui-models'
                 $profile=Join-Path $output 'profile'
                 $null=New-Item -ItemType Directory -Path $profile -Force
-                $start=[Diagnostics.ProcessStartInfo]::new("$root/dist/ui/Shanjie.UI.exe")
+                $start=[Diagnostics.ProcessStartInfo]::new("$($uiArguments.RuntimeRoot)/ui/Shanjie.UI.exe")
                 $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
-                $start.WorkingDirectory="$root/dist/ui"
+                $start.WorkingDirectory="$($uiArguments.RuntimeRoot)/ui"
                 $start.Environment['LOCALAPPDATA']=$profile
                 $start.Environment['SHANJIE_TEST_PROFILE']='1'
                 $start.Environment['SHANJIE_TEST_ROOT']=$profile
@@ -111,11 +135,9 @@ try {
                     if($process.ExitCode -or (Get-Content "$output/result.txt" -Raw) -ne 'PASS'){throw "Model-manager verification failed: $output/result.txt"}
                 } finally {$process.Dispose()}
             }
-            'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
-            'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }
-            'package' { & "$PSScriptRoot/package.ps1" -UseExistingBuild -CandidateId $runId }
         }
     } finally { Pop-Location }
+    if($uiRuntimeRoot){Assert-ReleasePayload $snapshot $uiRuntimeRoot @('x64','x86','ui','tools')}
 } catch {
     $status = 'failed'
     $failure = $_.Exception.Message

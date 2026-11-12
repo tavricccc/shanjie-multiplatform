@@ -5,9 +5,7 @@ param([string]$Base='origin/main',[switch]$DryRun,[switch]$UseExistingBuild,
     [ValidateSet('x64','x86')][string]$Architecture='x64')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$level=if($Architecture -eq 'x86'){'RELEASE'}else{'AFFECTED'}
-if($Architecture -eq 'x86'){Write-Host 'The CTest x86 compatibility path uses RELEASE (x64 and x86); use CTest presets for an individual x86 case.'}
 if($UseExistingBuild){Write-Verbose 'CTest validates and reuses incremental build caches; UseExistingBuild does not bypass their input checks.'}
 Push-Location $root
-try{& "$PSScriptRoot/test.ps1" -Level $level -BaseRef $Base -ChangeScope $ChangeScope -PlanOnly:$DryRun}
+try{& "$PSScriptRoot/test.ps1" -Level AFFECTED -Architecture $Architecture -BaseRef $Base -ChangeScope $ChangeScope -PlanOnly:$DryRun}
 finally{Pop-Location}

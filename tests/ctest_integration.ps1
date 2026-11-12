@@ -13,6 +13,51 @@ $checks=0
 function Check([bool]$Condition,[string]$Name){$script:checks++;if(!$Condition){throw "FAIL $Name"}}
 
 $cmake=Get-Content "$project/CMakeLists.txt" -Raw
+# Account for every verification entry using actual CMake case IDs and dispatch
+# calls. A new standalone script cannot silently sit outside the maintained plan.
+# This checks registration/policy, not semantic coverage of arbitrary branches.
+function Get-CtestDelegatedScripts([string]$CmakeText,$DispatcherAst) {
+    $ids=@([regex]::Matches($CmakeText,'shanjie_case\(\s*(?:"[^"]+"|[^\s)]+)\s+([a-z-]+)(?:\s|\))')|ForEach-Object{$_.Groups[1].Value}|Sort-Object -Unique)
+    $switch=$DispatcherAst.Find({param($n)$n -is [Management.Automation.Language.SwitchStatementAst] -and $n.Condition.Extent.Text -eq '$CaseId'},$true)
+    if(!$switch){throw 'CTest dispatcher case switch is missing.'}
+    @(foreach($clause in $switch.Clauses){
+        $id=$clause.Item1.Extent.Text.Trim("'"+'"')
+        if($id -notin $ids){continue}
+        foreach($command in $clause.Item2.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true)){
+            if($command.CommandElements[0].Extent.Text -match '[/\\]([^/\\"'']+\.ps1)["'']$'){$Matches[1]}
+        }
+    })|Sort-Object -Unique
+}
+function Assert-TestEntryAccounting([string[]]$Entries,[string[]]$Delegates,[object[]]$Exceptions) {
+    foreach($rule in $Exceptions){
+        if($rule.script -notin $Entries -or !$rule.scope -or $rule.category -notin 'dispatcher','wrapper','helper','conditional','required-extra'){throw "Unexplained or stale verification exception: $($rule.script)"}
+    }
+    foreach($entry in $Entries){
+        $exception=@($Exceptions|Where-Object script -eq $entry)
+        if($exception.Count -gt 1 -or ($entry -notin $Delegates -and !$exception.Count)){throw "Verification entry has no registered CTest delegate or maintained exception: $entry"}
+        if($entry -in $Delegates -and $exception.Count){throw "CTest delegate must not be hidden behind an exception: $entry"}
+    }
+}
+$dispatchTokens=$null;$dispatchErrors=$null
+$dispatcher=[Management.Automation.Language.Parser]::ParseFile("$project/scripts/ctest-case.ps1",[ref]$dispatchTokens,[ref]$dispatchErrors)
+if($dispatchErrors){throw 'CTest dispatcher could not be parsed.'}
+$entries=@(Get-ChildItem "$project/scripts" -File|Where-Object Name -Match '^(verify[^/]*|test[^/]*|measure[^/]*)\.ps1$'|ForEach-Object Name)
+$delegates=@(Get-CtestDelegatedScripts $cmake $dispatcher)
+$exceptions=@(Get-VerificationExceptions)
+Assert-TestEntryAccounting $entries $delegates $exceptions
+Check ($entries.Count -gt 0 -and $delegates.Count -gt 0) 'Every verification entry has an actual CTest route or explained standalone policy'
+foreach($mutation in 'new-entry','removed-case','stale-exception'){
+    $rejected=$false
+    try{
+        switch($mutation){
+            'new-entry' {Assert-TestEntryAccounting ($entries+@('verify-unmapped.ps1')) $delegates $exceptions}
+            'removed-case' {Assert-TestEntryAccounting $entries @(Get-CtestDelegatedScripts ($cmake.Replace(' english-keys ',' removed-english-keys ')) $dispatcher) $exceptions}
+            'stale-exception' {Assert-TestEntryAccounting $entries $delegates ($exceptions+@(@{script='verify-removed.ps1';category='conditional';scope='stale fixture'}))}
+        }
+    }catch{$rejected=$true}
+    Check $rejected "Inventory guard detects $mutation"
+}
+
 $english=Get-EnglishKeyCases
 $scenarios=[regex]::Match($cmake,'(?m)^set\(english_scenarios ([^)]+)\)').Groups[1].Value -split '\s+'
 $caseScenarios=@($english|ForEach-Object{$_[1]}|Sort-Object -Unique)
@@ -132,9 +177,19 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
         Check (@($selection.Selected.name|Sort-Object -Unique).Count -eq $selection.Selected.Count) "Configured $($scenario[0]) cases are selected once"
         Write-Host "PLAN $($scenario[0]): $($selection.Selected.Count) rows (fixtures included), FULL=$($policy.Full)"
     }
+    # Stable behavioral requirements, checked against real selection and fixtures.
+    # In particular, profile/template changes must not lose the Shanjie or WinUI
+    # branches merely because the fixed FULL label contains neither of them.
+    foreach($path in 'shared/src/input.rs','windows/src/tsf/keys.rs','shared/src/profile.rs','profiles/windows.ini','profiles/shanjie.ini'){
+        $policy=Select-VerificationPlan @($path)
+        $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        $required=@('fast.rust.shared','fast.rust.windows','full.tsf-smoke.standard.x64','release.tsf-smoke.shanjie.x64','full.english.numpad.x64','full.english.fullwidth.x64','full.english.backquote.x64')
+        if($path -match 'profile'){$required+=@('release.ui.verify','release.ui.candidate.x64')}
+        foreach($name in $required){Check ($name -in $selected.Selected.name) "$path retains required $name"}
+    }
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
     Check ($full.Selected.Count -eq 87 -and $inventory.tests.Count -eq 99) 'Label refinements preserve the FULL and x64 RELEASE inventories'
-    Write-Host 'PASS configured selection inventory: 11 scenarios, unique rows, FULL 87, x64 RELEASE 99, fixed CI 5; no native execution'
+    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 87, x64 RELEASE 99, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}

@@ -71,7 +71,7 @@
 
 日常未提交修改使用 `-ChangeScope Worktree`，單次提交使用 `-ChangeScope Commit`；兩者都包含 staged／unstaged／untracked 修改，但不代表整條分支已驗證。預設 `Branch -BaseRef origin/main` 保留上游累積比較語意，PR／整合用它或 FULL；不能靜默忽略分支中尚未驗證的舊變更。已含 CMake 重構的分支若因此擴大，先看 PlanOnly 的範圍與理由，再按本次目的明確選擇範圍。
 
-上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。明確要求 x86 時對應雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
+上游的 `verify-changed.ps1` 保留為 AFFECTED 相容入口，`-DryRun` 對應 `test.ps1 -PlanOnly`，只輸出計畫、狀態為 `planned`，不能當成測試成功。`-Architecture x86` 也先依同一規則選測：純文件不建置、不測試、不封裝；有界變更執行對應 x86 回歸與共用 x64 基線，未知影響才保守擴大到雙架構 RELEASE。`verify-selection.ps1` 匯入同一份影響規則，不再維護第二套 Steps／Suites 排程。
 
 | 時機／變更 | 跑 | 用途 |
 | --- | --- | --- |
@@ -88,6 +88,12 @@
 - 去重依實際斷言、架構、參數、fixture、產物／來源與環境。以仍有效的 JSON／JUnit／子案例結果認列已通過項目；只有登記或選中、PlanOnly、跳過與失敗都不算完成。同一驗證不因不同腳本名稱再跑一次；部分涵蓋時，只補尚未驗證且確實必要的配置。無法拆分的工具先說明重複範圍，不直接啟動整套。
 - 其他專用 fixture、故障注入、舊版共存、視覺／實機與選用量測的目的、前置條件及選測參數見 [docs/TESTING.md](docs/TESTING.md#專用驗收與實際差集)。上游未訂逐檔強制規則者需依實際變更判斷，不能一律加跑。
 - 自動提示規則只在 `scripts/test-plan.psm1` 維護。新增或修改 Markdown 驗證要求時，須同步程式規則與 `tests/verify_selection.ps1`；PlanOnly 只能提示規則文件變動，**不會理解任意自然語言或自動把新條文轉為測試**。額外提示不是 PASS，也不改變 CI 固定集合。
+
+### 防止驗證規則遺漏
+
+- 新功能或行為修正須在同一變更加入相應回歸；歷史 PR 的具體提醒應落成適合的既有 harness／單元測試與選測規則，不要求日後逐一重讀舊 PR。新增 `verify*`／`test*`／`measure*` PowerShell 入口須有已註冊 CTest delegate，或在 `test-plan.psm1` 的 `Get-VerificationExceptions` 說明條件、用途與不等價範圍；`fast.infrastructure` 自動拒絕未分類入口、失去 CTest 登記的 delegate 與過期例外。
+- 候選按鍵、互動模式、profile 邏輯／範本變更，須保留 Windows／善解模式、舊選項遷移及明確使用者選項的對應測試。範本變更的 AFFECTED 包含 shared 單元、標準／善解 TSF 與 WinUI；CI 依實際 CTest 清冊檢查關鍵選測要求，FULL 本身仍只代表固定 x64 集合。以目前 main 已合入的預設與斷言為準，不把歷史評論中的舊預設重新套回產品。
+- `status=passed` 只代表該層選中的測試通過。報告 `verification_summary` 另列必要額外項目、已知覆蓋待審及條件式審查；有 pending 時不得宣稱變更已完成所有必要驗收。條件式審查不代表要把每支專用工具全部跑一遍。CI 五項成功也不代表任意新程式分支都有斷言；新行為仍須設計測試，無法自動判定者明列未驗與理由。
 
 ### CTest 操作
 
@@ -109,7 +115,7 @@ pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 
 - FAST／AFFECTED 由 CTest 呼叫 Cargo 原生測試；FAST 是快速基線，AFFECTED 依變更再選相關回歸；Rust 測試框架仍由 Cargo 管理，不另造一套。
 - `build.ps1`、Cargo、NuGet／dotnet、模型與資料準備都有內容或工具鏈驗證過的增量快取；不要只因產物存在就跳過驗證。
-- Release 單檔安裝包由 RELEASE 驗收建立並校驗；一般修改不強制打包。
+- RELEASE 先建置 x64／x86，再建立與乾淨 commit、版本及 SHA-256 綁定的唯讀產物快照；兩架構測試與最終封裝必須使用該快照的 DLL、工具、資料與建置輸入。兩架構全部必要 JUnit／JSON／子案例通過後才執行 `release.package`；快照或候選包變更使收據失效，舊版無快照收據不能授權發布。一般修改不強制打包。
 - 全域 `~/.cargo/config.toml` 已設定：registry 快取每日自動 GC、dev/test 只留行號除錯資訊、相依套件 `opt-level = 1`。不要在 repo 裡設 `target-dir`（腳本寫死 `windows/target`）。
 - 清掉 30 天沒用的 target：`pwsh -File ~/.cargo/clean-stale-targets.ps1 -WhatIf` 先預覽。
 
