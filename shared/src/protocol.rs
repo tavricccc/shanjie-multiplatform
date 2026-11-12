@@ -44,6 +44,8 @@ pub struct Config {
     pub acg: bool,
     #[serde(default = "on")]
     pub it: bool,
+    #[serde(default = "on")]
+    pub beauty: bool,
     /// 語意校正, used when the model has a small model beside it.
     #[serde(default = "on")]
     pub rerank: bool,
@@ -61,6 +63,7 @@ fn standard() -> u32 { 1 }
 pub const PACK_ACG: u32 = 1;
 pub const PACK_QUOTES: u32 = 2;
 pub const PACK_IT: u32 = 4;
+pub const PACK_BEAUTY: u32 = 16;
 impl Default for Config {
     /// The built-in model with upstream's defaults, Standard layout, chat profile.
     fn default() -> Self {
@@ -74,6 +77,7 @@ impl Default for Config {
             prediction: true,
             acg: true,
             it: true,
+            beauty: true,
             rerank: true,
             rerank_level: standard(),
             fuzzy: 0,
@@ -83,7 +87,7 @@ impl Default for Config {
 }
 impl Config {
     pub fn packs(&self) -> u32 {
-        (if self.acg { PACK_ACG } else { 0 }) | (if self.quotes { PACK_QUOTES } else { 0 }) | (if self.it { PACK_IT } else { 0 })
+        (if self.acg { PACK_ACG } else { 0 }) | (if self.quotes { PACK_QUOTES } else { 0 }) | (if self.it { PACK_IT } else { 0 }) | (if self.beauty { PACK_BEAUTY } else { 0 })
     }
     /// The engine settings of a profile; the platform decides the layout from its keyboard choice.
     pub fn from_profile(p: &crate::profile::Document, layout: u32) -> Self {
@@ -97,6 +101,7 @@ impl Config {
             prediction: p.flag("engine", "prediction", true),
             acg: p.flag("engine", "acg_pack", true),
             it: p.flag("engine", "it_pack", true),
+            beauty: p.flag("engine", "beauty_pack", true),
             rerank: p.flag("engine", "rerank", true),
             rerank_level: crate::profile::RERANK_LEVELS.iter().position(|l| *l == p.get("engine", "rerank_level", "standard")).unwrap_or(1) as u32,
             fuzzy: p.fuzzy(),
@@ -129,4 +134,22 @@ pub enum Op {
     /// Applies the rerank of the last output, waiting for it if it is still running. The shell sends it only once the
     /// core says the job is done, so replaying it after a restart gives what was shown.
     Rerank,
+}
+
+#[cfg(test)]
+mod pack_tests {
+    use super::*;
+
+    #[test]
+    fn beauty_pack_defaults_on_and_can_be_saved_off() {
+        let mut profile = crate::profile::Document::parse("[profile]\nschema=9\n").unwrap();
+        assert_ne!(Config::from_profile(&profile, 0).packs() & PACK_BEAUTY, 0);
+        profile.set("engine", "beauty_pack", 0);
+        let config = Config::from_profile(&profile, 0);
+        assert_eq!(config.packs() & PACK_BEAUTY, 0);
+        assert_eq!(config.packs() & PACK_IT, PACK_IT);
+        assert!(crate::profile::REBUILD.contains(&("engine", "beauty_pack")));
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().beauty);
+    }
 }

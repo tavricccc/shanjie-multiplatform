@@ -14,7 +14,7 @@ mod windows_pack_cache_tests {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir_all(dir.join("packs")).unwrap();
         std::fs::write(dir.join("mcbpmf-data.txt"), "ㄋㄧˇ 你 -1\n").unwrap();
-        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] {
+        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv", "variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] {
             std::fs::write(dir.join(name), "").unwrap();
         }
         std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄠ-ㄆㄠ-ㄇㄠ\t貓泡貓\t-7\tacg\n").unwrap();
@@ -50,6 +50,9 @@ fn resource_stamp(
         "sandhi-add.tsv",
         "names-add.tsv",
         "demote.tsv",
+        "variant-order.tsv",
+        "rerank-protect.tsv",
+        "std-exempt.tsv",
     ]
     .iter()
     .map(|name| data.join(name))
@@ -63,7 +66,7 @@ fn resource_stamp(
         paths.push(digits);
     }
     // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
-    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_QUOTES, "quotes-add.tsv"), (PACK_IT, "it-add.tsv")] {
+    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_QUOTES, "quotes-add.tsv"), (PACK_IT, "it-add.tsv"), (PACK_BEAUTY, "beauty-add.tsv")] {
         let pack = data.join("packs").join(name);
         if packs & flag != 0 && pack.is_file() {
             paths.push(pack);

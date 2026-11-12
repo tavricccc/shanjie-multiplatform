@@ -41,6 +41,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AcgPack { get; set; }
     [ObservableProperty] public partial bool QuotePack { get; set; }
     [ObservableProperty] public partial bool ItPack { get; set; }
+    [ObservableProperty] public partial bool BeautyPack { get; set; }
     /// Upstream makes no rerank job while 避免敏感詞 is off, so both rerank choices grey with it.
     [ObservableProperty, NotifyPropertyChangedFor(nameof(RerankLevelEnabled))] public partial bool Rerank { get; set; }
     [ObservableProperty] public partial int RerankLevel { get; set; } = 1;

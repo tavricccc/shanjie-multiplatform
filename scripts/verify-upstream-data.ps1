@@ -28,8 +28,8 @@ foreach ($name in $expected.Keys | Sort-Object) {
 }
 
 # --- Word packs: every upstream pack is shipped by prepare-data.ps1, has a profile switch, and keeps upstream's default. ---
-# Upstream defaults: the app turns acg and it on (Shell.swift acgPackOn / itPackOn); quotes is off unless set (docs/contracts/quote-pack.md).
-$packs = @{ acg = @('acg_pack', '1'); it = @('it_pack', '1'); quotes = @('quote_pack', '0') }
+# Upstream defaults: ACG, IT and beauty are on; quotes is off (ShanjieKit/Shell.swift).
+$packs = @{ acg = @('acg_pack', '1'); it = @('it_pack', '1'); quotes = @('quote_pack', '0'); beauty = @('beauty_pack', '1') }
 $upstreamPacks = Get-ChildItem (Join-Path $upstream 'packs') -Filter '*.json' -File | ForEach-Object { $_.BaseName }
 foreach ($id in $upstreamPacks) { if (!$packs.ContainsKey($id)) { Fail "Upstream pack '$id' is new: ship it in prepare-data.ps1, add its switch to the profiles and shared/src/profile.rs, and list it here with upstream's default." } }
 foreach ($id in $packs.Keys) { if ($id -notin $upstreamPacks) { Fail "Pack '$id' is no longer in upstream; remove it here, in the profiles and in prepare-data.ps1." } }

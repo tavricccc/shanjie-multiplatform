@@ -103,3 +103,26 @@ impl LearnStore {
     }
     pub fn dir(&self) -> &Path { &self.dir }
 }
+
+#[cfg(test)]
+mod windows_store_tests {
+    use super::*;
+
+    #[test]
+    fn sentence_start_learning_keys_survive_a_windows_store_reopen() {
+        let dir = std::env::temp_dir().join(format!("shanjie-sinit-store-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let (store, _, _) = LearnStore::open(&dir).unwrap();
+        let keys = ["^>ㄏㄠˇ".to_owned(),
+            crate::learn::mid_key(Some("ㄏㄠˇ"), Some("ㄇㄚ˙")).unwrap(),
+            crate::learn::fine_key(Some("ㄏㄠˇ"), Some("ㄇㄚ˙"), None).unwrap()];
+        let records: Vec<_> = keys.into_iter().map(|context| Record {
+            context, reading: vec!["ㄋㄧˇ".into()], word: "妳".into(), weight: 1.0, day: 20_000,
+        }).collect();
+        store.save(&records).unwrap();
+        drop(store);
+        let (_, restored, _) = LearnStore::open(&dir).unwrap();
+        assert!(restored == records);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}

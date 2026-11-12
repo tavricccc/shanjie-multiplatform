@@ -1,7 +1,7 @@
 #Requires -Version 7
 # Upstream's whole core test suite against the Windows-built core, with upstream's own model set
 # (scripts/fetch-models.sh in upstream): every Windows overlay must keep upstream's assertions, apart
-# from the documented Windows policies that prepare-test-contracts.ps1 adapts.
+# from the documented Windows filesystem adaptations below.
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
@@ -206,7 +206,7 @@ try {
     $cargoVersion = (& cargo --version 2>&1 | Out-String).Trim()
     $testKey = Get-ContentFingerprint -Root $root -Paths @(
         'build/core/src','build/core/Cargo.toml','upstream/shanjie/core/tests','upstream/shanjie/core/Cargo.toml',
-        'scripts/test-core.ps1','scripts/prepare-test-contracts.ps1'
+        'scripts/test-core.ps1'
     ) -Values @($upstreamPin,$rustVersion,$cargoVersion,$env:RUSTFLAGS,$env:CARGO_ENCODED_RUSTFLAGS)
     $testManifest = Join-Path $tree '.source-cache.json'
     $testPaths = @('src','tests','Cargo.toml')
@@ -253,15 +253,17 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
             $content = [IO.File]::ReadAllText($fuzzy)
             $setup = [regex]'(?m)^\s*(use std::os::unix::fs::PermissionsExt;|std::fs::set_permissions\([^\n]*from_mode\(0o[0-7]+\)\)\.unwrap\(\);)\r?\n'
             if ($setup.Matches($content).Count -ne 3) { throw 'Upstream fuzzy learning fixture changed.' }
-            [IO.File]::WriteAllText($fuzzy, $setup.Replace($content, ''), [Text.UTF8Encoding]::new($false))
+            $content = [regex]::Replace($setup.Replace($content, ''), '(?m)^#\[cfg\(unix\)\][^\r\n]*\r?\n', '')
+            [IO.File]::WriteAllText($fuzzy, $content, [Text.UTF8Encoding]::new($false))
             # Tests of behavior Windows does not have, each named with the reason.
             $unixOnly = [regex]'(?m)^(#\[test\]\r?\n)?fn (store_append_refusals_fall_back_to_a_full_rewrite|max_rss|perf_full_store_per_key_and_enter_with_write)\('
             $learn = Join-Path $tree 'tests/engine_learn.rs'
             $content = [IO.File]::ReadAllText($learn)
+            # Our Windows store supports these generic persistence tests, including sentence-start keys.
+            $content = [regex]::Replace($content, '(?m)^#\[cfg\(unix\)\] // learning_open fails on Windows for now[^\r\n]*\r?\n', '')
             if ($unixOnly.Matches($content).Count -ne 3) { throw 'Upstream learning store test changed.' }
             [IO.File]::WriteAllText($learn, $unixOnly.Replace($content, "#[cfg(unix)]`n`$1fn `$2("), [Text.UTF8Encoding]::new($false))
             Preserve-Output (Join-Path $tree 'tests/learn_store.rs')
-            & "$PSScriptRoot/prepare-test-contracts.ps1" -TestsPath (Join-Path $tree 'tests')
             $written=Sync-ChangedFiles $tree $finalTree
             Preserve-Output $tree
             $tree=$finalTree
@@ -276,6 +278,7 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     $skips = @(
         'english_codes_through_the_c_abi'      # makes a FIFO with /usr/bin/mkfifo
         'load_lm_refuses_a_bad_trigram_table'  # rewrites a table a live engine still maps; Windows refuses writes to a mapped file
+        'learning_open_is_3_on_windows_and_picking_still_works' # upstream's Windows stub; this port supplies a working Windows store
     )
     $skipArguments = foreach ($skip in $skips) { '--skip'; $skip }
     $selected = if ($Tests) { $Tests } else { Get-ChildItem -LiteralPath "$tree/tests" -Filter *.rs | ForEach-Object BaseName }
@@ -284,7 +287,13 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     # decode on one thread, so cargo's one-binary-at-a-time run leaves most cores idle.
     $built = Invoke-Timed -Name 'Compile upstream core test binaries' -Category 'core.compile' -Details @{ test_binaries=$selected.Count; unit_tests=(!$NoUnitTests); cargo_profile='release';cache='Cargo target fingerprints' } -Action {
         $output = cargo test --release --no-run --message-format=json --manifest-path "$tree/Cargo.toml" @arguments
-        if ($LASTEXITCODE) { throw 'Upstream tests did not build.' }
+        if ($LASTEXITCODE) {
+            foreach ($line in $output) {
+                $message = $line | ConvertFrom-Json
+                if ($message.reason -eq 'compiler-message' -and $message.message.rendered) { Write-Host $message.message.rendered }
+            }
+            throw 'Upstream tests did not build.'
+        }
         $output
     }
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |

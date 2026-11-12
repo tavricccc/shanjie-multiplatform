@@ -271,6 +271,18 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
+        if (!settings.Vm.BeautyPack) throw new InvalidDataException("Beauty pack must default on");
+        var beauty = (Controls.SettingToggle)settings.FindName("BeautyPackToggle");
+        byte[] beforeBeauty = File.ReadAllBytes(Models.ProfileStore.Path);
+        beauty.SetToggleForVerification(false);
+        if (settings.Vm.BeautyPack || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(beforeBeauty))
+            throw new InvalidDataException("Beauty pack toggle must remain an unsaved draft");
+        settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.BeautyPack)
+            throw new InvalidDataException("Beauty pack opt-out was not retained");
+        settings.Vm.Preset(false);settings.Vm.Save();settings.Vm.Load();
+        if (settings.Vm.BeautyPack) throw new InvalidDataException("Operation preset replaced the personal beauty pack choice");
+        beauty.SetToggleForVerification(true);settings.Vm.Save();settings.Vm.Load();
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");
