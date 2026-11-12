@@ -128,7 +128,9 @@ public sealed partial class MainWindow
         choices.SelectionChanged+=(_,_)=>{
             var row=choices.SelectedIndex>=0?rows[choices.SelectedIndex]:null;
             notes.Text=row is null?"":ModelCatalog.Notes(row.Spec?.Catalog);
-            dialog.PrimaryButtonText=row?.Spec?.Catalog is {Advisories.Count:0}?"下載並選取":"仍然選用並下載";
+            dialog.PrimaryButtonText=row?.ActionLabel switch {
+                "選用"=>"選用既有模型", "更新"=>"更新並選取",
+                _=>row?.Spec?.Catalog is {Advisories.Count:0}?"下載並選取":"仍然選用並下載" };
             dialog.IsPrimaryButtonEnabled=!busy&&row?.Available==true;
         };
         dialog.Closing+=(_,e)=>{if(busy){e.Cancel=true;closeRequested=true;cancel.Cancel();}else cancel.Cancel();};
@@ -140,7 +142,7 @@ public sealed partial class MainWindow
             try
             {
                 var selected=await ModelCatalog.Download(row.Spec,new Progress<string>(s=>info.Text=s),cancel.Token);
-                await RefreshModels();Vm.SelectModel(selected.Id);Vm.Status="模型已下載、驗證並選取，按儲存後套用。其他設定草稿已保留。";ShowLoadFeedback();
+                await RefreshModels();Vm.SelectModel(selected.Id);Vm.Status="模型已驗證並選取，按儲存後套用。其他設定草稿已保留。";ShowLoadFeedback();
                 busy=false;dialog.Hide();
             }
             catch(OperationCanceledException){info.Text="已取消，原模型保持不變；重新開啟清單可續傳。";}

@@ -10,6 +10,7 @@ function Assert-Check([bool]$Condition,[string]$Name){if(!$Condition){throw "FAI
 & "$PSScriptRoot/verification_paths.ps1" -ResultRoot (Join-Path $ResultRoot 'verification-paths')
 & "$PSScriptRoot/ctest_integration.ps1" -ResultRoot (Join-Path $ResultRoot 'ctest-integration')
 & "$PSScriptRoot/verify_selection.ps1"
+& "$PSScriptRoot/upstream_sources.ps1" -ResultRoot (Join-Path $ResultRoot 'upstream-sources')
 # This existing Windows-only infrastructure test also exercises migration from
 # the original CTest payload junction without traversing or modifying its target.
 $toolSource=Join-Path $ResultRoot 'tools-source'

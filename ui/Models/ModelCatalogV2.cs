@@ -69,14 +69,15 @@ public static partial class ModelCatalog
         var builtinNotes=list.Models.FirstOrDefault(IsBuiltin);
         int builtinIndex=rows.FindIndex(r=>r.Spec?.Id==Builtin);
         if(builtinIndex>=0&&builtinNotes is not null)rows[builtinIndex]=rows[builtinIndex] with{Spec=BuiltinSpec with{Catalog=builtinNotes}};
-        var installed=(await Task.Run(Installed,token)).SelectMany(m=>new[]{m.Id,m.Catalog?.Id??m.Id}).ToHashSet();
+        var installed=await Task.Run(Installed,token);
         foreach(var m in list.Models)
         {
             if(IsBuiltin(m))continue;
             bool supported=Supported(m);
-            bool source=m.Assets.All(a=>releases.Any(r=>r.TagName==a.Release&&!r.Draft&&r.Assets.Any(x=>x.Name==a.Filename&&x.Size==a.Size&&x.Digest=="sha256:"+a.Sha256&&x.BrowserDownloadUrl==$"https://github.com/tavricccc/shanjie-upstream-backup/releases/download/{a.Release}/{a.Filename}")));
-            string state=!supported?"需要更新核心／格式支援":installed.Contains(m.Id)?"已下載":source?"可下載":"來源附件暫時無法核對";
-            rows.Add(new(m.Name,state,Spec(m),supported&&source,string.Join("、",m.Advisories.Select(a=>a.Title))));
+            bool source=m.Assets.All(a=>releases.Any(r=>r.TagName==a.Release&&!r.Draft&&r.Assets.Any(x=>x.Name==a.Filename&&x.Size==a.Size&&x.Digest=="sha256:"+a.Sha256&&IsUpstreamAssetUrl(x.BrowserDownloadUrl,a.Release,a.Filename))));
+            var spec=Spec(m);var downloaded=FindInstalled(spec,installed);bool update=downloaded is not null&&HasUpdate(downloaded.InstalledSpec!,spec);
+            string state=downloaded is not null?(!supported?"已下載・新版需要更新核心／格式支援":update?"已下載・可更新":"已下載"):!supported?"需要更新核心／格式支援":source?"可下載":"來源附件暫時無法核對";
+            rows.Add(new(m.Name,state,spec,supported&&(source||downloaded is not null&&!update),string.Join("、",m.Advisories.Select(a=>a.Title)),downloaded is null?"下載":update?"更新":"選用"));
         }
         return new(rows,status,DateTimeOffset.TryParse(list.GeneratedAt,CultureInfo.InvariantCulture,DateTimeStyles.None,out var at)?at:null,cached);
     }
@@ -84,7 +85,7 @@ public static partial class ModelCatalog
     {
         var m=spec.Catalog!;if(!Supported(m))throw new InvalidDataException("此配套需要更新核心。");
         // Native validation checks the immutable identity, all capabilities and paired files again.
-        var existing=(await Task.Run(Installed,token)).FirstOrDefault(x=>x.Id==spec.Id||x.Catalog?.Id==spec.Id);if(existing is not null)return existing;
+        var existing=FindInstalled(spec,await Task.Run(Installed,token));if(existing is not null&&!HasUpdate(existing.InstalledSpec!,spec))return existing;
         var files=new List<(ModelAsset Asset,string Path)>();
         foreach(var a in m.Assets)files.Add((a,await AssetFile(a.Release,a.Filename,a.Size,a.Sha256,progress,token)));
         token.ThrowIfCancellationRequested();
