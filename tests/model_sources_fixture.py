@@ -51,7 +51,12 @@ for updated in (False, True):
         "source_commit": "1" * 40, "state": "usable", "checked_at": catalog.now(),
         "report": "reports/" + "2" * 64 + ".json"}]
     model["advisories"] = [{"code": "quality-regression", "title": "退步提示測試",
-        "body": "隔離驗證用的評測備註。", "measurements": []}]
+        "body": "隔離驗證用的評測備註。", "measurements": []},
+        {"code": "performance-unmeasured", "title": "效能尚未比較",
+         "body": "未提供同場速度與記憶體測量；不以缺少效能資料限制選用。", "measurements": []},
+        {"code": "semantic-cost", "title": "包含語意校正",
+         "body": "語意模型會增加記憶體與每個音節的計算量，強度依設定；效能未作跨機器比較。",
+         "measurements": []}]
     model["advisory_revision"] = catalog.digest(catalog.semantic(model["advisories"]))
     models.append(model)
 

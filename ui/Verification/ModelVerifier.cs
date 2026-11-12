@@ -98,6 +98,54 @@ internal static class ModelVerifier
                 Check(!requests.Any(url=>url.Contains("/tavricccc/shanjie-upstream-backup/")),"an unavailable compatibility service does not redirect a reachable upstream to the mirror");
             }finally{File.Move(indexCache+".saved",indexCache,true);indexUnavailable=false;staleIndex=false;newRelease=false;revisedRelease=false;}
             await ModelCatalog.Online(CancellationToken.None);
+            var windowSize=settings.AppWindow.Size;
+            settings.Vm.RefreshModels(ModelCatalog.Installed());settings.Vm.SelectModel(choice.Id);settings.ShowModelOptions();await Task.Delay(150);
+            var advisoryList=(Microsoft.UI.Xaml.Controls.ItemsControl)settings.FindName("ModelAdvisoryList");
+            Check(advisoryList.Items.Count==selected.Advisories.Count,"settings render each model advisory as a separate card");
+            var elements=new List<Microsoft.UI.Xaml.DependencyObject>{advisoryList};
+            for(int i=0;i<elements.Count;i++)
+                for(int child=0;child<Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(elements[i]);child++)
+                    elements.Add(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(elements[i],child));
+            foreach(var advisory in selected.Advisories)
+                Check(elements.OfType<Microsoft.UI.Xaml.Controls.TextBlock>().Any(t=>t.Text==advisory.Title&&t.ActualHeight>0)
+                    &&elements.OfType<Microsoft.UI.Xaml.Controls.TextBlock>().Any(t=>t.Text==advisory.Body&&t.ActualHeight>0),"model advisory title and full body are rendered: "+advisory.Title);
+            int theme=settings.Vm.Theme;
+            foreach(int selectedTheme in new[]{1,2})
+            {
+                settings.Vm.Theme=selectedTheme;
+                advisoryList.StartBringIntoView(new Microsoft.UI.Xaml.BringIntoViewOptions{AnimationDesired=false,VerticalAlignmentRatio=0});await Task.Delay(180);
+                var viewport=(Microsoft.UI.Xaml.Controls.ScrollViewer)settings.FindName("ContentScroll");
+                var bounds=advisoryList.TransformToVisual(viewport).TransformBounds(new Windows.Foundation.Rect(0,0,advisoryList.ActualWidth,advisoryList.ActualHeight));
+                Check(bounds.Top>=-1&&bounds.Bottom<=viewport.ViewportHeight+1,"settings advisory cards fit the visible page: theme "+selectedTheme);
+                await VisualVerifier.Capture(settings.CaptureElement,Path.Combine(output,$"model-advisory-cards-{selectedTheme}.png"));
+            }
+            settings.Vm.Theme=theme;
+            foreach(var size in new[]{new Windows.Graphics.SizeInt32(840,680),new Windows.Graphics.SizeInt32(640,560)})
+            {
+                settings.AppWindow.Resize(size);await Task.Delay(150);
+                var showing=settings.OnlineModels();await Task.Delay(250);
+                var dialog=Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(settings.CaptureElement.XamlRoot)
+                    .Select(p=>p.Child).OfType<Microsoft.UI.Xaml.Controls.ContentDialog>().Single();
+                try{
+                    var content=(Microsoft.UI.Xaml.Controls.ScrollViewer)dialog.Content;
+                    var panel=(Microsoft.UI.Xaml.Controls.StackPanel)content.Content;
+                    var choices=panel.Children.OfType<Microsoft.UI.Xaml.Controls.ListView>().Single();
+                    choices.SelectedIndex=choices.Items.Cast<Microsoft.UI.Xaml.Controls.StackPanel>().ToList()
+                        .FindIndex(item=>item.Children.OfType<Microsoft.UI.Xaml.Controls.TextBlock>().First().Text==selected.Name);
+                    await Task.Delay(150);dialog.UpdateLayout();
+                    content.ChangeView(null,content.ScrollableHeight,null,true);await Task.Delay(150);dialog.UpdateLayout();
+                    var notes=(Microsoft.UI.Xaml.FrameworkElement)panel.Children.OfType<Microsoft.UI.Xaml.Controls.ContentControl>().Single().Content;
+                    var hint=panel.Children.OfType<Microsoft.UI.Xaml.Controls.TextBlock>().Last();
+                    foreach(var text in new[]{notes,hint})
+                    {
+                        var bounds=text.TransformToVisual(content).TransformBounds(new Windows.Foundation.Rect(0,0,text.ActualWidth,text.ActualHeight));
+                        Check(text.ActualHeight>0&&bounds.Bottom<=content.ViewportHeight+1&&bounds.Right<=content.ViewportWidth+1,
+                            $"model notes and final hint can be read to the bottom at {size.Width}x{size.Height}: {bounds}");
+                    }
+                    Check(content.ScrollableHeight>0&&Math.Abs(content.VerticalOffset-content.ScrollableHeight)<1,"long model notes scroll to their full end");
+                    await VisualVerifier.Capture(dialog,Path.Combine(output,$"model-notes-{size.Width}.png"));
+                }finally{dialog.Hide();await showing;settings.AppWindow.Resize(windowSize);}
+            }
             settings.Vm.RefreshModels(ModelCatalog.Installed());string original=settings.Vm.ModelId;int prompts=0;
             await settings.SelectModelWithConfirmation(choice,()=>{prompts++;return Task.FromResult(false);});
             Check(prompts==1&&settings.Vm.ModelId==original&&settings.Vm.DictionaryText==draft&&settings.Vm.HasChanges,"cancel keeps original model and unrelated unsaved draft");

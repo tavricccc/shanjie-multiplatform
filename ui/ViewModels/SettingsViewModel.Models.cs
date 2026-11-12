@@ -23,6 +23,7 @@ public partial class SettingsViewModel
             var selected=AvailableModels.FirstOrDefault(m=>m.Id==ModelId);
             if(selected is not null)ModelRevision=selected.Revision;
             OnPropertyChanged(nameof(ModelHelp));
+            OnPropertyChanged(nameof(ModelAdvisories));
         }
         finally{loading=previous;}
     }
@@ -30,6 +31,6 @@ public partial class SettingsViewModel
     {
         int index=AvailableModels.ToList().FindIndex(m=>m.Id==id);
         if(index<0)throw new InvalidDataException("模型尚未通過驗證，無法選取。");
-        ModelId=id;ModelVariant=index;ModelRevision=AvailableModels[index].Revision+"-"+Guid.NewGuid().ToString("N");OnPropertyChanged(nameof(ModelId));OnPropertyChanged(nameof(ModelHelp));HasChanges=true;
+        ModelId=id;ModelVariant=index;ModelRevision=AvailableModels[index].Revision+"-"+Guid.NewGuid().ToString("N");OnPropertyChanged(nameof(ModelId));OnPropertyChanged(nameof(ModelHelp));OnPropertyChanged(nameof(ModelAdvisories));HasChanges=true;
     }
 }

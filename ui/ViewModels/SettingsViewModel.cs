@@ -12,7 +12,7 @@ public partial class SettingsViewModel : ObservableObject
     /// `[engine] chat_apps`, one executable name per line.
     [ObservableProperty] public partial string ChatApps { get; set; } = "";
     public int Model => 5;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp))] public partial int ModelVariant { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ModelHelp)), NotifyPropertyChangedFor(nameof(ModelAdvisories))] public partial int ModelVariant { get; set; }
     [ObservableProperty] public partial bool ShiftToggle { get; set; }
     [ObservableProperty] public partial int ShiftSide { get; set; }
     [ObservableProperty] public partial bool CtrlSpaceToggle { get; set; }
@@ -133,6 +133,7 @@ public partial class SettingsViewModel : ObservableObject
         + (EnterCommits ? (EnterToCursor ? "Enter 選字並提交游標前的組字。" : "Enter 選字並提交整句。") : "Enter 選字後保留組字。");
     public string ModelHelp => AvailableModels.Any(m=>m.Id==ModelId)
         ? "儲存後先提交目前組字，再套用所選模型；個人詞庫及學習資料保留。內建配套供離線及失效備援使用。"
-            +(ModelId==ModelCatalog.Builtin?"":"\n\n"+ModelCatalog.Notes(AvailableModels.First(m=>m.Id==ModelId).Catalog))
+            +(ModelId!=ModelCatalog.Builtin&&AvailableModels.First(m=>m.Id==ModelId).Catalog is null?"\n"+ModelCatalog.Notes(null):"")
         : "所選配套目前不存在或未通過驗證，輸入時使用內建模型。原選擇已保留，可重新下載；選取其他模型並儲存可更換。";
+    public IReadOnlyList<ModelAdvisory> ModelAdvisories => AvailableModels.FirstOrDefault(m=>m.Id==ModelId)?.Catalog?.Advisories??[];
 }

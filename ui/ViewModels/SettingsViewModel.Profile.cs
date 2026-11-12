@@ -16,7 +16,7 @@ public partial class SettingsViewModel
         foreach (var key in ShiftKeys.Concat(PlainKeys)) key.PropertyChanged += (_, _) => { if (!loading) HasChanges = true; };
         Load(); PropertyChanged += (_, e) =>
         {
-            if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp))) HasChanges = true;
+            if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp) or nameof(ModelAdvisories))) HasChanges = true;
         };
     }
     public void Load() { profile = ProfileStore.Load(); ApplyDocument(true); HasChanges = false; Status = ""; ApplyInstalledKeyboards(Interop.Native.sj_installed_keyboards()); }
