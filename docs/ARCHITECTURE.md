@@ -78,18 +78,19 @@ DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<
 ## 驗證
 
 ```powershell
-pwsh -File scripts/verify.ps1                                 # 建置、上游核心全部測試、TSF 冒煙與真實 TSF 回歸
-pwsh -File scripts/test-core.ps1                              # 只跑上游核心測試（-Tests 指定整合測試檔）
-pwsh -File scripts/verify-regressions.ps1 -Architecture x86   # 加詞浮層、英文鍵、焦點交接、浮層生命週期
-pwsh -File scripts/verify.ps1 -NativeOnly -Interaction shanjie
-pwsh -File scripts/verify-interaction.ps1
-pwsh -File scripts/verify-mode.ps1
-pwsh -File scripts/verify-ui.ps1                              # WinUI 設定與安裝畫面離屏 render
-cargo test --manifest-path windows/Cargo.toml --lib
-pwsh -File scripts/package.ps1                                # 打包並校驗
+pwsh -File scripts/test.ps1 -Level FAST
+pwsh -File scripts/test.ps1 -Level AFFECTED
+pwsh -File scripts/test.ps1 -Level FULL
+pwsh -File scripts/test.ps1 -Level RELEASE
+pwsh -File scripts/release.ps1                     # 本機正式封裝：重用有效完整驗收，否則先跑 RELEASE
+cmake --preset windows-x64                                     # Visual Studio 2026 x64
+cmake --preset windows-x86                                     # Visual Studio 2026 x86
+ctest --preset windows-x64 --show-only
 ```
 
-TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)。
+分級規則、CTest 分類與舊流程覆蓋對照見 [Windows 驗收流程](TESTING.md)。TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替；測試只用隔離 profile，不安裝或註冊輸入法。舊的 `verify.ps1`、`test-core.ps1` 與個別 `verify-*.ps1` 仍可供除錯與 benchmark 對照，日常驗收以 CTest 分級入口為準。
+
+這些舊入口不是 CTest 成功後的第二輪驗收。相同來源／產物、架構、參數、fixture 與環境的案例已實際通過就直接認列；必要缺項以 CTest 補跑。故障注入、舊 DLL 共存、前景操作等不同目的不能混算，專用入口依 [條件與實際差集](TESTING.md#專用驗收與實際差集) 選最小範圍。修改按鍵路徑或核心請求仍須 `measure-engine.ps1`，功能回歸不能取代其延遲量測。僅編譯或做開發候選包不自動啟動 FULL／RELEASE。
 
 出貨的詞庫／詞包與測試的 `data`、`eval` 透過 `export-upstream.ps1` 從固定 Git commit 匯出，停用該次匯出的換行轉換；不依 Windows 工作副本的 CRLF。`engine_lm` 與 `engine_replay` 含延遲斷言，與其他核心測試分開，逐套、逐案例執行。回收的建置輸出保留在 `.deleted_files`，打包時排除這些目錄。
 
