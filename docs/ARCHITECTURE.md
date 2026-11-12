@@ -30,7 +30,7 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 單一 Win32 layered popup，由 Rust 以 Direct2D software DC render target／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點；以 premultiplied alpha 合成接近不透明的底面、細邊線、上緣亮邊與柔和陰影，不使用系統背景模糊。開啟時淡入並微幅縮放，選取高亮滑動，顯示中大小或位置改變時滑到新位置；隱藏立即完成，動畫政策關閉或跨螢幕 DPI 改變時直接定位。高對比改用不透明系統色並移除陰影。外觀來源與細節見 [DESIGN.md](DESIGN.md)。
 
-- **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 沿同一直排移動，最上列 ↑ 收回，左右鍵及 Windows 互動模式的 Tab 逐項移動。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心輸出視窗與數字標籤仍以九項為一組，1–9 選取反白所在的九項群組。
+- **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 沿同一直排移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心與數字標籤仍以九項為一組；1–9 選取反白所在群組的候選。
 - **尺寸與字型**：字詞預設 16 DIP、序號 9 DIP，依個人字級（14–32）等比縮放；候選列至少 24 DIP，上下各留 5 DIP，與 caret 間距 6 DIP。已安裝時優先用 Noto Sans 家族；否則候選字用 Microsoft JhengHei UI，序號用 Segoe UI（`windows/src/font.rs`）。
 - **配色**：一般主題預設霧藍 `#5874C9`，可跟隨 Windows 強調色或選自訂 HEX；預設藍的選取文字為白色，其他強調色依對比選黑或白。淺色底為 `#F8F8FA`、深色底為 `#1C1C20`，底面 alpha 均為 0.97，字、邊線與標記另有透明度。深色可選不透明純黑，其他底面維持原色。共用政策在 `shared/src/appearance.rs`，Windows 系統色在 `windows/src/appearance.rs`，色值由 `candidate.rs::Palette` 管理；主題偏好與設定程式共用，跟隨 Windows 時讀 `AppsUseLightTheme`，高對比優先使用系統色。
 - **組字面板**（`[candidates] reading_panel`，預設關閉）：關閉時與上游相同，組字只在 App 內，沒有候選也沒有提示就不顯示面板，有候選時也不畫整句列（`shanjie_shell::input::panel_view`）。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。原鍵混打需要它，`Document::reading_panel()` 在這個模式下讀出為開，不改寫設定值；舊 `[candidates] reading` 仍由遷移刪除，與它無關。
@@ -40,7 +40,7 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 中英模式提示是另一個 NOACTIVATE 視窗，以 tiny-skia 繪製 `assets/mode/` 的圖示，顯示 1400 ms 或到下一次輸入。
 
-模型清單與附件優先讀取官方上游，讀取失敗才改讀鏡像，兩者皆失敗才使用離線清單快取；取消下載不觸發鏡像重試。收據中的來源與配套 ID 保持不變。
+模型清單與附件優先讀取官方上游，讀取失敗才改讀鏡像，兩者皆失敗才使用離線清單快取；取消下載不觸發鏡像重試。收據中的來源與配套 ID 保持不變。同名已安裝模型以收據讀取的名稱匹配；來源改變不重裝，附件／release 改變時保留舊配套並提供更新。
 
 ## 設定程式
 
@@ -57,7 +57,7 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 - **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
 - **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
 - **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿；在最後一題按「套用」才經 `ProfileStore.Save` 寫入（暫存檔再整檔取代）並通知實例。
-  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`beauty_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
+  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`beauty_pack`、`meme_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
   - 保留我現在的設定：已存的 profile 加上實際改動的鍵；沒有差異就不寫。
   - 第一次寫入前把舊檔複製成 `profile.ini.before-quick-setup.bak`（只留一份，同一次流程再寫不覆蓋）；解除安裝時隨設定一起刪除。略過或關閉不碰檔案；個人詞典與學習資料是另外的檔案，不受影響。
   - 升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。

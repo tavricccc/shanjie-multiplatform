@@ -292,7 +292,7 @@ impl Special {
                     return Snapshot {
                         handled: true,
                         // A mapped backquote mark returns to normal composition;
-                        // Unicode and the symbol grid still commit directly.
+                        // Unicode, Big5 and the symbol grid still commit directly.
                         preedit: text.into(),
                         cursor: text.encode_utf16().count() as u32,
                         ..Default::default()

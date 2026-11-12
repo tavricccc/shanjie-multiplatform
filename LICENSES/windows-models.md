@@ -2,7 +2,7 @@
 
 模型原作者為 Nanako0129（善解，https://github.com/Nanako0129/shanjie）。模型優先使用原始 Release，無法讀取時才使用 https://github.com/tavricccc/shanjie-upstream-backup 的相同附件；大小、SHA-256、授權與署名不變。
 
-核心版本：善解 v0.7.0，`56979b2e2f6c7fd7a7288c38ed772d26f297e0e4`。本包內建會意 SJ-SR-8-15M 與該核心版本的其餘完整模型配套，放在 `data/models/builtin/`；其他相容配套由設定的線上模型管理另行下載。本文件補充同目錄的上游 `data.md`，不取代上游詞庫與模型的授權與署名；各模型的語料來源、各來源授權與署名以 `data.md` 對應的列為準。
+核心版本：善解 v0.7.0 後主線，`bf0bb4efe33105bccb3c9fc0fd373feec529d8d9`。本包內建會意 SJ-SR-8-15M 與該核心版本的其餘完整模型配套，放在 `data/models/builtin/`；其他相容配套由設定的線上模型管理另行下載。本文件補充同目錄的上游 `data.md`，不取代上游詞庫與模型的授權與署名；各模型的語料來源、各來源授權與署名以 `data.md` 對應的列為準。
 
 | 包內檔案 | 原始 Release 資產 | 資料授權 |
 | --- | --- | --- |

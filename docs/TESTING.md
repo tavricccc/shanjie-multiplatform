@@ -26,6 +26,8 @@ pwsh -File scripts/verify-changed.ps1 -Base origin/main -ChangeScope Branch -Dry
 
 僅編譯、確認產物或建立開發候選包，不自動啟動 FULL／RELEASE；修改程式依必要範圍執行 FAST／AFFECTED，先以 PlanOnly 檢查是否擴大。正式發布仍使用有同提交完整收據防護的 `release.ps1`，開發候選包不等於正式發布完成。
 
+`release.ui.models` 在獨立 profile 及離線模型 fixture 驗證原作者優先、讀取失敗改用鏡像、同名模型跨來源沿用與新版更新；附件大小、雜湊與原生收據仍實際核對，不代表正式來源網路或實機安裝驗收。
+
 CI 與 Release 的子模組初始化共用 `scripts/sync-upstream.ps1`，官方讀取失敗才改用鏡像，固定 commit 不變。
 
 GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢。跨 Run 僅快取 Cargo registry 與 `shared/target`、`windows/target` 的單元測試編譯產物；Cargo 仍驗證自身 fingerprint 並實際執行測試，不快取模型、完整產品或測試成功結果。CI 不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
