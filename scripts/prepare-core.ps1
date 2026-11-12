@@ -43,6 +43,11 @@ foreach ($relative in $cachePaths) {
 }
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 Copy-Item (Join-Path $upstream 'core/src') $output -Recurse -Force
+# Keep upstream's compiled-in official spellings in the standalone source cache.
+Copy-Item "$upstream/data/english-extra.txt","$upstream/data/lexicon/names-english.txt" "$output/src" -Force
+$engineFile = Join-Path $output 'src/engine.rs'
+$engineSource = [IO.File]::ReadAllText($engineFile).Replace('include_str!("../../data/english-extra.txt")','include_str!("english-extra.txt")').Replace('include_str!("../../data/lexicon/names-english.txt")','include_str!("names-english.txt")')
+[IO.File]::WriteAllText($engineFile,$engineSource,[Text.UTF8Encoding]::new($false))
 Copy-Item (Join-Path $upstream 'core/Cargo.toml') $output -Force
 Add-Content (Join-Path $output 'Cargo.toml') "`n[workspace]`n"
 $source = (Get-Content (Join-Path $upstream 'core/src/learn_store.rs') -Raw).Replace("`r`n","`n")

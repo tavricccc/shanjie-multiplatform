@@ -469,7 +469,7 @@ fn shifted_caps_tail_refreshes_predictions_in_upstream_english_mode() {
         out = Some(e.key_with_latin(Key::ch(ch.to_ascii_lowercase(), 0), ch.is_ascii_alphabetic().then_some(ch)).unwrap());
     }
     let out = out.unwrap();
-    assert_eq!(out.preedit, "gemini好");
+    assert_eq!(out.preedit, "Gemini好");
     assert!(!out.candidates.is_empty(), "the restored Chinese syllable must refresh its prediction row");
 }
 

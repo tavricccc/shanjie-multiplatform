@@ -33,7 +33,7 @@ impl Engine {
     }
 
     fn candidate_span(&self, length: usize) -> (usize, usize) {
-        if self.candidate_from_right {
+        if self.candidate_from_right && !self.cands.as_ref().is_some_and(|c| c.mixed.is_some()) {
             (self.cursor, self.cursor + length)
         } else if self.cursor == 0 {
             (0, length)
@@ -43,7 +43,9 @@ impl Engine {
     }
 
     fn open_candidates(&mut self, rows: Vec<Pred>) {
-        if !self.candidate_from_right {
+        // A mixed word spans its English token and the Chinese suffix at the end;
+        // keep that upstream span even when ordinary candidates are anchored right.
+        if !self.candidate_from_right || self.mixed_item().is_some() {
             self.open_candidates_left(rows);
             self.decorate_windows_candidates();
             return;
@@ -62,7 +64,7 @@ impl Engine {
                     (digit_layer::full_width(d).to_string(), 1),
                     (sym.to_string(), 1),
                 ]);
-                let mut c = Cands::new(Vec::new(), self.cand_vertical);
+                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
                 c.digit_zhuyin = Some((start, sym));
                 if let Some((n, syl, word)) = self.digit_syllable_alt(start + 1) {
                     list.push((word, 1));

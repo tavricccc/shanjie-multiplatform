@@ -219,7 +219,7 @@ mod windows_smart_tests {
                 }
                 assert_eq!(
                     e.reset(ResetMode::Commit).commit,
-                    "gemini好用嗎",
+                    if english { "Gemini好用嗎" } else { "gemini好用嗎" },
                     "english={english} tail={tail}"
                 );
             }
@@ -572,6 +572,7 @@ impl Engine {
             let split_at = chars.len() - tail.len();
             let head: String = chars[..split_at].iter().collect();
             let raw_tail: String = chars[split_at..].iter().collect();
+            let run_ascii = std::mem::take(&mut self.run_ascii);
             self.run.clear();
             self.run_shifted.clear();
             self.run_zh = None;
@@ -580,7 +581,8 @@ impl Engine {
             let mut commit = if head.is_empty() {
                 String::new()
             } else {
-                self.insert_english(head)?
+                let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
             };
             self.pred_dirty = true;
             commit.push_str(&self.insert_token(syl, None, None)?.commit);
@@ -614,6 +616,7 @@ impl Engine {
                     .filter(|r| self.has_mixed_han_entry(r, tone))
                 {
                     let full_syl = format!("{reading}{}", TONE_MARKS[tone]);
+                    let run_ascii = std::mem::take(&mut self.run_ascii);
                     self.run.clear();
                     self.run_shifted.clear();
                     self.run_zh = None;
@@ -622,7 +625,8 @@ impl Engine {
                     let mut commit = if head.is_empty() {
                         String::new()
                     } else {
-                        self.insert_english(head)?
+                        let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                        self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
                     };
                     self.pred_dirty = true;
                     commit.push_str(&self.insert_token(full_syl, None, None)?.commit);
@@ -644,6 +648,11 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // The explicit upstream Microsoft scheme owns its key rules. A window
+        // keeps the scheme it opened with even if the setting changes meanwhile.
+        if self.cands.as_ref().map_or(self.key_scheme == 1, |c| c.ms) {
+            return self.key_original(key);
+        }
         // Literal tokens keep typed order and use the existing cursor, deletion and commit paths.
         // This precedes English/digit interpretation, including tone keys that otherwise start a digit run.
         if self.zhuyin_only && key.modifiers == 0 {

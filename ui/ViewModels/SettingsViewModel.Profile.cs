@@ -45,7 +45,7 @@ public partial class SettingsViewModel
             ModelRevision=profile.Read("engine","model_revision","");
             ModelVariant=Math.Max(0,AvailableModels.ToList().FindIndex(m=>m.Id==ModelId));
             Prediction = profile.Flag("engine", "prediction", Interaction == 1); Demote = profile.Flag("engine", "demote", true); AcgPack = profile.Flag("engine", "acg_pack", true);
-            QuotePack = profile.Flag("engine", "quote_pack", false); ItPack = profile.Flag("engine", "it_pack", true); BeautyPack = profile.Flag("engine", "beauty_pack", true); Rerank = profile.Flag("engine", "rerank", true);
+            QuotePack = profile.Flag("engine", "quote_pack", false); ItPack = profile.Flag("engine", "it_pack", true); BeautyPack = profile.Flag("engine", "beauty_pack", true); MemePack = profile.Flag("engine", "meme_pack", true); Rerank = profile.Flag("engine", "rerank", true);
             RerankLevel = Math.Max(0, Array.IndexOf(RerankLevels, profile.Read("engine", "rerank_level", "standard")));
             FuzzyEnEng = profile.Flag("engine", "fuzzy_en_eng", false); FuzzyZhZ = profile.Flag("engine", "fuzzy_zh_z", false);
             FuzzyChC = profile.Flag("engine", "fuzzy_ch_c", false); FuzzyShS = profile.Flag("engine", "fuzzy_sh_s", false);
@@ -148,7 +148,7 @@ public partial class SettingsViewModel
         var apps = string.Join(";", ChatApps.Split([';', ',', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).Distinct());
         if (apps == DefaultChatApps) profile.Remove("engine", "chat_apps"); else profile.Set("engine", "chat_apps", apps);
         foreach (var (section, key, value) in new (string, string, object)[] {
-            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","quote_pack",QuotePack), ("engine","it_pack",ItPack), ("engine","beauty_pack",BeautyPack),
+            ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","quote_pack",QuotePack), ("engine","it_pack",ItPack), ("engine","beauty_pack",BeautyPack), ("engine","meme_pack",MemePack),
             ("engine","rerank",Rerank), ("engine","fuzzy_en_eng",FuzzyEnEng), ("engine","fuzzy_zh_z",FuzzyZhZ),
             ("engine","fuzzy_ch_c",FuzzyChC), ("engine","fuzzy_sh_s",FuzzyShS), ("engine","fuzzy_adjacent",FuzzyAdjacent),
             ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),

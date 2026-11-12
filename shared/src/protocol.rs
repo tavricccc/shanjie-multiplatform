@@ -46,6 +46,8 @@ pub struct Config {
     pub it: bool,
     #[serde(default = "on")]
     pub beauty: bool,
+    #[serde(default = "on")]
+    pub meme: bool,
     /// 語意校正, used when the model has a small model beside it.
     #[serde(default = "on")]
     pub rerank: bool,
@@ -63,6 +65,7 @@ fn standard() -> u32 { 1 }
 pub const PACK_ACG: u32 = 1;
 pub const PACK_QUOTES: u32 = 2;
 pub const PACK_IT: u32 = 4;
+pub const PACK_MEME: u32 = 8;
 pub const PACK_BEAUTY: u32 = 16;
 impl Default for Config {
     /// The built-in model with upstream's defaults, Standard layout, chat profile.
@@ -78,6 +81,7 @@ impl Default for Config {
             acg: true,
             it: true,
             beauty: true,
+            meme: true,
             rerank: true,
             rerank_level: standard(),
             fuzzy: 0,
@@ -87,7 +91,7 @@ impl Default for Config {
 }
 impl Config {
     pub fn packs(&self) -> u32 {
-        (if self.acg { PACK_ACG } else { 0 }) | (if self.quotes { PACK_QUOTES } else { 0 }) | (if self.it { PACK_IT } else { 0 }) | (if self.beauty { PACK_BEAUTY } else { 0 })
+        (if self.acg { PACK_ACG } else { 0 }) | (if self.quotes { PACK_QUOTES } else { 0 }) | (if self.it { PACK_IT } else { 0 }) | (if self.meme { PACK_MEME } else { 0 }) | (if self.beauty { PACK_BEAUTY } else { 0 })
     }
     /// The engine settings of a profile; the platform decides the layout from its keyboard choice.
     pub fn from_profile(p: &crate::profile::Document, layout: u32) -> Self {
@@ -102,6 +106,7 @@ impl Config {
             acg: p.flag("engine", "acg_pack", true),
             it: p.flag("engine", "it_pack", true),
             beauty: p.flag("engine", "beauty_pack", true),
+            meme: p.flag("engine", "meme_pack", true),
             rerank: p.flag("engine", "rerank", true),
             rerank_level: crate::profile::RERANK_LEVELS.iter().position(|l| *l == p.get("engine", "rerank_level", "standard")).unwrap_or(1) as u32,
             fuzzy: p.fuzzy(),
@@ -141,15 +146,23 @@ mod pack_tests {
     use super::*;
 
     #[test]
-    fn beauty_pack_defaults_on_and_can_be_saved_off() {
-        let mut profile = crate::profile::Document::parse("[profile]\nschema=9\n").unwrap();
-        assert_ne!(Config::from_profile(&profile, 0).packs() & PACK_BEAUTY, 0);
-        profile.set("engine", "beauty_pack", 0);
-        let config = Config::from_profile(&profile, 0);
-        assert_eq!(config.packs() & PACK_BEAUTY, 0);
-        assert_eq!(config.packs() & PACK_IT, PACK_IT);
-        assert!(crate::profile::REBUILD.contains(&("engine", "beauty_pack")));
-        let json = serde_json::to_string(&config).unwrap();
-        assert!(!serde_json::from_str::<Config>(&json).unwrap().beauty);
+    fn added_packs_default_on_and_keep_personal_opt_outs() {
+        for (key, bit) in [("beauty_pack", PACK_BEAUTY), ("meme_pack", PACK_MEME)] {
+            let mut profile = crate::profile::Document::parse("[profile]\nschema=9\n").unwrap();
+            assert_ne!(Config::from_profile(&profile, 0).packs() & bit, 0);
+            profile.set("engine", key, 0);
+            let config = Config::from_profile(&profile, 0);
+            assert_eq!(config.packs() & bit, 0);
+            assert_eq!(config.packs() & PACK_IT, PACK_IT);
+            assert!(crate::profile::REBUILD.contains(&("engine", key)));
+            let json = serde_json::to_string(&config).unwrap();
+            assert_eq!(serde_json::from_str::<Config>(&json).unwrap().packs() & bit, 0);
+            let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+            legacy.as_object_mut().unwrap().remove("meme");
+            legacy.as_object_mut().unwrap().remove("beauty");
+            assert_eq!(serde_json::from_value::<Config>(legacy).unwrap().packs() & (PACK_MEME | PACK_BEAUTY), PACK_MEME | PACK_BEAUTY);
+            let preset = crate::profile::preset(&profile.content(), true).unwrap();
+            assert!(!crate::profile::Document::parse(&preset).unwrap().flag("engine", key, true));
+        }
     }
 }

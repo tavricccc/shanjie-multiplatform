@@ -271,18 +271,20 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
-        if (!settings.Vm.BeautyPack) throw new InvalidDataException("Beauty pack must default on");
-        var beauty = (Controls.SettingToggle)settings.FindName("BeautyPackToggle");
-        byte[] beforeBeauty = File.ReadAllBytes(Models.ProfileStore.Path);
-        beauty.SetToggleForVerification(false);
-        if (settings.Vm.BeautyPack || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(beforeBeauty))
-            throw new InvalidDataException("Beauty pack toggle must remain an unsaved draft");
-        settings.Vm.Save(); settings.Vm.Load();
-        if (settings.Vm.BeautyPack)
-            throw new InvalidDataException("Beauty pack opt-out was not retained");
-        settings.Vm.Preset(false);settings.Vm.Save();settings.Vm.Load();
-        if (settings.Vm.BeautyPack) throw new InvalidDataException("Operation preset replaced the personal beauty pack choice");
-        beauty.SetToggleForVerification(true);settings.Vm.Save();settings.Vm.Load();
+        foreach (var pack in new[] { (Name: "BeautyPackToggle", Key: "beauty_pack"), (Name: "MemePackToggle", Key: "meme_pack") }) {
+            var toggle = (Controls.SettingToggle)settings.FindName(pack.Name);
+            bool enabled = pack.Key == "beauty_pack" ? settings.Vm.BeautyPack : settings.Vm.MemePack;
+            if (!enabled) throw new InvalidDataException(pack.Key + " must default on");
+            byte[] before = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(false);
+            if (!settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(before))
+                throw new InvalidDataException(pack.Key + " must remain an unsaved draft");
+            settings.Vm.Save(); settings.Vm.Load();
+            settings.Vm.Preset(false);settings.Vm.Save();settings.Vm.Load();
+            if (Models.ProfileStore.Load().Flag("engine", pack.Key, true))
+                throw new InvalidDataException(pack.Key + " opt-out was replaced by an operation preset");
+            toggle.SetToggleForVerification(true);settings.Vm.Save();settings.Vm.Load();
+        }
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");

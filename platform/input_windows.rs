@@ -69,7 +69,9 @@ impl Engine {
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
         engine.pack_oov_len = pack_oov_len;
-        engine.digit_table = windows_digit_table(data); Ok(engine)
+        engine.digit_table = windows_digit_table(data);
+        if let Ok(text) = std::fs::read_to_string(data.join("mixed-words.tsv")) { engine.set_mixed_words(&text); }
+        Ok(engine)
     }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
     pub fn candidate_reading(&self) -> String {
@@ -94,7 +96,7 @@ impl Engine {
     /// (their indexes carry meaning).
     fn decorate_windows_candidates(&mut self) {
         let Some(mut cands) = self.cands.take() else { return };
-        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none()
+        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() && cands.mixed.is_none()
             && cands.digit_zhuyin.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
         let touching = self.cursor.saturating_sub(1);
         let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
@@ -113,7 +115,7 @@ impl Engine {
         let (_,length) = list.first()?.clone();
         let keep: Vec<bool> = list.iter().map(|(word,_)| self.space_inputs_zhuyin || !windows_reading_text(word)).collect();
         let (start,end) = self.candidate_span(length);
-        let mut cands = Cands::new(list, self.cand_vertical);
+        let mut cands = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
         cands.alt = alt;
         retain_with_alt(&mut cands, &keep);
         if end <= self.syls.len() && !(start..end).any(|index| self.is_punct(index)) {
@@ -231,7 +233,7 @@ mod personal_lexicon_tests {
             assert!(off.associated_words("米卡").candidates.is_empty());
             assert!(off.pack_text.is_none());
         }
-        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 8).is_err());
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, !PACK_ALL).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
     #[test]

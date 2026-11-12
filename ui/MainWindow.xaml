@@ -218,6 +218,7 @@
                             <controls:SettingToggle Label="經典台詞" Description="經典電影台詞，與上游相同，預設關閉；變更會重新載入核心。" IsOn="{x:Bind Vm.QuotePack, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="資訊與 AI 詞" Description="約一千個程式、軟體與 AI 相關的詞，與上游相同；變更會重新載入核心。" IsOn="{x:Bind Vm.ItPack, Mode=TwoWay}"/>
                             <controls:SettingToggle x:Name="BeautyPackToggle" Label="美妝與保養詞" Description="539 個保養、彩妝、香水與美髮相關詞，與上游相同，預設開啟；變更會重新載入核心。" IsOn="{x:Bind Vm.BeautyPack, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="MemePackToggle" Label="迷因與直播用語" Description="139 個迷因、網路及直播用語，與上游相同，預設開啟；變更會重新載入核心。" IsOn="{x:Bind Vm.MemePack, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Text="模糊輸入" Style="{StaticResource SjGroupTitle}"/>
                         <TextBlock Style="{StaticResource SjNote}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。預設全部關閉；變更會重新載入核心。"/>
