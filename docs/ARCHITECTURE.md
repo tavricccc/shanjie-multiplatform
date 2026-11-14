@@ -26,6 +26,9 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 唯讀加詞由一般使用者權限的 `shanjie-word-helper.exe` 協調，在可回收的子程序取得 UIA 選取。helper 在任何視窗建立前啟用 PerMonitorV2；浮層依自身 HWND DPI 單次換算，使用實體錨點，並隨選取位置更新。native owner 留在 helper 內，以 NOACTIVATE／TOOLWINDOW 暫時置頂，來源失效即關閉，取消非同步處理；不變更 TSF 宿主程序的 DPI 或服務權限。
 
+
+游標前文在開始組字時經 TSF 讀取，最多保留最後 64 個 Unicode 字元；上游核心依此建立僅含漢字相鄰對的上下文重現集合，提交、取消或過期時清除，並沿用現有前文開關。Windows 對外按鍵入口處理一次前文有效期，內部按鍵回放不重複消耗。
+
 ## 候選窗
 
 單一 Win32 layered popup，由 Rust 以 Direct2D software DC render target／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點；以 premultiplied alpha 合成接近不透明的底面、細邊線、上緣亮邊與柔和陰影，不使用系統背景模糊。開啟時淡入並微幅縮放，選取高亮滑動，顯示中大小或位置改變時滑到新位置；隱藏立即完成，動畫政策關閉或跨螢幕 DPI 改變時直接定位。高對比改用不透明系統色並移除陰影。外觀來源與細節見 [DESIGN.md](DESIGN.md)。
