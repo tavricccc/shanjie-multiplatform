@@ -1,7 +1,7 @@
 {
-  "repository": "https://github.com/tavricccc/shanjie-upstream-backup",
-  "commit": "7fdc88a1101c2ca23aa716b3dc3ae56747e16b96",
-  "release": "v0.6.1",
+  "repository": "https://github.com/Nanako0129/shanjie",
+  "commit": "0cba51d4c0b29378119015188fd406a768483e62",
+  "release": "v0.7.0",
   "abi": "core/include/shanjie.h",
   "modelSources": "MODEL-SOURCES.json"
 }

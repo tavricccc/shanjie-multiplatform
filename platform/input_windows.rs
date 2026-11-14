@@ -58,15 +58,26 @@ impl Engine {
         let filtered: String = overlay.lines().filter(|line| {
             !crate::overlay_row(line).is_some_and(|(r,w,_,_)| replaced(r,w))
         }).map(|line| format!("{line}\n")).collect();
-        let mut lex = Lexicon::parse_with(&base,Some(&filtered)).map_err(|_| EngineError::LoadFailed)?;
+        let variants = VariantOrder::parse(&std::fs::read_to_string(data.join(VARIANT_ORDER_FILE)).map_err(|_| EngineError::LoadFailed)?).map_err(|_| EngineError::LoadFailed)?;
+        let mut lex = Lexicon::parse_with_variants(&base,Some(&filtered),Some(&variants)).map_err(|_| EngineError::LoadFailed)?;
         lex.manual = Arc::new(manual);
+        let protect = std::fs::read_to_string(data.join(RERANK_PROTECT_FILE)).map_err(|_| EngineError::LoadFailed)?;
+        let lex = lex.with_protected(&protect).map_err(|_| EngineError::LoadFailed)?;
         let lex = Arc::new(lex);
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
+        engine.pack_single = pack_has_single(&pack_text);
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
         engine.pack_oov_len = pack_oov_len;
-        engine.digit_table = windows_digit_table(data); Ok(engine)
+        engine.digit_table = windows_digit_table(data);
+        if let Ok(text) = std::fs::read_to_string(data.join("mixed-words.tsv")) { engine.set_mixed_words(&text); }
+        match std::fs::read_to_string(data.join("english-next.tsv")) {
+            Ok(text) => engine.en_table = Some(Arc::new(EnglishTable::parse(&text).map_err(|_| EngineError::LoadFailed)?)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(EngineError::LoadFailed),
+        }
+        Ok(engine)
     }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
     pub fn candidate_reading(&self) -> String {
@@ -91,7 +102,7 @@ impl Engine {
     /// (their indexes carry meaning).
     fn decorate_windows_candidates(&mut self) {
         let Some(mut cands) = self.cands.take() else { return };
-        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none()
+        let plain = cands.short.is_none() && cands.zh.is_none() && cands.dalt.is_none() && cands.mixed.is_none()
             && cands.digit_zhuyin.is_none() && cands.rows.is_empty() && !cands.list.is_empty();
         let touching = self.cursor.saturating_sub(1);
         let digits = self.syls.get(touching).is_some_and(|reading| crate::learn::digit_of(reading).is_some());
@@ -110,7 +121,7 @@ impl Engine {
         let (_,length) = list.first()?.clone();
         let keep: Vec<bool> = list.iter().map(|(word,_)| self.space_inputs_zhuyin || !windows_reading_text(word)).collect();
         let (start,end) = self.candidate_span(length);
-        let mut cands = Cands::new(list, self.cand_vertical);
+        let mut cands = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
         cands.alt = alt;
         retain_with_alt(&mut cands, &keep);
         if end <= self.syls.len() && !(start..end).any(|index| self.is_punct(index)) {
@@ -170,10 +181,11 @@ mod personal_lexicon_tests {
         std::fs::write(dir.join("packs/it-add.tsv"), "ㄉㄧㄢˋ-ㄋㄠˇ\t電腦\t-8\tit\n").unwrap();
         std::fs::write(dir.join("packs/quotes-add.tsv"), "ㄋㄧˇ-ㄏㄠˇ\t你好\t-8\tquotes\n").unwrap();
         std::fs::write(dir.join("demote.tsv"), "").unwrap();
+        for name in ["variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
         let personal = dir.join("dictionary.tsv");
         let rows = "ㄨㄛˇ 我 -1\nㄏㄠˇ 好 -1\nㄧ 一 -1\nㄌㄧˇ 李 -1\nㄇㄧˇ-ㄎㄚ 米卡 -1\nㄉㄧㄢˋ-ㄋㄠˇ 電腦 -1\nㄋㄧˇ-ㄏㄠˇ 你好 -1\nㄓㄨˋ 著 -1\n";
         std::fs::write(&personal, rows).unwrap();
-        for packs in 0..=PACK_ALL {
+        for packs in (0..=PACK_ALL).filter(|mask| mask & !PACK_ALL == 0) {
             for _ in 0..2 {
                 let e = Engine::new_with_personal(&dir,Layout::Standard,Some(&personal),packs).unwrap();
                 for (r,w) in [("ㄨㄛˇ","我"),("ㄏㄠˇ","好"),("ㄧ","一"),("ㄌㄧˇ","李"),("ㄇㄧˇ-ㄎㄚ","米卡"),("ㄉㄧㄢˋ-ㄋㄠˇ","電腦"),("ㄋㄧˇ-ㄏㄠˇ","你好"),("ㄓㄨˋ","著")] {
@@ -197,6 +209,7 @@ mod personal_lexicon_tests {
         std::fs::write(dir.join("sandhi-add.tsv"), "").unwrap();
         std::fs::write(dir.join("names-add.tsv"), "ㄊㄞˊ-ㄨㄢ-ㄧˋ-ㄉㄚˋ\t臺灣藝大\t-4.6\tnames\n").unwrap();
         std::fs::write(dir.join("demote.tsv"), "").unwrap();
+        for name in ["variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
         let personal = dir.join("dictionary.tsv");
         std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
         let plain = Engine::new(&dir, Layout::Standard).unwrap();
@@ -212,6 +225,7 @@ mod personal_lexicon_tests {
         std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -1.0\n").unwrap();
         for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
         std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄧˇ-ㄎㄚ-ㄕㄚ\t米卡莎\t-4.6\tacg\n").unwrap();
+        for name in ["variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
         let personal = dir.join("dictionary.tsv");
         std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
         for source in [None, Some(personal.as_path())] {
@@ -225,7 +239,7 @@ mod personal_lexicon_tests {
             assert!(off.associated_words("米卡").candidates.is_empty());
             assert!(off.pack_text.is_none());
         }
-        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, 8).is_err());
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, !PACK_ALL).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
     #[test]
@@ -234,6 +248,7 @@ mod personal_lexicon_tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("mcbpmf-data.txt"), "ㄨㄛˇ 我 -1.0\n").unwrap();
         for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
+        for name in ["variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] { std::fs::write(dir.join(name), "").unwrap(); }
         let personal = dir.join("dictionary.tsv");
         std::fs::write(&personal, "ㄋㄧˇ 你 -1.0\n").unwrap();
         for source in [None, Some(personal.as_path())] {

@@ -1,6 +1,6 @@
 """Source-verified discovery, native probes, advisory evaluation and atomic catalog publication.
 
-Only release assets from tavricccc/shanjie-upstream-backup are data inputs. No upstream script is executed.
+Model assets come from Nanako0129/shanjie, with tavricccc/shanjie-upstream-backup as a read fallback. No upstream script is executed.
 All native parsers run in disposable child processes with a private LOCALAPPDATA.
 """
 from __future__ import annotations
@@ -9,7 +9,9 @@ import urllib.request, urllib.error
 if hasattr(sys.stdout,"reconfigure"):sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = "tavricccc/shanjie-multiplatform"
-UPSTREAM = "tavricccc/shanjie-upstream-backup"
+UPSTREAM = "Nanako0129/shanjie"
+MIRROR = "tavricccc/shanjie-upstream-backup"
+SOURCES = (UPSTREAM, MIRROR)
 PROFILE = "windows-bundle-v1"
 BRANCH = "model-catalog"
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -42,20 +44,33 @@ def request(url,method="GET",body=None):
     if token and url.startswith("https://api.github.com/"): headers["Authorization"]="Bearer "+token
     raw=None if body is None else encoded(body)
     if raw:headers["Content-Type"]="application/json"
-    for attempt in range(4):
-        try: return urllib.request.urlopen(urllib.request.Request(url,data=raw,headers=headers,method=method),timeout=50)
-        except urllib.error.HTTPError as e:
-            if e.code not in (429,500,502,503,504) or attempt==3: raise
-            time.sleep(min(2**attempt,8))
+    urls=[url]
+    prefix=f"https://github.com/{UPSTREAM}/releases/download/"
+    if method=="GET" and url.startswith(prefix):urls.append(url.replace(prefix,f"https://github.com/{MIRROR}/releases/download/",1))
+    for source in urls:
+        for attempt in range(4):
+            try: return urllib.request.urlopen(urllib.request.Request(source,data=raw,headers=headers,method=method),timeout=50)
+            except urllib.error.HTTPError as e:
+                if e.code in (429,500,502,503,504) and attempt<3:
+                    time.sleep(min(2**attempt,8));continue
+                if source==urls[-1]:raise
+                break
+            except (urllib.error.URLError, TimeoutError):
+                if source==urls[-1]:raise
+                break
 def api(path,method="GET",body=None):
     with request("https://api.github.com/"+path,method,body) as response:return json.load(response)
 def releases():
-    out=[]
-    for page in range(1,101):
-        rows=api(f"repos/{UPSTREAM}/releases?per_page=100&page={page}")
-        out.extend(r for r in rows if not r["draft"])
-        if len(rows)<100:return out
-    raise ValueError("Release pagination exceeded bound; refusing a partial snapshot")
+    for repository in SOURCES:
+        out=[]
+        try:
+            for page in range(1,101):
+                rows=api(f"repos/{repository}/releases?per_page=100&page={page}")
+                out.extend(r for r in rows if not r["draft"])
+                if len(rows)<100:return out
+            raise ValueError("Release pagination exceeded bound; refusing a partial snapshot")
+        except (urllib.error.URLError, TimeoutError):
+            if repository==MIRROR:raise
 def branch_head():
     try:return api(f"repos/{REPO}/git/ref/heads/{BRANCH}")["object"]["sha"]
     except urllib.error.HTTPError as e:
@@ -108,15 +123,15 @@ def discover(out):
             if a["name"] not in NAMES and not legal:
                 if re.search(r"\.sj[a-z0-9]+$",a["name"]):pending.append({"release":r["tag_name"],"filename":a["name"],"state":"unsupported","reason":"Unknown model attachment role"})
                 continue
-            expected=f"https://github.com/{UPSTREAM}/releases/download/{r['tag_name']}/{a['name']}"
-            if a["browser_download_url"]!=expected:raise ValueError("Unexpected upstream download URL")
+            repository=next((source for source in SOURCES if a["browser_download_url"]==f"https://github.com/{source}/releases/download/{r['tag_name']}/{a['name']}"),None)
+            if repository is None:raise ValueError("Unexpected upstream download URL")
             try:
                 path=download(a,cache)
                 with path.open("rb") as stream:header=stream.read(256)
                 magic="TEXT0001" if legal else header[:8].decode("ascii")
                 if magic not in CAPS and not legal:raise NotImplementedError("Unknown magic or format version")
                 role=("attribution" if a["name"].endswith(".tsv") else "license") if legal else NAMES[a["name"]]
-                item={"role":role,"repository":UPSTREAM,"release":r["tag_name"],"filename":a["name"],
+                item={"role":role,"repository":repository,"release":r["tag_name"],"filename":a["name"],
                       "format_magic":magic,"size":a["size"],"sha256":a["digest"][7:],"requires_assets":[]}
                 pair=None;kn=None
                 if item["role"]=="classes":pair=header[8:40].hex()
@@ -126,7 +141,7 @@ def discover(out):
                     pair=header[68:100].hex()
                     if magic=="SJTL0004" and header[212:244]!=bytes(32):kn=header[212:244].hex()
                 found.append({"asset":item,"pair":pair,"kn":kn,"prerelease":r["prerelease"]})
-                sources.append({"release_id":r["id"],"asset_id":a["id"],"release":r["tag_name"],"filename":a["name"],
+                sources.append({"repository":repository,"release_id":r["id"],"asset_id":a["id"],"release":r["tag_name"],"filename":a["name"],
                                 "size":a["size"],"digest":a["digest"]})
             except Exception as e:
                 pending.append({"release":r["tag_name"],"filename":a["name"],"state":"unsupported" if isinstance(e,NotImplementedError) else "unverified","reason":str(e)[:600]})
@@ -234,7 +249,7 @@ def validate_model(m):
     if not any(x["state"]=="usable" for x in m["compatibility"]):raise ValueError("No tested usable target")
     roles=set();hashes={a["sha256"] for a in m["assets"]};graph={}
     for a in m["assets"]:
-        if a["role"] in roles or a["repository"]!=UPSTREAM or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
+        if a["role"] in roles or a["repository"] not in SOURCES or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
         if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
         allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
                  "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,5)},"colloquial":{"SJLM0001"},
@@ -334,8 +349,10 @@ def publish(out):
         if name not in ("MODEL-CATALOG-V2.json","MODEL-CATALOG-STATE.json") and not re.fullmatch(r"reports/[a-f0-9]{64}\.json",name):raise ValueError("Publication path not allowed")
         if filehash(folder/name)!=sha:raise ValueError("Publication plan content changed")
     for a in plan["sources"]:
-        current=api(f"repos/{UPSTREAM}/releases/assets/{a['asset_id']}")
-        expected=f"https://github.com/{UPSTREAM}/releases/download/{a['release']}/{a['filename']}"
+        repository=a["repository"]
+        if repository not in SOURCES:raise ValueError("Unexpected publication source")
+        current=api(f"repos/{repository}/releases/assets/{a['asset_id']}")
+        expected=f"https://github.com/{repository}/releases/download/{a['release']}/{a['filename']}"
         if current["browser_download_url"]!=expected or any(current[k]!=a[v] for k,v in (("size","size"),("name","filename"),("digest","digest"))):raise ValueError("Upstream asset changed; rediscover before publishing")
     for attempt in range(3):
         head,old,old_state=previous();catalog=read(folder/"MODEL-CATALOG-V2.json");validate(catalog)

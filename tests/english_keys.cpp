@@ -1,9 +1,13 @@
-// Synthetic keyboard state on an owned TSF thread; never sends desktop input.
+// Synthetic keyboard state on a private TSF desktop; never sends desktop input.
 #define wmain old_smoke_main
 #include "tsf_smoke.cpp"
 #undef wmain
 int wmain(int argc,wchar_t** argv) {
     require(argc==3,901);std::wstring scenario=argv[2];
+    auto desktopName=L"Shanjie.English."+std::to_wstring(GetCurrentProcessId());
+    auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+    require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+    std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
     BYTE original[256]{};require(GetKeyboardState(original),902);
     struct Restore {BYTE* state;~Restore(){SetKeyboardState(state);}} restore{original};
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),903);
@@ -150,10 +154,14 @@ int wmain(int argc,wchar_t** argv) {
     }else if(scenario==L"shift"){
         press('R',true);press('U');press('S');press('T');press(VK_RETURN);require(store->text==L"Rust",920);
     }else if(scenario==L"shift-caps-zh"){
+        wchar_t local[32768];require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768),965);
+        auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
+        // Upstream English applies the official spelling; raw-key mixing keeps typed casing.
+        auto expected=GetPrivateProfileIntW(L"input",L"upstream_english",0,profile.c_str())?L"Gemini好用嗎":L"gemini好用嗎";
         for(auto ch:std::wstring(L"GEMINI"))press(ch,true,true);
         for(auto ch:std::wstring(L"CL3M/4A87"))press(ch==L'/'?VK_OEM_2:ch,false,true);
-        require(store->text==L"gemini好用嗎",963);
-        press(VK_RETURN);require(store->text==L"gemini好用嗎",964);
+        require(store->text==expected,963);
+        press(VK_RETURN);require(store->text==expected,964);
     }else if(scenario==L"shift-caps"){
         press('R',true,true);press('U',false,true);press(VK_RETURN);require(store->text==L"rU",921);
     }else if(scenario==L"eten"){

@@ -13,21 +13,46 @@ mod windows_pack_cache_tests {
         let dir = std::env::temp_dir().join(format!("shanjie-pack-cache-{}-{}", std::process::id(),
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir_all(dir.join("packs")).unwrap();
-        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄋㄧˇ 你 -1\n").unwrap();
-        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv"] {
+        std::fs::write(dir.join("mcbpmf-data.txt"), "ㄋㄧˇ 你 -1\nㄓˊ 值 -1\n").unwrap();
+        for name in ["overlay-add.tsv", "sandhi-add.tsv", "names-add.tsv", "demote.tsv", "variant-order.tsv", "rerank-protect.tsv", "std-exempt.tsv"] {
             std::fs::write(dir.join(name), "").unwrap();
         }
         std::fs::write(dir.join("packs/acg-add.tsv"), "ㄇㄠ-ㄆㄠ-ㄇㄠ\t貓泡貓\t-7\tacg\n").unwrap();
+        std::fs::write(dir.join("packs/beauty-add.tsv"), "ㄇㄠ\t貓\t-7\tbeauty\n").unwrap();
+        std::fs::write(dir.join("english-next.tsv"), "E\trust\t10\nW\trust\t值\t1\n").unwrap();
+        std::fs::write(dir.join("mixed-words.tsv"), "cp\tㄓˊ\tCP值\t100\n").unwrap();
         let personal = dir.join("personal.tsv");
         std::fs::write(&personal, "ㄋㄧˇ 妳 -2\n").unwrap();
         for personal in [None, Some(personal.as_path())] {
-            let first = Engine::new_with_personal(&dir, Layout::Standard, personal, PACK_ACG).unwrap();
-            let cached = Engine::new_with_personal(&dir, Layout::Standard, personal, PACK_ACG).unwrap();
+          for packs in [PACK_ACG, PACK_ACG | PACK_BEAUTY] {
+            let first = Engine::new_with_personal(&dir, Layout::Standard, personal, packs).unwrap();
+            let mut cached = Engine::new_with_personal(&dir, Layout::Standard, personal, packs).unwrap();
             assert!(Arc::ptr_eq(&first.lex, &cached.lex));
             assert!(first.pack_oov_len > 0);
             assert_eq!(cached.pack_oov_len, first.pack_oov_len);
             assert_eq!(cached.pack_text.as_deref(), first.pack_text.as_deref());
+            assert_eq!(cached.pack_single, packs & PACK_BEAUTY != 0);
+            assert!(Arc::ptr_eq(first.en_table.as_ref().unwrap(), cached.en_table.as_ref().unwrap()));
+            assert!(Arc::ptr_eq(first.mixed.as_ref().unwrap(), cached.mixed.as_ref().unwrap()));
+            cached.set_candidate_anchor(true);
+            cached.set_prediction(false).unwrap();
+            cached.set_english(true).unwrap();
+            for pick in [0, 1] {
+                for key in [Key::ch('c', MOD_SHIFT), Key::ch('p', 0), Key::new(KeyKind::Space), Key::ch('5', 0), Key::ch('6', 0)] {
+                    cached.key(key).unwrap();
+                }
+                let list = cached.key(Key::new(KeyKind::Down)).unwrap();
+                assert_eq!(list.candidates[0], "CP值");
+                assert!(cached.candidate_reading().is_empty());
+                let selected = cached.pick(pick).unwrap().unwrap();
+                assert_eq!(selected.preedit, if pick == 0 { "CP值" } else { "Cp值" });
+                cached.reset(ResetMode::Discard);
+            }
+          }
         }
+        std::fs::write(dir.join("english-next.tsv"), "invalid table\n").unwrap();
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, None, PACK_ACG).is_err());
+        assert!(Engine::new_with_personal(&dir, Layout::Standard, Some(&personal), PACK_ACG).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
@@ -38,6 +63,8 @@ type LexCache = Vec<(
     (Option<String>, usize),
     // The optional digit count table read from the same data folder (upstream shares it across engines).
     Option<Arc<DigitTable>>,
+    Option<Arc<MixedTable>>,
+    Option<Arc<EnglishTable>>,
 )>;
 fn resource_stamp(
     data: &Path,
@@ -50,6 +77,9 @@ fn resource_stamp(
         "sandhi-add.tsv",
         "names-add.tsv",
         "demote.tsv",
+        "variant-order.tsv",
+        "rerank-protect.tsv",
+        "std-exempt.tsv",
     ]
     .iter()
     .map(|name| data.join(name))
@@ -58,12 +88,12 @@ fn resource_stamp(
         paths.push(p.to_owned());
     }
     // Optional like the pack: present files are part of the key, a missing one is not an error.
-    let digits = data.join("digits.tsv");
-    if digits.is_file() {
-        paths.push(digits);
+    for name in ["digits.tsv", "mixed-words.tsv", "english-next.tsv"] {
+        let file = data.join(name);
+        if file.is_file() { paths.push(file); }
     }
     // A missing pack file contributes nothing, so it is absent from the stamp rather than an error.
-    for (flag, name) in [(PACK_ACG, "acg-add.tsv"), (PACK_QUOTES, "quotes-add.tsv"), (PACK_IT, "it-add.tsv")] {
+    for (flag, name) in PACK_FILES {
         let pack = data.join("packs").join(name);
         if packs & flag != 0 && pack.is_file() {
             paths.push(pack);
@@ -94,13 +124,16 @@ impl Engine {
             .get_or_init(Default::default)
             .lock()
             .map_err(|_| EngineError::LoadFailed)?;
-        if let Some(index) = cache.iter().position(|(key, _, _, _)| key == &stamp) {
+        if let Some(index) = cache.iter().position(|(key, _, _, _, _, _)| key == &stamp) {
             let entry = cache.remove(index);
             let mut engine = Engine::with_lexicon(entry.1.clone(), layout);
             engine.data_dir = Some(data.to_owned());
             engine.pack_text = entry.2.0.clone();
             engine.pack_oov_len = entry.2.1;
+            engine.pack_single = engine.pack_text.as_deref().is_some_and(pack_has_single);
             engine.digit_table = entry.3.clone();
+            engine.mixed = entry.4.clone();
+            engine.en_table = entry.5.clone();
             cache.push(entry);
             return Ok(engine);
         }
@@ -109,7 +142,7 @@ impl Engine {
         if cache.len() == 4 {
             cache.remove(0);
         }
-        cache.push((stamp, engine.lex.clone(), (engine.pack_text.clone(), engine.pack_oov_len), engine.digit_table.clone()));
+        cache.push((stamp, engine.lex.clone(), (engine.pack_text.clone(), engine.pack_oov_len), engine.digit_table.clone(), engine.mixed.clone(), engine.en_table.clone()));
         Ok(engine)
     }
     pub fn load_lm(&mut self, path: &Path) -> Result<(), EngineError> {

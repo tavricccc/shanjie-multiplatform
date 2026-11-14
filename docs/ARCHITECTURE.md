@@ -26,6 +26,9 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 
 唯讀加詞由一般使用者權限的 `shanjie-word-helper.exe` 協調，在可回收的子程序取得 UIA 選取。helper 在任何視窗建立前啟用 PerMonitorV2；浮層依自身 HWND DPI 單次換算，使用實體錨點，並隨選取位置更新。native owner 留在 helper 內，以 NOACTIVATE／TOOLWINDOW 暫時置頂，來源失效即關閉，取消非同步處理；不變更 TSF 宿主程序的 DPI 或服務權限。
 
+
+游標前文在開始組字時經 TSF 讀取，最多保留最後 64 個 Unicode 字元；上游核心依此建立僅含漢字相鄰對的上下文重現集合，提交、取消或過期時清除，並沿用現有前文開關。Windows 對外按鍵入口處理一次前文有效期，內部按鍵回放不重複消耗。
+
 ## 候選窗
 
 單一 Win32 layered popup，由 Rust 以 Direct2D software DC render target／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點；以 premultiplied alpha 合成接近不透明的底面、細邊線、上緣亮邊與柔和陰影，不使用系統背景模糊。開啟時淡入並微幅縮放，選取高亮滑動，顯示中大小或位置改變時滑到新位置；隱藏立即完成，動畫政策關閉或跨螢幕 DPI 改變時直接定位。高對比改用不透明系統色並移除陰影。外觀來源與細節見 [DESIGN.md](DESIGN.md)。
@@ -39,6 +42,10 @@ Rust DLL 使用靜態 CRT，x64 與 x86 各一份（x86 供 32 位元 App 載入
 - **滑鼠**：點擊帶 sequence，TSF 拒絕過期點擊；失焦、取消與 layout 銷毀都會關閉候選。
 
 中英模式提示是另一個 NOACTIVATE 視窗，以 tiny-skia 繪製 `assets/mode/` 的圖示，顯示 1400 ms 或到下一次輸入。
+
+模型清單與附件優先讀取官方上游，讀取失敗才改讀鏡像，兩者皆失敗才使用離線清單快取；取消下載不觸發鏡像重試。收據中的來源與配套 ID 保持不變。同名已安裝模型以收據讀取的名稱匹配；來源改變不重裝，附件／release 改變時保留舊配套並提供更新。
+
+Windows 的相容索引可以落後於原作者發布清單。模型清單合併通過原生掃描的安裝收據，依元件角色比對配套，不把完整 SR-8 配套當成只有相同 bigram／classes 的兩檔配套。新發佈或同標籤的新雜湊尚未有相容索引時，顯示待驗項目；原作者可讀時不因此查鏡像。內建提示只針對實際較舊且沒有較新元件的配套。
 
 ## 設定程式
 
@@ -55,7 +62,7 @@ WinUI 3 self-contained unpackaged 程式（x64，.NET 10／Windows App SDK），
 - **觸發**：只有無參數的設定程式啟動才判斷（`QuickSetupGate.Due`），所以裝完按「開啟設定」、更新後重開與手動開啟都算；`--setup`、`--uninstall`、`--check-update`、`--verify-*` 不經過這裡。已提升權限、測試 profile（`SHANJIE_TEST_PROFILE=1`）、`--no-quick-setup` 或 `SHANJIE_NO_QUICK_SETUP=1` 都不會顯示。`--quick-setup` 與「一般」頁的按鈕可重新開啟。
 - **只顯示一次**：標記是 `profile.ini` 旁的 `quick-setup.txt`，屬於目前的 Windows 使用者，不放進 profile，因為範本與 schema 遷移都會重寫 profile。開始顯示時就寫入，略過或關閉也算看過；之後升級不會再出現，只有解除安裝時連同設定刪除才重來。提升權限的程序不寫，因為它的資料夾不一定屬於那個人。
 - **保存**：流程用自己的 `QuickSetupDraft`，不動設定頁的草稿；在最後一題按「套用」才經 `ProfileStore.Save` 寫入（暫存檔再整檔取代）並通知實例。
-  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
+  - 選了範本：寫一份全新的 profile，不合併舊檔。內容是出貨的範本檔（`profiles/windows.ini` 或 `shanjie.ini`）、從舊檔帶過來的少數鍵（`QuickSetupDraft.Carried`：`engine` 的 `model_id`、`model_revision`、`acg_pack`、`it_pack`、`beauty_pack`、`meme_pack`、`quote_pack`、`chat_apps`，`input` 的 `dictionary`、`keyboard`），再加上流程裡的選擇；其他舊值（外觀、字級、模糊音、詞句偏好等）回到範本預設。
   - 保留我現在的設定：已存的 profile 加上實際改動的鍵；沒有差異就不寫。
   - 第一次寫入前把舊檔複製成 `profile.ini.before-quick-setup.bak`（只留一份，同一次流程再寫不覆蓋）；解除安裝時隨設定一起刪除。略過或關閉不碰檔案；個人詞典與學習資料是另外的檔案，不受影響。
   - 升級者預設「保留我現在的設定」；重新開啟前若設定頁有未儲存的草稿，先問要不要儲存。
@@ -78,20 +85,21 @@ DLL、設定程式、工具與內建模型放在唯一的 `versions/<DLL hash>-<
 ## 驗證
 
 ```powershell
-pwsh -File scripts/verify.ps1                                 # 建置、上游核心全部測試、TSF 冒煙與真實 TSF 回歸
-pwsh -File scripts/test-core.ps1                              # 只跑上游核心測試（-Tests 指定整合測試檔）
-pwsh -File scripts/verify-regressions.ps1 -Architecture x86   # 加詞浮層、英文鍵、焦點交接、浮層生命週期
-pwsh -File scripts/verify.ps1 -NativeOnly -Interaction shanjie
-pwsh -File scripts/verify-interaction.ps1
-pwsh -File scripts/verify-mode.ps1
-pwsh -File scripts/verify-ui.ps1                              # WinUI 設定與安裝畫面離屏 render
-cargo test --manifest-path windows/Cargo.toml --lib
-pwsh -File scripts/package.ps1                                # 打包並校驗
+pwsh -File scripts/test.ps1 -Level FAST
+pwsh -File scripts/test.ps1 -Level AFFECTED
+pwsh -File scripts/test.ps1 -Level FULL
+pwsh -File scripts/test.ps1 -Level RELEASE
+pwsh -File scripts/release.ps1                     # 本機正式封裝：重用有效完整驗收，否則先跑 RELEASE
+cmake --preset windows-x64                                     # Visual Studio 2026 x64
+cmake --preset windows-x86                                     # Visual Studio 2026 x86
+ctest --preset windows-x64 --show-only
 ```
 
-TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替。依改動挑哪些要跑見 [AGENTS.md](../AGENTS.md)。
+分級規則、CTest 分類與舊流程覆蓋對照見 [Windows 驗收流程](TESTING.md)。TSF harness 用真正的 Windows context 與 edit session，鍵盤 sink 註冊以 ThreadProxy 代替；測試只用隔離 profile，不安裝或註冊輸入法。舊的 `verify.ps1`、`test-core.ps1` 與個別 `verify-*.ps1` 仍可供除錯與 benchmark 對照，日常驗收以 CTest 分級入口為準。
 
-出貨的詞庫／詞包與測試的 `data`、`eval` 透過 `export-upstream.ps1` 從固定 Git commit 匯出，停用該次匯出的換行轉換；不依 Windows 工作副本的 CRLF。`engine_lm` 與 `engine_replay` 含延遲斷言，與其他核心測試分開，逐套、逐案例執行。回收的建置輸出保留在 `.deleted_files`，打包時排除這些目錄。
+這些舊入口不是 CTest 成功後的第二輪驗收。相同來源／產物、架構、參數、fixture 與環境的案例已實際通過就直接認列；必要缺項以 CTest 補跑。故障注入、舊 DLL 共存、前景操作等不同目的不能混算，專用入口依 [條件與實際差集](TESTING.md#專用驗收與實際差集) 選最小範圍。修改按鍵路徑或核心請求仍須 `measure-engine.ps1`，功能回歸不能取代其延遲量測。僅編譯或做開發候選包不自動啟動 FULL／RELEASE。
+
+出貨的詞庫／詞包與測試的 `data`、`eval` 透過 `export-upstream.ps1` 從固定 Git commit 匯出，停用該次匯出的換行轉換；不依 Windows 工作副本的 CRLF。`engine_lm`、`engine_replay` 與 `engine_newword` 含延遲斷言，與其他核心測試分開，逐套、逐案例執行。回收的建置輸出保留在 `.deleted_files`，打包時排除這些目錄。
 
 已在目前程序載入對應架構的 MSVC 與 Windows SDK 時，原生驗證及量測腳本可明確設定 `$env:SHANJIE_USE_CURRENT_TOOLCHAIN='1'`，不變更系統環境；一般建置仍以 `build.ps1 -UseCurrentToolchain` 選用目前工具。未指定時沿用 Visual Studio 的工具偵測。
 

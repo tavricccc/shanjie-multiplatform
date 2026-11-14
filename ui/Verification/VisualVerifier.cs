@@ -28,6 +28,7 @@ internal static class VisualVerifier
     {
         var installed = settings.Vm.AvailableModels.ToList();
         Models.ModelChoice a = new("fixture-a", "測試配套 A（已下載）"), b = new("fixture-b", "測試配套 B（已下載）");
+        b=b with{InstalledSpec=Models.ModelCatalog.Known()[0]};
         settings.Vm.RefreshModels([a, b]); settings.Vm.SelectModel(b.Id); settings.Vm.DictionaryText = "ㄇㄠ 貓";
         string draft = settings.Vm.DictionaryText; byte[] saved = File.ReadAllBytes(Models.ProfileStore.Path);
         async Task Expect(string id, string what)
@@ -271,6 +272,20 @@ internal static class VisualVerifier
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
+        foreach (var pack in new[] { (Name: "BeautyPackToggle", Key: "beauty_pack"), (Name: "MemePackToggle", Key: "meme_pack") }) {
+            var toggle = (Controls.SettingToggle)settings.FindName(pack.Name);
+            bool enabled = pack.Key == "beauty_pack" ? settings.Vm.BeautyPack : settings.Vm.MemePack;
+            if (!enabled) throw new InvalidDataException(pack.Key + " must default on");
+            byte[] before = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(false);
+            if (!settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(before))
+                throw new InvalidDataException(pack.Key + " must remain an unsaved draft");
+            settings.Vm.Save(); settings.Vm.Load();
+            settings.Vm.Preset(false);settings.Vm.Save();settings.Vm.Load();
+            if (Models.ProfileStore.Load().Flag("engine", pack.Key, true))
+                throw new InvalidDataException(pack.Key + " opt-out was replaced by an operation preset");
+            toggle.SetToggleForVerification(true);settings.Vm.Save();settings.Vm.Load();
+        }
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");

@@ -1,42 +1,48 @@
 #Requires -Version 7
-param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Scenarios,[ValidateSet(0,1,2)][int[]]$MixedModes)
+param([string]$ResultRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Scenarios,[ValidateSet(0,1,2)][int[]]$MixedModes,[string]$HarnessPath,[string]$PayloadRoot)
 $ErrorActionPreference='Stop';$root=Split-Path $PSScriptRoot -Parent
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 . "$PSScriptRoot/msvc-command.ps1"
+$null=Initialize-TestTimings -ProjectRoot $root -Name 'english-keys'
 if(!$ResultRoot){$ResultRoot=Join-Path $root ('build/english-keys-'+[guid]::NewGuid().ToString('N'))}
 $ResultRoot=[IO.Path]::GetFullPath($ResultRoot);New-Item -ItemType Directory $ResultRoot -Force|Out-Null
-$payload=Join-Path $ResultRoot 'payload';New-Item -ItemType Directory $payload -Force|Out-Null
-foreach($arch in $Architectures){New-Item -ItemType Directory "$payload/$arch" -Force|Out-Null;Copy-Item "$root/dist/$arch/Shanjie.dll" "$payload/$arch" -Force}
-New-Item -ItemType Junction -Path "$payload/data" -Target "$root/dist/data"|Out-Null
-New-Item -ItemType Directory -Path "$payload/tools"|Out-Null
-Get-ChildItem "$root/dist/tools" -File|Copy-Item -Destination "$payload/tools"
-Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
+$payload=if($PayloadRoot){[IO.Path]::GetFullPath($PayloadRoot)}else{Join-Path $ResultRoot 'payload'}
+if($PayloadRoot){
+ foreach($arch in $Architectures){if(!(Test-Path -LiteralPath "$payload/$arch/Shanjie.dll")){throw "Validated CTest payload is missing $arch/Shanjie.dll."}}
+ foreach($name in @('data','tools')){if(!(Test-Path -LiteralPath "$payload/$name")){throw "Validated CTest payload is missing $name."}}
+ if(!(Test-Path -LiteralPath "$payload/installed.json")){throw 'Validated CTest payload is missing installed.json.'}
+}else{
+ New-Item -ItemType Directory $payload -Force|Out-Null
+ foreach($arch in $Architectures){New-Item -ItemType Directory "$payload/$arch" -Force|Out-Null;Copy-Item "$root/dist/$arch/Shanjie.dll" "$payload/$arch" -Force}
+  New-Item -ItemType Junction -Path "$payload/data" -Target "$root/dist/data"|Out-Null
+  Copy-TestTools -Source "$root/dist/tools" -Destination "$payload/tools"
+ Set-Content "$payload/installed.json" '{"version":"test","keyboards":3}' -Encoding utf8NoBOM
+}
 $saved=@{};foreach($name in 'LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL','SHANJIE_TEST_PINYIN','SHANJIE_TEST_ETEN'){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
-# Mode bits: 1 raw-key mixing, 2 upstream English; the mixing mode is one choice, so never both.
-$cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order','digit-navigation'){$cases+=,@($mode,$scenario,1,1)}}
-foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
-foreach($scenario in 'shift','shift-caps'){$cases+=,@(2,$scenario,1,1)}
-$cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
-foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
-$cases+=,@(0,'backquote-disabled',1,1)
-foreach($mode in 0,1,2){$cases+=,@($mode,'numpad',1,1)}
-$cases+=,@(0,'numpad',2,1)
-foreach($mode in 0,1,2){$cases+=,@($mode,'standalone-tones',1,1)}
-$cases+=,@(2,'standalone-tones-off',1,1);$cases+=,@(2,'standalone-tones-shanjie',1,1)
-$cases+=,@(0,'fullwidth',1,1);$cases+=,@(0,'fullwidth-english',1,1);$cases+=,@(0,'fullwidth-disabled',1,1)
+$cases=Get-EnglishKeyCases
 try{
  $env:SHANJIE_TEST_PROFILE='1';$env:SHANJIE_HEADLESS='1';$env:SHANJIE_CORE_LOCAL=$null
  foreach($arch in $Architectures){
   $out=Join-Path $ResultRoot $arch;New-Item -ItemType Directory $out -Force|Out-Null
-  $command=@"
+  if ($HarnessPath) {
+   if ($Architectures.Count -ne 1) { throw 'A prebuilt English harness can only be used for one architecture per invocation.' }
+   $exe=[IO.Path]::GetFullPath($HarnessPath)
+   if (!(Test-Path -LiteralPath $exe)) { throw "English-key harness is missing: $exe" }
+  } else {
+   $exe=Join-Path $out 'features.exe'
+   $command=@"
 @echo off
 $(Get-MsvcSetup $arch)
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/english_keys.cpp" /Fo"$out/features.obj" /Fe"$out/features.exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" "$root/tests/english_keys.cpp" /Fo"$out/features.obj" /Fe"$exe" /link ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib
 "@
-  Invoke-HarnessBuild $command "$out/compile.cmd" "$out/features.exe" "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'}
+   Set-Content "$out/compile.cmd" $command -Encoding utf8NoBOM
+   Invoke-Timed -Name "Compile English-key harness ($arch)" -Category 'build.cpp.harness' -Details @{architecture=$arch;source='tests/english_keys.cpp'} -Action { Invoke-HarnessBuild $command "$out/compile.cmd" $exe "$out/compile.log";if($LASTEXITCODE){throw 'Feature harness compilation failed'} }
+  }
   foreach($case in $cases){
    if($Scenarios -and $case[1] -notin $Scenarios){continue}
-   if($MixedModes -and $case[0] -notin $MixedModes){continue}
+   if($PSBoundParameters.ContainsKey('MixedModes') -and $case[0] -notin $MixedModes){continue}
    $folder=Join-Path $out "mode$($case[0])-layout$($case[2])-$($case[1])";if(Test-Path $folder){throw 'Use a fresh result directory'}
    New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
    $text=(Get-Content "$root/profiles/windows.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*',"keyboard=$($case[2])"
@@ -50,24 +56,24 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    if($case[1] -eq 'fullwidth-english'){$text=$text -replace '(?m)^chinese=.*','chinese=0'}
    if($case[1] -eq 'fullwidth-disabled'){$text=$text -replace '(?m)^shift_space_toggle=.*','shift_space_toggle=0'}
    Set-Content "$folder/profile/Shanjie/profile.ini" $text -Encoding utf8NoBOM;$env:LOCALAPPDATA="$folder/profile"
-   $worker=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru
+   $start=Start-TestStage -Name "Start English-key core ($arch $($case[1]))" -Category 'core.lifecycle'
+   $worker=$null
+   try{$worker=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--serve' -WindowStyle Hidden -PassThru;Complete-TestStage -Stage $start -Details @{architecture=$arch;profile="$folder/profile";pid=$worker.Id}}
+   catch{Complete-TestStage -Stage $start -Status 'failed' -Details @{architecture=$arch;profile="$folder/profile"} -ErrorMessage $_.Exception.Message;throw}
    try{
-    $ready=$false
-    for($attempt=0;$attempt -lt 12;$attempt++){
-     if($worker.HasExited){throw 'Owned English-key core exited during preload.'}
-     $probe=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--status' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput "$folder/core-status.json" -RedirectStandardError "$folder/core-status-error.log"
-     if($probe.ExitCode -eq 0 -and (Get-Content "$folder/core-status.json" -Raw|ConvertFrom-Json).ok){$ready=$true;break}
-     Start-Sleep -Milliseconds 100
-    }
-    if(!$ready){throw 'Owned English-key core did not finish preload.'}
-    & "$out/features.exe" "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"};Write-Output "PASS $arch $($case -join ',')"
-   }
-   finally{
-    $stop=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru;$stop.WaitForExit(5000)|Out-Null
-    if(!$worker.WaitForExit(5000)){
-     if(!$worker.Path.StartsWith($payload+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase')){throw 'Refuse to terminate a core outside this test payload.'}
-     $worker.Kill();$worker.WaitForExit();Write-Output "Stopped owned test core after shutdown timeout: $($worker.Id)"
-    }
+    Wait-TestCoreReady -CorePath "$payload/tools/shanjie-core.exe" -OutputDirectory $folder | Out-Null
+    Invoke-Timed -Name "English-key regression ($arch $($case[1]))" -Category 'english.keys' -Details @{architecture=$arch;scenario=$case[1];mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3]} -Action { & $exe "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"} }
+    Write-Output "PASS $arch $($case -join ',')"
+   } finally {
+    $stopStage=Start-TestStage -Name "Stop English-key core ($arch $($case[1]))" -Category 'core.lifecycle'
+    $stop=$null;$stopExited=$false;$stopCode=$null;$stopError=$null
+    try{$stop=Start-Process "$payload/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru;$stopExited=$stop.WaitForExit(5000);$stopCode=if($stopExited){$stop.ExitCode}else{$null}}
+    catch{$stopError=$_.Exception.Message}
+    if($stop -and !$stopExited){try{$stop.Kill();$stop.WaitForExit(5000)|Out-Null}catch{}}
+    $workerExited=$worker.WaitForExit(5000)
+    if(!$workerExited){try{$worker.Kill();$worker.WaitForExit(5000)|Out-Null}catch{}}
+    if($stopError -or !$stopExited -or $stopCode -ne 0 -or !$workerExited){$message='An isolated English-key core did not stop cleanly within five seconds.';Complete-TestStage -Stage $stopStage -Status 'failed' -Details @{architecture=$arch;pid=$worker.Id;stop_exit_code=$stopCode;worker_force_stopped=(!$workerExited)} -ErrorMessage ($stopError ?? $message);throw $message}
+    Complete-TestStage -Stage $stopStage -Details @{architecture=$arch;pid=$worker.Id;stop_exit_code=$stopCode}
    }
   }
  }

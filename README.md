@@ -3,7 +3,7 @@
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，另外加了微軟注音鍵位、中英混打、雙 Ctrl 加詞與線上模型管理。
 
 - **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3。目前版本 **0.14.0**，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。
-- **上游**：使用善解 v0.6.1 的核心、詞庫與整組模型。
+- **上游**：使用善解 v0.7.0 後主線的核心與詞庫（`0cba51d4`），保留 v0.7.0 的完整模型配套。
 - **Linux**：IBus 版停在 0.12.1，已停止維護；`linux/` 的原始碼沒有再編譯或測試。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。
@@ -65,26 +65,40 @@
 - **組字面板**：「組字與提交」頁的選項，預設關閉，組字只顯示在 App 內，沒有候選時不顯示面板，與上游相同。開啟後在候選窗位置顯示整句組字，游標移進句子時標出游標所在的字，使用者可依需要開啟（游標在句尾時不標；原鍵混打標的是正在打的注音）。
 - **純注音輸出**：「組字與提交」頁可切換，預設關閉。開啟後，標準／倚天注音逐鍵輸出符號與聲調，例如 `su3cl3` 得到「ㄋㄧˇㄏㄠˇ」，不自動轉成漢字或開啟候選、預測及聯想，也不加入選字學習。空白鍵輸入空格；方向鍵、刪除、Enter 提交與 Esc 沿用組字操作。切換時先提交現有組字；關閉後恢復原有輸入設定。拼音配置不啟用此模式，數字鍵盤仍直接輸入數字。
 - **加詞**：反白 1–32 個漢字後雙按 Ctrl，在詞旁確認讀音並加入個人詞庫；加入前會比對內建詞庫、個人詞庫與目前模型。
-- **模型**：內建會意 SJ-SR-8-15M 語意校正模型與上游 v0.6.1 的其餘完整配套（含口語模型），也可在設定中下載其他相容模型。配置名稱可換行，展開清單可捲動並標示目前選項。
+- **模型**：內建上游 v0.7.0 的完整模型配套（含會意 SJ-SR-8-15M 與常談），也可在設定中下載其他相容模型。配置名稱可換行，展開清單可捲動並標示目前選項。同名已安裝模型會沿用；來源切換不要求重裝，有新配套時標示「已下載・可更新」。
 - **貢獻者**：「關於」頁列出貢獻者（原作者 Nanako0129 置頂並標示，其餘依 GitHub 提交數排序，不顯示次數），滑鼠移入姓名可看貢獻摘要，也可開啟個人頁面與提交紀錄。頭像先連線載入，失敗時使用隨程式附上的頭像；統計更新方式見[貢獻者資料](docs/CONTRIBUTORS.md)。
 - **上游功能**：資訊與 AI 詞包、模糊輸入、語意校正強度、中英文之間自動加空格、依 App 自動切換聊天／書面都可在設定中開關。
 
 個人設定在 `%LOCALAPPDATA%\Shanjie\profile.ini`。直接改檔後，按設定頁的「重新啟動輸入法」或重新啟用善解才會讀取；這個按鈕不會終止 App，也換不掉 App 已載入的舊版 DLL。
 
+美妝與保養、迷因與直播詞包預設開啟，可在「選字」關閉；原鍵混打、純注音、右側候選與分段提交等 Windows 擴充保留。
+
+程式版本更新維持由 `tavricccc/shanjie-multiplatform` 提供；模型清單與附件優先原作者 `Nanako0129/shanjie`，讀取失敗才用 `tavricccc/shanjie-upstream-backup`。
+
+已下載配套與內建同版或較新時，設定不再提示改用內建。相容配套索引落後時，清單保留通過原生驗證的已安裝模型，並直接依上游發布資料顯示新版本或同標籤的檔案更新；尚待確認的配套會明確標示。
+
+模型建議以標題與內文分明的卡片顯示，設定頁、下載及選用確認共用排版；下載視窗的內容可完整捲動閱讀。
+
 ## 開發
 
-需要 PowerShell 7、Git、Rust MSVC、Visual Studio Build Tools（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
+需要 PowerShell 7、Git、Rust MSVC、CMake 4.2 以上、Visual Studio 2026（MSVC、Windows SDK resource compiler）與 .NET 10 SDK。
 
 ```powershell
-git submodule update --init
-pwsh -File scripts/package.ps1      # 建置並打包成 dist/Shanjie-Windows-Setup.exe
+pwsh -File scripts/sync-upstream.ps1  # 優先官方，無法讀取才改用鏡像
+pwsh -File scripts/package.ps1      # 建置測試用候選包，位於 build/release-candidates/
+pwsh -File scripts/release.ps1      # 完整 RELEASE 或重用有效紀錄，再產出正式安裝包
 pwsh -File scripts/build.ps1        # 只編譯；-Architecture x64|x86 只建單一架構
-pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
+pwsh -File scripts/test.ps1 -Level FAST       # 日常快速檢查
+pwsh -File scripts/test.ps1 -Level AFFECTED   # 依變更範圍跑相關回歸
+pwsh -File scripts/test.ps1 -Level FULL       # x64 完整回歸
+pwsh -File scripts/test.ps1 -Level RELEASE    # x64/x86、UI 與安裝包驗收
 ```
+
+CTest 測試分類、案例清冊、報告與基準比較方法見 [Windows 驗收流程](docs/TESTING.md)。
 
 推送到 main 且 `windows/Cargo.toml` 的版本號變更時，GitHub Actions 會建立 Release，並建置 Windows 單檔安裝程式附上；手動執行 workflow 預設只建置驗證，不覆寫既有 Release。
 
-`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只重新整理與打包現有 `dist/`。
+`build.ps1` 的 `-UseExistingCore` 略過 prepare，`-SkipSettings` 重用已發佈的設定程式；`package.ps1 -UseExistingBuild` 只把現有 `dist/` 封裝為候選包。正式本機安裝包由 `release.ps1` 核對乾淨 commit、四處版本、完整雙架構 CTest／JUnit 與產物雜湊後提升至 `dist/Shanjie-Windows-Setup.exe`；CI-safe 或失效紀錄不能代替，流程見 [測試文件](docs/TESTING.md)。一般 PR CI 固定執行必要輕量基線，不擴大成完整驗收。
 
 - [架構](docs/ARCHITECTURE.md)：模組、候選窗規格、設定程式、驗證指令。
 - [上游差異](UPSTREAM-CHANGES.md)：核心覆蓋與升版流程。更新上游前先讀。
@@ -93,7 +107,7 @@ pwsh -File scripts/verify.ps1       # 核心與 Windows 回歸測試
 
 ## 致謝
 
-- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。原 repo 已無法存取，程式碼與模型 Release 改由鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup) 提供（內容與原作者發布者相同，著作權與授權仍屬原作者）。
+- [善解注音](https://github.com/Nanako0129/shanjie)（Nanako0129，Apache-2.0）：輸入核心、詞庫與模型，本專案是它的 Windows 移植。程式碼與模型 Release 優先讀取原倉庫，無法讀取時才使用鏡像 [tavricccc/shanjie-upstream-backup](https://github.com/tavricccc/shanjie-upstream-backup)；附件仍核對大小與 SHA-256，著作權與授權不變。
 - [Pane](https://github.com/LBEILC/Pane)（LBEILC）：介面的視覺風格參考了它。
 - [Lucide](https://lucide.dev)：圖示。其他詞庫與演算法的授權見 `LICENSES/`。
 

@@ -13,8 +13,7 @@ public sealed partial class MainWindow
         if(!modelListReady||selectingModel||Vm.UpdatingModels||ModelSelector.SelectedItem is not ModelChoice choice||choice.Id==Vm.ModelId)return;
         await SelectModelWithConfirmation(choice,async()=>
         {
-            var text=new TextBlock{Text=ModelCatalog.Notes(choice.Catalog),TextWrapping=TextWrapping.Wrap,MaxWidth=520};
-            var dialog=new ContentDialog{XamlRoot=Root.XamlRoot,Title="選用模型前請確認",Content=new ScrollViewer{Content=text,MaxHeight=420},
+            var dialog=new ContentDialog{XamlRoot=Root.XamlRoot,Title="選用模型前請確認",Content=new ScrollViewer{Content=ModelNotes(choice.Catalog),MaxHeight=420,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},
                 PrimaryButtonText="仍然選用",CloseButtonText="取消",DefaultButton=ContentDialogButton.Close};
             return await dialog.ShowAsync()==ContentDialogResult.Primary;
         });
@@ -62,8 +61,20 @@ public sealed partial class MainWindow
         try{if(File.Exists(note)){notice=$"這版不再支援先前選用的模型「{File.ReadAllText(note).Trim()}」，已改用內建的{ModelCatalog.BuiltinName}。";File.Delete(note);}}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){}
         var chosen=Vm.AvailableModels.FirstOrDefault(m=>m.Id==Vm.ModelId);
-        if(notice.Length==0&&chosen is not null&&chosen.Id!=ModelCatalog.Builtin)
-            notice=$"目前使用「{chosen.Name}」。內建模型已是{ModelCatalog.BuiltinName}；要改用，在「模型配置」選內建後儲存。";
+        if(notice.Length==0&&chosen is not null&&chosen.Id!=ModelCatalog.Builtin&&chosen.InstalledSpec is {} saved)
+        {
+            var parts=saved.Catalog?.Assets.Select(a=>(a.Role,a.Release))
+                ??new[]{(Role:"bigram",Release:saved.ModelRelease),(Role:"classes",Release:saved.ClassesRelease)};
+            bool older=false,newer=false;
+            foreach(var part in parts)
+            {
+                var builtin=ModelCatalog.BuiltinAssets.Value.FirstOrDefault(a=>a.Role==part.Role);
+                if(builtin is not null&&ModelCatalog.ReleaseVersion(part.Release) is {} selectedVersion
+                    &&ModelCatalog.ReleaseVersion(builtin.Release) is {} builtinVersion&&selectedVersion.Family==builtinVersion.Family)
+                {older|=selectedVersion.Generation<builtinVersion.Generation;newer|=selectedVersion.Generation>builtinVersion.Generation;}
+            }
+            if(older&&!newer)notice=$"目前使用「{chosen.Name}」。內建模型已有較新配套 {ModelCatalog.BuiltinName}；要改用，在「模型配置」選內建後儲存。";
+        }
         if(notice.Length==0)return;
         Vm.Status=string.IsNullOrWhiteSpace(Vm.Status)?notice:Vm.Status+"\n"+notice;ShowLoadFeedback();
     }
@@ -111,7 +122,11 @@ public sealed partial class MainWindow
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item,string.Join("，",new[]{row.Name,row.State,row.Summary}.Where(s=>s.Length>0)));
         return item;
     }
-    private async void OnlineModels(object sender,RoutedEventArgs args)
+    private static FrameworkElement ModelNotes(ModelEntry? entry)=>entry is null
+        ?new TextBlock{Text=ModelCatalog.Notes(null),TextWrapping=TextWrapping.Wrap,MaxWidth=520}
+        :new ItemsControl{ItemsSource=entry.Advisories,ItemTemplate=(DataTemplate)Application.Current.Resources["SjModelAdvisory"],MaxWidth=520};
+    private async void OnlineModels(object sender,RoutedEventArgs args)=>await OnlineModels();
+    internal async Task OnlineModels()
     {
         if(modelOperation is not null)return;
         using var cancel=new CancellationTokenSource();modelOperation=cancel;
@@ -119,16 +134,19 @@ public sealed partial class MainWindow
         var listTime=new TextBlock {Text=ModelCatalog.ListTime(null,false),TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"]};
         var progress=new ProgressBar {IsIndeterminate=true};
         var choices=new ListView {MaxHeight=260,SelectionMode=ListViewSelectionMode.Single};
-        var notes=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxWidth=520};
+        var notes=new ContentControl{HorizontalContentAlignment=HorizontalAlignment.Stretch};
         var panel=new StackPanel {Spacing=12,MaxWidth=520};panel.Children.Add(listTime);panel.Children.Add(choices);panel.Children.Add(progress);panel.Children.Add(info);
-        panel.Children.Add(new ScrollViewer{Content=notes,MaxHeight=240});
+        panel.Children.Add(notes);
         panel.Children.Add(new TextBlock {Text="只列相容配套供下載。完成後選入設定草稿，按主視窗「儲存」才套用；個人詞庫與學習資料保留。",TextWrapping=TextWrapping.Wrap});
-        var dialog=new ContentDialog {XamlRoot=Root.XamlRoot,Title="取得其他模型",Content=panel,PrimaryButtonText="下載並選取",SecondaryButtonText="取消下載",CloseButtonText="關閉",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+        var content=new ScrollViewer{Content=panel,MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+        var dialog=new ContentDialog {XamlRoot=Root.XamlRoot,Title="取得其他模型",Content=content,PrimaryButtonText="下載並選取",SecondaryButtonText="取消下載",CloseButtonText="關閉",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
         List<CatalogRow> rows=[];bool busy=false,closeRequested=false;
         choices.SelectionChanged+=(_,_)=>{
             var row=choices.SelectedIndex>=0?rows[choices.SelectedIndex]:null;
-            notes.Text=row is null?"":ModelCatalog.Notes(row.Spec?.Catalog);
-            dialog.PrimaryButtonText=row?.Spec?.Catalog is {Advisories.Count:0}?"下載並選取":"仍然選用並下載";
+            notes.Content=row is null?null:ModelNotes(row.Spec?.Catalog);
+            dialog.PrimaryButtonText=row?.ActionLabel switch {
+                "選用"=>"選用既有模型", "更新"=>"更新並選取",
+                _=>row?.Spec?.Catalog is {Advisories.Count:0}?"下載並選取":"仍然選用並下載" };
             dialog.IsPrimaryButtonEnabled=!busy&&row?.Available==true;
         };
         dialog.Closing+=(_,e)=>{if(busy){e.Cancel=true;closeRequested=true;cancel.Cancel();}else cancel.Cancel();};
@@ -140,7 +158,7 @@ public sealed partial class MainWindow
             try
             {
                 var selected=await ModelCatalog.Download(row.Spec,new Progress<string>(s=>info.Text=s),cancel.Token);
-                await RefreshModels();Vm.SelectModel(selected.Id);Vm.Status="模型已下載、驗證並選取，按儲存後套用。其他設定草稿已保留。";ShowLoadFeedback();
+                await RefreshModels();Vm.SelectModel(selected.Id);Vm.Status="模型已驗證並選取，按儲存後套用。其他設定草稿已保留。";ShowLoadFeedback();
                 busy=false;dialog.Hide();
             }
             catch(OperationCanceledException){info.Text="已取消，原模型保持不變；重新開啟清單可續傳。";}

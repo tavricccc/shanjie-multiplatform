@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 26] = [
+pub const REBUILD: [(&str, &str); 28] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -23,6 +23,8 @@ pub const REBUILD: [(&str, &str); 26] = [
     ("engine", "model_revision"),
     ("engine", "acg_pack"),
     ("engine", "it_pack"),
+    ("engine", "beauty_pack"),
+    ("engine", "meme_pack"),
     ("engine", "quote_pack"),
     ("engine", "rerank"),
     ("engine", "rerank_level"),
@@ -356,7 +358,7 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 }
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 3] = [
-    ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "model_id", "model_revision", "rerank", "rerank_level",
+    ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "beauty_pack", "meme_pack", "model_id", "model_revision", "rerank", "rerank_level",
         "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",

@@ -2,9 +2,10 @@
 # Everything the pinned upstream ships (lexicon files, word packs, models) must ship here and be on by upstream's default.
 # A new or changed upstream item fails this check until it is wired in; nothing is silently left out or switched off.
 # Static checks always run; -Dist also compares the built dist/data and dist model folder with upstream (run after a build).
-param([switch]$Dist)
+param([switch]$Dist,[string]$RuntimeRoot)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 $upstream = Join-Path $root 'upstream/shanjie/data'
 $failures = [Collections.Generic.List[string]]::new()
 function Fail([string]$message) { $failures.Add($message) }
@@ -28,8 +29,8 @@ foreach ($name in $expected.Keys | Sort-Object) {
 }
 
 # --- Word packs: every upstream pack is shipped by prepare-data.ps1, has a profile switch, and keeps upstream's default. ---
-# Upstream defaults: the app turns acg and it on (Shell.swift acgPackOn / itPackOn); quotes is off unless set (docs/contracts/quote-pack.md).
-$packs = @{ acg = @('acg_pack', '1'); it = @('it_pack', '1'); quotes = @('quote_pack', '0') }
+# Upstream defaults: ACG, IT, meme and beauty are on; quotes is off (ShanjieKit/Shell.swift).
+$packs = @{ acg = @('acg_pack', '1'); it = @('it_pack', '1'); quotes = @('quote_pack', '0'); meme = @('meme_pack', '1'); beauty = @('beauty_pack', '1') }
 $upstreamPacks = Get-ChildItem (Join-Path $upstream 'packs') -Filter '*.json' -File | ForEach-Object { $_.BaseName }
 foreach ($id in $upstreamPacks) { if (!$packs.ContainsKey($id)) { Fail "Upstream pack '$id' is new: ship it in prepare-data.ps1, add its switch to the profiles and shared/src/profile.rs, and list it here with upstream's default." } }
 foreach ($id in $packs.Keys) { if ($id -notin $upstreamPacks) { Fail "Pack '$id' is no longer in upstream; remove it here, in the profiles and in prepare-data.ps1." } }
@@ -54,7 +55,7 @@ if ($prepareData -notmatch 'data/lexicon/\*') { Fail 'prepare-data.ps1 must copy
 if ($Dist) {
     # Compare with the pinned Git blobs: the shipped data comes from them, and the checkout may have other line endings.
     function Same-AsUpstream([string]$built, [string]$path) { (git -C (Join-Path $root 'upstream/shanjie') rev-parse "HEAD:data/$path") -eq (git hash-object --no-filters $built) }
-    $data = Join-Path $root 'dist/data'
+    $data = Join-Path $RuntimeRoot 'data'
     foreach ($file in Get-ChildItem (Join-Path $upstream 'lexicon') -File) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }

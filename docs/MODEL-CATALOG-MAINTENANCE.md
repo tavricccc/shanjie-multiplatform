@@ -2,6 +2,10 @@
 
 Windows 讀 format:2 清單，驗證配套並確認備註。內建模型是 `MODEL-SOURCES.json` 所記錄的整組模型（id `builtin`）：會意更新為 SJ-SR-8-15M，其餘維持上游 v0.6.1 配套；核心 pin 維持 `UPSTREAM.json`。`source` 指向隨版本庫保存的原始附件，`pinned_sha256` 記錄核心 pin 的原有模型雜湊。
 
+模型查詢與下載沿用 Windows `v0.15.4-beta.5` 的原作者路徑：發布清單為 `https://api.github.com/repos/Nanako0129/shanjie/releases?per_page=100&page={page}`，附件為 `https://github.com/Nanako0129/shanjie/releases/download/{tag}/{filename}`。各項讀取失敗時才改查同一路徑下的 `tavricccc/shanjie-upstream-backup`；程式版本更新仍由 `tavricccc/shanjie-multiplatform` 提供。
+
+Windows 維護的相容索引用來確認配套與提供備註，不取代原作者發布清單。索引落後或不可讀時，保留已驗證的安裝收據，直接顯示上游新版本或同標籤檔案更新並標示待驗；不能因此切換鏡像，也不能把尚未驗證的附件當成可用配套。
+
 ## 上線與日常操作
 
 工作流程：`.github/workflows/model-catalog-maintenance.yml`。每日 UTC 01:23（臺灣 09:23）執行；亦可在 Actions 選 **Run workflow**：
@@ -22,7 +26,7 @@ main 的 `MODEL-CATALOG.json` 保留給 0.12.2 等舊版。新 receipt 使用舊
 
 流程是 `discover → probe → advisory evaluation → assemble → publish`，實作在 `scripts/model_catalog/catalog.py`、`probe.ps1` 與 `windows/src/bin/shanjie-model-check.rs`。
 
-1. 完整分頁查詢 `tavricccc/shanjie-upstream-backup` 公開 Releases；固定來源與合法附件名稱，核對 GitHub 記錄及實體內容的大小／SHA-256。不執行上游附件中的指令。
+1. 完整分頁查詢 `Nanako0129/shanjie` 公開 Releases，無法讀取時才改查 `tavricccc/shanjie-upstream-backup`；兩邊皆失敗時停止，不發布部分清單。附件優先原作者來源，讀取失敗才改用鏡像，仍核對大小／SHA-256。程式更新與維護清單的發布倉庫維持 `tavricccc/shanjie-multiplatform`，既有模型收據的來源與 ID 不重寫。不執行上游附件中的指令。
 2. 依實際 magic 與內嵌雜湊配對。目前能力含 SJLM0001、SJCL0001、SJKN0002、SJT30001、SJTL0001–0004、SJWM0002 映射及無詞類模型。口語模型作獨立主模型，保留來源／授權附件，不混入一般模型。
 3. 同一 source commit 的 x64、x86 原生核心在隔離資料、停用學習及正式核心連線的子程序驗證完整配套、映射等價、載入、輸入與一次提交。語意配套另確認實際重排。架構證據遺失／重複時停止組裝；只對通過的架構宣稱可用。
 4. 同一 runner、核心配置及公開資料比較基準與候選。資料為 pinned upstream `eval/bench/suite-v1/dev302.txt` 前 20 句，收錄於 `evaluation.txt`；記錄資料 SHA-256、配置、分母與雙方分數。聊天／正式模式分開，不挪用歷史 302 句或 macOS 成績；小集合只提供有限參考。

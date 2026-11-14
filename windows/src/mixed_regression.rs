@@ -1,4 +1,12 @@
 //! Public fixtures only; no installed data or user settings.
+// This module is compiled only for tests. RELEASE feeds the sealed model/data
+// directory; standalone Cargo tests retain their existing dist/data default.
+fn test_data_root() -> std::path::PathBuf {
+    std::env::var_os("SHANJIE_TEST_DATA_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data"))
+}
+
 use shanjie_core::{engine::{Engine,Layout,Key,KeyKind,ResetMode,MOD_SHIFT},lm::Profile,Lexicon};
 use std::sync::Arc;
 
@@ -74,7 +82,7 @@ fn zhuyin_only_edits_symbols_and_restores_normal_conversion_when_disabled() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data"]
 fn zhuyin_only_never_opens_predictions_with_builtin_data() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     for mixed in [false, true] {
         let mut e = Engine::new(&data, Layout::Standard).unwrap();
         e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
@@ -316,7 +324,7 @@ fn shifted_english_stays_literal_at_space_and_does_not_leak_to_next_reading() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
-    let data=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data=test_data_root();
     let mut e=Engine::new(&data,Layout::Standard).unwrap();
     e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
     e.set_windows_input_options((1<<20)|(1<<21)|(1<<22)|(1<<23));
@@ -427,7 +435,7 @@ fn digit_runs_hand_back_complete_readings_to_windows_mixing() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn sessions_on_one_model_share_the_digit_tables() {
-    let data=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data=test_data_root();
     let model=data.join("models/builtin/bigram.winmap");
     let open=|packs:u32|{
         let mut e=Engine::new_with_personal(&data,Layout::Standard,None,packs).unwrap();
@@ -447,7 +455,7 @@ fn sessions_on_one_model_share_the_digit_tables() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn shifted_caps_tail_refreshes_predictions_in_upstream_english_mode() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     let mut e = Engine::new(&data, Layout::Standard).unwrap();
     e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
     e.set_windows_input_options(0);
@@ -461,14 +469,14 @@ fn shifted_caps_tail_refreshes_predictions_in_upstream_english_mode() {
         out = Some(e.key_with_latin(Key::ch(ch.to_ascii_lowercase(), 0), ch.is_ascii_alphabetic().then_some(ch)).unwrap());
     }
     let out = out.unwrap();
-    assert_eq!(out.preedit, "gemini好");
+    assert_eq!(out.preedit, "Gemini好");
     assert!(!out.candidates.is_empty(), "the restored Chinese syllable must refresh its prediction row");
 }
 
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn mixed_sentences_recover_reordered_syllables() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     let mut e = Engine::new(&data, Layout::Standard).unwrap();
     e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
     let colloquial = data.join("models/builtin/colloquial.sjlm");
@@ -566,7 +574,7 @@ fn mixed_sentences_recover_reordered_syllables() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
 fn selected_maple_story_is_remembered_across_partial_enters() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     for profile in [shanjie_core::lm::Profile::Chat, shanjie_core::lm::Profile::Formal] {
         let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
         e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
@@ -605,7 +613,7 @@ fn selected_maple_story_is_remembered_across_partial_enters() {
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 runs it after the build"]
 fn upstream_english_digit_candidates_include_zhuyin_and_tones_with_builtin_data() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     let model = data.join("models/builtin/bigram.winmap");
     for right in [false, true] {
         for prediction in [false, true] {
@@ -733,7 +741,7 @@ fn upstream_english_digit_candidates_include_zhuyin_and_tones_with_builtin_data(
 #[test]
 #[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
 fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
-    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/data");
+    let data = test_data_root();
     let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
     e.load_lm(&data.join("models/builtin/bigram.winmap")).unwrap();
     e.set_profile(shanjie_core::lm::Profile::Chat).unwrap();

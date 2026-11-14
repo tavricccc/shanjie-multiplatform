@@ -1,18 +1,18 @@
 # Windows 安裝包的模型
 
-模型原作者為 Nanako0129（善解，https://github.com/Nanako0129/shanjie，已無法存取）；會意第 8 版的上游公開附件由使用者提供的模型備份取回，原樣保存在本 repo，其餘原始 Release 資產以原檔名與相同 SHA-256 鏡像於 https://github.com/tavricccc/shanjie-upstream-backup 。授權與署名不變。
+模型原作者為 Nanako0129（善解，https://github.com/Nanako0129/shanjie）。模型優先使用原始 Release，無法讀取時才使用 https://github.com/tavricccc/shanjie-upstream-backup 的相同附件；大小、SHA-256、授權與署名不變。
 
-核心版本：善解 v0.6.1，`7fdc88a1101c2ca23aa716b3dc3ae56747e16b96`。本包內建會意 SJ-SR-8-15M 與該核心版本的其餘完整模型配套，放在 `data/models/builtin/`；其他相容配套由設定的線上模型管理另行下載。本文件補充同目錄的上游 `data.md`，不取代上游詞庫與模型的授權與署名；各模型的語料來源、各來源授權與署名以 `data.md` 對應的列為準。
+核心版本：善解 v0.7.0 後主線，`bf0bb4efe33105bccb3c9fc0fd373feec529d8d9`。本包內建會意 SJ-SR-8-15M 與該核心版本的其餘完整模型配套，放在 `data/models/builtin/`；其他相容配套由設定的線上模型管理另行下載。本文件補充同目錄的上游 `data.md`，不取代上游詞庫與模型的授權與署名；各模型的語料來源、各來源授權與署名以 `data.md` 對應的列為準。
 
 | 包內檔案 | 原始 Release 資產 | 資料授權 |
 | --- | --- | --- |
-| `bigram.winmap` | [通語 SJ-LM-7-9.7M](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-lm-7-9.7m) `bigram.sjlm` | CC BY-SA 4.0 |
-| `classes.sjc` | [辨類 SJ-WC-6-512C](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-wc-6-512c) | CC BY-SA 4.0 |
-| `kn.sjkn` | [承接 SJ-KN-2-397K](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-kn-2-397k) | CC BY-SA 4.0 |
-| `trigram.sjt3` | [連文 SJ-CX-2-7.7M](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-cx-2-7.7m)（書面設定） | CC BY-SA 4.0 |
-| `trigram-chat.sjt3` | [連文 SJ-CX-2-950K](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-cx-2-950k)（聊天設定） | CC BY-SA 4.0 |
-| `tinylm.sjtl` | [會意 SJ-SR-8-15M 原始附件](../models/sj-sr-8-15m/tinylm.sjtl)（語意校正；原 Release：`Nanako0129/shanjie` 的 `sj-sr-8-15m`） | CC BY-SA 4.0 |
-| `colloquial.sjlm` | [常談 SJ-CL-2-69K](https://github.com/tavricccc/shanjie-upstream-backup/releases/tag/sj-cl-2-69k)（聊天設定的語意校正） | CC BY-SA 4.0；口語池各來源的授權見 `data.md` |
+| `bigram.winmap` | [通語 SJ-LM-7-9.7M](https://github.com/Nanako0129/shanjie/releases/tag/sj-lm-7-9.7m) `bigram.sjlm` | CC BY-SA 4.0 |
+| `classes.sjc` | [辨類 SJ-WC-6-512C](https://github.com/Nanako0129/shanjie/releases/tag/sj-wc-6-512c) | CC BY-SA 4.0 |
+| `kn.sjkn` | [承接 SJ-KN-2-397K](https://github.com/Nanako0129/shanjie/releases/tag/sj-kn-2-397k) | CC BY-SA 4.0 |
+| `trigram.sjt3` | [連文 SJ-CX-2-7.7M](https://github.com/Nanako0129/shanjie/releases/tag/sj-cx-2-7.7m)（書面設定） | CC BY-SA 4.0 |
+| `trigram-chat.sjt3` | [連文 SJ-CX-2-950K](https://github.com/Nanako0129/shanjie/releases/tag/sj-cx-2-950k)（聊天設定） | CC BY-SA 4.0 |
+| `tinylm.sjtl` | [會意 SJ-SR-8-15M 原始附件](https://github.com/Nanako0129/shanjie/releases/tag/sj-sr-8-15m)（語意校正） | CC BY-SA 4.0 |
+| `colloquial.sjlm` | [常談 SJ-CL-2-69K](https://github.com/Nanako0129/shanjie/releases/tag/sj-cl-2-69k)（聊天設定的語意校正） | CC BY-SA 4.0；口語池各來源的授權見 `data.md` |
 
 署名：**Wikipedia contributors、Tatoeba contributors**。常談口語池逐一來源的署名（YODAS 影片、Tatoeba 作者、WildChat 與 MASSIVE 的出處）在同目錄的 `colloquial-attribution.tsv`，原樣取自上游附件。
 

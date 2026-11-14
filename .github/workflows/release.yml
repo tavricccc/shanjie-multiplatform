@@ -43,7 +43,9 @@ jobs:
 
   windows:
     needs: release
-    runs-on: windows-latest
+    # Match the Visual Studio 2026 generator selected by the CMake presets.
+    runs-on: windows-2025
+    timeout-minutes: 180
     outputs:
       artifact_name: windows-package-${{ github.run_attempt }}
     defaults:
@@ -52,8 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
-          submodules: true
           persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
         with:
           dotnet-version: 10.0.x
@@ -62,14 +65,19 @@ jobs:
         with:
           path: build/model
           key: models-${{ hashFiles('MODEL-SOURCES.json') }}
-      - name: Build and verify the package
-        run: pwsh -File scripts/package.ps1
-      - name: Unit tests
-        run: cargo test --manifest-path windows/Cargo.toml --lib
-      - name: Mixed-input regression against the built data
-        run: cargo test --manifest-path windows/Cargo.toml --lib -- --ignored mixed_regression --test-threads=1
-      - name: Verify release transaction rules
-        run: python scripts/test_release.py
+      - name: Run CTest RELEASE (interactive UI rows are reported as not run)
+        run: pwsh -File scripts/test.ps1 -Level RELEASE -BaseRef HEAD -CiSafe
+      - name: Upload CTest reports and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: windows-ctest-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/reports/**
+            build/cmake/windows-x64/Testing/Temporary/LastTest.log
+            build/cmake/windows-x86/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 14
       - name: Prepare verified release assets
         run: |
           foreach ($name in @('Shanjie-Windows-Setup.exe')) {
@@ -105,8 +113,9 @@ jobs:
           git config --global --add safe.directory '*'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
-          submodules: true
           persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
       - name: Cache upstream models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:

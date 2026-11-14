@@ -12,7 +12,7 @@ function Replace-Contract([string]$old, [string]$replacement, [int]$count = 1) {
     }
     $script:content = $script:content.Replace($old,$replacement)
 }
-Replace-Contract '    cursor: usize,' "    cursor: usize,`n    candidate_from_right: bool,`n    windows_punctuation_candidates: bool,`n    candidate_grid_columns: usize,"
+Replace-Contract "    layout: Layout,`n    syls: Vec<String>,`n    cursor: usize," "    layout: Layout,`n    syls: Vec<String>,`n    cursor: usize,`n    candidate_from_right: bool,`n    windows_punctuation_candidates: bool,`n    candidate_grid_columns: usize,"
 Replace-Contract '            cursor: 0,' "            cursor: 0,`n            candidate_from_right: false,`n            windows_punctuation_candidates: false,`n            candidate_grid_columns: PAGE_SIZE,"
 Replace-Contract '    dalt: Option<DigitAlt>,' "    dalt: Option<DigitAlt>,`n    digit_zhuyin: Option<(usize, char)>,"
 Replace-Contract 'dalt: None }' 'dalt: None, digit_zhuyin: None }'
@@ -23,12 +23,12 @@ Replace-Contract 'let idx = row * cols + d;' 'let idx = sel / PAGE_SIZE * PAGE_S
 Replace-Contract '    fn open_candidates(&mut self, rows: Vec<Pred>) {' '    fn open_candidates_left(&mut self, rows: Vec<Pred>) {'
 $leftDigitOld = @'
             if let Some(d) = digit_of(&self.syls[touching]) {
-                // Digits.md A.3.4 (Down): the row of the digit context first, then the digit and its full-width form, then (A.3.6)
+                // docs/spec/english-mixed.md §7.4 (Down): the row of the digit context first, then the digit and its full-width form, then (docs/spec/english-mixed.md §7.7)
                 // the syllable the last digit tokens could have been. The punctuation table is not asked.
                 let mut list: Vec<(String, usize)> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
                 list.push((d.to_string(), 1));
                 list.push((digit_layer::full_width(d).to_string(), 1));
-                let mut c = Cands::new(Vec::new(), self.cand_vertical);
+                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
                 if let Some((n, syl, word)) = self.digit_syllable_alt(touching + 1) {
                     list.push((word, 1));
                     c.dalt = Some(DigitAlt::Syllable { n, syl });
@@ -41,12 +41,12 @@ $leftDigitOld = @'
 '@
 $leftDigitNew = @'
             if let Some(d) = digit_of(&self.syls[touching]) {
-                // Digits.md A.3.4 (Down): the row of the digit context first, then the digit and its full-width form, then (A.3.6)
+                // docs/spec/english-mixed.md §7.4 (Down): the row of the digit context first, then the digit and its full-width form, then (docs/spec/english-mixed.md §7.7)
                 // the syllable the last digit tokens could have been. The punctuation table is not asked.
                 let mut list: Vec<(String, usize)> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
                 list.push((d.to_string(), 1));
                 list.push((digit_layer::full_width(d).to_string(), 1));
-                let mut c = Cands::new(Vec::new(), self.cand_vertical);
+                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
                 if let Some(sym) = self.digit_zhuyin_symbol(d) {
                     list.push((sym.to_string(), 1));
                     c.digit_zhuyin = Some((touching, sym));
@@ -99,8 +99,8 @@ $chooseNew = @'
 Replace-Contract $chooseOld $chooseNew
 Replace-Contract 'let alts = typed.chars().next().and_then(|c| self.punct.get(&c)).cloned().unwrap_or_default();' 'let alts = self.windows_punctuation_alternatives(&typed);'
 Replace-Contract '        self.punct = map;' "        self.punct = map;`n        self.windows_punctuation_candidates = false;"
-Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l);' 2
-Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_key, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
+Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = if c.mixed.is_some() { if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) } } else { self.candidate_span(l) };' 2
+Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
 Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/input_windows.rs" -Raw)

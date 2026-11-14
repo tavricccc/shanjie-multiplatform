@@ -1,8 +1,7 @@
 name: ci
 
-# Pull requests into main: upstream data coverage and the Rust unit tests that need no installed data or models.
-# The upstream core suite (scripts/test-core.ps1) and the TSF/UI verification (scripts/verify.ps1) need models,
-# a built package and a desktop, so they stay local and the release job.
+# PR updates and manual runs use only the fixed, model-free CTest CI baseline.
+# Full product builds, upstream core suites, TSF/UI regressions and packaging stay local/release-only.
 on:
   pull_request:
     branches: [main]
@@ -17,7 +16,8 @@ concurrency:
 
 jobs:
   unit-tests:
-    runs-on: windows-latest
+    # Run the lightweight CI baseline with the Visual Studio 2026 generator.
+    runs-on: windows-2025
     timeout-minutes: 30
     defaults:
       run:
@@ -25,17 +25,57 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
-          submodules: true
           persist-credentials: false
-      - name: Upstream data coverage
-        run: pwsh -File scripts/verify-upstream-data.ps1
-      - name: Release transaction tests (no GitHub writes)
-        run: python scripts/test_release.py
-      - name: Verification selection rules
-        run: pwsh -File tests/verify_selection.ps1
-      - name: Prepare the Windows core
-        run: pwsh -File scripts/prepare-core.ps1
-      - name: Unit tests (shared)
-        run: cargo test --manifest-path shared/Cargo.toml --lib --target x86_64-pc-windows-msvc
-      - name: Unit tests (windows)
-        run: cargo test --manifest-path windows/Cargo.toml --lib --target x86_64-pc-windows-msvc
+          fetch-depth: 1
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - name: Check PowerShell syntax
+        run: |
+          $files = Get-ChildItem scripts -Recurse -File | Where-Object Extension -In '.ps1','.psm1'
+          foreach ($file in $files) {
+            $tokens = $null; $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors) { throw "$($file.Name): $($parseErrors.Message -join '; ')" }
+          }
+      - name: Identify Cargo compilation cache
+        id: cargo-cache-key
+        env:
+          SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/config.toml', 'windows/Cargo.toml', 'windows/Cargo.lock', 'shared/Cargo.toml', 'upstream/shanjie/core/Cargo.toml', 'UPSTREAM.json', 'platform/**/*.rs', 'scripts/prepare-*.ps1') }}
+        run: |
+          $rust = (& rustc --version --verbose | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify rustc for the CI cache.' }
+          $cargo = (& cargo --version | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify Cargo for the CI cache.' }
+          if (!$env:ImageOS -or !$env:ImageVersion) { throw 'Runner image identity is required for the CI cache.' }
+          $identity = @($env:ImageOS, $env:ImageVersion, $rust, $cargo, $env:RUSTFLAGS, $env:CARGO_ENCODED_RUSTFLAGS, $env:SHANJIE_CARGO_CACHE_INPUTS) -join "`n"
+          $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity))).ToLowerInvariant()
+          "prefix=cargo-unit-vs2026-v1-${{ runner.os }}-${{ runner.arch }}-$digest" >> $env:GITHUB_OUTPUT
+          Write-Host "Runner image: $env:ImageOS $env:ImageVersion"
+          Write-Host $rust
+          Write-Host $cargo
+      - name: Cache Cargo compilation inputs and outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          # Preserve the two workspaces' native fingerprints and target separation.
+          # Do not cache generated core sources, workspace Cargo.lock files, results or CMake.
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            shared/target
+            windows/target
+          key: ${{ steps.cargo-cache-key.outputs.prefix }}-${{ github.sha }}
+          restore-keys: ${{ steps.cargo-cache-key.outputs.prefix }}-
+      # Cargo still validates its inputs and executes both suites on a cache hit.
+      - name: Configure and run the fixed lightweight CTest baseline
+        run: pwsh -File scripts/test.ps1 -Level CI -CiSafe
+      - name: Upload machine-readable test reports and failure logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: windows-ctest-${{ github.run_id }}
+          path: |
+            build/reports/**
+            build/cmake/windows-x64/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 14

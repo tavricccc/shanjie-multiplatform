@@ -101,6 +101,12 @@ int wmain(int argc, wchar_t** argv) {
     bool original = argc == 3 && std::wstring(argv[2]) == L"--shanjie";
     bool cold = argc == 3 && std::wstring(argv[2]) == L"--cold-start";
     bool zhuyinOnly = argc == 3 && std::wstring(argv[2]) == L"--zhuyin-only";
+    if(!visual) {
+        auto desktopName=L"Shanjie.Smoke."+std::to_wstring(GetCurrentProcessId());
+        auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+        require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+        std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
+    }
     require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
     HMODULE dll = LoadLibraryW(argv[1]); require(dll != nullptr,3);
     auto factoryFn = (HRESULT (WINAPI*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject"); require(factoryFn != nullptr,4);
@@ -555,6 +561,21 @@ int wmain(int argc, wchar_t** argv) {
         localNotify(L"Shanjie.ProfileChanged.v2");
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
         std::puts("Original Shanjie profile: none/page/expand candidate navigation and unchanged Shift passed");
+    }
+    if (!visual && !original) {
+        // The useful pair is farther than eight UTF-16 units from the caret.
+        // Supplementary characters also exercise the 64-character boundary.
+        for (bool supplementary : {false,true}) {
+            std::wstring prefix=L"反映";
+            for(int i=0;i<40;++i)prefix+=supplementary?L"\U0001F600":L"甲";
+            prefix+=L" ";
+            store->text=prefix;store->externalCaret((LONG)prefix.size());
+            press('Z',1100);press('0',1102);press('3',1104);
+            press('U',1106);press(VK_OEM_2,1108);press('4',1110);
+            press(VK_RETURN,1112);
+            require(store->text==prefix+L"反映",1114);
+        }
+        std::puts("TSF context recurrence: long and supplementary-character prefixes passed");
     }
     if (visual) {
         BOOL shown = TRUE; candidates->IsShown(&shown); require(!shown,61);

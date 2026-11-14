@@ -85,6 +85,15 @@
     <CornerRadius x:Key="SjRadiusItem">12</CornerRadius>
     <CornerRadius x:Key="SjRadiusControl">10</CornerRadius>
 
+    <DataTemplate x:Key="SjModelAdvisory">
+        <Border Background="{ThemeResource SjFillControlBrush}" BorderBrush="{ThemeResource SjStrokeBrush}" BorderThickness="1" CornerRadius="12" Padding="14,12" Margin="0,8,0,0">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource SjText1Brush}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding Body}" FontSize="13" LineHeight="20" Foreground="{ThemeResource SjText2Brush}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+    </DataTemplate>
+
     <!-- WinUI controls (text boxes, drop-downs, number boxes, check and radio buttons) in the theme colors:
          neutral control fill with a thin stroke, 10 px corners, the accent only for state and focus. -->
     <StaticResource x:Key="TextControlBackground" ResourceKey="SjFillControlBrush"/>
