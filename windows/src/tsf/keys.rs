@@ -605,8 +605,10 @@ impl Data {
                     let left = range(selection(&current, cookie)?);
                     left.Collapse(cookie, TF_ANCHOR_START)?;
                     let mut moved = 0;
-                    left.ShiftStart(cookie, -8, &mut moved, std::ptr::null())?;
-                    let mut text = [0u16; 8];
+                    // Upstream recurrence uses the last 64 Unicode characters;
+                    // allow two UTF-16 units per character before trimming.
+                    left.ShiftStart(cookie, -128, &mut moved, std::ptr::null())?;
+                    let mut text = [0u16; 128];
                     let mut count = 0;
                     left.GetText(cookie, 0, &mut text, &mut count)?;
                     let mut units = &text[..count as usize];
@@ -617,7 +619,8 @@ impl Data {
                         units = &units[..units.len() - 1];
                     }
                     let value = std::ffi::CString::new(
-                        String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?,
+                        String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?
+                            .chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect::<String>(),
                     )
                     .unwrap();
                     let value = value.to_str().unwrap();
