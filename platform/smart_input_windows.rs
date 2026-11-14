@@ -11,6 +11,18 @@ fn english_word(word: &str) -> bool {
 mod windows_smart_tests {
     use super::*;
     #[test]
+    fn windows_literal_keys_consume_context_freshness_and_clear_stale_context() {
+        let mut e = engine();
+        e.zhuyin_only = true;
+        e.set_left_context("甲乙");
+        e.key(Key::ch('1', 0)).unwrap();
+        assert_eq!(e.recur_pairs(), 1);
+        assert!(!e.left_fresh);
+        e.key(Key::new(KeyKind::Backspace)).unwrap();
+        e.key(Key::ch('2', 0)).unwrap();
+        assert_eq!(e.recur_pairs(), 0);
+    }
+    #[test]
     fn upstream_english_preserves_windows_caps_and_shift_display() {
         let mut e=engine();e.set_mixed_input(false);
         e.set_upstream_english(true,true,true,true).unwrap();
@@ -648,6 +660,12 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // Consume the context once at the public key boundary, including paths
+        // handled entirely by Windows and keys replayed through key_original.
+        if !std::mem::take(&mut self.left_fresh) && self.composition_empty()
+            && self.mixed_raw.is_empty() && self.pending_literal.is_empty() {
+            self.clear_left();
+        }
         // The explicit upstream Microsoft scheme owns its key rules. A window
         // keeps the scheme it opened with even if the setting changes meanwhile.
         if self.cands.as_ref().map_or(self.key_scheme == 1, |c| c.ms) {
@@ -720,6 +738,8 @@ impl Engine {
             }
         }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
+            self.late = None;
+            self.late_in = None;
             // Symbols the Windows policy kept behind an unfinished reading go in front of the run: upstream's
             // run replaces that reading, and the symbols were typed before the letter.
             let mut commit=String::new();

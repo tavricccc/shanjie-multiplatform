@@ -67,10 +67,16 @@ impl Engine {
         let demote = std::fs::read_to_string(data.join("demote.tsv")).map_err(|_| EngineError::LoadFailed)?;
         if !Demote::parse(&demote).is_some_and(|d| d.check(&lex)) { return Err(EngineError::LoadFailed); }
         let mut engine = Engine::with_lexicon(lex,layout); engine.data_dir = Some(data.to_path_buf());
+        engine.pack_single = pack_has_single(&pack_text);
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
         engine.pack_oov_len = pack_oov_len;
         engine.digit_table = windows_digit_table(data);
         if let Ok(text) = std::fs::read_to_string(data.join("mixed-words.tsv")) { engine.set_mixed_words(&text); }
+        match std::fs::read_to_string(data.join("english-next.tsv")) {
+            Ok(text) => engine.en_table = Some(Arc::new(EnglishTable::parse(&text).map_err(|_| EngineError::LoadFailed)?)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(EngineError::LoadFailed),
+        }
         Ok(engine)
     }
     pub fn is_prediction_row(&self) -> bool { self.cands.is_none() && !self.pred.is_empty() }
