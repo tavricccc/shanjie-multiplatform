@@ -57,7 +57,7 @@ pub fn safe_name(s:&str,max:usize)->bool {
 }
 fn fail<T>(s:&str)->Result<T>{Err(s.into())}
 // Receipts retain their original repository as part of their immutable bundle ID.
-// New downloads are routed to the mirror by the downloader, not by rewriting receipts.
+// Downloads try upstream first, then the mirror; routing never rewrites receipts.
 fn trusted_repository(repository:&str)->bool {
     matches!(repository,"tavricccc/shanjie-upstream-backup"|"Nanako0129/shanjie")
 }

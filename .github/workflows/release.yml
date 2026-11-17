@@ -54,8 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
-          submodules: true
           persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
         with:
           dotnet-version: 10.0.x
@@ -112,8 +113,9 @@ jobs:
           git config --global --add safe.directory '*'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
-          submodules: true
           persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
       - name: Cache upstream models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:

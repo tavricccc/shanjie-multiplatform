@@ -19,6 +19,7 @@ Expect 'release workflow' @('.github/workflows/release.yml') $false @('fast','te
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
+Expect 'model manager fixture' @('tests/model_sources_fixture.py') $false @('fast','settings-ui','candidate-host')
 Expect 'installer' @('windows/src/installer/progress.rs') $false @('fast','windows')
 Expect 'platform' @('platform/smart_input_windows.rs') $false @('fast','rust','core','english','submission')
 Expect 'suites merge without duplicates' @('windows/src/word_popup.rs','tests/popup_lifecycle.cpp','tests/english_keys.cpp') $false @('fast','windows','word','popup-lifecycle','rust','english')
