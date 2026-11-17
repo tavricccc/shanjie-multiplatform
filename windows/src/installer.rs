@@ -166,6 +166,7 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         "data/packs/acg-add.tsv",
         "data/packs/quotes-add.tsv",
         "data/packs/it-add.tsv",
+        "data/packs/beauty-add.tsv",
         "tools/shanjie-manager.exe",
         "tools/shanjie-core.exe",
         "安裝善解.exe",

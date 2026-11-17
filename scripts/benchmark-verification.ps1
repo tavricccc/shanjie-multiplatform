@@ -274,7 +274,7 @@ try {
         & git -C $root worktree add --detach $worktree $workCommit *> (Join-Path $artifactsRoot "$name-worktree.log")
         if($LASTEXITCODE){throw "Could not create $name benchmark worktree."}
         $gitAdded+=,$worktree
-        & git -C $worktree submodule update --init --recursive *> (Join-Path $artifactsRoot "$name-submodules.log")
+        & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'sync-upstream.ps1') -ProjectRoot $worktree *> (Join-Path $artifactsRoot "$name-submodules.log")
         if($LASTEXITCODE){throw "Could not initialize $name pinned submodule."}
     }
     if(!$measurements.Contains('baseline_warm')){
