@@ -53,7 +53,7 @@ try {
         foreach($stale in $existingRootNames | Where-Object { $_ -notin $expectedRootNames }) { Preserve-Output (Join-Path $data $stale) }
         Copy-Item "$exportRoot/data/lexicon/*" $data -Force
         Copy-Item "$root/data/pinyin-map.tsv" $data -Force
-        foreach ($pack in @('acg','it','beauty')) {
+        foreach ($pack in @('acg','it','meme','beauty')) {
             Copy-Item "$exportRoot/data/packs/$pack-add.tsv","$exportRoot/data/packs/$pack-sources.tsv","$exportRoot/data/packs/$pack.json" "$data/packs" -Force
         }
         Copy-Item "$exportRoot/data/packs/quotes-add.tsv","$exportRoot/data/packs/quotes.json" "$data/packs" -Force

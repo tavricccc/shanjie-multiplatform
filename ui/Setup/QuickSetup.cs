@@ -47,7 +47,7 @@ internal sealed class QuickSetupDraft
     /// model, the word packs, the chat-app list, the personal dictionary file and the keyboard layout (a person on
     /// 倚天 could not type on the standard one). A subset of `PERSONAL` in shared/src/profile.rs.
     internal static readonly (string Section, string Key)[] Carried = [
-        ("engine", "model_id"), ("engine", "model_revision"), ("engine", "acg_pack"), ("engine", "it_pack"), ("engine", "beauty_pack"), ("engine", "quote_pack"),
+        ("engine", "model_id"), ("engine", "model_revision"), ("engine", "acg_pack"), ("engine", "it_pack"), ("engine", "beauty_pack"), ("engine", "meme_pack"), ("engine", "quote_pack"),
         ("engine", "chat_apps"), ("input", "dictionary"), ("input", "keyboard")];
     internal static string BackupPath => ProfileStore.Path + ".before-quick-setup.bak";
     readonly string baseline;

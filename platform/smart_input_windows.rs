@@ -11,6 +11,18 @@ fn english_word(word: &str) -> bool {
 mod windows_smart_tests {
     use super::*;
     #[test]
+    fn windows_literal_keys_consume_context_freshness_and_clear_stale_context() {
+        let mut e = engine();
+        e.zhuyin_only = true;
+        e.set_left_context("甲乙");
+        e.key(Key::ch('1', 0)).unwrap();
+        assert_eq!(e.recur_pairs(), 1);
+        assert!(!e.left_fresh);
+        e.key(Key::new(KeyKind::Backspace)).unwrap();
+        e.key(Key::ch('2', 0)).unwrap();
+        assert_eq!(e.recur_pairs(), 0);
+    }
+    #[test]
     fn upstream_english_preserves_windows_caps_and_shift_display() {
         let mut e=engine();e.set_mixed_input(false);
         e.set_upstream_english(true,true,true,true).unwrap();
@@ -219,7 +231,7 @@ mod windows_smart_tests {
                 }
                 assert_eq!(
                     e.reset(ResetMode::Commit).commit,
-                    "gemini好用嗎",
+                    if english { "Gemini好用嗎" } else { "gemini好用嗎" },
                     "english={english} tail={tail}"
                 );
             }
@@ -572,6 +584,7 @@ impl Engine {
             let split_at = chars.len() - tail.len();
             let head: String = chars[..split_at].iter().collect();
             let raw_tail: String = chars[split_at..].iter().collect();
+            let run_ascii = std::mem::take(&mut self.run_ascii);
             self.run.clear();
             self.run_shifted.clear();
             self.run_zh = None;
@@ -580,7 +593,8 @@ impl Engine {
             let mut commit = if head.is_empty() {
                 String::new()
             } else {
-                self.insert_english(head)?
+                let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
             };
             self.pred_dirty = true;
             commit.push_str(&self.insert_token(syl, None, None)?.commit);
@@ -614,6 +628,7 @@ impl Engine {
                     .filter(|r| self.has_mixed_han_entry(r, tone))
                 {
                     let full_syl = format!("{reading}{}", TONE_MARKS[tone]);
+                    let run_ascii = std::mem::take(&mut self.run_ascii);
                     self.run.clear();
                     self.run_shifted.clear();
                     self.run_zh = None;
@@ -622,7 +637,8 @@ impl Engine {
                     let mut commit = if head.is_empty() {
                         String::new()
                     } else {
-                        self.insert_english(head)?
+                        let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                        self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
                     };
                     self.pred_dirty = true;
                     commit.push_str(&self.insert_token(full_syl, None, None)?.commit);
@@ -644,6 +660,17 @@ impl Engine {
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
+        // Consume the context once at the public key boundary, including paths
+        // handled entirely by Windows and keys replayed through key_original.
+        if !std::mem::take(&mut self.left_fresh) && self.composition_empty()
+            && self.mixed_raw.is_empty() && self.pending_literal.is_empty() {
+            self.clear_left();
+        }
+        // The explicit upstream Microsoft scheme owns its key rules. A window
+        // keeps the scheme it opened with even if the setting changes meanwhile.
+        if self.cands.as_ref().map_or(self.key_scheme == 1, |c| c.ms) {
+            return self.key_original(key);
+        }
         // Literal tokens keep typed order and use the existing cursor, deletion and commit paths.
         // This precedes English/digit interpretation, including tone keys that otherwise start a digit run.
         if self.zhuyin_only && key.modifiers == 0 {
@@ -711,6 +738,8 @@ impl Engine {
             }
         }
         if self.shadow_on() && self.run.is_empty() && key.kind==KeyKind::Char && key.modifiers==MOD_SHIFT && key.ch.is_ascii_alphabetic() {
+            self.late = None;
+            self.late_in = None;
             // Symbols the Windows policy kept behind an unfinished reading go in front of the run: upstream's
             // run replaces that reading, and the symbols were typed before the letter.
             let mut commit=String::new();
