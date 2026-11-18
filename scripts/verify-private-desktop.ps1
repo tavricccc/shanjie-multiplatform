@@ -1,39 +1,21 @@
 #Requires -Version 7
 param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
- 'word-deferred','word-natural','word-stale','word-readonly','word-password','word-invalid','word-empty'),[switch]$ExplicitCore)
+ 'word-deferred','word-natural','word-stale','word-readonly','word-password','word-invalid','word-empty'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-if(!('ShanjieFixtureProcess' -as [type])) { Add-Type -TypeDefinition @'
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public static class ShanjieFixtureProcess {
- [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr OpenProcess(uint access,bool inherit,uint pid);
- [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool QueryFullProcessImageName(IntPtr handle,uint flags,StringBuilder path,ref uint size);
- [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
- [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateProcess(IntPtr handle,uint code);
- [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr handle,uint timeout);
- static string PathOf(IntPtr handle) {var path=new StringBuilder(32768);uint size=32768;return QueryFullProcessImageName(handle,0,path,ref size)?path.ToString():null;}
- public static string Read(uint pid) {var h=OpenProcess(0x1000,false,pid);if(h==IntPtr.Zero)return null;try{return PathOf(h);}finally{CloseHandle(h);}}
- public static bool Retire(uint pid,string expected) {
-  // Query on the same handle used for termination, so PID reuse cannot target
-  // a different executable. Never request termination access to other paths.
-  if(!String.Equals(Read(pid),expected,StringComparison.OrdinalIgnoreCase))return false;
-  var h=OpenProcess(0x101001,false,pid);if(h==IntPtr.Zero)throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-  try {if(!String.Equals(PathOf(h),expected,StringComparison.OrdinalIgnoreCase))return false;
-   if(!TerminateProcess(h,0))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-   if(WaitForSingleObject(h,5000)!=0)throw new Exception("Fixture helper did not exit");return true;
-  } finally {CloseHandle(h);}
- }
-}
-'@ }
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+$null=Initialize-TestTimings -ProjectRoot $root -Name 'private-desktop'
 if(Test-Path -LiteralPath $Output){throw 'Use a fresh fixture output directory.'}
 New-Item -ItemType Directory -Path $Output -Force|Out-Null
 $Payload=[IO.Path]::GetFullPath($Payload)
 $results=@()
+$ownedServers=[Collections.Generic.List[object]]::new()
 try {
  foreach($scenario in $Cases) {
+  $caseStage=Start-TestStage -Name "Private-desktop TSF case $scenario" -Category 'tsf.private-desktop'
+  $caseCompleted=$false
+  try {
   $fixture=[IO.Path]::GetFullPath((Join-Path $Output $scenario))
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
   $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
@@ -51,32 +33,44 @@ try {
   $start.Environment['SHANJIE_TEST_ROOT']=$fixture
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}
   $start.ArgumentList.Add("$Payload/$arch/Shanjie.dll");$start.ArgumentList.Add($scenario)
-  $server=$null
-  if($ExplicitCore){
+  $server=$null;$child=$null
    $serverStart=[Diagnostics.ProcessStartInfo]::new("$Payload/tools/shanjie-core.exe")
    $serverStart.UseShellExecute=$false;$serverStart.CreateNoWindow=$true
-   foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT')){$serverStart.Environment[$key]=$start.Environment[$key]}
-   $serverStart.ArgumentList.Add('--serve');$server=[Diagnostics.Process]::Start($serverStart)
-   Start-Sleep -Milliseconds 200
-   if($server.HasExited){throw "Private fixture core exited: $($server.ExitCode)"}
-  }
+   foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT','SHANJIE_HEADLESS')){$serverStart.Environment[$key]=$start.Environment[$key]}
+   $serverStart.ArgumentList.Add('--serve');$server=[Diagnostics.Process]::Start($serverStart);$ownedServers.Add($server)
+   $probeEnvironment=@{}
+   foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT')){$probeEnvironment[$key]=[Environment]::GetEnvironmentVariable($key);[Environment]::SetEnvironmentVariable($key,$start.Environment[$key])}
+   try{Wait-TestCoreReady -CorePath "$Payload/tools/shanjie-core.exe" -OutputDirectory $fixture | Out-Null}
+   finally{foreach($key in $probeEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$probeEnvironment[$key])}}
   $child=[Diagnostics.Process]::Start($start)
   $stdout=$child.StandardOutput.ReadToEndAsync();$stderr=$child.StandardError.ReadToEndAsync()
-  if(!$child.WaitForExit(25000)){$child.Kill();throw "Owned fixture timed out: $scenario"}
+  if(!$child.WaitForExit(25000)){
+   try{$child.Kill();$child.WaitForExit(5000)|Out-Null}catch{}
+   throw "Owned fixture timed out: $scenario"
+  }
   $log=$stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult();$code=$child.ExitCode;$child.Dispose()
+  $child=$null
   Set-Content -LiteralPath "$fixture/result.log" -Value $log -Encoding utf8NoBOM
   $results+=[pscustomobject]@{scenario=$scenario;exit=$code}
   Write-Output $log.Trim()
-  if($server){[ShanjieFixtureProcess]::Retire($server.Id,[IO.Path]::GetFullPath("$Payload/tools/shanjie-core.exe"))|Out-Null;$server.Dispose()}
+  if($server){if(!$server.HasExited){$server.Kill();if(!$server.WaitForExit(5000)){throw 'Owned fixture core did not exit.'}};$server.Dispose();[void]$ownedServers.Remove($server)}
   if($code){throw "Compatibility fixture failed: $scenario ($code)"}
+  Complete-TestStage -Stage $caseStage -Details @{scenario=$scenario;architecture=$arch;profile=$fixture;explicit_core=$true}
+  $caseCompleted=$true
+  } catch {
+   if(!$caseCompleted){Complete-TestStage -Stage $caseStage -Status 'failed' -Details @{scenario=$scenario} -ErrorMessage $_.Exception.Message}
+   throw
+  } finally {
+   if($child){
+    try{if(!$child.HasExited){$child.Kill();$child.WaitForExit(5000)|Out-Null}}finally{$child.Dispose()}
+   }
+  }
  }
 } finally {
  $results|ConvertTo-Json|Set-Content -LiteralPath "$Output/results.json" -Encoding utf8NoBOM
- # Retire only helpers launched from this never-installed private fixture payload.
- $core=[IO.Path]::GetFullPath("$Payload/tools/shanjie-core.exe")
- foreach($worker in Get-Process -Name shanjie-core -ErrorAction SilentlyContinue){
-  if([ShanjieFixtureProcess]::Read($worker.Id) -eq $core){
-   [ShanjieFixtureProcess]::Retire($worker.Id,$core)|Out-Null
-  }
+ # Retire only Process objects this invocation launched; never scan or stop a same-path user process.
+ foreach($worker in $ownedServers){
+  try{if(!$worker.HasExited){$worker.Kill();if(!$worker.WaitForExit(5000)){throw 'Owned fixture core did not exit.'}}}
+  finally{$worker.Dispose()}
  }
 }

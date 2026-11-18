@@ -62,7 +62,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
   & cmd.exe /d /c "$out/compile.cmd" *> "$out/compile.log"
   if($LASTEXITCODE){throw "Feature harness build failed: $arch"}
   for($index=0;$index -lt $cases.Count;$index++) {
-   if($CaseIndices -and $index -notin $CaseIndices){continue}
+   if($null -ne $CaseIndices -and $CaseIndices.Count -gt 0 -and $index -notin $CaseIndices){continue}
    $case=$cases[$index];$fixture=Join-Path $out "case$index"
    $env:SHANJIE_TEST_ETEN=if($case.keyboard -eq 2){'1'}else{$null}
    New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force | Out-Null

@@ -9,11 +9,12 @@ Closes #
 <!-- 依 AGENTS.md「驗證：做多少」勾選實際跑過的；沒跑的寫明原因。 -->
 
 - [ ] 只改文件，不需要建置或測試
-- [ ] `test-core.ps1`（`platform/`、prepare 腳本）
-- [ ] `cargo test --lib` 與相關 `verify-*.ps1`（`shared/`、`windows/src`）
-- [ ] `verify-ui.ps1`（`ui/`）
-- [ ] `verify.ps1`（x64）
+- [ ] `scripts/test.ps1 -Level FAST`
+- [ ] `scripts/test.ps1 -Level AFFECTED`
+- [ ] `scripts/test.ps1 -Level FULL`（整合前）
+- [ ] `scripts/test.ps1 -Level RELEASE`（發布前）
 - [ ] 實機確認（寫在下方）
+- [ ] 已註明未執行的測試及原因
 
 結果與沒跑的項目：
 
