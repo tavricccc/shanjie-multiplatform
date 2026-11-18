@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
@@ -33,7 +33,7 @@ try {
         $snapshot=Get-ReleaseSnapshot $root $env:SHANJIE_RELEASE_SNAPSHOT_ID $env:SHANJIE_RELEASE_SNAPSHOT_SHA256
         $runtimeRoot=$snapshot.runtime_root
         if($PayloadRoot){$PayloadRoot="$PayloadRoot-$($snapshot.id)"}
-        if($CaseId -in 'ui-verify','ui-startup','ui-disabled'){
+        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models'){
             # WinUI temporarily changes installed.json; only a private fixture may
             # be mutable. Its DLL/tools/UI bytes are checked against the seal.
             $uiRuntimeRoot=Join-Path $resultRoot 'runtime'
@@ -113,6 +113,27 @@ try {
             'package' {
                 if(!$snapshot){throw 'RELEASE packaging requires the sealed snapshot and both architectures test evidence; use package.ps1 for a development candidate.'}
                 & "$PSScriptRoot/package.ps1" -UseExistingBuild -CandidateId $runId -SnapshotHash $snapshot.sha256 -PackagingPermitPath $env:SHANJIE_RELEASE_PACKAGING_PERMIT
+            }
+            'ui-models' {
+                $fixtures=Join-Path $resultRoot 'fixtures'
+                & python "$root/tests/model_sources_fixture.py" $fixtures
+                if($LASTEXITCODE){throw 'Model-source fixture preparation failed.'}
+                $output=Join-Path $resultRoot 'ui-models'
+                $profile=Join-Path $output 'profile'
+                $null=New-Item -ItemType Directory -Path $profile -Force
+                $start=[Diagnostics.ProcessStartInfo]::new("$($uiArguments.RuntimeRoot)/ui/Shanjie.UI.exe")
+                $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+                $start.WorkingDirectory="$($uiArguments.RuntimeRoot)/ui"
+                $start.Environment['LOCALAPPDATA']=$profile
+                $start.Environment['SHANJIE_TEST_PROFILE']='1'
+                $start.Environment['SHANJIE_TEST_ROOT']=$profile
+                $start.Environment['SHANJIE_CORE_LOCAL']='1'
+                foreach($argument in @('--verify-model-v2',$output,$fixtures)){$start.ArgumentList.Add($argument)}
+                $process=[Diagnostics.Process]::Start($start)
+                try {
+                    if(!$process.WaitForExit(180000)){$process.Kill($true);$process.WaitForExit();throw 'Model-manager UI verification timed out.'}
+                    if($process.ExitCode -or (Get-Content "$output/result.txt" -Raw) -ne 'PASS'){throw "Model-manager verification failed: $output/result.txt"}
+                } finally {$process.Dispose()}
             }
         }
     } finally { Pop-Location }

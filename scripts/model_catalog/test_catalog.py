@@ -94,6 +94,34 @@ class Contract(unittest.TestCase):
     def test_complete_release_pagination(self):
         with patch.object(c,"api",side_effect=[[{"draft":False}]*100,[{"draft":True},{"draft":False}]]) as call:
             self.assertEqual(len(c.releases()),101);self.assertEqual(call.call_count,2)
+    def test_model_releases_try_author_then_mirror_only_on_read_failure(self):
+        with patch.object(c,"api",return_value=[]) as call:
+            self.assertEqual(c.releases(),[])
+            call.assert_called_once_with(f"repos/{c.UPSTREAM}/releases?per_page=100&page=1")
+        with patch.object(c,"api",side_effect=[urllib.error.URLError("unavailable"),[{"draft":False}]]) as call:
+            self.assertEqual(c.releases(),[{"draft":False}])
+            self.assertIn(c.UPSTREAM,call.call_args_list[0].args[0])
+            self.assertIn(c.MIRROR,call.call_args_list[1].args[0])
+        with patch.object(c,"api",side_effect=urllib.error.URLError("unavailable")):
+            with self.assertRaises(urllib.error.URLError):c.releases()
+    def test_only_model_downloads_use_the_asset_mirror(self):
+        response=object()
+        url=f"https://github.com/{c.UPSTREAM}/releases/download/model-v6/bigram.sjlm"
+        with patch.object(c.urllib.request,"urlopen",side_effect=[urllib.error.URLError("offline"),response]) as call:
+            self.assertIs(c.request(url),response)
+            self.assertEqual([x.args[0].full_url for x in call.call_args_list],[url,url.replace(c.UPSTREAM,c.MIRROR)])
+        url=f"https://api.github.com/repos/{c.REPO}/releases"
+        with patch.object(c.urllib.request,"urlopen",side_effect=urllib.error.URLError("offline")) as call:
+            with self.assertRaises(urllib.error.URLError):c.request(url)
+            self.assertEqual(call.call_count,1)
+    def test_existing_mirror_bundle_keeps_its_identity(self):
+        author=self.bundle();mirror=copy.deepcopy(author)
+        mirror["assets"][0]["repository"]=c.MIRROR
+        mirror["id"]=c.model(mirror["assets"],mirror["name"])["id"]
+        before=copy.deepcopy(mirror)
+        c.validate(self.catalog(mirror))
+        self.assertEqual(mirror,before)
+        self.assertNotEqual(author["id"],mirror["id"])
     def test_partial_snapshot_does_not_succeed(self):
         with patch.object(c,"api",side_effect=[["first"]*100,RuntimeError("rate limited")]):
             with self.assertRaises(Exception):c.releases()
@@ -120,7 +148,7 @@ class Contract(unittest.TestCase):
     def test_changed_upstream_asset_blocks_before_write(self):
         with fixture() as tmp:
             p=pathlib.Path(tmp);_,_,plan=self.publication(p)
-            plan["sources"]=[{"asset_id":123,"release":"SJ-new","filename":"bigram.sjlm","size":128,"digest":"sha256:"+"a"*64}]
+            plan["sources"]=[{"repository":c.UPSTREAM,"asset_id":123,"release":"SJ-new","filename":"bigram.sjlm","size":128,"digest":"sha256:"+"a"*64}]
             c.write(p/"publication-plan.json",plan)
             changed={"browser_download_url":f"https://github.com/{c.UPSTREAM}/releases/download/SJ-new/bigram.sjlm","name":"bigram.sjlm","size":128,"digest":"sha256:"+"b"*64}
             with patch.object(c,"api",return_value=changed) as api:

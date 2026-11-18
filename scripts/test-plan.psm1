@@ -50,7 +50,7 @@ function Get-VerificationImpact([string]$Path) {
         '^(windows/src/mixed_regression\.rs|tests/english_keys\.cpp|scripts/verify-english-keys\.ps1)$' {
             $labels=@('rust','english');$reason='Preserve upstream Rust/mixed-input and English-key regression selection.';break
         }
-        '^ui/|^scripts/verify-ui\.ps1$' {
+        '^ui/|^scripts/verify-ui\.ps1$|^tests/model_sources_fixture\.py$' {
             $labels=@('settings-ui','candidate-host');$reason='Settings UI and native candidate host, without unrelated mode/TSF suites.';break
         }
         '^profiles/.*\.ini$' {

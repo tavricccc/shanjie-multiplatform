@@ -164,7 +164,7 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     }
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
-        @('ui','ui/View.xaml.cs',13),@('add-word','windows/src/word_helper.rs',22),
+        @('ui','ui/View.xaml.cs',14),@('add-word','windows/src/word_helper.rs',22),
         @('candidate','windows/src/candidate.rs',30),@('english','tests/english_keys.cpp',27),
         @('submission','tests/submission.cpp',28),@('platform','platform/input_windows.rs',50),
         @('shared','shared/src/lib.rs',92),@('shared-input','shared/src/input.rs',94),
@@ -184,12 +184,12 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
         $policy=Select-VerificationPlan @($path)
         $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
         $required=@('fast.rust.shared','fast.rust.windows','full.tsf-smoke.standard.x64','release.tsf-smoke.shanjie.x64','full.english.numpad.x64','full.english.fullwidth.x64','full.english.backquote.x64')
-        if($path -match 'profile'){$required+=@('release.ui.verify','release.ui.candidate.x64')}
+        if($path -match 'profile'){$required+=@('release.ui.verify','release.ui.models','release.ui.candidate.x64')}
         foreach($name in $required){Check ($name -in $selected.Selected.name) "$path retains required $name"}
     }
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 92 -and $inventory.tests.Count -eq 104) 'Label refinements preserve the FULL and x64 RELEASE inventories'
-    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 87, x64 RELEASE 99, fixed CI 5; no native execution'
+    Check ($full.Selected.Count -eq 92 -and $inventory.tests.Count -eq 105) 'The model-manager row extends x64 RELEASE while preserving the FULL inventory'
+    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 92, x64 RELEASE 105, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}

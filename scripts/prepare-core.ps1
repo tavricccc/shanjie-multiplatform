@@ -45,11 +45,11 @@ New-Item -ItemType Directory -Path $output -Force | Out-Null
 Copy-Item (Join-Path $upstream 'core/src') $output -Recurse -Force
 Copy-Item (Join-Path $upstream 'core/Cargo.toml') $output -Force
 Add-Content (Join-Path $output 'Cargo.toml') "`n[workspace]`n"
-$source = Get-Content (Join-Path $upstream 'core/src/learn_store.rs') -Raw
+$source = (Get-Content (Join-Path $upstream 'core/src/learn_store.rs') -Raw).Replace("`r`n","`n")
 $constants = $source.Substring($source.IndexOf('pub const FILE:'), $source.IndexOf('// <fcntl.h>') - $source.IndexOf('pub const FILE:'))
-$shared = $source.Substring($source.IndexOf('/// Latest accepted day'), $source.IndexOf('impl LearnStore {') - $source.IndexOf('/// Latest accepted day'))
+$shared = $source.Substring($source.IndexOf('/// Latest accepted day'), $source.IndexOf("#[cfg(unix)]`nimpl LearnStore {") - $source.IndexOf('/// Latest accepted day'))
 $imports = @'
-use crate::learn::{context_key, is_full_context, is_han, is_single, Record, GLOBAL, NEWWORD, NEWWORD_MAX, NEWWORD_MIN, NEXT_PREFIX, SENTINEL};
+use crate::learn::{context_key, is_han, is_single, single_key_ok, FINE_SEP, Record, GLOBAL, NEWWORD, NEWWORD_MAX, NEWWORD_MIN, NEXT_PREFIX, SENTINEL};
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
@@ -62,27 +62,14 @@ $content = Get-Content $lib -Raw
 if (!$content.Contains('pub mod learn_store;')) { throw 'Upstream module contract changed.' }
 $content = $content.Replace('pub mod learn_store;', "#[cfg(not(windows))]`npub mod learn_store;`n#[cfg(windows)]`n#[path = `"learn_store_windows.rs`"]`npub mod learn_store;")
 Set-Content $lib $content -Encoding utf8NoBOM
-$learn = Join-Path $output 'src/learn.rs'
-$content = Get-Content $learn -Raw
-$content = $content.Replace('pub fn local_day() -> i64 {', "#[cfg(not(windows))]`npub fn local_day() -> i64 {")
-$content += "`n#[cfg(windows)]`n" + (Get-Content (Join-Path $root 'platform/clock_windows.rs') -Raw)
-Set-Content $learn $content -Encoding utf8NoBOM
 & "$PSScriptRoot/prepare-lm.ps1" -CorePath $output
-& "$PSScriptRoot/prepare-trigram.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-candidates.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-keys.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-smart-input.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-selection-learning.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-resident.ps1" -CorePath $output
 & "$PSScriptRoot/prepare-memory.ps1" -CorePath $output
-# Keep the registered chat cells for SR7 bundles and the separately shipped SR8 model.
-$colloquial = Join-Path $output 'src/colloquial.rs'
-$content = Get-Content $colloquial -Raw
-$anchor = 'profile == Profile::Chat && model.file_sha256() == PAIRED_TINYLM_SHA256'
-if (!$content.Contains($anchor)) { throw 'Upstream colloquial model pairing changed.' }
-$content = $content.Replace($anchor, 'profile == Profile::Chat && (model.file_sha256() == PAIRED_TINYLM_SHA256 || model.file_sha256() == "356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de")')
-Set-Content $colloquial $content -Encoding utf8NoBOM
-    Save-ContentCache -Root $output -ManifestPath $cacheManifest -Key $key -Paths $cachePaths
+Save-ContentCache -Root $output -ManifestPath $cacheManifest -Key $key -Paths $cachePaths
     Complete-TestStage -Stage $stage -Status 'passed' -Details @{ cache='miss'; upstream_commit=$pin.commit }
 } catch {
     Complete-TestStage -Stage $stage -Status 'failed' -ErrorMessage $_.Exception.Message -Details @{ cache='miss'; upstream_commit=$pin.commit }

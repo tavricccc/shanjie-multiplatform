@@ -6,6 +6,10 @@ $root = Split-Path $PSScriptRoot -Parent
 $cache = [IO.Path]::GetFullPath((Join-Path $root 'build/model'))
 $destinationPath = [IO.Path]::GetFullPath($Destination)
 if ([IO.Path]::GetDirectoryName($destinationPath) -ne $cache) { throw 'Unexpected model cache path.' }
+$urls = @($Url)
+if ($Url -match '^https://github.com/(?:Nanako0129/shanjie|tavricccc/shanjie-upstream-backup)/releases/download/(.+)$') {
+    $urls = @("https://github.com/Nanako0129/shanjie/releases/download/$($Matches[1])", "https://github.com/tavricccc/shanjie-upstream-backup/releases/download/$($Matches[1])")
+}
 $parts = "$destinationPath.parts"
 New-Item -ItemType Directory -Path $parts -Force | Out-Null
 $chunkSize = 4MB
@@ -18,8 +22,11 @@ $results = 0..($count-1) | ForEach-Object -Parallel {
     $part = Join-Path $using:parts "$index.part"
     try {
         if (!(Test-Path -LiteralPath $part) -or (Get-Item -LiteralPath $part).Length -ne $end-$start+1) {
-            & $using:curl --fail --location --silent --show-error --range "$start-$end" --connect-timeout 20 --max-time 180 --retry 2 --retry-all-errors --output $part "$using:Url"
-            if ($LASTEXITCODE) { throw "Download failed: part $index" }
+            foreach ($sourceUrl in $using:urls) {
+                & $using:curl --fail --location --silent --show-error --range "$start-$end" --connect-timeout 20 --max-time 180 --retry 2 --retry-all-errors --output $part $sourceUrl
+                if (!$LASTEXITCODE) { break }
+            }
+            if ($LASTEXITCODE) { throw "Download failed from upstream and mirror: part $index" }
         }
         if ((Get-Item -LiteralPath $part).Length -ne $end-$start+1) { throw "Unexpected asset range length: part $index" }
         [pscustomobject]@{ Index=$index; Error=$null }
