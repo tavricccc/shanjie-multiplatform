@@ -24,7 +24,13 @@ int wmain(int argc,wchar_t**argv) {
     ComPtr<ITfThreadMgrEx> extended;thread.As(&extended);TfClientId client=0;
     require(SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),908);
     ComPtr<ITfDocumentMgr> doc;require(SUCCEEDED(thread->CreateDocumentMgr(&doc)),909);
-    ComPtr<Store> store;store.Attach(new Store);store->layoutReady=true;store->readOnly=scenario==L"word-readonly";
+    ComPtr<Store> store;store.Attach(new Store);store->layoutReady=true;
+    store->readOnly=scenario==L"word-readonly"||scenario.starts_with(L"status-readonly");
+    if(scenario.ends_with(L"-disjoint")) {
+        store->staticFlags=TS_SS_DISJOINTSEL|TS_SS_REGIONS|TS_SS_TKBAUTOCORRECTENABLE|TS_SS_TKBPREDICTIONENABLE;
+    } else if(scenario==L"status-writable-regions") {
+        store->staticFlags=TS_SS_REGIONS|TS_SS_TKBAUTOCORRECTENABLE;
+    }
     WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"Shanjie.Compat0122.Test";RegisterClassW(&wc);
     store->window=CreateWindowW(wc.lpszClassName,L"Private fixture",WS_OVERLAPPEDWINDOW,-12000,-12000,800,400,nullptr,nullptr,wc.hInstance,nullptr);
     require(store->window!=nullptr,910);ShowWindow(store->window,SW_SHOWNOACTIVATE);
@@ -42,7 +48,24 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if(scenario.starts_with(L"shift-")) {
+    if(scenario.starts_with(L"status-")) {
+        TF_STATUS status{};require(SUCCEEDED(context->GetStatus(&status)),1000);
+        require(status.dwStaticFlags==store->staticFlags,1001);
+        require(((status.dwDynamicFlags&TF_SD_READONLY)!=0)==store->readOnly,1002);
+        keyboard(0);BOOL accepted=FALSE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'S',flags('S',false),&accepted)),1003);
+        require(bool(accepted)!=store->readOnly,1004);
+        if(store->readOnly) {
+            keyboard(VK_RSHIFT);accepted=TRUE;
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_RSHIFT,flags(VK_RSHIFT,false),&accepted))&&!accepted,1005);
+            keyboard(0);require(store->text.empty()&&chinese(),1006);
+        } else {
+            for(int key:{'S','U','3','\r'})down(key);
+            require(store->text==L"你"&&compositions()==0,1007);
+            keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(!chinese(),1008);
+            keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(chinese(),1009);
+        }
+    } else if(scenario.starts_with(L"shift-")) {
         int side=scenario==L"shift-left"?VK_LSHIFT:VK_RSHIFT;
         keyboard(side);down(side);
         if(scenario==L"shift-enter"){keyboard(side,VK_RETURN);down(VK_RETURN);keyboard(side);up(VK_RETURN);}
@@ -88,7 +111,7 @@ int wmain(int argc,wchar_t**argv) {
         if(scenario==L"word-invalid")store->text=L"ab";
         if(scenario==L"word-stale")keys->OnSetFocus(FALSE);
         auto end=std::chrono::steady_clock::now()+std::chrono::milliseconds(1700);
-        bool expected=scenario==L"word-deferred"||scenario==L"word-natural";
+        bool expected=scenario==L"word-deferred"||scenario==L"word-natural"||scenario==L"word-disjoint";
         while(std::chrono::steady_clock::now()<end){pump();if(expected&&panel()&&IsWindowVisible(panel()))break;Sleep(10);}
         require((panel()&&IsWindowVisible(panel()))==expected,961);
         if(expected){require(GetWindow(panel(),GW_OWNER)==savedWindow,962);store->externalCaret(2);pump();require(!IsWindowVisible(panel()),963);}
