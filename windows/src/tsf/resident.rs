@@ -1,7 +1,9 @@
 //! Process-local warm core. No TSF/COM objects or HWNDs cross threads.
-use crate::{engine::Engine, input::Pinyin, profile::Document};
+use super::service::{option_operations, Data};
+use crate::{broker::Op, engine::{BuildSource, Engine}, input::Pinyin, profile::Document};
 use std::{
     path::{Path, PathBuf},
+    rc::Rc,
     sync::{
         atomic::{AtomicU32, Ordering},
         mpsc, Mutex, OnceLock,
@@ -38,8 +40,8 @@ impl Config {
             engine: crate::broker::Config { ranking: p.ranking(program().as_deref()), ..crate::broker::Config::from_profile(p, layout) },
         }
     }
-    fn load(&self) -> Option<(Engine, Pinyin)> {
-        let engine = Engine::open(&self.data, &self.engine)?;
+    fn load(&self, source: Option<BuildSource>) -> Option<(Engine, Pinyin)> {
+        let engine = Engine::open_reusing(&self.data, &self.engine, source)?;
         let pinyin = if self.keyboard >= 3 {
             Pinyin::load(&self.data, self.keyboard == 4).ok()?
         } else {
@@ -98,13 +100,16 @@ pub(super) fn prepare(config: Config) -> Result<Pending> {
             return Ok(spare);
         }
     }
+    spawn(config, |input| input.load(None))
+}
+fn spawn(config: Config, load: impl FnOnce(Config) -> Option<(Engine, Pinyin)> + Send + 'static) -> Result<Pending> {
     let (sender, receiver) = mpsc::channel();
     let input = config.clone();
     LOADS.fetch_add(1, Ordering::Release);
     std::thread::Builder::new()
         .name("Shanjie core preload".into())
         .spawn(move || {
-            let result = input.load();
+            let result = load(input);
             let _ = sender.send(result);
             COMPLETED.fetch_add(1, Ordering::Release);
         })
@@ -144,4 +149,105 @@ pub(super) fn park(config: Config, mut engine: Engine, mut pinyin: Pinyin) {
 }
 pub(super) fn invalidate() {
     *SPARE.lock().unwrap() = None;
+}
+
+pub(super) fn retire(engine: Engine) {
+    // Ownership has left the TSF service. Free memory and close the pipe off its thread.
+    let _ = std::thread::Builder::new().name("Shanjie core retire".into()).spawn(move || drop(engine));
+}
+
+/// At most one worker; a newer profile invalidates the result even before its own job starts.
+#[derive(Default)]
+pub(super) struct Rebuild {
+    generation: u64,
+    desired: Option<Document>,
+    building: Option<(u64, Pending)>,
+    ready: Option<(Engine, Pinyin)>,
+}
+impl Rebuild {
+    pub fn request(&mut self, desired: Option<Document>) {
+        if self.desired.as_ref().map(|p| &p.0) == desired.as_ref().map(|p| &p.0) {
+            return;
+        }
+        self.generation += 1;
+        self.desired = desired;
+        if let Some((engine, _)) = self.ready.take() { retire(engine); }
+    }
+
+    pub fn reset(&mut self) {
+        self.request(None);
+        self.building = None;
+    }
+}
+
+impl Data {
+    pub(super) fn poll_rebuild(self: &Rc<Self>) -> Result<()> {
+        let mut slot = self.rebuild.borrow_mut();
+        if let Some((generation, build)) = slot.building.as_ref() {
+            let Load::Loading(receiver) = &build.load else { unreachable!("rebuilds start on workers") };
+            let received = match receiver.try_recv() {
+                Ok(result) => Some(result),
+                Err(mpsc::TryRecvError::Empty) => None,
+                Err(mpsc::TryRecvError::Disconnected) => Some(None),
+            };
+            if let Some(result) = received {
+                let latest = *generation == slot.generation;
+                slot.building.take();
+                if latest {
+                    slot.ready = result;
+                    if slot.ready.is_none() {
+                        slot.desired = None;
+                        crate::bridge::failure("無法套用輸入法設定，已保留目前的引擎。");
+                    }
+                } else if let Some((engine, _)) = result {
+                    retire(engine);
+                }
+            }
+        }
+        if slot.building.is_none() && slot.ready.is_none() {
+            if let Some(prefs) = slot.desired.clone() {
+                let (config, source) = {
+                    let state = self.state.borrow();
+                    let old = state.core_config();
+                    let config = Config::new(&state.data, &prefs, state.profile_layout);
+                    // A changed package under the same ID must load from disk.
+                    let source = (old.engine.model == config.engine.model && old.model_revision == config.model_revision)
+                        .then(|| state.engine.build_source()).flatten();
+                    (config, source)
+                };
+                match spawn(config, move |input| {
+                    let (mut engine, pinyin) = input.load(source)?;
+                    for op in option_operations(&prefs) { engine.perform(op)?; }
+                    engine.perform(Op::Demote(prefs.flag("engine", "demote", true)))?;
+                    Some((engine, pinyin))
+                }) {
+                    Ok(build) => slot.building = Some((slot.generation, build)),
+                    Err(error) => {
+                        slot.desired = None;
+                        super::trace(format_args!("engine rebuild worker: {error}"));
+                        crate::bridge::failure("無法啟動引擎建置，已保留目前的引擎。");
+                    }
+                }
+            }
+        }
+        let input_ready = {
+            let recovery = self.recovery.borrow();
+            recovery.is_empty() && !recovery.refresh
+        };
+        let can_swap = slot.ready.is_some() && input_ready
+            && self.profile_update.borrow().is_none() && {
+                let s = self.state.borrow();
+                s.composition.is_none() && s.snapshot.preedit.is_empty()
+                    && s.pinyin.pending.is_empty() && s.special.mode == 0
+            };
+        let swap = if can_swap { slot.desired.take().zip(slot.ready.take()) } else { None };
+        if let Some(watcher) = self.state.borrow().watcher.as_ref() {
+            watcher.rebuild_poll(slot.desired.is_some() || slot.building.is_some());
+        }
+        drop(slot);
+        if let Some((prefs, engine)) = swap {
+            self.apply_profile(prefs, false, Some(engine))?;
+        }
+        Ok(())
+    }
 }

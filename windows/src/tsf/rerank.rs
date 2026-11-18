@@ -1,5 +1,5 @@
 //! The core reranks an output after replying, as upstream runs the job off the main thread (s7c2b section 2.1); the
-//! result is asked for here once the core says it is done, so a key never waits for the model.
+//! result is asked for here once the core says it is done. Enter can also apply the result before commit.
 use super::service::{output, Data};
 use crate::broker::Op;
 use std::{
@@ -54,6 +54,7 @@ impl Data {
                 let shown = &s.snapshot;
                 shown.preedit == snapshot.preedit
                     && shown.cursor == snapshot.cursor
+                    && shown.active_segment == snapshot.active_segment
                     && shown.candidates == snapshot.candidates
                     && shown.selected == snapshot.selected
                     && shown.first == snapshot.first

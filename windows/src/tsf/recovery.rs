@@ -8,6 +8,7 @@ use crate::{
     input::{Associated, Pinyin, Special},
 };
 use std::{
+    cell::Cell,
     collections::VecDeque,
     rc::Rc,
     time::{Duration, Instant},
@@ -27,11 +28,23 @@ struct Key {
     flags: LPARAM,
     keyboard: [u8; 256],
     pick: Option<(u32, Snapshot)>,
+    toggle: bool,
+}
+impl Key {
+    fn is_forward_tab(&self) -> bool {
+        self.vk.0 == VK_TAB.0 as usize && self.keyboard[VK_SHIFT.0 as usize] & 0x80 == 0
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Waiting {
+    ForwardTab,
+    Other,
 }
 #[derive(Default)]
 pub(super) struct Recovery {
     keys: VecDeque<Key>,
     deadline: Option<Instant>,
+    waiting_for_lock: Option<Waiting>,
     pub refresh: bool,
 }
 impl Recovery {
@@ -39,7 +52,7 @@ impl Recovery {
         *self = Self::default();
     }
     pub fn is_empty(&self) -> bool {
-        self.keys.is_empty()
+        self.keys.is_empty() && self.waiting_for_lock.is_none()
     }
     pub(super) fn rebase(&mut self, from:u64, to:u64) {
         for key in &mut self.keys {if key.generation==from {key.generation=to;}}
@@ -82,14 +95,12 @@ impl Drop for Keyboard {
     }
 }
 impl Data {
-    fn attempt_key(self: &Rc<Self>, key: &Key, cookie: Option<u32>) -> Result<bool> {
+    fn attempt_key(self: &Rc<Self>, key: &Key, cookie: u32) -> Result<bool> {
         if self.generation.get() != key.generation
             || self.state.borrow().context.as_ref() != Some(&key.context)
         {
             return Ok(true);
         }
-        self.retry_retirement(&key.context, false)?;
-        self.ensure_engine()?;
         if let Some((_, old)) = &key.pick {
             let current = &self.state.borrow().snapshot;
             if current.preedit != old.preedit
@@ -111,20 +122,12 @@ impl Data {
             SetKeyboardState(&key.keyboard)?;
         }
         let _keyboard = Keyboard(previous);
-        let result = if let Some((index, _)) = key.pick.as_ref() {
-            if let Some(cookie) = cookie {
-                self.pick_at(&key.context, cookie, *index).map(|_| true)
-            } else {
-                let data = self.clone();
-                let context = key.context.clone();
-                let index = *index;
-                self.request_current(&key.context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                    data.pick_at(&context, cookie, index)
-                })
-                .map(|_| true)
-            }
+        let result = if key.toggle {
+            self.toggle_in_session(&key.context, cookie, !self.chinese()).map(|_| true)
+        } else if let Some((index, _)) = key.pick.as_ref() {
+            self.pick_at(&key.context, cookie, *index).map(|_| true)
         } else {
-            self.key_down(&key.context, key.vk, key.flags)
+            self.key_down(&key.context, cookie, key.vk, key.flags)
         };
         let written = self.application_written.get();
         self.state
@@ -143,6 +146,67 @@ impl Data {
             Ok(true)
         } else {
             result
+        }
+    }
+    // One outstanding TSF lock request owns its key. Only a rejected request or
+    // a failed execution may return that key to the recovery queue.
+    fn request_key(self: &Rc<Self>, key: &Key, allow_async: bool) -> Result<Option<bool>> {
+        if let Err(error) = self.retry_retirement(&key.context, false).and_then(|_| self.ensure_engine()) {
+            return if allow_async { Err(error) } else { Ok(Some(false)) };
+        }
+        let result = Rc::new(Cell::new(None));
+        let deferred = Rc::new(Cell::new(false));
+        let request = |flags| {
+            let data = self.clone();
+            let result = result.clone();
+            let deferred = deferred.clone();
+            let key = key.clone();
+            let context = key.context.clone();
+            self.request_status(&context, flags | TF_ES_READWRITE, move |cookie| {
+                if data.generation.get() != key.generation
+                    || data.state.borrow().context.as_ref() != Some(&key.context)
+                {
+                    result.set(Some(true));
+                    return Ok(());
+                }
+                let outcome = data.attempt_key(&key, cookie);
+                result.set(Some(outcome.as_ref().copied().unwrap_or(false)));
+                if deferred.get() {
+                    data.recovery.borrow_mut().waiting_for_lock = None;
+                    if outcome.is_err() {
+                        data.keep_failed_key(key);
+                    } else {
+                        data.recovery.borrow_mut().rebase(key.generation, data.generation.get());
+                        data.schedule_retry();
+                    }
+                }
+                outcome.map(|_| ())
+            })
+        };
+        let respond = |flags| request(flags).and_then(|status| { status.ok()?; Ok(status) });
+        let status = match respond(TF_ES_SYNC) {
+            Err(_) if result.get().is_none() && !allow_async => return Ok(Some(false)),
+            Err(error) if result.get().is_none() && [TF_E_SYNCHRONOUS, TF_E_LOCKED].contains(&error.code()) => respond(TF_ES_ASYNC)?,
+            other => other?,
+        };
+        if status == TF_S_ASYNC {
+            deferred.set(true);
+            let waiting = if key.is_forward_tab() { Waiting::ForwardTab } else { Waiting::Other };
+            self.recovery.borrow_mut().waiting_for_lock = Some(waiting);
+            Ok(None)
+        } else {
+            Ok(Some(result.get().ok_or(E_FAIL)?))
+        }
+    }
+    fn keep_failed_key(self: &Rc<Self>, key: Key) {
+        let mut recovery = self.recovery.borrow_mut();
+        recovery.deadline.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+        let context = key.context.clone();
+        recovery.keys.push_front(key);
+        drop(recovery);
+        self.recovery_hint(&context, false);
+        if self.state.borrow().engine.failure() != Some(Failure::Ambiguous) {
+            self.schedule_retry();
         }
     }
     pub(super) fn schedule_retry(&self) {
@@ -209,10 +273,13 @@ impl Data {
             return Ok(false);
         }
         if shift(vk) {
-            return self.key_down(context, vk, flags);
+            self.shift_down(vk, flags);
+            return Ok(true);
         }
         self.watch(context)?;
-        if (self.is_retiring(context) || !self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) && vk.0 == VK_ESCAPE.0 as usize {
+        if vk.0 == VK_ESCAPE.0 as usize && self.recovery.borrow().waiting_for_lock.is_none()
+            && (self.is_retiring(context) || self.recovery.borrow().deadline.is_some() || self.profile_update.borrow().is_some())
+        {
             self.profile_update.borrow_mut().take();
             self.recovery.borrow_mut().clear();
             if self.is_retiring(context) {
@@ -258,24 +325,53 @@ impl Data {
             flags,
             keyboard,
             pick: None,
+            toggle: false,
         };
+        let allow_async = if vk.0 == VK_TAB.0 as usize {
+            self.can_defer_tab(vk, flags)
+        } else {
+            true
+        };
+        self.dispatch_edit(key, allow_async)
+    }
+    pub(super) fn dispatch_toggle(self: &Rc<Self>, context: &ITfContext) -> Result<()> {
+        self.dispatch_edit(Key {
+            context: context.clone(),
+            generation: self.generation.get(),
+            vk: WPARAM(0),
+            flags: LPARAM(0),
+            keyboard: [0; 256],
+            pick: None,
+            toggle: true,
+        }, true).map(|_| ())
+    }
+    fn dispatch_edit(self: &Rc<Self>, key: Key, allow_async: bool) -> Result<bool> {
         self.wake_profile_update();
         if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() {
-            if let Ok(handled) = self.attempt_key(&key, None) {
-                return Ok(handled);
-            }
+            return match self.request_key(&key, allow_async) {
+                Ok(Some(handled)) => Ok(handled),
+                Ok(None) => Ok(true), // The lock callback now owns an IME key; it has not run yet.
+                Err(_) => { self.keep_failed_key(key); Ok(true) }
+            };
         }
         let mut recovery = self.recovery.borrow_mut();
-        recovery.keys.push_back(key);
-        if recovery
-            .deadline
-            .is_none_or(|deadline| Instant::now() >= deadline)
+        if key.vk.0 == VK_TAB.0 as usize && (!allow_async
+            || self.profile_update.borrow().is_some()
+            || recovery.deadline.is_some()
+            || recovery.waiting_for_lock == Some(Waiting::Other)
+            || !recovery.keys.iter().all(Key::is_forward_tab))
         {
+            // An older edit can close the list or change modes. Forward the original
+            // Tab while the host can still receive it; there must be no replay for it.
+            return Ok(false);
+        }
+        recovery.keys.push_back(key);
+        if recovery.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             recovery.deadline = Some(Instant::now() + Duration::from_secs(5));
         }
+        let waiting = recovery.waiting_for_lock.is_some();
         drop(recovery);
-        self.recovery_hint(context, false);
-        self.schedule_retry();
+        if !waiting { self.schedule_retry(); }
         Ok(true)
     }
     pub(super) fn dispatch_pick(
@@ -291,30 +387,26 @@ impl Data {
             flags: LPARAM(0),
             keyboard: [0; 256],
             pick: Some((index, self.state.borrow().snapshot.clone())),
+            toggle: false,
         };
         self.wake_profile_update();
-        if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() && self.attempt_key(&key, Some(cookie)).is_ok() {
-            return Ok(());
+        if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() {
+            if self.attempt_key(&key, cookie).is_err() {
+                self.keep_failed_key(key);
+            }
+        } else {
+            self.recovery.borrow_mut().keys.push_back(key);
+            self.schedule_retry();
         }
-        let mut recovery = self.recovery.borrow_mut();
-        recovery.keys.push_back(key);
-        if recovery
-            .deadline
-            .is_none_or(|deadline| Instant::now() >= deadline)
-        {
-            recovery.deadline = Some(Instant::now() + Duration::from_secs(5));
-        }
-        drop(recovery);
-        self.recovery_hint(context, false);
-        self.schedule_retry();
         Ok(())
     }
     pub(super) fn retry_pending(self: &Rc<Self>) {
-        if self.retry_profile_update() { return; }
+        if self.recovery.borrow().waiting_for_lock.is_some() || self.retry_profile_update() { return; }
         // Bound each timer dispatch so a burst does not monopolize the UI thread.
         let started = Instant::now();
         for _ in 0..16 {
-            let Some(key) = self.recovery.borrow().keys.front().cloned() else {
+            let front = self.recovery.borrow().keys.front().cloned();
+            let Some(key) = front else {
                 let refresh = self.recovery.borrow().refresh;
                 self.recovery.borrow_mut().clear();
                 if refresh {
@@ -337,19 +429,18 @@ impl Data {
                 self.recovery_hint(&key.context, true);
                 return;
             }
-            if self.attempt_key(&key, None).is_err() {
-                self.recovery_hint(&key.context, false);
-                if self.state.borrow().engine.failure() != Some(Failure::Ambiguous) {
-                    self.schedule_retry();
+            self.recovery.borrow_mut().keys.pop_front();
+            match self.request_key(&key, true) {
+                Ok(None) => return,
+                Ok(Some(_)) => {
+                    // Following keys are a new composition in the same valid field.
+                    self.recovery.borrow_mut().rebase(key.generation, self.generation.get());
                 }
-                return;
+                Err(_) => {
+                    self.keep_failed_key(key);
+                    return;
+                }
             }
-            let generation = self.generation.get();
-            let mut recovery = self.recovery.borrow_mut();
-            recovery.keys.pop_front();
-            // Following keys are a new composition in the same valid field.
-            recovery.rebase(key.generation,generation);
-            drop(recovery);
             if started.elapsed() > Duration::from_millis(30) {
                 self.schedule_retry();
                 return;

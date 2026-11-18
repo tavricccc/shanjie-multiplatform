@@ -7,6 +7,7 @@
 
 namespace shanjie {
 struct Snapshot {
+    unsigned englishRunStart = 0, englishRunLen = 0;
     bool handled = false;
     bool associated = false;
     bool prediction = false;

@@ -8,7 +8,7 @@ use windows::{
     core::*,
     Win32::{
         Foundation::*,
-        UI::{HiDpi::*, TextServices::*, WindowsAndMessaging::*},
+        UI::{TextServices::*, WindowsAndMessaging::*},
     },
 };
 const TF_INVALID_UIELEMENTID: u32 = u32::MAX;
@@ -125,7 +125,7 @@ impl Candidates {
         state: Snapshot,
     ) -> Result<()> {
         let state = crate::input::panel_view(state, self.reading_panel.get());
-        if state.candidates.is_empty() && state.preedit.is_empty() {
+        if state.candidates.is_empty() && state.preedit.is_empty() && state.english_run_utf16_len == 0 {
             self.close();
             return Ok(());
         }
@@ -163,7 +163,7 @@ impl Candidates {
         if let Err(e) = &extent {
             super::trace(format_args!("GetTextExt: {:?}", e.code()));
         }
-        if extent.is_err() || (clipped.as_bool() && rect == RECT::default()) {
+        if extent.is_err() || rect == RECT::default() {
             // WinUI/XAML hosts often report no layout; keep the panel at the last caret or the view.
             let screen = view.GetScreenExt().unwrap_or_default();
             if self.caret.get() != RECT::default() {
@@ -175,29 +175,9 @@ impl Candidates {
                 return Ok(());
             }
         }
-        let owner = view.GetWnd()?;
+        let owner = view.GetWnd().unwrap_or_default();
         self.view.set(owner);
-        if !owner.is_invalid()
-            && GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(owner))
-                != DPI_AWARENESS_PER_MONITOR_AWARE
-        {
-            let mut start = POINT {
-                x: rect.left,
-                y: rect.top,
-            };
-            let mut end = POINT {
-                x: rect.right,
-                y: rect.bottom,
-            };
-            LogicalToPhysicalPointForPerMonitorDPI(Some(owner), &mut start).ok()?;
-            LogicalToPhysicalPointForPerMonitorDPI(Some(owner), &mut end).ok()?;
-            rect = RECT {
-                left: start.x,
-                top: start.y,
-                right: end.x,
-                bottom: end.y,
-            };
-        }
+        let _ = super::service::physical(owner, &mut rect);
         self.caret.set(rect);
         let shown = self.show(true);
         if let Err(e) = &shown {

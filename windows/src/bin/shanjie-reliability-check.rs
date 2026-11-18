@@ -16,6 +16,7 @@ fn main() {
         "busy" => broker::verification::busy_learning(data),
         "ambiguous" => broker::verification::ambiguous(data),
         "capacity" => broker::verification::capacity(data),
+        "pack-switch" => broker::verification::pack_switch(data, &args[3]),
         "restart" => broker::verification::restart(data),
         "restricted-identity" => broker::verification::restricted_identity(data,args[3].parse().unwrap()),
         "profile-root" => broker::verification::profile_root(),

@@ -260,6 +260,7 @@ internal static class VisualVerifier
         }
         string legacy = "[profile]\nschema=2\ninteraction=windows\n[engine]\nmodel=2\nranking=formal\n[input]\nlearning=1\nassociations=0\nescape_clears=0\n[appearance]\nfont_size=22\n";
         File.WriteAllText(Models.ProfileStore.Path, legacy); settings.Vm.Load();
+        if (settings.Vm.EnglishOverwrite) throw new InvalidDataException("A missing English overwrite setting must display off");
         if (settings.Vm.Model != 5 || !settings.Vm.Learning || settings.Vm.Associations || settings.Vm.Prediction || settings.Vm.Escape != 2 || !settings.Vm.ShiftPunctuation || File.ReadAllText(Models.ProfileStore.Path) != legacy)
             throw new InvalidDataException("Read-only schema 2 migration did not preserve settings or original file");
         settings.Vm.Save();
@@ -270,6 +271,11 @@ internal static class VisualVerifier
             throw new InvalidDataException("Windows preset/retained data round-trip failed");
         settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
         if (settings.Vm.Interaction != 1 || !settings.Vm.ShiftToggle || !settings.Vm.SpaceOperates || !settings.Vm.Learning) throw new InvalidDataException("Shanjie profile round-trip failed");
+        foreach (bool overwrite in new[] { true, false }) {
+            settings.Vm.EnglishOverwrite = overwrite; settings.Vm.Preset(true); settings.Vm.Save(); settings.Vm.Load();
+            if (settings.Vm.EnglishOverwrite != overwrite || Models.ProfileDocument.Parse(File.ReadAllText(Models.ProfileStore.Path)).Flag("input", "english_overwrite", !overwrite) != overwrite)
+                throw new InvalidDataException("The preset and saved profile must keep the English overwrite choice");
+        }
         settings.LoadProfile(true);
         settings.Vm.Save(); settings.Vm.Load(); if (settings.Vm.Model != 5 || File.ReadAllText(Models.ProfileStore.Path).Contains("layout=")) throw new InvalidDataException("Latest model/Windows template failed");
         foreach (var pack in new[] { (Name: "BeautyPackToggle", Key: "beauty_pack"), (Name: "MemePackToggle", Key: "meme_pack") }) {

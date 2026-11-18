@@ -119,6 +119,7 @@ impl Data {
                 if !self.retirement_live(r, ticket) {
                     return Ok(());
                 }
+                let _ = r.context.GetProperty(&GUID_PROP_ATTRIBUTE).and_then(|p| p.Clear(cookie, &range));
                 range
                     .SetText(cookie, 0, &r.text)
                     .inspect_err(|e| self.retirement_error("retirement.write", e))

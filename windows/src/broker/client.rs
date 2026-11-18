@@ -36,13 +36,14 @@ pub struct Client {
     pub failure: Option<Failure>,
 }
 impl Client {
-    pub fn open(data: &Path, config: Config) -> Option<Self> {
-        Self::try_open(data, config).map_err(|e| {
+    pub fn open(data: &Path, config: Config, source: Option<String>) -> Option<Self> {
+        Self::try_open(data, config, source).map_err(|e| {
             crate::runtime_log::io("client.open", &e);
             crate::bridge::failure(format!("core open: kind={:?} win32={:?}",e.kind(),e.raw_os_error()));
         }).ok()
     }
-    fn try_open(data: &Path, config: Config) -> io::Result<Self> {
+    pub fn id(&self) -> &str { &self.id }
+    fn try_open(data: &Path, config: Config, source: Option<String>) -> io::Result<Self> {
         let deadline = Instant::now() + COLD;
         let pipe = connect(data, true, deadline).map_err(crate::runtime_log::at("client.connect"))?;
         let id = identity();
@@ -50,6 +51,7 @@ impl Client {
             &Request::Open {
                 id: id.clone(),
                 config: config.clone(),
+                source,
                 replay: Vec::new(),
                 sequence: 0,
             },
@@ -90,6 +92,7 @@ impl Client {
                 &Request::Open {
                     id: self.id.clone(),
                     config: self.config.clone(),
+                    source: None,
                     replay,
                     sequence: self.sequence,
                 },

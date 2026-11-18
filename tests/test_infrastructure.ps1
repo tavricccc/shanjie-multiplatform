@@ -55,16 +55,23 @@ foreach($badRows in @(@{rows=@($ciRows[0..3])},@{rows=@($ciRows)+@([pscustomobje
 }
 
 $english=Get-EnglishKeyCases
-Assert-Check ($english.Count -eq 32) 'Preserve all 32 English mode/layout combinations, including digit navigation'
-Assert-Check ((Get-SubmissionCases 1).Count -eq 52) 'Preserve all 52 Standard submission combinations'
-Assert-Check ((Get-SubmissionCases 2).Count -eq 25) 'Preserve all 25 Eten submission combinations'
+ Assert-Check ($english.Count -eq 33 -and @($english | Where-Object {$_[1] -eq 'shift'}).Count -eq 2) 'Preserve all 33 English mode/layout combinations, including Shift and digit navigation'
+foreach($keyboard in 1,2) {
+    $submissionCases=Get-SubmissionCases $keyboard
+    Assert-Check ($submissionCases.Count -eq $(if($keyboard -eq 1){66}else{30})) 'Preserve existing submission combinations and cover both interactions in the async lock regression'
+    $asyncCases=@($submissionCases | Where-Object {$_[0] -eq 'async-keys'})
+    Assert-Check ($asyncCases.Count -eq 2 -and @($asyncCases | Where-Object {$_[4] -eq 'shanjie'}).Count -eq 1) "Keep both async lock interaction profiles with keyboard $keyboard"
+    foreach($mode in 'async-keys','rebuild-local','rebuild-pipe','segment') {
+        Assert-Check ($mode -in ($submissionCases | ForEach-Object {$_[0]})) "Keep $mode covered with keyboard $keyboard"
+    }
+}
 $rows=@(
     [pscustomobject]@{name='full.english.caps.x64';preset='windows-x64';selected=$true;reason='selected'},
     [pscustomobject]@{name='full.english.numpad.x64';preset='windows-x64';selected=$false;reason='unrelated'},
     [pscustomobject]@{name='full.submission.input-digits.x64';preset='windows-x64';selected=$true;reason='selected'}
 )
 $plan=@(Get-HarnessCasePlan $rows)
-Assert-Check ($plan.Count -eq 33) 'Plan expands parent groups into every input combination'
+Assert-Check ($plan.Count -eq 42) 'Plan expands parent groups into every input combination'
 Assert-Check (@($plan | Where-Object { !$_.selected -and $_.reason -eq 'unrelated' }).Count -eq 4) 'Unselected combinations retain their reason'
 Assert-Check (@($plan | Where-Object status -ne 'not-run').Count -eq 0) 'Planning never marks combinations passed'
 

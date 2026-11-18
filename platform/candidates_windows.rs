@@ -53,6 +53,41 @@ impl Engine {
         }
     }
 
+    /// Highlight one decoded word while editing inside a sentence. The candidate
+    /// anchor decides which word touches the caret at a boundary.
+    pub fn windows_active_segment(&self) -> Option<[u32; 2]> {
+        if self.path.len() < 2 || self.cursor >= self.syls.len()
+            || self.windows_phonetic_pending() || !self.pending_literal.is_empty()
+            || !self.run.is_empty() || !self.mixed_raw.is_empty() || self.drun.is_some()
+        {
+            return None;
+        }
+        let touching = if self.candidate_from_right { self.cursor } else { self.cursor.saturating_sub(1) };
+        let mut start = 0;
+        let (mut start, mut end) = self.path.iter().find_map(|word| {
+            let end = start + word.syllables;
+            let span = (start, end);
+            start = end;
+            (touching < end).then_some(span)
+        })?;
+        if let Some(candidates) = &self.cands {
+            // Prediction rows may insert new units, so they do not have an exact span in the current text.
+            if let Some(literal) = candidates.literals.get(&candidates.sel) {
+                (start, end) = (literal.start, literal.end);
+            } else if let Some((_, length)) = candidates.list.get(candidates.sel).filter(|_| candidates.sel >= candidates.rows.len() && candidates.dalt.is_none()) {
+                let right = self.candidate_from_right && candidates.mixed.is_none();
+                let available = if right { self.syls.len() - self.cursor } else if self.cursor == 0 { self.syls.len() } else { self.cursor };
+                if *length <= available { (start, end) = self.candidate_span(*length); }
+            }
+        }
+        if start == 0 && end == self.syls.len() { return None; }
+        let offset = |end| {
+            let chars = (0..end).map(|i| self.token_width(i)).sum::<usize>();
+            self.display.chars().take(chars).map(char::len_utf16).sum::<usize>() as u32
+        };
+        Some([offset(start), offset(end)])
+    }
+
     fn open_candidates(&mut self, rows: Vec<Pred>) {
         // A mixed word spans its English token and the Chinese suffix at the end;
         // keep that upstream span even when ordinary candidates are anchored right.

@@ -14,6 +14,9 @@ Replace-SmartContract '    pub fn key(&mut self, k: Key) -> Result<Output, Engin
 Replace-SmartContract "        if !std::mem::take(&mut self.left_fresh) && self.composition_empty() {`n            self.clear_left();`n        }" ''
 Replace-SmartContract '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, ch));' '            self.shadow_key[col] = Some(Self::shadow_entry(&self.shadow_key, self.mixed_display_char.filter(|display| display.eq_ignore_ascii_case(&ch)).unwrap_or(ch)));'
 Replace-SmartContract 'return self.revert_keys(Revert::Overwrite, k.ch, col, sym);' 'return self.revert_keys(Revert::Overwrite, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
+# An explicit uppercase sequence can still open an English run when ordinary
+# lowercase column replacement is set to preserve Zhuyin.
+Replace-SmartContract 'if occupied && self.english_overwrite {' 'if occupied && (self.english_overwrite || (self.windows_shifted_boundaries && self.mixed_display_char.is_some_and(|ch| ch.is_ascii_uppercase()) && self.shadow_key.iter().flatten().all(|(ch, _)| ch.is_ascii_uppercase()))) {'
 Replace-SmartContract 'return self.revert_keys(Revert::Order, k.ch, col, sym);' 'return self.revert_keys(Revert::Order, self.mixed_display_char.unwrap_or(k.ch), col, sym);'
 Replace-SmartContract "        self.invalidate();`n        self.clear_left();" "        self.invalidate();`n        self.mixed_raw.clear();`n        self.mixed_explicit_english = false;`n        self.mixed_shifted_end = 0;`n        self.run_shifted.clear();`n        self.mixed_latin = false;`n        self.clear_left();"
 Replace-SmartContract "        } else {`n            self.pending()`n        };" "        } else if self.mixed_input && !self.mixed_raw.is_empty() {`n            self.mixed_raw.clone()`n        } else {`n            self.pending()`n        };"
@@ -108,6 +111,21 @@ Replace-DigitLayerContract "    pub fn scorer(&self) -> Scorer<'_> {`n        Sc
 Replace-DigitLayerContract 'return Some(DigitEnv { st, table, cache: c, profile: self.profile, reorder });' 'return Some(DigitEnv { st, table, cache: c, profile: self.profile, reorder, mixed_order: self.mixed_input });'
 Replace-DigitLayerContract 'Some(DigitEnv { st, table, cache, profile: self.profile, reorder })' 'Some(DigitEnv { st, table, cache, profile: self.profile, reorder, mixed_order: self.mixed_input })'
 Replace-DigitLayerContract 'env.scorer().decide(' 'env.decide(' 5
+$earlyTone = @'
+        run.buf.push(c);
+        if self.mixed_order_active() && run.emitted.is_empty() {
+            if let [body, ending, last] = run.buf.as_slice() {
+                if let Some(tone) = Layout::Standard.tone_of(*ending) {
+                    let symbols = [*body, *last];
+                    if self.windows_early_reading(&body.to_string(), tone, *last).is_some() {
+                        return self.drun_finish(run, 0, &symbols, tone, String::new());
+                    }
+                }
+            }
+        }
+        let mut flushed = Vec::new();
+'@
+Replace-DigitLayerContract "        run.buf.push(c);`n        let mut flushed = Vec::new();" $earlyTone.Replace("`r`n","`n").TrimEnd()
 Replace-DigitLayerContract 'let Some(mut syl) = body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() else { continue };' 'let Some(mut syl) = (if self.mixed_order_active() { self.mixed_reading_order(&body.iter().collect::<String>(), false) } else { body.iter().map(|&k| Layout::Standard.symbol_of(k).map(|x| x.1)).collect::<Option<String>>() }) else { continue };'
 Set-Content $digitLayerFile $digitLayerContent -Encoding utf8NoBOM
 

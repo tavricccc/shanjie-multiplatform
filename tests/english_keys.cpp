@@ -41,6 +41,10 @@ int wmain(int argc,wchar_t** argv) {
         }
         if(required)require(test&&eaten,917);
     };
+    auto expect=[&](const std::wstring& expected,int check){
+        if(store->text!=expected){std::printf("Text (UTF-16):");for(auto unit:store->text)std::printf(" %04x",(unsigned)unit);std::puts("");}
+        require(store->text==expected,check);
+    };
     if(scenario==L"digit-navigation"){
         std::wstring committed;
         for(auto digit:std::wstring(L"125890")){
@@ -62,7 +66,7 @@ int wmain(int argc,wchar_t** argv) {
             for(auto ch:std::wstring(L"ABC"))press(ch,true);
             require(store->text==expected+L"ABC",960);
             press(mark.first);expected+=std::wstring(L"ABC")+mark.second;
-            require(store->text==expected,961);
+            expect(expected,961);
             press(VK_RETURN,false,false,false);require(store->text==expected,962);
         }
         for(auto ch:std::wstring(L"99.9"))press(ch==L'.'?VK_OEM_PERIOD:ch);
@@ -147,12 +151,24 @@ int wmain(int argc,wchar_t** argv) {
     }else if(scenario==L"caps"){
         // HELLO is in the public bundled English list; RUST is intentionally absent.
         for(auto ch:std::wstring(L"HELLO"))press(ch,false,true);
-        press(VK_RETURN);require(store->text==L"HELLO",918);
+        press(VK_RETURN);expect(L"HELLO",918);
     }else if(scenario==L"caps-zh"){
         press('S',false,true);press('U',false,true);press('3',false,true);press(VK_RETURN);
         require(store->text==L"你",919);
     }else if(scenario==L"shift"){
         press('R',true);press('U');press('S');press('T');press(VK_RETURN);require(store->text==L"Rust",920);
+        for(auto ch:std::wstring(L"HELLO"))press(ch,true);
+        press(VK_SPACE,true);
+        for(auto ch:std::wstring(L"WORLD"))press(ch,true);
+        press(VK_RETURN);require(store->text==L"RustHELLO WORLD",1011);
+        press('A',true);press('I',true);press('D');press('9');press(VK_SPACE);press(VK_RETURN);
+        expect(L"RustHELLO WORLDAI開",1012);
+        press('A',true);press('I',true);press('G');press('4');press(VK_RETURN);
+        expect(L"RustHELLO WORLDAI開AI是",1013);
+        press('A',true);press('P',true);press('I',true);press('L');press('C');press('3');press(VK_RETURN);
+        expect(L"RustHELLO WORLDAI開AI是API好",1014);
+        press('A',true);press('I',true);press(VK_SPACE,true);press('0');press(VK_RETURN);
+        expect(L"RustHELLO WORLDAI開AI是API好AI 0",1015);
     }else if(scenario==L"shift-caps-zh"){
         wchar_t local[32768];require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768),965);
         auto profile=std::wstring(local)+L"/Shanjie/profile.ini";

@@ -117,7 +117,7 @@ impl Default for State {
     }
 }
 impl State {
-    fn core_config(&self) -> resident::Config {
+    pub(super) fn core_config(&self) -> resident::Config {
         resident::Config::new(&self.data, &self.prefs, self.profile_layout)
     }
     fn park_engine(&mut self) {
@@ -139,12 +139,14 @@ impl Drop for State {
 }
 pub struct Data {
     pub state: RefCell<State>,
+    pub(super) active_word_atom: Cell<Option<u32>>,
     pub ending: Cell<bool>,
     pub editing: Cell<bool>,
     pub mode_revision: Cell<u64>,
     pub(super) profile_update: RefCell<Option<super::profile_refresh::Pending>>,
     pub(super) generation: Cell<u64>,
     pub(super) recovery: RefCell<super::recovery::Recovery>,
+    pub(super) rebuild: RefCell<resident::Rebuild>,
     pub(super) application_written: Cell<bool>,
     pub(super) retiring: RefCell<Vec<Rc<super::retirement::Retirement>>>,
     pub indicator: RefCell<Box<Indicator>>,
@@ -171,6 +173,7 @@ pub struct Data {
     ITfTextLayoutSink,
     ITfTextEditSink,
     ITfThreadFocusSink,
+    ITfDisplayAttributeProvider,
     Agile = false
 )]
 pub(super) struct Service {
@@ -179,12 +182,14 @@ pub(super) struct Service {
 pub fn new() -> ITfTextInputProcessorEx {
     let data = Rc::new(Data {
         state: RefCell::new(State::default()),
+        active_word_atom: Cell::new(None),
         ending: Cell::new(false),
         editing: Cell::new(false),
         mode_revision: Cell::new(0),
         profile_update: RefCell::new(None),
         generation: Cell::new(0),
         recovery: RefCell::new(Default::default()),
+        rebuild: RefCell::new(Default::default()),
         application_written: Cell::new(false),
         retiring: RefCell::new(Vec::new()),
         indicator: RefCell::new(Box::new(Indicator::default())),
@@ -239,6 +244,14 @@ impl Data {
         flags: TF_CONTEXT_EDIT_CONTEXT_FLAGS,
         operation: impl FnOnce(u32) -> Result<()> + 'static,
     ) -> Result<()> {
+        self.request_status(context, flags, operation)?.ok()
+    }
+    pub(super) fn request_status(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        flags: TF_CONTEXT_EDIT_CONTEXT_FLAGS,
+        operation: impl FnOnce(u32) -> Result<()> + 'static,
+    ) -> Result<HRESULT> {
         let client = self.state.borrow().client;
         let edit: ITfEditSession = Edit {
             _owner: self.owner(),
@@ -246,7 +259,7 @@ impl Data {
             operation: RefCell::new(Some(Box::new(operation))),
         }
         .into();
-        unsafe { context.RequestEditSession(client, &edit, flags)?.ok() }
+        unsafe { context.RequestEditSession(client, &edit, flags) }
     }
     pub fn chinese(&self) -> bool {
         self.state
@@ -399,6 +412,7 @@ impl Data {
     }
     pub fn deactivate(self: &Rc<Self>) -> Result<()> {
         self.diagnostic("deactivate",None,None,None);
+        self.rebuild.borrow_mut().reset();
         let cancelled=self.cancel();
         self.retire_before_deactivate();
         // Unadvising TSF and destroying the last native window can synchronously
@@ -512,6 +526,9 @@ impl Data {
                     .cast::<ITfInsertAtSelection>()?
                     .InsertTextAtSelection(cookie, TF_IAS_QUERYONLY, &[])?
             };
+            if composition.is_some() && self.state.borrow().snapshot.active_segment.is_some() {
+                let _ = context.GetProperty(&GUID_PROP_ATTRIBUTE).and_then(|p| p.Clear(cookie, &range));
+            }
             self.diagnostic_range("apply.initial_range",&range,cookie,0);
             let width = self.state.borrow().full_width;
             let committed = if width {
@@ -580,6 +597,9 @@ impl Data {
             // If a later caret update fails, do not repeat text already sent.
             self.application_written.set(true);
             self.state.borrow_mut().snapshot = out.clone();
+            if let (Some(atom), Some(segment)) = (self.active_word_atom.get(), out.active_segment) {
+                let _ = super::composition_style::mark(context, cookie, &range, atom, segment);
+            }
             let caret = range.Clone()?;
             caret.Collapse(cookie, TF_ANCHOR_START)?;
             let mut moved = 0;
@@ -634,59 +654,67 @@ impl Data {
                 s.candidates.as_ref().map(|c| c.data.clone())
             };
             if let Some(candidates) = candidates {
-                candidates.update(
+                if let Err(error) = candidates.update(
                     context,
                     cookie,
                     &caret,
                     self.state.borrow().snapshot.clone(),
-                )?;
+                ) {
+                    super::trace(format_args!("candidate UI: {error}"));
+                    candidates.close();
+                }
             }
             Ok(())
         }
     }
     pub fn toggle(self: &Rc<Self>, input: Option<ITfContext>) -> Result<()> {
         let chinese = !self.chinese();
-        let (composition, context) = {
-            let mut s = self.state.borrow_mut();
-            s.associated.clear();
-            if let Some(c) = &s.candidates {
-                c.data.close();
-            }
-            (s.composition.clone(), s.context.clone())
+        let context = {
+            let s = self.state.borrow();
+            s.context.clone().filter(|_| s.composition.is_some() || !self.recovery.borrow().is_empty())
         };
-        if composition.is_none() {
+        let Some(context) = context else {
+            self.clear_mode_candidates();
             self.set_mode(chinese)?;
             return self.notify_mode(input, chinese);
+        };
+        if !self.recovery.borrow().is_empty() {
+            return self.dispatch_toggle(&context);
         }
-        let context = context.ok_or(E_FAIL)?;
         let current = context.clone();
         let data = self.clone();
-        self.request_current(
-            &context,
-            TF_ES_ASYNCDONTCARE | TF_ES_READWRITE,
-            move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    let pending =
-                        if !s.pinyin.pending.is_empty() || [1, 2, 3].contains(&s.special.mode) {
-                            Some(s.snapshot.preedit.clone())
-                        } else {
-                            None
-                        };
-                    let mut out = output(s.engine.reset(false))?;
-                    if let Some(pending) = pending {
-                        out.commit = pending;
-                    }
-                    s.special.clear();
-                    s.pinyin.clear();
-                    s.raw_reading.clear();
-                    out
-                };
-                data.apply(&current, cookie, out, false)?;
-                data.set_mode(chinese)?;
-                data.notify_mode(Some(current), chinese)
-            },
-        )
+        self.request_current(&context, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, move |cookie| {
+            data.toggle_in_session(&current, cookie, chinese)
+        })
+    }
+    fn clear_mode_candidates(&self) {
+        let mut s = self.state.borrow_mut();
+        s.associated.clear();
+        if let Some(c) = &s.candidates {
+            c.data.close();
+        }
+    }
+    pub(super) fn toggle_in_session(self: &Rc<Self>, context: &ITfContext, cookie: u32, chinese: bool) -> Result<()> {
+        self.clear_mode_candidates();
+        if self.state.borrow().composition.is_some() {
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let mut out = output(s.engine.reset(false))?;
+                if !s.pinyin.pending.is_empty() || [1, 2, 3].contains(&s.special.mode) {
+                    out.commit = s.snapshot.preedit.clone();
+                }
+                s.special.clear();
+                s.pinyin.clear();
+                s.raw_reading.clear();
+                out
+            };
+            self.apply(context, cookie, out, false)?;
+        }
+        self.set_mode(chinese)?;
+        if let Err(error) = self.notify_mode(Some(context.clone()), chinese) {
+            super::trace(format_args!("mode indicator: {error}"));
+        }
+        Ok(())
     }
     pub fn notify_mode(self: &Rc<Self>, input: Option<ITfContext>, chinese: bool) -> Result<()> {
         if !self
@@ -727,11 +755,11 @@ impl Data {
                 let mut caret = RECT::default();
                 let mut clipped = BOOL::default();
                 view.GetTextExt(cookie, &range, &mut caret, &mut clipped)?;
-                if clipped.as_bool() {
+                if clipped.as_bool() || caret == RECT::default() {
                     return Ok(());
                 }
-                let owner = view.GetWnd()?;
-                physical(owner, &mut caret)?;
+                let owner = view.GetWnd().unwrap_or_default();
+                let _ = physical(owner, &mut caret);
                 data.indicator.borrow_mut().show(
                     caret,
                     if owner.is_invalid() {
@@ -793,10 +821,32 @@ impl Data {
             return Ok(());
         }
         let current = profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
+        let (applied, live) = {
+            let s = self.state.borrow();
+            (s.prefs.clone(), s.engine.is_open())
+        };
+        let rebuild = profile::REBUILD.iter().any(|(section, key)| current.get(section, key, "") != applied.get(section, key, ""));
+        if rebuild && live {
+            let mut live_profile = current.clone();
+            for (section, key) in profile::REBUILD {
+                if let Some(value) = applied.0.get(section).and_then(|values| values.get(key)) {
+                    live_profile.set(section, key, value);
+                } else {
+                    live_profile.remove(section, key);
+                }
+            }
+            self.rebuild.borrow_mut().request(Some(current));
+            // Live options still apply to the old engine while its replacement waits.
+            if live_profile.0 != applied.0 {
+                self.apply_profile(live_profile, false, None)?;
+            }
+            return self.poll_rebuild();
+        }
+        self.rebuild.borrow_mut().request(None);
+        self.apply_profile(current, rebuild, None)
+    }
+    pub(super) fn apply_profile(self: &Rc<Self>, current: Document, rebuild: bool, built: Option<(Engine, Pinyin)>) -> Result<()> {
         let old = self.state.borrow().prefs.clone();
-        let rebuild = profile::REBUILD
-        .iter()
-        .any(|(s, k)| current.get(s, k, "") != old.get(s, k, ""));
         let mode_changed = current.get("input", "chinese", "") != old.get("input", "chinese", "");
         let width_changed =
             current.get("input", "full_width", "") != old.get("input", "full_width", "");
@@ -806,10 +856,20 @@ impl Data {
         let prediction_changed =
             current.get("engine", "prediction", "") != old.get("engine", "prediction", "");
         let demote_changed = current.get("engine", "demote", "") != old.get("engine", "demote", "");
+        let adopted = built.is_some();
+        let mut retired = None;
         {
             let mut s = self.state.borrow_mut();
             s.prefs = current.clone();
-            if rebuild {
+            if let Some((engine, pinyin)) = built {
+                retired = Some(std::mem::replace(&mut s.engine, engine));
+                s.pinyin = pinyin;
+                s.snapshot = Snapshot::default();
+                s.raw_reading.clear();
+                s.associated.clear();
+                s.association_caret = None;
+                if let Some(candidates) = &s.candidates { candidates.data.close(); }
+            } else if rebuild {
                 s.engine = Engine::default();
                 s.preload = None;
                 s.pinyin = Pinyin::default();
@@ -839,9 +899,10 @@ impl Data {
                 c.data.reading_panel.set(current.reading_panel());
             }
         }
+        if let Some(engine) = retired { resident::retire(engine); }
         if let Some(popup)=self.word_popup.borrow().as_ref(){let _=popup.set_appearance(current.number("appearance","theme",0),crate::appearance::Appearance::from_document(&current));}
         self.prepare_engine()?;
-        if self.state.borrow().engine.is_open() {
+        if self.state.borrow().engine.is_open() && !adopted {
             let mut operations=std::collections::VecDeque::from(option_operations(&current));
             if demote_changed {operations.push_back(crate::broker::Op::Demote(current.flag("engine","demote",true)));}
             if prediction_changed {operations.push_back(crate::broker::Op::Prediction(current.flag("engine","prediction",false)));}
@@ -866,6 +927,7 @@ impl Data {
         Ok(())
     }
     pub fn restart(self: &Rc<Self>) -> Result<()> {
+        self.rebuild.borrow_mut().request(None);
         self.cancel()?;
         {
             let mut s = self.state.borrow_mut();
@@ -947,12 +1009,12 @@ fn configure_options(s: &mut State) -> Result<()> {
     for op in option_operations(&s.prefs) {output(s.engine.perform(op))?;}
     Ok(())
 }
-fn option_operations(p:&Document) -> [crate::broker::Op;4] {
+pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;4] {
     let keyboard=p.number("input","keyboard",0);
     let zhuyin=keyboard<3;
     let upstream=zhuyin && keyboard!=2 && p.flag("input","upstream_english",false);
-    // Upstream defaults: overwrite, key order and the reversal guard all on.
-    let english=upstream as u32 | (p.flag("input","english_overwrite",true) as u32)<<1
+    // Keep upstream's key order and reversal guard; Windows defaults overwrite to off.
+    let english=upstream as u32 | (p.flag("input","english_overwrite",false) as u32)<<1
         | (p.flag("input","english_key_order",true) as u32)<<2 | (p.flag("input","english_reversal_guard",true) as u32)<<3;
     let windows=p.get("profile","interaction","windows")=="windows";
     [crate::broker::Op::Options(p.input_options() | 1 << 23 | (windows as u32) << 24),
@@ -975,6 +1037,7 @@ unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
             8 => data.poll_word(),
             9 => data.word_closed(),
             10 => data.poll_rerank(),
+            11 => { let _ = data.poll_rebuild(); }
             _ => {
                 let _ = data.refresh();
             }
@@ -994,6 +1057,9 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
         self.data.diagnostic("activate.enter",None,None,None);
         let result = (|| unsafe {
             let thread = thread.ok()?.clone();
+            if let Ok(categories) = CoCreateInstance::<_, ITfCategoryMgr>(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER) {
+                self.data.active_word_atom.set(categories.RegisterGUID(&super::composition_style::ACTIVE_WORD).ok());
+            }
             let preferences =
                 profile::load(&profile::path()).map_err(|_| Error::from_hresult(E_FAIL))?;
             let mut path = [0u16; 32768];

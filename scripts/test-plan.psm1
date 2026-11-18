@@ -108,7 +108,7 @@ function Get-VerificationExceptions {
     @(
         @{id='input-features';script='verify-input-features.ps1';category='conditional';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
         @{id='profile-refresh';script='verify-profile-refresh.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
-        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. Upstream core-suite and submission busy tests are different fixtures, not proof of these reliability-check cases.'}
+        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^platform/(resident_windows|input_windows_ffi)\.rs$|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. For pack rebuild performance and lifetime changes use -Cases pack-switch; CTest rebuild-local/rebuild-pipe check app behavior, not latency, memory or retired pipe sessions.'}
         @{id='dictionary-store';script='verify-dictionary-store.ps1';category='conditional';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
         @{id='profile-coexistence';script='verify-profile-coexistence.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
         @{id='update-probes';script='verify-update.ps1';category='conditional';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
@@ -186,7 +186,8 @@ function Get-EnglishKeyCases {
     # Mode bits: 1 raw-key mixing, 2 upstream English; these are mutually exclusive choices.
     $cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order','digit-navigation'){$cases+=,@($mode,$scenario,1,1)}}
     foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
-    foreach($scenario in 'shift','shift-caps'){$cases+=,@(2,$scenario,1,1)}
+    foreach($mode in 1,2){$cases+=,@($mode,'shift',1,1)}
+    $cases+=,@(2,'shift-caps',1,1)
     $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
     foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
     $cases+=,@(0,'backquote-disabled',1,1)
@@ -201,6 +202,7 @@ function Get-EnglishKeyCases {
 function Get-SubmissionCases([int]$Keyboard) {
     $prefix=if($Keyboard -eq 1){'SU3'}else{'NE3'}
     $cases=@(@('commit','ADB','adb'),@('commit','XYZ','xyz'),@('commit',$prefix,'你'),@('commit',($prefix+'ADB'),'你adb'),@('commit',('A'*96),('a'*96)),@('cancel','ADB',''),@('focus','ADB','adb'),@('toggle','ADB','adb'),@('refresh','ADB','adb'),@('return','ADB','adb'),@('cancel-generation','ADB',''),@('deactivate','ADB','adb'),@('refresh-twice','ADB','adb'),@('busy','A','adb'),@('busy-epoch','A','adb'),@('busy-cancel','A',''),@('busy-focus','A','a'),@('busy-expire','A','adb'),@('busy-pick',$prefix,'妳'),@('busy-mouse',$prefix,'妳'),@('retire-write-fail','ADB','adb'),@('retire-request-fail','ADB','adb'),@('retire-escape','ADB','adb'),@('retire-deactivate','ADB','adb'),@('retire-stale','ADB','adb'))
+    $cases += @(@('async-keys',$prefix,'你'),@('async-keys',$prefix,'你',0,'shanjie'),@('rebuild-local',$prefix,'波尼'),@('rebuild-pipe',$prefix,'波尼'),@('segment',$prefix,('你'*8)))
     if($Keyboard -eq 1) {
         foreach($mix in 0,1,2) {
             $cases+=,@('input-digits','9 U. ','哎呦',$mix)
@@ -212,7 +214,12 @@ function Get-SubmissionCases([int]$Keyboard) {
                 foreach($digits in '13','14','16','17','13467','R3','R4','R6','R7','R3467') { $cases+=,@('input-digits',$digits,$digits.ToLowerInvariant(),$mix) }
                 $cases+=,@('input-digits','GK42U⌫U/4','設定',$mix)
             }
-            if($mix -band 2) { foreach($digits in '3.14','0.5','2026/10/15') { $cases+=,@('input-digits',$digits,$digits,$mix) } }
+            if($mix -band 2) {
+                foreach($digits in '3.14','0.5','2026/10/15','2026','17680') { $cases+=,@('input-digits',$digits,$digits,$mix) }
+                foreach($conversion in @(@('8EK4','8個'),@('02J4','0度'),@('SU38EK4','你8個'),@('SU39Y4','你在'),@('SU320U4','你電'),@('1U0 ','編'),@('1U 0 ','逼安'))) {
+                    $cases+=,@('input-digits',$conversion[0],$conversion[1],$mix)
+                }
+            }
         }
     }
     return ,$cases
@@ -254,10 +261,12 @@ function Get-HarnessCasePlan([object[]]$Rows) {
                 foreach($case in (Get-SubmissionCases $keyboard)) {
                     $index++
                     if($case[0] -ne $mode){continue}
+                    $parameters=@{architecture=$architecture;keyboard=$keyboard;mode=$mode;mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2]}
+                    if($mode -eq 'async-keys'){$parameters.interaction=if($case.Count -gt 4){$case[4]}else{'windows'}}
                     [pscustomobject]@{
                         name="$($row.name)/keyboard$keyboard-case$index"
                         parent=$row.name; preset=$row.preset; category='submission.case'
-                        parameters=@{architecture=$architecture;keyboard=$keyboard;mode=$mode;mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2]}
+                        parameters=$parameters
                         selected=$row.selected; reason=$row.reason; status='not-run'; attempts=@(); flaky=$false
                     }
                 }

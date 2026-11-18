@@ -156,10 +156,17 @@ int wmain(int argc, wchar_t** argv) {
     require(residentStatus && liveObjects,460);
     auto waitPreload = [&]() {
         auto start = Clock::now();
-        while ((residentStatus() >> 32) != (residentStatus() & 0xffffffffULL)) {
+        auto settled=start;
+        auto status=residentStatus();
+        // Let the service consume completed builds and start any newer queued job.
+        do {
+            MSG msg;
+            while (PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&msg);
+            auto next=residentStatus();
+            if(next!=status) {status=next;settled=Clock::now();}
             require(Clock::now()-start < std::chrono::seconds(15),461);
             Sleep(5);
-        }
+        } while ((status >> 32) != (status & 0xffffffffULL) || Clock::now()-settled<std::chrono::milliseconds(35));
         std::printf("Background preload wait: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-start).count());
     };
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
@@ -236,12 +243,16 @@ int wmain(int argc, wchar_t** argv) {
             require(store->text==prefix+L"ㄋㄧˇ ㄏㄠˇ",1216);
             press(VK_UP,1217); press(VK_DOWN,1219);
             require(store->text==prefix+L"ㄋㄧˇ ㄏㄠˇ",1221);
-            // Switching mode commits the existing composition before rebuilding the engine.
+            // The previous mode stays editable until the user submits and the new engine takes over.
             require(WritePrivateProfileStringW(L"input",L"zhuyin_only",L"0",profile.c_str()),1222);
             localNotify(L"Shanjie.ProfileChanged.v2");
             waitPreload();
+            require(store->text==prefix+L"ㄋㄧˇ ㄏㄠˇ",1223);
+            press(VK_BACK,1242); require(store->text==prefix+L"ㄋㄧˇ ㄏㄠ",1244);
+            press('3',1246); press(VK_RETURN,1248);
             prefix+=L"ㄋㄧˇ ㄏㄠˇ";
-            require(store->text==prefix,1223);
+            require(store->text==prefix,1250);
+            waitPreload();
             for (wchar_t key : std::wstring(L"SU3")) press(key,1224);
             require(store->text==prefix+L"你",1226); press(VK_RETURN,1227);
             require(WritePrivateProfileStringW(L"input",L"keyboard",L"2",profile.c_str()),1229);
@@ -489,6 +500,7 @@ int wmain(int argc, wchar_t** argv) {
         press('S',325); press('U',327); press('3',329); press(VK_SPACE,331); require(noCandidates(),333);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"3",profile.c_str()),334);
         localNotify(L"Shanjie.ProfileChanged.v2");
+        waitPreload();
         press('Z',335); press('H',337); press('U',339); auto beforePinyinReload = store->text;
         require(WritePrivateProfileStringW(L"engine",L"rerank_level",L"conservative",profile.c_str()),341);
         localNotify(L"Shanjie.ProfileChanged.v2");
@@ -498,10 +510,12 @@ int wmain(int argc, wchar_t** argv) {
         require(store->text == beforePinyinReload && noCandidates(),381);
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
+        press(VK_RETURN,391); // With Enter-to-select, the second Enter submits the composition.
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"0",profile.c_str()),512);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"0",profile.c_str()),513);
         localNotify(L"Shanjie.ProfileChanged.v2");
+        waitPreload();
         for (int spaces : {0,1,2}) {
             for (wchar_t key : std::wstring(L"SU3CL35K4G4")) press(key,514);
             auto beforeEnglish = store->text; auto englishCaret = store->selection.acpStart;
@@ -532,6 +546,8 @@ int wmain(int argc, wchar_t** argv) {
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"0",profile.c_str()),448);
         localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforeSmartOff && noCandidates(),450);
+        press(VK_RETURN,451); require(store->text == beforeSmartOff,453);
+        waitPreload();
         press('S',452); require(noCandidates(),454); press(VK_ESCAPE,456);
         std::puts("Mixed input: raw English with reading hint, tone composition, live off preserves English passed");
     }
@@ -599,6 +615,24 @@ int wmain(int argc, wchar_t** argv) {
             require(store->text==prefix+L"反映",1114);
         }
         std::puts("TSF context recurrence: current-line boundaries, long and supplementary-character prefixes passed");
+        require(WritePrivateProfileStringW(L"input",L"mixed_input",L"0",profile.c_str()),1260);
+        require(WritePrivateProfileStringW(L"input",L"upstream_english",L"1",profile.c_str()),1261);
+        for (const auto* overwrite : {static_cast<const wchar_t*>(nullptr), L"1", L"0"}) {
+            require(WritePrivateProfileStringW(L"input",L"english_overwrite",overwrite,profile.c_str()),1262);
+            localNotify(L"Shanjie.ProfileChanged.v2");
+            waitPreload();
+            store->externalText(L"");
+            press('O',1263); press('K',1264); // Two keys in the same Zhuyin column.
+            auto enabled=overwrite && *overwrite==L'1';
+            if(store->text!=(enabled ? L"ok" : L"ㄜ")) {
+                std::printf("English overwrite %d, text (UTF-16):",enabled);
+                for(auto unit:store->text)std::printf(" %04x",(unsigned)unit);
+                std::puts("");
+            }
+            require(store->text==(enabled ? L"ok" : L"ㄜ"),1265);
+            press(VK_RETURN,1266);
+        }
+        std::puts("English overwrite: missing/off preserves Zhuyin, explicit on produces English");
     }
     if (visual) {
         BOOL shown = TRUE; candidates->IsShown(&shown); require(!shown,61);
