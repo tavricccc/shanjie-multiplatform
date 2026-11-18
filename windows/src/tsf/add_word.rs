@@ -14,7 +14,7 @@ pub(super) struct Selection {
     context: ITfContext, generation: u64, owner: HWND, rect: RECT, word: String,
 }
 fn editable(context:&ITfContext)->Result<()> { unsafe {
-    if context.GetStatus()?.dwStaticFlags & TF_SD_READONLY!=0
+    if context.GetStatus()?.dwDynamicFlags & TF_SD_READONLY!=0
         || compartment(context,&GUID_COMPARTMENT_KEYBOARD_DISABLED)
         || compartment(context,&GUID_COMPARTMENT_EMPTYCONTEXT) { return Err(E_ACCESSDENIED.into()); }
     Ok(())
