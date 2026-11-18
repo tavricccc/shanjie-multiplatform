@@ -58,7 +58,7 @@ W／S 為全新 Windows／善解範本的值。在設定中載入操作預設只
 | `input.caps_lock_english` | Caps Lock 暫時輸入英文；關閉時仍輸入注音 | 0／1 |
 | `input.mixed_input`／`input.upstream_english` | 中英混打與切換：關閉／原鍵混打／上游英文，三選一（兩個都開的舊設定讀成原鍵混打） | 兩個範本都是 0、1，預設上游英文 |
 | `candidates.reading_panel` | 組字面板：顯示整句組字並標出游標所在的字，可依需要開啟；原鍵混打時固定開啟 | 0／0 |
-| `input.english_overwrite` | 上游判斷：重打同一個位置算英文 | 1／1；限標準注音 |
+| `input.english_overwrite` | 上游判斷：重打同一個位置算英文 | 0／0，保留使用者已儲存的值。限標準注音 |
 | `input.english_key_order` | 上游判斷：聲調後音節不存在、注音鍵沒照順序算英文 | 1／1（舊設定檔保留原值）；限標準注音 |
 | `input.english_reversal_guard` | 上游判斷：快打時鍵序顛倒不當英文 | 1／1；限標準注音 |
 | `input.mixed_tolerance` | 原鍵混打片段的相鄰重複鍵容錯 | 0／0 |

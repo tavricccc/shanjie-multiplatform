@@ -1,6 +1,7 @@
 mod candidates;
 mod diagnostics;
 mod add_word;
+mod composition_style;
 mod keys;
 mod focus_handoff;
 mod mode;

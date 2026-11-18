@@ -183,6 +183,8 @@ enum Request {
     Open {
         id: String,
         config: Config,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
         replay: Vec<Op>,
         sequence: u64,
     },

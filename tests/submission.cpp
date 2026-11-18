@@ -11,6 +11,7 @@ std::string utf8(const std::wstring& value);
 #include <textstor.h>
 #include <psapi.h>
 #include <wrl/client.h>
+#include <wrl/implements.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -20,6 +21,12 @@ std::string utf8(const std::wstring& value);
 using Microsoft::WRL::ComPtr;
 #include "thread_proxy.h"
 #include "local_notify.h"
+class EditProbe final : public Microsoft::WRL::RuntimeClass<
+    Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, ITfEditSession> {
+public:
+    unsigned calls=0;
+    HRESULT STDMETHODCALLTYPE DoEditSession(TfEditCookie) override { ++calls; return S_OK; }
+};
 class Store final : public ITextStoreACP, public ITfContextOwnerCompositionSink {
     long refs_ = 1;
     ComPtr<ITextStoreACPSink> sink_;
@@ -30,9 +37,11 @@ public:
     HRESULT STDMETHODCALLTYPE OnEndComposition(ITfCompositionView* view) override { composing=false; ++ends; ComPtr<ITfRange> range; ComPtr<ITfRangeACP> acp; LONG at=0,length=0; GUID owner{}; view->GetOwnerClsid(&owner); if(SUCCEEDED(view->GetRange(&range)) && SUCCEEDED(range.As(&acp)) && SUCCEEDED(acp->GetExtent(&at,&length)) && at>=0 && length>=0 && at+length<=(LONG)text.size()) { auto part=text.substr(at,length); endedText+=part; std::printf("EVENT composition_end owner=%08lx at=%ld length=%ld text=%s\n",owner.Data1,at,length,utf8(part).c_str()); } else std::puts("EVENT composition_end range_unavailable"); return S_OK; }
     std::wstring text;
     HWND window = nullptr;
+    RECT screenBounds{};
     bool layoutReady = false;
-    bool deferAsync=false;
-    bool failNextSetText=false, rejectNextAsync=false;
+    bool deferAsync=false, traceLocks=false;
+    bool failNextSetText=false, rejectNextAsync=false, rejectSync=false, rejectContextRead=false, windowless=false;
+    unsigned refusedSync=0, deferredWrites=0, refusedContext=0, refusedWindow=0, hostTabs=0;
     std::deque<DWORD> delayedLocks;
     void grantDelayed() { deferAsync=false; while(!delayedLocks.empty()) {DWORD flags=delayedLocks.front();delayedLocks.pop_front();requireGrant(flags);} }
     void requireGrant(DWORD flags) {if(!sink_ || FAILED(sink_->OnLockGranted(flags))) {std::puts("DELAYED_LOCK_FAILED");ExitProcess(120);} }
@@ -44,10 +53,28 @@ public:
     ULONG STDMETHODCALLTYPE Release() override { auto n = InterlockedDecrement(&refs_); if (!n) delete this; return n; }
     HRESULT STDMETHODCALLTYPE AdviseSink(REFIID iid, IUnknown* sink, DWORD) override { if (iid != IID_ITextStoreACPSink) return E_NOINTERFACE; return sink->QueryInterface(IID_PPV_ARGS(&sink_)); }
     HRESULT STDMETHODCALLTYPE UnadviseSink(IUnknown*) override { sink_.Reset(); return S_OK; }
-    HRESULT STDMETHODCALLTYPE RequestLock(DWORD flags, HRESULT* result) override { if (!sink_) return E_FAIL; if(rejectNextAsync && !(flags&TS_LF_SYNC)) {rejectNextAsync=false;*result=E_FAIL;return S_OK;} if(deferAsync && !(flags&TS_LF_SYNC)) {delayedLocks.push_back(flags);*result=TS_S_ASYNC;return S_OK;} *result = sink_->OnLockGranted(flags); return S_OK; }
+    HRESULT STDMETHODCALLTYPE RequestLock(DWORD flags, HRESULT* result) override {
+        if (!sink_) return E_FAIL;
+        if (rejectSync && (flags&TS_LF_SYNC) && (flags&TS_LF_READWRITE)==TS_LF_READWRITE) { ++refusedSync; *result=TS_E_SYNCHRONOUS; }
+        else if (rejectNextAsync && !(flags&TS_LF_SYNC)) { rejectNextAsync=false; *result=E_FAIL; }
+        else if (deferAsync && !(flags&TS_LF_SYNC)) { deferredWrites+=(flags&TS_LF_READWRITE)==TS_LF_READWRITE; delayedLocks.push_back(flags); *result=TS_S_ASYNC; }
+        else { *result=sink_->OnLockGranted(flags); }
+        if (traceLocks) std::printf("STORE lock_flags=%08lx outer=00000000 session=%08lx\n",flags,(unsigned long)*result);
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE GetStatus(TS_STATUS* out) override { *out = {0,0}; return S_OK; }
     HRESULT STDMETHODCALLTYPE QueryInsert(LONG start, LONG end, ULONG, LONG* a, LONG* b) override { *a = start; *b = end; return S_OK; }
-    HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override { *fetched = count ? 1 : 0; if (count) *out = selection; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override {
+        if (rejectContextRead && count) {
+            rejectContextRead = false;
+            ++refusedContext;
+            *fetched = 0;
+            return E_FAIL;
+        }
+        *fetched = count ? 1 : 0;
+        if (count) *out = selection;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE SetSelection(ULONG count, const TS_SELECTION_ACP* value) override { if (count != 1) return E_INVALIDARG; selection = *value; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetText(LONG start, LONG end, WCHAR* plain, ULONG capacity, ULONG* count, TS_RUNINFO* runs, ULONG runCapacity, ULONG* runCount, LONG* next) override {
         if (end == -1) end = (LONG)text.size(); if (start < 0 || end < start || end > (LONG)text.size()) return TS_E_INVALIDPOS;
@@ -87,8 +114,40 @@ public:
         POINT point{24 + start * 24,80}; ClientToScreen(window,&point);
         *out = {point.x,point.y,point.x+1,point.y+26}; *clipped = FALSE; return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE GetScreenExt(TsViewCookie,RECT* out) override { *out = {}; return S_OK; }
-    HRESULT STDMETHODCALLTYPE GetWnd(TsViewCookie,HWND* out) override { *out = window; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetScreenExt(TsViewCookie,RECT* out) override { *out=screenBounds; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetWnd(TsViewCookie,HWND* out) override {
+        *out=window;
+        if (windowless) { ++refusedWindow; return E_FAIL; }
+        return S_OK;
+    }
+};
+class StyledRanges final : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,ITfEditSession> {
+    ITfContext* context_;
+    TfGuidAtom atom_;
+public:
+    std::vector<std::pair<LONG,LONG>> ranges;
+    StyledRanges(ITfContext* context,TfGuidAtom atom):context_(context),atom_(atom) {}
+    HRESULT STDMETHODCALLTYPE DoEditSession(TfEditCookie cookie) override {
+        ComPtr<ITfProperty> property;
+        auto hr=context_->GetProperty(GUID_PROP_ATTRIBUTE,&property);
+        if(FAILED(hr))return hr;
+        ComPtr<IEnumTfRanges> items;
+        hr=property->EnumRanges(cookie,&items,nullptr);
+        if(FAILED(hr))return hr;
+        ComPtr<ITfRange> item;ULONG fetched=0;
+        while(items->Next(1,&item,&fetched)==S_OK && fetched==1) {
+            VARIANT attribute{};hr=property->GetValue(cookie,item.Get(),&attribute);
+            bool ours=SUCCEEDED(hr)&&attribute.vt==VT_I4&&static_cast<TfGuidAtom>(attribute.lVal)==atom_;
+            VariantClear(&attribute);
+            if(ours) {
+                LONG start=0,length=0;ComPtr<ITfRangeACP> acp;
+                if(FAILED(hr=item.As(&acp))||FAILED(hr=acp->GetExtent(&start,&length)))return hr;
+                ranges.emplace_back(start,length);
+            }
+            item.Reset();
+        }
+        return S_OK;
+    }
 };
 #include <cstdlib>
 #include "shanjie.h"
@@ -136,7 +195,7 @@ int wmain(int argc,wchar_t** argv) {
  ComPtr<ITfKeyEventSink> keys;require(SUCCEEDED(service.As(&keys)),16);
  auto context=firstContext;auto store=first;
  auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(5);}};
- auto press=[&](WPARAM requested){WPARAM vk=requested;bool shifted=false;
+ auto press=[&](WPARAM requested, bool shifted=false){WPARAM vk=requested;
    if(mode.starts_with(L"input-")) {
      if(requested==L'\\')vk=VK_OEM_5;
      else if(requested==L'.')vk=VK_OEM_PERIOD;
@@ -149,19 +208,297 @@ int wmain(int argc,wchar_t** argv) {
      else if(requested==L'⌂')vk=VK_HOME;
    }
    keyboardState(false,shifted);BOOL tested=FALSE,eaten=FALSE;LPARAM flags=(LPARAM(MapVirtualKeyW((UINT)vk,MAPVK_VK_TO_VSC))<<16)|1;
-   require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),vk,flags,&tested)),17);
+   auto testedHr=keys->OnTestKeyDown(context.Get(),vk,flags,&tested);
+   require(SUCCEEDED(testedHr),17);
    if(!tested) {
      ComPtr<ITfCompartmentMgr> manager;VARIANT value{};ComPtr<ITfCompartment> compartment;
      proxy.As(&manager);manager->GetCompartment(GUID_COMPARTMENT_KEYBOARD_OPENCLOSE,&compartment);compartment->GetValue(&value);
      std::printf("TEST_FALSE chinese=%ld win=%04x/%04x ctrl=%04x alt=%04x shift=%04x\n",value.vt==VT_I4?value.lVal:-1,GetKeyState(VK_LWIN)&65535,GetKeyState(VK_RWIN)&65535,GetKeyState(VK_CONTROL)&65535,GetKeyState(VK_MENU)&65535,GetKeyState(VK_SHIFT)&65535);VariantClear(&value);
      context.As(&manager);for(auto id:{GUID_COMPARTMENT_KEYBOARD_DISABLED,GUID_COMPARTMENT_EMPTYCONTEXT}){compartment.Reset();manager->GetCompartment(id,&compartment);compartment->GetValue(&value);std::printf("CONTEXT_DISABLED %ld\n",value.vt==VT_I4?value.lVal:-1);VariantClear(&value);}
    }
-   if(tested)require(SUCCEEDED(keys->OnKeyDown(context.Get(),vk,flags,&eaten)),18);
+   HRESULT downHr=S_FALSE;
+   if(tested){downHr=keys->OnKeyDown(context.Get(),vk,flags,&eaten);require(SUCCEEDED(downHr),18);}
+   if(mode==L"async-keys") {
+     if(vk==VK_TAB&&!eaten) {++store->hostTabs;std::printf("HOST original_tab=%u shift=%d\n",store->hostTabs,shifted);}
+     std::printf("TSF key=%llu test_hr=%08lx down_called=%d down_hr=%08lx eaten=%d\n",
+       (unsigned long long)vk,(unsigned long)testedHr,tested,(unsigned long)downHr,eaten);
+   }
    if(!eaten && !mode.starts_with(L"input-") && vk>=32 && vk<=126){std::wstring literal(1,(wchar_t)std::towlower((wchar_t)vk));store->text.replace(store->selection.acpStart,store->selection.acpEnd-store->selection.acpStart,literal);store->selection.acpStart=store->selection.acpEnd=store->selection.acpStart+1;}
    std::printf("KEY vk=%llu tested=%d eaten=%d text=%s\n",(unsigned long long)vk,tested,eaten,utf8(store->text).c_str());
+   return eaten!=FALSE;
  };
- for(wchar_t vk:sequence)press(vk);
- if(mode.starts_with(L"input-")) {
+ bool deactivated=false;
+ if(mode!=L"async-keys" && mode!=L"segment" && !mode.starts_with(L"rebuild-")) for(wchar_t vk:sequence)press(vk);
+ if(mode.starts_with(L"rebuild-")) {
+   const std::wstring pack=sequence==L"SU3" ? L"QI SU6" : L"PO NE2";
+   const auto type=[&](const std::wstring& characters){for(wchar_t key:characters)press(key);};
+   wchar_t local[32768]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768)>0,216);
+   const auto path=std::wstring(local)+L"\\Shanjie\\profile.ini";
+   auto profile=[&](bool enable, bool rerank, const char* dictionary) {
+     std::ifstream in(path,std::ios::binary);std::string content((std::istreambuf_iterator<char>(in)),{});in.close();
+     const auto setting=[&](std::string_view name, std::string value){auto at=content.find(name);require(at!=std::string::npos,217);at+=name.size();content.replace(at,content.find_first_of("\r\n",at)-at,value);};
+     setting("acg_pack=",enable?"1":"0");setting("rerank=",rerank?"1":"0");setting("dictionary=",dictionary);
+     std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<content;out.close();localNotify(L"Shanjie.ProfileChanged.v2");
+   };
+   auto settle=[&](unsigned builds){
+     auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(25);
+     do { pump(); require(std::chrono::steady_clock::now()<deadline,218); } while((resident()>>32)<builds);
+     pump();
+   };
+   auto candidatesContain=[&](const std::wstring& wanted){
+     ComPtr<ITfUIElementMgr> manager;require(SUCCEEDED(thread.As(&manager)),219);
+     ComPtr<IEnumTfUIElements> elements;require(SUCCEEDED(manager->EnumUIElements(&elements)),220);
+     ComPtr<ITfUIElement> element;ULONG count=0;
+     while(SUCCEEDED(elements->Next(1,&element,&count)) && count==1) {
+       ComPtr<ITfCandidateListUIElement> list;
+       if(SUCCEEDED(element.As(&list))) {
+         UINT length=0;require(SUCCEEDED(list->GetCount(&length)),221);
+         for(UINT i=0;i<length;++i) {BSTR value=nullptr;require(SUCCEEDED(list->GetString(i,&value)),222);bool match=value&&wanted==value;SysFreeString(value);if(match)return true;}
+       }
+       element.Reset();
+     }
+     return false;
+   };
+   auto builds=static_cast<unsigned>(resident());
+   type(sequence);
+   profile(true,true,"missing.tsv");
+   require(static_cast<unsigned>(resident())==builds+1,223);
+   press(VK_DOWN); press('1');
+   const auto firstWord=first->text;
+   settle(++builds);
+   require(first->composing && first->ends==0 && first->text==firstWord,224);
+   press(VK_RETURN); require(first->endedText==firstWord&&!first->composing,225);
+
+   type(sequence);
+   profile(true,true,"personal.tsv");
+   profile(false,false,"personal.tsv");
+   require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+   settle(builds+=2);
+   require(first->ends==1 && first->composing,227);
+   press(VK_ESCAPE);pump();
+   require(first->text==firstWord && first->endedText==firstWord,228);
+   type(pack);press(VK_HOME);press(VK_DOWN);
+   require(!candidatesContain(expected) && !first->text.ends_with(expected),229);
+   press(VK_ESCAPE);press(VK_ESCAPE);
+
+   type(pack);
+   const auto oldText=first->text;
+   profile(true,false,"personal.tsv");
+   settle(++builds);
+   require(first->composing && first->text==oldText && first->endedText==firstWord,230);
+   press(VK_RETURN);pump();
+   type(pack);press(VK_HOME);press(VK_DOWN);
+   require(candidatesContain(expected) || first->text.ends_with(expected),231);
+   press(VK_ESCAPE);press(VK_ESCAPE);
+   type(sequence);press(VK_DOWN);
+   require(candidatesContain(L"龘") || first->text.ends_with(L"龘"),232);
+   press(VK_ESCAPE);press(VK_ESCAPE);
+   profile(false,false,"personal.tsv");
+   require(SUCCEEDED(service->Deactivate()),233);deactivated=true;
+   const auto afterDeactivate=first->text;
+   settle(++builds);require(!first->composing && first->text==afterDeactivate,234);
+ } else if(mode==L"segment") {
+   ComPtr<ITfDisplayAttributeProvider> styling;
+   require(SUCCEEDED(service.As(&styling)),235);
+   ComPtr<IEnumTfDisplayAttributeInfo> styles;require(SUCCEEDED(styling->EnumDisplayAttributeInfo(&styles)),236);
+   ComPtr<ITfDisplayAttributeInfo> style;ULONG fetched=0;
+   require(styles->Next(1,&style,&fetched)==S_OK && fetched==1,237);
+   ComPtr<ITfDisplayAttributeInfo> done;require(styles->Next(1,&done,&fetched)==S_FALSE && fetched==0,238);
+   GUID guid{};TF_DISPLAYATTRIBUTE appearance{};
+   require(SUCCEEDED(style->GetGUID(&guid)) && SUCCEEDED(style->GetAttributeInfo(&appearance)) && appearance.lsStyle==TF_LS_SOLID && appearance.fBoldLine,239);
+   ComPtr<ITfCategoryMgr> category;TfGuidAtom atom=0;
+   require(SUCCEEDED(CoCreateInstance(CLSID_TF_CategoryMgr,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&category)))&&SUCCEEDED(category->RegisterGUID(guid,&atom)),240);
+   auto ranges=[&] {
+     auto edit=Microsoft::WRL::Make<StyledRanges>(context.Get(),atom);
+     HRESULT result=E_FAIL;
+     require(SUCCEEDED(context->RequestEditSession(serviceClient,edit.Get(),TF_ES_READ|TF_ES_SYNC,&result))&&SUCCEEDED(result),241);
+     return edit->ranges;
+   };
+   const std::wstring prefix=L"seed 🧸 ";const auto offset=static_cast<LONG>(prefix.size());
+   first->text=prefix;first->externalCaret(offset);
+   auto type=[&]{for(auto vk:sequence)press(vk);};
+   for(auto i=0;i<8;++i)type();
+   require(first->text==prefix+expected && first->composing && ranges().empty(),242);
+   press(VK_HOME);
+   require(ranges()==std::vector{std::pair{offset,1L}},243);
+   for(auto i=0;i<3;++i)press(VK_RIGHT);
+   const bool right=sequence==L"SU3";
+   require(ranges()==std::vector{std::pair{offset+(right?3L:2L),1L}},244);
+   press(VK_DELETE);require(first->text==prefix+expected.substr(1),245);
+   type();require(first->text==prefix+expected,246);
+   press(VK_DOWN);press('1');press(VK_DOWN);press('1');
+   require(first->composing && first->text.size()==prefix.size()+expected.size(),247);
+   press(VK_END);require(ranges().empty(),248);
+   press(VK_LEFT);press(VK_LEFT);
+   const auto before=first->text;
+   const auto boundary=first->selection.acpStart;
+   require(!ranges().empty(),249);
+   press(VK_RETURN);
+   require(first->text==before && first->endedText==before.substr(offset,boundary-offset)&&first->composing,250);
+   press(VK_ESCAPE);
+   require(first->text==before.substr(0,boundary)&&!first->composing&&ranges().empty(),251);
+   for(auto i=0;i<2;++i) {
+     type();for(wchar_t vk:std::wstring(right?L"CL3":L"HZ3"))press(vk);
+   }
+   require(first->text.ends_with(L"你好你好"),252);
+   press(VK_HOME);press(VK_RIGHT);
+   require(ranges()==std::vector{std::pair{boundary,2L}},253);
+   press(VK_RIGHT);press(VK_RIGHT);
+   require(ranges()==std::vector{std::pair{boundary+2L,2L}},254);
+   press(VK_ESCAPE);
+ } else if(mode==L"async-keys") {
+   first->text=L"seed "; first->externalCaret(5);
+   first->windowless=true; first->rejectSync=true; first->deferAsync=true; first->traceLocks=true;
+   first->rejectContextRead=true;
+   for(wchar_t vk:sequence) press(vk);
+   press(VK_DOWN); press('1'); press(VK_RETURN);
+   for(wchar_t vk:std::wstring(L"ADB")) press(vk);
+   press(VK_ESCAPE);
+   pump();
+   require(first->text==L"seed " && first->starts==0 && first->ends==0,211);
+   require(first->refusedSync==1 && first->deferredWrites==1,212);
+   first->rejectSync=false;
+   first->grantDelayed();
+   // The optional context read can fail, but the first granted edit must still compose.
+   require(first->starts==1 && first->text.size()>5,295);
+   pump();
+   require(first->refusedContext>0,213);
+   require(first->text==L"seed "+expected && first->endedText==expected && !first->composing,214);
+   require(first->starts==2 && first->ends==2 && first->earlyWrites==0,215);
+
+   // Probe both HRESULTs from real MSCTF, independently of the TIP's decision.
+   auto probe=Microsoft::WRL::Make<EditProbe>();
+   require(probe!=nullptr,255);
+   auto request=[&](DWORD flags, HRESULT expectedSession, unsigned expectedCalls){
+     HRESULT session=E_FAIL;
+     auto outer=context->RequestEditSession(serviceClient,probe.Get(),flags|TF_ES_READWRITE,&session);
+     std::printf("EDIT flags=%08lx outer=%08lx phrSession=%08lx DoEditSession.calls=%u\n",
+       flags,(unsigned long)outer,(unsigned long)session,probe->calls);
+     require(outer==S_OK && session==expectedSession && probe->calls==expectedCalls,256);
+   };
+   request(TF_ES_SYNC,S_OK,1);
+   first->rejectSync=true;first->deferAsync=true;
+   request(TF_ES_SYNC,TF_E_SYNCHRONOUS,1);
+   request(TF_ES_ASYNCDONTCARE,TF_S_ASYNC,1);
+   first->rejectSync=false;first->grantDelayed();pump();
+   require(probe->calls==2,257);
+   std::printf("EDIT deferred callback completed: DoEditSession.calls=%u\n",probe->calls);
+
+   wchar_t local[32768]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768)>0,258);
+   const auto profile=std::wstring(local)+L"\\Shanjie\\profile.ini";
+   wchar_t interaction[16]{};
+   GetPrivateProfileStringW(L"profile",L"interaction",L"windows",interaction,16,profile.c_str());
+   const bool windows=std::wstring_view(interaction)==L"windows";
+   auto type=[&]{ for(wchar_t vk:sequence) require(press(vk),259); };
+   auto delay=[&]{ first->rejectSync=true; first->deferAsync=true; };
+   auto grant=[&]{ first->rejectSync=false; first->grantDelayed(); pump(); };
+   auto hostTab=[&](bool shifted=false){
+     const auto count=first->hostTabs;
+     require(!press(VK_TAB,shifted) && first->hostTabs==count+1,260);
+   };
+   auto candidateSelection=[&]{
+     ComPtr<ITfUIElementMgr> manager;
+     ComPtr<IEnumTfUIElements> elements;
+     require(SUCCEEDED(thread.As(&manager)) && SUCCEEDED(manager->EnumUIElements(&elements)),261);
+     ComPtr<ITfUIElement> element;
+     ULONG count=0;require(elements->Next(1,&element,&count)==S_OK && count==1,262);
+     ComPtr<ITfCandidateListUIElement> list;
+     UINT selection=UINT_MAX;
+     require(SUCCEEDED(element.As(&list)) && SUCCEEDED(list->GetSelection(&selection)),263);
+     return selection;
+   };
+
+   // An idle host Tab also bypasses an earlier IME write waiting for its lock.
+   const auto before=first->text;
+   hostTab(); hostTab(true);
+   delay();
+   require(press(sequence.front()),264);
+   pump();
+   auto writes=first->deferredWrites;
+   hostTab();
+   require(first->deferredWrites==writes && first->text==before,265);
+   for(wchar_t vk:sequence.substr(1)) require(press(vk),266);
+   require(press(VK_RETURN),267);
+   grant();
+   require(first->text==before+expected && first->endedText==expected+expected && !first->composing,268);
+
+   // With a valid screen extent, position candidates far enough to reach
+   // GetWnd even though this text store has no window and no text layout.
+   const auto refusedWindow=first->refusedWindow;
+   first->screenBounds={100,120,800,600};
+   type();require(press(VK_DOWN),269);
+   require(first->refusedWindow>refusedWindow,294);
+   std::printf("WINDOWLESS GetWnd failures=%u; refused first context read=%u\n",first->refusedWindow,first->refusedContext);
+   const auto composing=first->text;
+   const auto ends=first->ends;
+   const auto selected=candidateSelection();
+   writes=first->deferredWrites;
+   delay();
+   if(windows) {
+     // Two navigation Tabs target a confirmed Windows candidate list.
+     require(press(VK_TAB)&&press(VK_TAB),270);
+     pump();
+     require(first->deferredWrites==writes+1 && candidateSelection()==selected,271);
+     grant();
+     require(candidateSelection()==selected+2 && first->text==composing && first->ends==ends,272);
+     delay();
+     require(press(VK_ESCAPE),273);
+     pump();
+     writes=first->deferredWrites;
+     // This Tab follows a candidate-closing key whose edit has not run yet.
+     hostTab();
+     require(first->deferredWrites==writes,274);
+     grant();
+     require(first->text==composing && first->ends==ends && press(VK_RETURN),275);
+   } else {
+     const auto refused=first->refusedSync;
+     // The Shanjie interaction may finish the composition and give Tab to
+     // the host. If sync is refused there is no delayed edit for that key.
+     hostTab();hostTab(true);
+     require(first->refusedSync==refused+2 && first->deferredWrites==writes,276);
+     grant();
+     require(first->text==composing && first->ends==ends && candidateSelection()==selected,277);
+     hostTab();
+     require(first->text==composing && first->ends==ends+1 && !first->composing,278);
+
+     require(press(sequence.front()),291);
+     const auto unfinished=first->text;
+     delay();require(press(VK_TAB),292);grant();
+     require(first->composing && first->text==unfinished && press(VK_ESCAPE),293);
+
+     require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),279);
+     localNotify(L"Shanjie.ProfileChanged.v2");pump();
+     require(press(sequence.front()),280);
+     delay();
+     require(press(VK_TAB),281);
+     grant();
+     require(candidateSelection()==0,282);
+     delay();
+     require(press(VK_TAB,true),283);grant();
+     require(first->composing && press(VK_ESCAPE) && !first->composing,284);
+   }
+
+   // Ending a context with an edit in flight must invalidate that callback,
+   // rather than letting its key land in the next composition.
+   for(bool deactivate : {false,true}) {
+     const auto stable=first->text;
+     const auto starts=first->starts;
+     delay();require(press(sequence.front()),285);
+     if(deactivate) {
+       require(SUCCEEDED(service->Deactivate())
+         && SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),286);
+     } else {
+       ComPtr<ITfThreadFocusSink> focus;
+       require(SUCCEEDED(service.As(&focus)) && SUCCEEDED(focus->OnKillThreadFocus())
+         && SUCCEEDED(focus->OnSetThreadFocus()),287);
+     }
+     grant();
+     require(first->text==stable && first->starts==starts && !first->composing,288);
+     hostTab();
+     type();require(press(VK_RETURN),289);
+     require(first->text==stable+expected && !first->composing,290);
+   }
+ } else if(mode.starts_with(L"input-")) {
    if(mode==L"input-space-commit") {
      require(store->text==expected && store->endedText==expected && !store->composing,70);
    } else {
@@ -265,5 +602,5 @@ int wmain(int argc,wchar_t** argv) {
    press(VK_RETURN);require(store->text==expected,37);require(store->endedText==expected,38);require(!store->composing,39);
  }
  std::printf("PASS mode=%s text=%s submitted=%s\n",utf8(mode).c_str(),utf8(first->text).c_str(),utf8(first->endedText).c_str());
- require(SUCCEEDED(service->Deactivate()),40);thread->SetFocus(nullptr);document->Pop(TF_POPF_ALL);thread->Deactivate();std::fflush(stdout);return 0;
+ if(!deactivated) require(SUCCEEDED(service->Deactivate()),40);thread->SetFocus(nullptr);document->Pop(TF_POPF_ALL);thread->Deactivate();std::fflush(stdout);return 0;
 }

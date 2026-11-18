@@ -67,11 +67,11 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | --- | --- | --- |
 | `ui/` | Rust＋settings UI／native host | 13 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
 | 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 27 項，保留混打，無無關 interaction／UI |
-| submission harness | Rust＋提交 | 28 項 |
-| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 50 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
+| submission harness | Rust＋提交 | 32 項 |
+| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 54 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
 | 原生候選 | Rust＋native candidate-host＋TSF compatibility | 25 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 87 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 89 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 91 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 93 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
@@ -103,14 +103,16 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `tests/tsf_smoke.cpp` | standard、cold 各一項 | 真實 TSF context、標準 profile 與無模型冷啟動；不註冊輸入法 |
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
 | `verify-english-keys.ps1` | 20 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言；加入上游兩種模式的 digit-navigation |
-| `verify-submission.ps1` | 21 個 mode 項目及 `input-digits` 項目 | 每項提交、取消、焦點、忙碌與退休流程斷言；數字輸入保留所有原始組合 |
+| `verify-submission.ps1` | `full.submission.*`，含 `async-keys`、`rebuild-local`、`rebuild-pipe`、`segment`、`input-digits` | 保留提交、取消、焦點、忙碌、退休及原有數字組合；新增數字語境、第一聲、學習檔與詞典保留，並驗證延遲編輯鎖的輸入順序及組字詞段範圍 |
 | `verify-private-desktop.ps1` | 18 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
 | `verify-interaction.ps1`、`verify-mode.ps1` | `release.interaction.x64`、`release.mode.x64`、`release.mode.x86` | 隔離 profile 的引擎互動回歸、兩架構離屏模式列／圖示 smoke；不送出桌面輸入 |
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
 | 上游 WinUI 啟動／停用控制項回歸 | `release.ui.startup.{clean,reopen,different-directory}`、`release.ui.disabled.keyboard{1,3,2}` | 獨立啟動路徑、已有 profile、不同工作目錄；標準／善解／倚天停用設定的初次與重開檢查，保留非標準鍵盤的鄰鍵列斷言 |
 
-依目前來源清冊，FULL 為 87 個 x64 項目，RELEASE 為 x64 99＋x86 84＝183 個項目、227 個參數子案例。分組計數不代表某輪已執行；實際清冊與結果以兩個 preset 的 inventory、對應提交的 JSON／JUnit／子案例為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
+FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查看；RELEASE 另選兩個 preset 的 release 案例。實際執行與通過的數量以該輪 JSON／JUnit 及參數子案例為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
+
+`ctest --preset windows-x64 -R 'submission[.]async-keys' --output-on-failure` 可單跑編輯鎖回歸，x86 使用 `windows-x86` preset。每架構涵蓋標準／倚天搭配 Windows／善解互動。案例記錄外層 HRESULT、`phrSession`、非同步回呼次數、宿主收到的 Tab、候選選取與文件結果，並驗證前文查詢失敗後首個寫入回呼仍開始組字，失焦或停用後舊回呼不寫入。這些案例在私人桌面的 TSF 模擬宿主執行。
 
 ### 專用驗收與實際差集
 
@@ -126,10 +128,10 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | 原入口／原始條件 | 實際 CTest 對應與差異 | 最小獨立驗證及必要前置 |
 | --- | --- | --- |
 | `verify.ps1`、`test-core.ps1`、`verify-regressions.ps1`；原完整驗收／相關邏輯 | 上表 `fast.*`、`full.*` 保留核心、混打、TSF／英文／提交／私人桌面；RELEASE 加 x86。已實際通過的相同案例不再跑舊入口 | 必要缺項用 CTest 選原生案例；原核心記憶體限制排程及延遲斷言保留 |
-| `verify-ui.ps1`；`ui/` 與原生候選介面變更 | WinUI 改動選 x64 `settings-ui`＋`candidate-host`；原生候選依上游只選 `candidate-host`＋`tsf-compat`。RELEASE 加 x86 host。FULL 的 87 項不含 UI 驗收 | 相同成功案例不再跑舊 UI 腳本；缺項用相應 CTest 標籤／`-R`，先建置相應產品／harness。native-only 不需要再驗整套 WinUI |
+| `verify-ui.ps1`；`ui/` 與原生候選介面變更 | WinUI 改動選 x64 `settings-ui`＋`candidate-host`；原生候選依上游只選 `candidate-host`＋`tsf-compat`。RELEASE 加 x86 host。FULL 不含 WinUI 驗收 | 相同成功案例不再跑舊 UI 腳本；缺項用相應 CTest 標籤／`-R`，先建置相應產品／harness。native-only 不需要再驗整套 WinUI |
 | `verify-input-features.ps1`；相關輸入行為需審查 | 使用 `tests/submission.cpp`。`input-retain` 與 CTest `input-digits` 共用 71／72 號組字／提交斷言，但 profile 的 prediction、escape、shift、punctuation 等不同；`input-space-commit` 的 70 號空白提交斷言也不能以一般 input-digits 取代。不能只按同按鍵文字認定等價 | 既有匹配證據可認列；只對必要且未驗證配置用 `-Architectures`、零起算 `-CaseIndices`，需要對應 DLL、data／tools、MSVC。`-ResidentCore` 與預設行程內核心分開判斷 |
 | `verify-profile-refresh.ps1`；profile 通知／更新時序相關 | `tests/profile_refresh.cpp` 使用 resident core、prediction 故障注入及 normal／queued／latest／escape／focus／deadline。CTest submission refresh／refresh-twice 使用行程內核心，不能替代這個故障矩陣 | 只選受影響且無有效結果的 `-Architectures`、`-Scenarios`、`-Faults`；需要 DLL、dist core、MSVC 與獨立 profile |
-| `verify-core-recovery.ps1`；broker／復原／請求交付相關 | 呼叫 `shanjie-reliability-check.exe` 的 pipe／fault／busy／restart／ambiguous／rerank／outstanding／capacity；與上游 `full.core-suite`、submission busy 不是同一 fixture | 用 `-Architectures`、`-Cases` 選未覆蓋情境，須先有該架構 release reliability-check、dist 核心及資料；故障測試僅停止自己的隔離核心 |
+| `verify-core-recovery.ps1`；broker／復原／請求交付／詞包切換效能 | `-Cases pack-switch` 分別比較本地及 Named Pipe 的獨立建置、背景共用建置，記錄建置與按鍵 p50／p95、記憶體、實際模型載入次數及退休的 pipe 工作階段；`rebuild-*` 驗證應用程式切換時機，無法取代此量測 | 先建相應版本及模型，在其他量測未執行時執行 `pwsh -File scripts/verify-core-recovery.ps1 -Architectures x64 -Cases pack-switch`。其他故障情境仍按 `-Cases` 選擇；僅停止自己的隔離核心 |
 | `verify-dictionary-store.ps1`；詞典 ABI／發布儲存相關 | `tests/dictionary_store.cpp` 的 `sj_dictionary_save` 首次發布、截斷修復、SHA-256 檔名與 x64／x86 同時儲存；word-add／一般單元測試不等於此跨程序 ABI 目的 | 需兩架構 DLL 與 MSVC；新 build fixture，不碰私人詞典。無 case／架構篩選，需先說明剩餘必要內容與重複範圍，不自動重跑 |
 | `verify-profile-coexistence.ps1`；確有 profile 格式／遷移相容需求 | `tests/profile_coexistence.cpp` 同時讀新舊 DLL；目前版本 UI 保存不能取代舊 DLL 共存 | 必須提供 `-OldPackage`、正確 `-OldSchema`；用 `-Architecture` 限縮。沒有舊套件就是未驗，不能算 PASS；證據留在工作區 |
 | `verify-update.ps1`；Caps Lock／焦點／resident core 相關 | `tests/caps_lock.cpp` 與 `shanjie-core-check` 的 Caps Lock 矩陣、midword／fields／immediate／resident 模型；不是安裝升級測試。與 CTest English／smoke 只有部分行為相似，不能僅按名稱抵銷 | 先比對實際案例配置；需要兩架構 DLL、core-check、資料／模型、MSVC。只有 `-ExplicitCore` 等環境參數，沒有 scenario／架構篩選；若仍必要須明列無法拆分限制，不能自動跑整套 |

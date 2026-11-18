@@ -74,7 +74,7 @@ public partial class SettingsViewModel
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
             AddWordInterval = Math.Clamp(profile.Number("shortcuts", "add_word_interval", 450), 200, 1000);
             // One choice; raw-key mixing wins over upstream English, as Document::migrate stores it.
-            MixedMode = profile.Flag("input", "mixed_input", false) ? 1 : profile.Flag("input", "upstream_english", false) ? 2 : 0; EnglishOverwrite = profile.Flag("input", "english_overwrite", true); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
+            MixedMode = profile.Flag("input", "mixed_input", false) ? 1 : profile.Flag("input", "upstream_english", false) ? 2 : 0; EnglishOverwrite = profile.Flag("input", "english_overwrite", false); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
             UseContext = profile.Flag("input", "context", true);

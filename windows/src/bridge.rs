@@ -202,6 +202,8 @@ pub struct Frame {
     pub selected: i32,
     pub count: u32,
     pub candidates: *const *const c_char,
+    pub english_run_utf16_start: u32,
+    pub english_run_utf16_len: u32,
 }
 #[repr(C)]
 struct OwnedFrame {
@@ -229,6 +231,8 @@ fn frame(s: Snapshot) -> *mut Frame {
         selected: s.selected.map_or(-1, |i| i as i32),
         count: pointers.len() as u32,
         candidates: pointers.as_ptr(),
+        english_run_utf16_start: s.english_run_utf16_start,
+        english_run_utf16_len: s.english_run_utf16_len,
     };
     Box::into_raw(Box::new(OwnedFrame {
         raw,
@@ -248,6 +252,9 @@ unsafe fn snapshot(r: *const Frame) -> Snapshot {
         commit: text(r.commit).into(),
         preedit: text(r.preedit).into(),
         cursor: r.cursor,
+        english_run_utf16_start: r.english_run_utf16_start,
+        english_run_utf16_len: r.english_run_utf16_len,
+        active_segment: None,
         columns: r.columns,
         first: r.first,
         total: r.total,

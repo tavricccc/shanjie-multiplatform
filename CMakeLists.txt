@@ -131,7 +131,7 @@ if(SHANJIE_ARCH STREQUAL "x64")
 endif()
 
 set(english_scenarios caps caps-zh english-symbol-order digit-navigation shift-caps-zh shift shift-caps eten partial whole candidate backquote backquote-disabled numpad standalone-tones standalone-tones-off standalone-tones-shanjie fullwidth fullwidth-english fullwidth-disabled)
-set(submission_modes commit cancel focus toggle refresh return cancel-generation deactivate refresh-twice busy busy-epoch busy-cancel busy-focus busy-expire busy-pick busy-mouse retire-write-fail retire-request-fail retire-escape retire-deactivate retire-stale)
+set(submission_modes commit cancel focus toggle refresh return cancel-generation deactivate refresh-twice busy busy-epoch busy-cancel busy-focus busy-expire busy-pick busy-mouse retire-write-fail retire-request-fail retire-escape retire-deactivate retire-stale async-keys rebuild-local rebuild-pipe segment)
 set(compat_cases shift-right shift-left shift-unknown shift-proxy-enter shift-enter handoff-same handoff-timeout handoff-generation handoff-context handoff-different cmd-commit status-writable-disjoint status-writable-regions status-readonly status-readonly-disjoint word-deferred word-natural word-disjoint word-stale word-readonly word-password word-invalid word-empty)
 set(popup_cases cancel-command cancel-deactivate cancel-double cancel-escape cancel-focus-notification cancel-keyboard-reading cancel-late cancel-mouse cancel-outside cancel-owner-destroy cancel-reentry cancel-save cancel-stale-notify cancel-theme-dark cancel-theme-light)
 

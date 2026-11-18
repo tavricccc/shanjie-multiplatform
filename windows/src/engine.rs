@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     ptr,
     sync::{Arc, Condvar, Mutex},
+    time::Duration,
 };
 use windows::{
     core::PCWSTR,
@@ -15,6 +16,37 @@ use windows::{
 };
 
 pub use shanjie_shell::protocol::{Failure, Snapshot};
+
+#[derive(Clone, PartialEq, Eq)]
+struct ModelStamp {
+    path: PathBuf,
+    files: [Option<(u64, u64)>; 7],
+}
+impl ModelStamp {
+    fn read(path: PathBuf) -> Self {
+        let stamp = |p: &Path| std::fs::metadata(p).ok().map(|m| (m.file_size(), m.last_write_time()));
+        let [classes, kn, trigram, chat, tiny, colloquial] = ["classes.sjc", "kn.sjkn", "trigram.sjt3", "trigram-chat.sjt3", "tinylm.sjtl", "colloquial.sjlm"]
+            .map(|name| stamp(&path.with_file_name(name)));
+        let files = [stamp(&path), classes, kn, trigram, chat, tiny, colloquial];
+        Self { path, files }
+    }
+}
+pub(crate) struct SharedModel {
+    handle: *mut ShanjieShared,
+    model: ModelStamp,
+}
+// §5.4: only the immutable shared parts cross threads. No operation borrows the source engine.
+unsafe impl Send for SharedModel {}
+unsafe impl Sync for SharedModel {}
+impl Drop for SharedModel {
+    fn drop(&mut self) {
+        unsafe { shanjie_shared_free(self.handle) }
+    }
+}
+pub(crate) enum BuildSource {
+    Local(SharedModel),
+    Remote(String),
+}
 /// A rerank job. It owns its data (S7c-2a section 2.5), so it may outlive the engine; freed once nothing holds it.
 struct Job(*mut ShanjieRerankJob);
 // The core makes the job Send and Sync from its fields (ffi.rs F8); only the pointer needs saying so.
@@ -65,6 +97,7 @@ fn rerank_worker(runner: Runner) {
 }
 pub struct Engine {
     pub handle: *mut ShanjieEngine,
+    model: Option<ModelStamp>,
     pub rerank_jobs_run:u64,
     /// Set in the resident core: jobs run there instead of before the reply.
     reranks: Option<Runner>,
@@ -88,6 +121,7 @@ impl Default for Engine {
     fn default() -> Self {
         Self {
             handle: ptr::null_mut(),
+            model: None,
             rerank_jobs_run:0,
             reranks: None,
             last: Snapshot::default(),
@@ -121,49 +155,74 @@ impl Drop for Engine {
 impl Engine {
     /// An engine in the resident core (SHANJIE_CORE_LOCAL: in this process instead).
     pub fn open(data: &Path, config: &crate::broker::Config) -> Option<Self> {
+        Self::open_reusing(data, config, None)
+    }
+    pub(crate) fn open_reusing(data: &Path, config: &crate::broker::Config, source: Option<BuildSource>) -> Option<Self> {
         if std::env::var_os("SHANJIE_CORE_LOCAL").is_some() {
-            return Self::open_local(data, config);
+            return Self::open_local_reusing(data, config, match &source {
+                Some(BuildSource::Local(shared)) => Some(shared), _ => None,
+            });
         }
-        let remote = crate::broker::Client::open(data, config.clone())?;
+        let remote = crate::broker::Client::open(data, config.clone(), match source {
+            Some(BuildSource::Remote(id)) => Some(id), _ => None,
+        })?;
         let mut engine = Self::default();
         engine.remote = Some(remote);
         Some(engine)
     }
+    pub(crate) fn build_source(&self) -> Option<BuildSource> {
+        if let Some(client) = &self.remote {
+            return Some(BuildSource::Remote(client.id().to_owned()));
+        }
+        self.share_local().map(BuildSource::Local)
+    }
+    pub(crate) fn share_local(&self) -> Option<SharedModel> {
+        let model = self.model.as_ref()?.clone();
+        let mut handle = ptr::null_mut();
+        (unsafe { shanjie_engine_share(self.handle, &mut handle) } == 0)
+            .then_some(SharedModel { handle, model })
+    }
     /// Builds the engine in this process, in the order of upstream's Shell.build(): a failing side
     /// model only turns its feature off, as there.
     pub fn open_local(data: &Path, config: &crate::broker::Config) -> Option<Self> {
-        let model = crate::model_store::resolve(data, &config.model);
+        Self::open_local_reusing(data, config, None)
+    }
+    pub(crate) fn open_local_reusing(data: &Path, config: &crate::broker::Config, source: Option<&SharedModel>) -> Option<Self> {
+        let model = ModelStamp::read(crate::model_store::resolve(data, &config.model));
         let mut e = Self::default();
         let folder = crate::profile::folder();
         let personal = folder.join(&config.dictionary);
         if config.dictionary != "dictionary.tsv" && !personal.exists() {
             return None;
         }
-        let dictionary = if personal.exists() && personal.metadata().ok()?.len() != 0 {
-            Some(CString::new(personal.to_str()?).ok()?)
-        } else {
-            None
-        };
-        let side = |name: &str| CString::new(model.with_file_name(name).to_str()?).ok();
+        let personal = (personal.exists() && personal.metadata().ok()?.len() != 0).then_some(personal);
         unsafe {
-            if shanjie_windows_engine_new(
-                CString::new(data.to_str()?).ok()?.as_ptr(),
-                dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
-                config.layout,
-                config.packs(),
-                &mut e.handle,
-            ) != 0
-            {
-                return None;
-            }
-            let lm = CString::new(model.to_str()?).ok()?;
-            if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
-                return None;
-            }
-            // Missing or failed: the n-gram alone. 常談 only serves the small model's rerank.
-            if side("tinylm.sjtl").is_some_and(|t| shanjie_engine_load_tinylm(e.handle, t.as_ptr()) == 0) {
-                if let Some(table) = side("colloquial.sjlm") {
-                    shanjie_engine_load_colloquial(e.handle, table.as_ptr());
+            if let Some(source) = source.filter(|s| s.model == model && model.path.extension().is_some_and(|ext| ext == "winmap")) {
+                e.handle = windows_engine_new_shared(&*source.handle, &model.path, personal.as_deref(), config.layout, config.packs())?;
+            } else {
+                let dictionary = match personal.as_deref() {
+                    Some(path) => Some(CString::new(path.to_str()?).ok()?),
+                    None => None,
+                };
+                if shanjie_windows_engine_new(
+                    CString::new(data.to_str()?).ok()?.as_ptr(),
+                    dictionary.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
+                    config.layout,
+                    config.packs(),
+                    &mut e.handle,
+                ) != 0 {
+                    return None;
+                }
+                let lm = CString::new(model.path.to_str()?).ok()?;
+                if shanjie_engine_load_lm(e.handle, lm.as_ptr()) != 0 {
+                    return None;
+                }
+                let side = |name: &str| CString::new(model.path.with_file_name(name).to_str()?).ok();
+                // Missing or failed: the n-gram alone. 常談 only serves the small model's rerank.
+                if side("tinylm.sjtl").is_some_and(|t| shanjie_engine_load_tinylm(e.handle, t.as_ptr()) == 0) {
+                    if let Some(table) = side("colloquial.sjlm") {
+                        shanjie_engine_load_colloquial(e.handle, table.as_ptr());
+                    }
                 }
             }
             // A new engine starts with the core's defaults, so every switch is sent each time.
@@ -193,6 +252,7 @@ impl Engine {
                 }
             }
         }
+        e.model = Some(model);
         Some(e)
     }
     /// From now on a rerank job runs on its own thread after the reply, as upstream runs it off the main thread.
@@ -222,6 +282,9 @@ impl Engine {
             let r = &*ranked;
             out.preedit = string(r.preedit);
             out.cursor = r.cursor_utf16;
+            out.active_segment = windows_active_segment(&*self.handle);
+            out.english_run_utf16_start = r.english_run_utf16_start;
+            out.english_run_utf16_len = r.english_run_utf16_len;
             out.candidates = (0..r.candidate_count).map(|i| string(*r.candidates.add(i as usize))).collect();
             out.selected = usize::try_from(r.candidate_selected).ok();
             out.columns = r.candidate_columns;
@@ -230,23 +293,30 @@ impl Engine {
             shanjie_output_free(ranked);
         }
     }
-    fn rerank(&mut self) -> Snapshot {
-        let finished = self.reranks.clone().and_then(|runner| {
-            let (slot, signal) = &*runner;
+    fn rerank(&mut self, timeout: Option<Duration>) -> Option<Snapshot> {
+        let finished = if let Some(runner) = &self.reranks {
+            let (slot, signal) = runner.as_ref();
             let mut r = slot.lock().unwrap();
-            while r.busy() {
-                r = signal.wait(r).unwrap();
+            if let Some(timeout) = timeout {
+                r = signal.wait_timeout_while(r, timeout, |state| state.busy()).unwrap().0;
+                if r.busy() {
+                    return None;
+                }
+            } else {
+                r = signal.wait_while(r, |state| state.busy()).unwrap();
             }
             let latest = r.latest;
             r.finished.take().filter(|f| f.0 == latest)
-        });
+        } else {
+            None
+        };
         // Only the candidates can change; what the last output committed was already sent.
         let mut out = Snapshot { commit: String::new(), rerank: false, ..self.last.clone() };
         if let Some((_, job, 0)) = finished {
             unsafe { self.apply_rerank(&job, &mut out) };
         }
         self.last = out.clone();
-        out
+        Some(out)
     }
     fn begin(&mut self, timeout: u32) -> bool {
         unsafe {
@@ -338,6 +408,9 @@ impl Engine {
                 commit: string(r.commit),
                 preedit: string(r.preedit),
                 cursor: r.cursor_utf16,
+                active_segment: windows_active_segment(&*self.handle),
+                english_run_utf16_start: r.english_run_utf16_start,
+                english_run_utf16_len: r.english_run_utf16_len,
                 selected: usize::try_from(r.candidate_selected).ok(),
                 columns: r.candidate_columns,
                 first: r.candidate_first,
@@ -452,7 +525,13 @@ impl Engine {
                 ch,
                 modifiers,
                 latin,
-            } => self.operation(|h, o| unsafe {
+            } => {
+                if kind == 3 && modifiers == 0 && self.last.rerank && !self.last.preedit.is_empty()
+                    && (self.last.candidates.is_empty() || self.last.prediction && self.last.selected.is_none())
+                {
+                    self.rerank(Some(Duration::from_millis(100)));
+                }
+                self.operation(|h, o| unsafe {
                 shanjie_windows_key_with_latin(
                     h,
                     ShanjieKey {
@@ -463,7 +542,8 @@ impl Engine {
                     latin.map_or(0, |c| c as u32),
                     o,
                 )
-            }),
+                })
+            }
             Op::Reset(discard) => {
                 if discard {
                     self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) })
@@ -517,7 +597,8 @@ impl Engine {
             Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
                 == 0)
                 .then(Snapshot::default),
-            Op::Rerank => (!self.handle.is_null()).then(|| self.rerank()),
+            Op::Rerank if !self.handle.is_null() => self.rerank(None),
+            Op::Rerank => None,
         }
     }
     pub fn replay(&mut self, ops: &[crate::broker::Op]) -> bool {
@@ -541,5 +622,25 @@ impl shanjie_shell::input::Core for Engine {
     }
     fn reset(&mut self, discard: bool) -> Option<Snapshot> {
         Engine::reset(self, discard)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enter_rerank_timeout_leaves_the_current_output_available() {
+        let mut engine = Engine::default();
+        engine.last = Snapshot { preedit: "原組字".into(), rerank: true, ..Default::default() };
+        let runner = Arc::new((Mutex::new(Reranks { latest: 1, running: Some(1), ..Default::default() }), Condvar::new()));
+        engine.reranks = Some(runner.clone());
+        assert!(engine.rerank(Some(Duration::from_millis(1))).is_none());
+        assert!(engine.last.rerank);
+        assert_eq!(engine.last.preedit, "原組字");
+        runner.0.lock().unwrap().latest += 1;
+        let output = engine.rerank(Some(Duration::ZERO)).unwrap();
+        assert!(!output.rerank);
+        assert_eq!(output.preedit, "原組字");
     }
 }

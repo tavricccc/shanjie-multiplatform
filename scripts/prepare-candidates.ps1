@@ -41,23 +41,7 @@ $leftDigitOld = @'
 '@
 $leftDigitNew = @'
             if let Some(d) = digit_of(&self.syls[touching]) {
-                // docs/spec/english-mixed.md §7.4 (Down): the row of the digit context first, then the digit and its full-width form, then (docs/spec/english-mixed.md §7.7)
-                // the syllable the last digit tokens could have been. The punctuation table is not asked.
-                let mut list: Vec<(String, usize)> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
-                list.push((d.to_string(), 1));
-                list.push((digit_layer::full_width(d).to_string(), 1));
-                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
-                if let Some(sym) = self.digit_zhuyin_symbol(d) {
-                    list.push((sym.to_string(), 1));
-                    c.digit_zhuyin = Some((touching, sym));
-                }
-                if let Some((n, syl, word)) = self.digit_syllable_alt(touching + 1) {
-                    list.push((word, 1));
-                    c.dalt = Some(DigitAlt::Syllable { start: touching + 1 - n, n, syl });
-                }
-                c.list = list;
-                c.rows = rows;
-                self.cands = Some(c);
+                self.open_digit_candidates(d, touching, self.digit_zhuyin_symbol(d), rows);
                 return;
             }
 '@
@@ -76,8 +60,8 @@ $chooseOld = @'
         }
 '@
 $chooseNew = @'
-        let tail_alt = usize::from(matches!(c.dalt, Some(DigitAlt::Syllable { .. })));
-        if let Some((target, sym)) = c.digit_zhuyin.take().filter(|_| idx >= c.rows.len() && idx + 1 + tail_alt == c.list.len()) {
+        // The Zhuyin alternative follows the half-width and full-width forms.
+        if let Some((target, sym)) = c.digit_zhuyin.take().filter(|_| idx == c.rows.len() + 2) {
             let commit = self.choose_digit_zhuyin(target, sym)?;
             if !commit.is_empty() {
                 self.commit_out = Some(commit);

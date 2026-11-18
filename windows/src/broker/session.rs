@@ -7,6 +7,7 @@ pub type Sessions = Arc<Mutex<HashMap<String, Arc<Mutex<State>>>>>;
 pub struct State {
     config: Config,
     engine: Engine,
+    shared: Option<Arc<crate::engine::SharedModel>>,
     sequence: u64,
     cached: Reply,
     touched: Instant,
@@ -105,6 +106,7 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
             Request::Open {
                 id,
                 config,
+                source,
                 replay,
                 sequence,
             } => {
@@ -115,7 +117,9 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                     reply(None, None, false)
                 } else {
                     let state = open_or_attach(&sessions, &id, |state| state.touched.elapsed() < IDLE_SESSION, || {
-                        let mut engine = Engine::open_local(&data, &config)?;
+                        let original = source.and_then(|id| sessions.lock().unwrap().get(&id).cloned());
+                        let shared = original.and_then(|s| s.lock().unwrap().shared.clone());
+                        let mut engine = Engine::open_local_reusing(&data, &config, shared.as_deref())?;
                         engine.rerank_in_background();
                         if !engine.replay(&replay) {
                             return None;
@@ -123,9 +127,13 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                         let mut initial = reply(Some(&engine), None, true);
                         initial.sequence = sequence;
                         initial.found = true;
+                        // Capture on the thread that built the engine. Future sessions clone
+                        // just these parts and never touch the original session's engine.
+                        let shared = engine.share_local().map(Arc::new);
                         Some(State {
                             config: config.clone(),
                             engine,
+                            shared,
                             sequence,
                             cached: initial,
                             touched: Instant::now(),

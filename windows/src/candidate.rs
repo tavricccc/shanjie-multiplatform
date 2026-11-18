@@ -470,12 +470,16 @@ impl Host {
                 let len = if (0xd800..0xdc00).contains(&units[start]) { 2 } else { 1 };
                 mark = Some((start, len.min(units.len() - start)));
             }
-            let reading = String::from_utf16_lossy(&text);
+            let english_end = self.state.english_run_utf16_start + self.state.english_run_utf16_len;
+            if self.state.english_run_utf16_len != 0 {
+                if !text.is_empty() { text.extend("  ".encode_utf16()); }
+                text.extend("空白：英文斷開".encode_utf16());
+            }
             self.reading = None;
             self.reading_width = 0.0;
             self.reading_height = 0.0;
             self.reading_mark = None;
-            if !reading.is_empty() {
+            if !text.is_empty() {
                 // Alone (still typing, nothing to choose yet) the row is the whole panel and takes the
                 // candidates' size; above a candidate row it is smaller.
                 let reading_size = if self.items.is_empty() { self.size as f32 } else { (self.size as f32 * 0.8).max(9.0) };
@@ -495,6 +499,12 @@ impl Host {
                     10000.0,
                     1000.0,
                 )?;
+                if self.state.english_run_utf16_len != 0 && english_end as usize <= units.len() {
+                    layout.SetUnderline(true, DWRITE_TEXT_RANGE {
+                        startPosition: self.state.english_run_utf16_start,
+                        length: self.state.english_run_utf16_len,
+                    })?;
+                }
                 let mut m = DWRITE_TEXT_METRICS::default();
                 layout.GetMetrics(&mut m)?;
                 self.reading_width = m
@@ -657,7 +667,7 @@ impl Host {
     ) -> Result<()> {
         unsafe {
             self.sequence = self.sequence.wrapping_add(1);
-            if !visible || (state.candidates.is_empty() && state.preedit.is_empty()) {
+            if !visible || (state.candidates.is_empty() && state.preedit.is_empty() && state.english_run_utf16_len == 0) {
                 self.hide();
                 return Ok(());
             }

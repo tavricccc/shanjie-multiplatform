@@ -60,6 +60,8 @@ $input=@(Get-AdditionalVerificationPlan -Paths @('windows/src/input.rs') -Labels
 Check-Rule (($input|Where-Object id -eq 'input-features').kind -eq 'review' -and !($input|Where-Object id -eq 'input-features').command -and ($input|Where-Object id -eq 'input-features').reason -like '*-CaseIndices*') 'Partial input overlap calls for a configuration difference review, not a whole-script rerun'
 $recovery=@(Get-AdditionalVerificationPlan -Paths @('windows/src/tsf/recovery.rs') -Labels @('full'))
 Check-Rule (($recovery|Where-Object id -eq 'core-recovery').reason -like '*-Cases*') 'Recovery review narrows independent fault cases'
+$packBuild=@(Get-AdditionalVerificationPlan -Paths @('platform/resident_windows.rs') -Labels @('core','submission'))
+Check-Rule (($packBuild|Where-Object id -eq 'core-recovery').reason -like '*-Cases pack-switch*') 'Pack build changes distinguish app coverage from latency, memory and pipe lifetime checks'
 Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('windows/src/runtime_log.rs') -Labels @('fast','windows')).Count -eq 0) 'Unrelated diagnostics do not trigger dedicated verification'
 $docs=Select-VerificationPlan @('AGENTS.md','docs/TESTING.md')
 Check-Rule ($docs.Skip -and !$docs.Labels.Count -and $docs.AdditionalVerification.Count -eq 1 -and $docs.AdditionalVerification[0].id -eq 'markdown-rules' -and !$docs.AdditionalVerification[0].command) 'Rule Markdown changes prompt review without adding tests or interpreting script names'

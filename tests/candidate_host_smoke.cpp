@@ -49,6 +49,15 @@ int wmain(int argc,wchar_t** argv) {
         SendMessageW(presenter.window(),WM_LBUTTONUP,0,MAKELPARAM(MulDiv(35,GetDpiForWindow(presenter.window()),96),grid.bottom/2));
         while (PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&message);
         assert(picks == 2 && pickedIndex == 12);
+        shanjie::Snapshot englishHint;
+        englishHint.englishRunLen = 5;
+        presenter.publish(englishHint,preferences,caret,96,true);
+        assert(presenter.shown());
+        RECT hintBounds{};GetClientRect(presenter.window(),&hintBounds);
+        assert(hintBounds.right > MulDiv(48,GetDpiForWindow(presenter.window()),96));
+        englishHint.englishRunLen = 0;
+        presenter.publish(englishHint,preferences,caret,96,true);
+        assert(!presenter.shown());
         frame.candidates.resize(9); frame.columns = 0; frame.total = 9; frame.selected = 1;
         // The reading panel alone fits its text with no minimum width, and glides as the text grows and shrinks.
         {

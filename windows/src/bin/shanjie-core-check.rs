@@ -133,7 +133,7 @@ fn main() {
     // The core reranks after replying, as upstream runs the job off the main thread; a restart replays the reranks.
     let mut local = Engine::open_local(&data, &config).expect("local engine");
     report_panics();
-    let mut remote = broker::Client::open(&data, config.clone()).unwrap();
+    let mut remote = broker::Client::open(&data, config.clone(), None).unwrap();
     let mut reranked = 0;
     for ch in "su3cl".chars() {
         reranked += rerank_step(&mut remote, &mut local, ch) as usize;
@@ -149,7 +149,7 @@ fn main() {
     assert_eq!(status.model_loads, 1);
     // verify-update.ps1 installs the public model-v6-classes-v4 bundle as a user model.
     for model in ["model-v6-classes-v4", shanjie_shell::profile::BUILTIN] {
-        let mut alternate=broker::Client::open(&data,Config { model:model.into(),..config.clone() }).expect("selected model opens");
+        let mut alternate=broker::Client::open(&data,Config { model:model.into(),..config.clone() },None).expect("selected model opens");
         for ch in "su3".chars() {
             alternate.perform(Op::Key {kind:1,ch:ch as u32,modifiers:0,latin:None}).unwrap();
         }
@@ -167,7 +167,7 @@ fn main() {
             let config = config.clone();
             std::thread::spawn(move || {
                 start_fixture(&data);
-                let mut c = broker::Client::open(&data, config).unwrap();
+                let mut c = broker::Client::open(&data, config, None).unwrap();
                 for ch in "su3".chars() {
                     c.perform(Op::Key {
                         kind: 1,

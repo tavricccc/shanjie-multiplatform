@@ -362,7 +362,7 @@ const PERSONAL: [(&str, &[&str]); 3] = [
         "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
     (
         "input",
-        &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing"],
+        &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing", "english_overwrite"],
     ),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint", "accent", "accent_color", "pure_black", "animation"]),
 ];
@@ -522,6 +522,23 @@ mod tests {
             let doc = template(windows);
             assert!(doc.flag("input", "upstream_english", false) && !doc.flag("input", "mixed_input", true));
             assert!(!doc.flag("candidates", "reading_panel", true) && !doc.reading_panel());
+        }
+    }
+    #[test]
+    fn english_overwrite_defaults_off_and_keeps_explicit_choices() {
+        for (windows, interaction) in [(true, "windows"), (false, "shanjie")] {
+            assert!(!template(windows).flag("input", "english_overwrite", true));
+            for schema in [6, 9] {
+                for (setting, enabled) in [("", false), ("english_overwrite=0", false), ("english_overwrite=1", true)] {
+                    let mut doc = Document::parse(&format!("[profile]\nschema={schema}\ninteraction={interaction}\n[input]\n{setting}\n")).unwrap();
+                    doc.migrate();
+                    assert_eq!(doc.flag("input", "english_overwrite", !enabled), enabled);
+                    for use_windows in [true, false] {
+                        let preset_text = preset(&doc.content(), use_windows).unwrap();
+                        assert_eq!(Document::parse(&preset_text).unwrap().flag("input", "english_overwrite", !enabled), enabled);
+                    }
+                }
+            }
         }
     }
     #[test]

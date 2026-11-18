@@ -114,7 +114,7 @@ components:
 
 設定與安裝視窗是毛玻璃風格（內容視窗＋Rust 玻璃視窗）。候選窗是單一 Win32 layered popup，以 Direct2D software DC render target 繪製，`UpdateLayeredWindow` 用 premultiplied alpha 合成；陰影與上緣亮邊畫在 bitmap 裡，沒有 blur 或背景視窗。
 
-**The Quiet Candidate Rule.** 不用 DWM 轉場，視窗保持 `WS_EX_NOACTIVATE`。開啟時短暫淡入並從游標側輕微放大，選取高亮滑動，顯示中尺寸或位置改變時面板滑到新的大小與位置；隱藏立即切換；Windows 動畫效果關閉時全部立即切換。隱藏時收到主題變更只更新 palette，不自行重開候選。
+候選窗不用 DWM 轉場，保留 `WS_EX_NOACTIVATE`；陰影以向下偏移的圓角層繪製，高對比不畫陰影。啟用動畫時，面板開啟會短暫淡入、從游標側輕微放大，顯示中尺寸及位置平滑移動，選取高亮在項目間滑動。外觀設定可跟隨 Windows 或指定開關；關閉動畫時直接放到目標位置。隱藏時收到主題變更只更新色盤。
 
 ## Shapes
 

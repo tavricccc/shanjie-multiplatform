@@ -260,6 +260,42 @@ mod windows_smart_tests {
             );
         }
     }
+
+    #[test]
+    fn shifted_english_resumes_zhuyin_without_stealing_prefix_keys() {
+        let lex = Arc::new(Lexicon::parse("ㄎㄞ 開 -0.1\nㄕˋ 是 -0.1\nㄓˊ 值 -0.1\nㄏㄠˇ 好 -0.1\n").unwrap());
+        for upstream in [false, true] {
+            let mut engine = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            engine.set_windows_input_options(0);
+            engine.set_mixed_input(!upstream);
+            engine.set_upstream_english(upstream, false, true, true).unwrap();
+            for (prefix, suffix, expected) in [
+                ("C", "hatgpt", "Chatgpt"), ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"),
+                ("CP", "56", "CP值"), ("API", "lc3", "API好"), ("A", "84", "A84"),
+            ] {
+                for ch in prefix.chars() {
+                    engine.key(Key::ch(ch.to_ascii_lowercase(), MOD_SHIFT)).unwrap();
+                }
+                type_keys(&mut engine, suffix);
+                assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "upstream={upstream} {prefix}+{suffix:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn raw_key_tone_early_recovers_readings_and_keeps_literals() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄆㄚˊ 爬 -0.1\nㄅㄚˋ 爸 -0.1\nㄉㄚˋ 大 -0.1\nㄇㄟˇ 美 -0.1\n").unwrap());
+        let mut engine = Engine::with_lexicon(lex, Layout::Standard);
+        engine.set_mixed_input(true);
+        // The medial can also start the following reading (w4 + u0r3).
+        // Resolve the ambiguous three-key fragment when Enter confirms it.
+        assert_eq!(type_keys(&mut engine, "s3u").preedit, "s3u");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "你");
+        for (keys, expected) in [("q68", "爬"), ("148", "爸"), ("248", "大"), ("a3o", "a3o"), ("1234567890", "1234567890")] {
+            assert_eq!(type_keys(&mut engine, keys).preedit, expected, "{keys}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "{keys}");
+        }
+    }
 }
 
 impl Engine {
@@ -269,6 +305,7 @@ impl Engine {
         let raw = std::mem::take(&mut self.mixed_raw);
         self.mixed_latin = false;
         self.mixed_explicit_english = false;
+        self.mixed_shifted_end = 0;
         let prefix = self.mixed_text(&raw)?.commit;
         let mut out = self.mixed_text(" ")?;
         out.commit = flushed + &prefix + &out.commit;
@@ -276,6 +313,7 @@ impl Engine {
     }
     pub fn is_mixed_pending(&self) -> bool {
         self.drun.is_some() || self.mixed_latin || !self.mixed_raw.is_empty()
+            || (self.windows_shifted_boundaries && self.shifted_run_reading(0).is_some())
     }
     pub fn set_mixed_input(&mut self, mixed: bool) {
         self.mixed_input = mixed;
@@ -286,6 +324,39 @@ impl Engine {
         let mut syllable = reading.to_string();
         syllable.push_str(TONE_MARKS[tone]);
         self.lex.entries(&[syllable]).iter().any(|(word, _)| !windows_reading_text(word))
+    }
+
+    fn shifted_reading(&self, tail: &str, tone: usize, reorder: bool) -> Option<String> {
+        if !(1..=3).contains(&tail.len()) || tail.len() == 1 && tail.as_bytes()[0].is_ascii_uppercase() {
+            return None;
+        }
+        let reading = self.mixed_reading_order(tail, !reorder)?;
+        if tail.bytes().all(|ch| ch.is_ascii_digit()) && !(tone != 0 && reading == "ㄓ") {
+            return None;
+        }
+        self.has_mixed_han_entry(&reading, tone).then_some(reading)
+    }
+
+    fn shifted_run_reading(&self, tone: usize) -> Option<(usize, String)> {
+        let start = self.run_shifted.iter().take(self.run.len()).rposition(|&shifted| shifted)? + 1;
+        let reading = self.shifted_reading(
+            &self.run[start..], tone, self.english_reversal_guard || self.mixed_input,
+        )?;
+        (!english_word(&self.run.to_ascii_lowercase()))
+            .then(|| (start, format!("{reading}{}", TONE_MARKS[tone])))
+    }
+
+    fn windows_early_reading(&self, body: &str, tone: usize, last: char) -> Option<String> {
+        let (column, _) = self.layout.symbol_of(last)?;
+        if column == 2 && last.is_ascii_alphabetic() && body.bytes().all(|ch| ch.is_ascii_alphabetic()) {
+            return None;
+        }
+        let before = self.mixed_reading_order(body, false)?;
+        if self.has_mixed_han_entry(&before, tone) {
+            return None;
+        }
+        let reading = self.mixed_reading_order(&format!("{body}{last}"), false)?;
+        self.has_mixed_han_entry(&reading, tone).then_some(reading)
     }
 
     fn replay_mixed_reading(&mut self, reading: &str, key: Key) -> Result<Output, EngineError> {
@@ -388,6 +459,19 @@ impl Engine {
         let explicit_english = std::mem::take(&mut self.mixed_explicit_english);
         let shifted_end = std::mem::take(&mut self.mixed_shifted_end).min(raw.len());
         self.mixed_latin = false;
+        if key.kind == KeyKind::Enter && key.modifiers == 0 && !explicit_english {
+            if let [body, ending, last] = raw.as_bytes() {
+                let tone_key = *ending as char;
+                if let Some(reading) = self.layout.tone_of(tone_key)
+                    .and_then(|tone| self.windows_early_reading(&(*body as char).to_string(), tone, *last as char))
+                {
+                    let prefix = self.replay_mixed_reading(&reading, Key::ch(tone_key, 0))?.commit;
+                    let mut out = self.key_original(key)?;
+                    out.commit.insert_str(0, &prefix);
+                    return Ok(out);
+                }
+            }
+        }
         // Once a run is literal digits, later tone-number keys remain digits.
         if !raw.is_empty() && raw.bytes().all(|c| c.is_ascii_digit())
             && key.kind==KeyKind::Char && key.modifiers==0 && key.ch.is_ascii_digit() {
@@ -405,6 +489,19 @@ impl Engine {
         } else {
             None
         };
+        if let Some(tone) = tone.filter(|_| shifted_end > 0 && !english_word(&raw.to_ascii_lowercase())) {
+            let (head, tail) = raw.split_at(shifted_end);
+            if let Some(reading) = self.shifted_reading(tail, tone, true) {
+                let prefix = self.mixed_text(head)?.commit;
+                let mut out = self.replay_mixed_reading(&reading, key)?;
+                let ending = if key.kind == KeyKind::Space { ' ' } else { key.ch };
+                if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                    self.typed_literals.insert(index, format!("{tail}{ending}"));
+                }
+                out.commit.insert_str(0, &prefix);
+                return Ok(out);
+            }
+        }
         if let Some(tone) = tone.filter(|_| key.kind != KeyKind::Space || !explicit_english) {
             if shifted_end == 0 {
                 if let Some(reading) = self.corrected_mixed_keys(&raw, tone) {
@@ -560,6 +657,10 @@ impl Engine {
     fn windows_run_tone(&mut self, c: char, tone: usize) -> Result<Output, EngineError> {
         self.sync_run_shifted();
         let chars: Vec<char> = self.run.chars().collect();
+        let explicit = self.shifted_run_reading(tone);
+        if c == ' ' && explicit.is_none() {
+            return self.key_original(Key::new(KeyKind::Space));
+        }
         let mut tail: Vec<(usize, char)> = Vec::new();
         let mut above = 3;
         for (i, ch) in chars.iter().enumerate().rev() {
@@ -580,8 +681,9 @@ impl Engine {
             .map(|&(_, sym)| sym)
             .chain(TONE_MARKS[tone].chars())
             .collect();
-        if tail.len() >= 2 && !self.lex.entries(std::slice::from_ref(&syl)).is_empty() {
-            let split_at = chars.len() - tail.len();
+        let split = explicit.or_else(|| (tail.len() >= 2 && !self.lex.entries(std::slice::from_ref(&syl)).is_empty())
+            .then_some((chars.len() - tail.len(), syl)));
+        if let Some((split_at, syl)) = split {
             let head: String = chars[..split_at].iter().collect();
             let raw_tail: String = chars[split_at..].iter().collect();
             let run_ascii = std::mem::take(&mut self.run_ascii);
@@ -748,7 +850,9 @@ impl Engine {
                 self.clear_pend();
                 commit=self.insert_windows_literal(&text)?.commit;
             }
-            let mut out=self.start_run(self.latin_character(key))?;
+            let writing = self.latin_character(key);
+            let mut out=self.start_run(writing)?;
+            self.run_ascii |= self.windows_shifted_boundaries && writing.is_ascii_uppercase();
             let run_len = self.run.chars().count();
             self.run_shifted.clear();
             if run_len > 0 {
@@ -768,6 +872,10 @@ impl Engine {
                 if let Some(tone) = Layout::Standard.tone_of(key.ch) {
                     return self.windows_run_tone(key.ch, tone);
                 }
+            }
+            if self.windows_shifted_boundaries && !self.run.is_empty() && key.kind == KeyKind::Space
+                && key.modifiers == 0 && self.run_shifted.contains(&true) {
+                return self.windows_run_tone(' ', 0);
             }
             if key.kind==KeyKind::Char && key.ch.is_ascii_alphabetic() {
                 let was_shifted = key.modifiers == MOD_SHIFT;
@@ -832,6 +940,10 @@ impl Engine {
     }
 
     fn mixed_view(&self, mut out: Output) -> Output {
+        if self.mixed_latin && self.mixed_raw.bytes().any(|ch| ch.is_ascii_alphabetic()) {
+            out.english_run_utf16_len = self.mixed_raw.encode_utf16().count() as u32;
+            out.english_run_utf16_start = out.cursor_utf16 - out.english_run_utf16_len;
+        }
         if self.is_mixed_hint() {
             out.candidates = vec![self.pending(), self.mixed_raw.clone()];
             out.selected = None;
@@ -846,6 +958,25 @@ impl Engine {
         if self.mixed_latin {
             if key.modifiers & !MOD_SHIFT != 0 {
                 return self.passthrough(String::new());
+            }
+            if key.kind == KeyKind::Char && key.modifiers == 0 && !key.ch.is_ascii_alphabetic()
+                && !self.mixed_explicit_english
+                && (2..=3).contains(&self.mixed_raw.len())
+            {
+                let (body, ending) = self.mixed_raw.split_at(self.mixed_raw.len() - 1);
+                let tone_key = ending.as_bytes()[0] as char;
+                if let Some(reading) = self.layout.tone_of(tone_key)
+                    .and_then(|tone| self.windows_early_reading(body, tone, key.ch))
+                {
+                    let mut typed = std::mem::take(&mut self.mixed_raw);
+                    typed.push(key.ch);
+                    self.mixed_latin = false;
+                    let out = self.replay_mixed_reading(&reading, Key::ch(tone_key, 0))?;
+                    if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
+                        self.typed_literals.insert(index, typed);
+                    }
+                    return Ok(out);
+                }
             }
             if key.kind == KeyKind::Char && key.ch.is_ascii_alphabetic() {
                 self.mixed_raw.push(self.latin_character(key));

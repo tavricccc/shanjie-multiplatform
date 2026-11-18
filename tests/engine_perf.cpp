@@ -15,5 +15,5 @@ int wmain(int argc,wchar_t** argv) {
         for (auto ch : std::string("su3cl3")) { start = now(); assert(engine.key({1,(unsigned)ch,0},output)); samples.push_back(now()-start); }
     }
     auto typed = memory(); std::sort(samples.begin(),samples.end());
-    std::printf("ENGINE learning=%u open_ms=%.3f private_delta_mib=%.2f working_set_delta_mib=%.2f typed_private_delta_mib=%.2f key_median_ms=%.3f key_p95_ms=%.3f samples=%zu\n",learning,openMs,(opened.PrivateUsage-before.PrivateUsage)/1048576.0,(opened.WorkingSetSize-before.WorkingSetSize)/1048576.0,(typed.PrivateUsage-before.PrivateUsage)/1048576.0,samples[samples.size()/2],samples[samples.size()*95/100],samples.size());
+    std::printf("ENGINE learning=%u open_ms=%.3f private_delta_mib=%.2f working_set_delta_mib=%.2f typed_private_delta_mib=%.2f key_median_ms=%.3f key_p95_ms=%.3f samples=%zu\n",learning,openMs,(double(opened.PrivateUsage)-before.PrivateUsage)/1048576.0,(double(opened.WorkingSetSize)-before.WorkingSetSize)/1048576.0,(double(typed.PrivateUsage)-before.PrivateUsage)/1048576.0,samples[samples.size()/2],samples[samples.size()*95/100],samples.size());
 }

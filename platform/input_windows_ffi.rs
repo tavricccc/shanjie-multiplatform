@@ -16,6 +16,10 @@ pub unsafe extern "C" fn shanjie_windows_is_prediction_row(engine: *mut ShanjieE
     if engine.is_null() { return 0; }
     unsafe { (*engine).0.is_prediction_row() as u32 }
 }
+// Internal Rust query on the thread that owns the composition.
+pub fn windows_active_segment(engine: &ShanjieEngine) -> Option<[u32; 2]> {
+    engine.0.windows_active_segment()
+}
 #[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_associate(engine: *mut ShanjieEngine, prefix: *const c_char, out: *mut *mut ShanjieOutput) -> i32 {
     guard(|| {
@@ -39,4 +43,13 @@ pub unsafe extern "C" fn shanjie_windows_engine_new(data: *const c_char, persona
             Err(_) => SHANJIE_ERR_LOAD,
         }
     })
+}
+
+// Internal Rust bridge. The upstream C constructor has no Windows personal dictionary argument.
+pub fn windows_engine_new_shared(
+    shared: &ShanjieShared, model: &Path, personal: Option<&Path>, layout: u32, packs: u32,
+) -> Option<*mut ShanjieEngine> {
+    let layout = match layout { 0 => Layout::Standard, 1 => Layout::Eten, _ => return None };
+    Engine::new_with_personal_shared(&shared.0, model, layout, personal, packs)
+        .ok().map(|engine| Box::into_raw(Box::new(ShanjieEngine(engine))))
 }

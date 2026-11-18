@@ -83,6 +83,10 @@ impl ControlChannel {
         if pending { SetTimer(Some(self.window),45,15,None); }
         else { let _=KillTimer(Some(self.window),45); }
     } }
+    pub fn rebuild_poll(&self, pending:bool) { unsafe {
+        if pending { SetTimer(Some(self.window),46,25,None); }
+        else { let _=KillTimer(Some(self.window),46); }
+    } }
     pub fn stop_retry(&self) {
         unsafe {
             let _ = KillTimer(Some(self.window), 42);
@@ -133,6 +137,7 @@ unsafe extern "system" fn watcher_proc(
     if !p.is_null() && message == WORD_CLOSED_MESSAGE { (*p).word_closed.set(wp.0); ((*p).callback)((*p).context,9); return LRESULT(0); }
     if !p.is_null() && message == WM_TIMER && wp.0 == 44 { ((*p).callback)((*p).context,8); return LRESULT(0); }
     if !p.is_null() && message == WM_TIMER && wp.0 == 45 { ((*p).callback)((*p).context,10); return LRESULT(0); }
+    if !p.is_null() && message == WM_TIMER && wp.0 == 46 { ((*p).callback)((*p).context,11); return LRESULT(0); }
     DefWindowProcW(window, message, wp, lp)
 }
 

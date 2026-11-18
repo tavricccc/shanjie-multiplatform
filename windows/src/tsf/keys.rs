@@ -1,10 +1,10 @@
-use super::service::{compartment, output, pick_associated, range, selection, Data, Service_Impl};
+use super::service::{compartment, output, pick_associated, range, selection, Data, Service_Impl, State};
 use crate::{
     engine::Snapshot,
     input::{self, Special},
 };
 use shanjie_core::ffi::ShanjieKey;
-use std::{cell::Cell, rc::Rc};
+use std::rc::Rc;
 use windows::{
     core::*,
     Win32::{
@@ -34,6 +34,23 @@ fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
     } else {
         None
     }
+}
+/// Only Tab actions that are known to belong to the IME may wait for a write lock.
+fn tab_can_defer(s: &State, key: ShanjieKey) -> bool {
+    let out = &s.snapshot;
+    if s.special.mode != 0 {
+        return true;
+    }
+    if key.modifiers & !1 != 0 || s.associated.active() || !s.pinyin.pending.is_empty() {
+        return false;
+    }
+    if out.prediction && !out.reading_hint && !out.candidates.is_empty() {
+        return key.modifiers == 0 || out.selected.is_some();
+    }
+    let windows = s.prefs.get("profile", "interaction", "windows") == "windows";
+    input::right_action_key(&key, out, windows)
+        || (!s.prefs.zhuyin_only() && input::pending(out)
+            && out.english_run_utf16_len == 0 && !s.engine.mixed_pending())
 }
 fn held(key: VIRTUAL_KEY) -> bool {
     unsafe { GetKeyState(key.0 as i32) as u16 & 0x8000 != 0 }
@@ -141,7 +158,7 @@ impl Data {
             }
             if (p.flag("shortcuts", "ctrl_space_toggle", false)
                 && plain_shortcut(vk, VK_CONTROL, VK_SHIFT))
-                || (p.flag("shortcuts", "shift_space_toggle", true)
+                || ((s.snapshot.english_run_utf16_len != 0 || p.flag("shortcuts", "shift_space_toggle", true))
                     && plain_shortcut(vk, VK_SHIFT, VK_CONTROL))
             {
                 return Ok(true);
@@ -187,10 +204,15 @@ impl Data {
                         && key.modifiers == 3
                         && s.snapshot.selected.is_some()));
             }
+            if key.kind == 13 {
+                return Ok(s.context.as_ref() == Some(context)
+                    && (!s.snapshot.preedit.is_empty() || tab_can_defer(&s, key)));
+            }
             if s.associated.handles(key)
                 || s.pinyin.handles(key)
                 || s.special.mode != 0
                 || !s.snapshot.preedit.is_empty()
+                || ((2..=13).contains(&key.kind) && !self.recovery.borrow().is_empty())
             {
                 return Ok(true);
             }
@@ -203,53 +225,55 @@ impl Data {
                         && input::is_punctuation(key))))
         }
     }
+    pub(super) fn can_defer_tab(&self, vk: WPARAM, flags: LPARAM) -> bool {
+        let s = self.state.borrow();
+        let mut key = translate(vk, flags).expect("Tab has a TSF key mapping");
+        if !s.prefs.flag("input", "caps_lock_english", false) {
+            key.modifiers &= !16;
+        }
+        tab_can_defer(&s, key)
+    }
+    pub(super) fn shift_down(&self, vk: WPARAM, flags: LPARAM) {
+        if self.state.borrow().shift_tap && self.state.borrow().shift_physical != physical_shift(vk,flags) {
+            self.state.borrow_mut().shift_used = true;
+        }
+        if flags.0 & (1 << 30) == 0 && !self.state.borrow().shift_tap {
+            let physical = physical_shift(vk, flags);
+            let mut s = self.state.borrow_mut();
+            s.shift_tap = true;
+            s.shift_used = other_held(physical);
+            s.shift_physical = physical;
+            s.shift_epoch = super::modifiers::epoch();
+        }
+    }
     pub(super) fn key_down(
         self: &Rc<Self>,
         context: &ITfContext,
+        cookie: u32,
         vk: WPARAM,
         flags: LPARAM,
     ) -> Result<bool> {
-        if system_shortcut(vk) {
-            return Ok(false);
-        }
-        if !shift(vk) {
-            self.mode_revision.set(self.mode_revision.get() + 1);
-            unsafe {
-                self.indicator.borrow_mut().hide();
-            }
-            if self.state.borrow().shift_tap {
-                self.state.borrow_mut().shift_used = true;
-            }
-        }
+        self.mode_revision.set(self.mode_revision.get() + 1);
+        unsafe { self.indicator.borrow_mut().hide(); }
         if !self.wants(context, vk, flags)? {
             return Ok(false);
         }
         let p = self.state.borrow().prefs.clone();
-        if p.flag("shortcuts", "shift_toggle", true) && shift(vk) {
-            if self.state.borrow().shift_tap && self.state.borrow().shift_physical != physical_shift(vk,flags) {
-                self.state.borrow_mut().shift_used = true;
-            }
-            if flags.0 & (1 << 30) == 0 && !self.state.borrow().shift_tap {
-                let physical = physical_shift(vk, flags);
-                let mut s = self.state.borrow_mut();
-                s.shift_tap = true;
-                s.shift_used = other_held(physical);
-                s.shift_physical = physical;
-                s.shift_epoch = super::modifiers::epoch();
-            }
-            return Ok(true);
-        }
         if p.flag("shortcuts", "ctrl_space_toggle", false)
             && plain_shortcut(vk, VK_CONTROL, VK_SHIFT)
         {
             if flags.0 & (1 << 30) == 0 {
-                self.toggle(Some(context.clone()))?;
+                self.toggle_in_session(context, cookie, !self.chinese())?;
             }
             return Ok(true);
         }
-        if p.flag("shortcuts", "shift_space_toggle", true)
-            && plain_shortcut(vk, VK_SHIFT, VK_CONTROL)
-        {
+        let english_run = self.state.borrow().snapshot.english_run_utf16_len != 0;
+        if plain_shortcut(vk, VK_SHIFT, VK_CONTROL) && english_run {
+            let out = output(self.state.borrow_mut().engine.perform(crate::broker::Op::Space))?;
+            self.apply(context, cookie, out, false)?;
+            return Ok(true);
+        }
+        if p.flag("shortcuts", "shift_space_toggle", true) && plain_shortcut(vk, VK_SHIFT, VK_CONTROL) {
             if flags.0 & (1 << 30) == 0 {
                 let width = self.state.borrow().full_width;
                 self.state.borrow_mut().full_width = !width;
@@ -258,17 +282,11 @@ impl Data {
                 if !out.preedit.is_empty() {
                     out.commit.clear();
                     out.handled = true;
-                    let data = self.clone();
-                    let current = context.clone();
-                    self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                        data.apply(&current, cookie, out, false)
-                    })?;
+                    self.apply(context, cookie, out, false)?;
                 }
             }
             return Ok(true);
         }
-        self.ensure_engine()?;
-        self.watch(context)?;
         let mut key = translate(vk, flags).ok_or(E_FAIL)?;
         if !p.flag("input", "caps_lock_english", false) {
             key.modifiers &= !16;
@@ -285,18 +303,14 @@ impl Data {
                 return Ok(true);
             }
             if escape == "clear" {
-                let data = self.clone();
-                let current = context.clone();
-                self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                    let mut out = {
-                        let mut s = data.state.borrow_mut();
-                        s.pinyin.clear();
-                        s.raw_reading.clear();
-                        output(s.engine.reset(true))?
-                    };
-                    out.handled = true;
-                    data.apply(&current, cookie, out, false)
-                })?;
+                let mut out = {
+                    let mut s = self.state.borrow_mut();
+                    s.pinyin.clear();
+                    s.raw_reading.clear();
+                    output(s.engine.reset(true))?
+                };
+                out.handled = true;
+                self.apply(context, cookie, out, false)?;
                 return Ok(true);
             }
         }
@@ -304,47 +318,44 @@ impl Data {
         let numpad = self.chinese() && self.state.borrow().special.mode == 0 && numpad_literal(vk, key, &state);
         if numpad || (p.flag("shortcuts", "ctrl_punctuation", true) && input::is_punctuation(key)) {
             let mark = if numpad { char::from_u32(key.ch).unwrap().to_string() } else { input::punctuation(key).into() };
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    let mut converted = Snapshot::default();
-                    let unfinished = numpad && s.pinyin.pending.is_empty() && input::pending(&s.snapshot);
-                    if !s.pinyin.pending.is_empty() {
-                        let state = s.snapshot.clone();
-                        let super::service::State { pinyin, engine, .. } = &mut *s;
-                        converted = output(pinyin.key(
-                            ShanjieKey {
-                                kind: 2,
-                                ch: 0,
-                                modifiers: 0,
-                            },
-                            engine,
-                            state,
-                            p.flag("input", "alphanumeric", true),
-                            true,
-                        ))?;
-                        if !pinyin.pending.is_empty() {
-                            drop(s);
-                            return data.apply(&current, cookie, converted, false);
-                        }
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let mut converted = Snapshot::default();
+                let unfinished = numpad && s.pinyin.pending.is_empty() && input::pending(&s.snapshot);
+                if !s.pinyin.pending.is_empty() {
+                    let state = s.snapshot.clone();
+                    let super::service::State { pinyin, engine, .. } = &mut *s;
+                    converted = output(pinyin.key(
+                        ShanjieKey {
+                            kind: 2,
+                            ch: 0,
+                            modifiers: 0,
+                        },
+                        engine,
+                        state,
+                        p.flag("input", "alphanumeric", true),
+                        true,
+                    ))?;
+                    if !pinyin.pending.is_empty() {
+                        drop(s);
+                        self.apply(context, cookie, converted, false)?;
+                        return Ok(true);
                     }
-                    s.raw_reading.clear();
-                    s.associated.clear();
-                    // A keypad character must not drop an unfinished reading: commit it, then the character.
-                    let mut out = if unfinished {
-                        let mut out = output(s.engine.reset(false))?;
-                        out.commit.push_str(&mark);
-                        out
-                    } else {
-                        output(s.engine.perform(crate::broker::Op::Punctuation(mark)))?
-                    };
-                    out.commit = converted.commit + &out.commit;
+                }
+                s.raw_reading.clear();
+                s.associated.clear();
+                // A keypad character must not drop an unfinished reading: commit it, then the character.
+                let mut out = if unfinished {
+                    let mut out = output(s.engine.reset(false))?;
+                    out.commit.push_str(&mark);
                     out
+                } else {
+                    output(s.engine.perform(crate::broker::Op::Punctuation(mark)))?
                 };
-                data.apply(&current, cookie, out, false)
-            })?;
+                out.commit = converted.commit + &out.commit;
+                out
+            };
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         let space_candidates = !p.zhuyin_only() && p.flag("candidates", "space_operates", false);
@@ -361,27 +372,23 @@ impl Data {
             && !self.state.borrow().engine.mixed_pending()
             && !(space_candidates && (!closed || trigger != "down"))
         {
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    s.associated.clear();
-                    s.association_caret = None;
-                    s.raw_reading.clear();
-                    if !p.zhuyin_only() && p.flag("input", "space_commits", false) {
-                        let mut out = output(s.engine.reset(false))?;
-                        out.handled = true;
-                        if p.flag("input", "space_after_commit", false) {
-                            out.commit.push(' ');
-                        }
-                        out
-                    } else {
-                        output(s.engine.perform(crate::broker::Op::Space))?
+            let out = {
+                let mut s = self.state.borrow_mut();
+                s.associated.clear();
+                s.association_caret = None;
+                s.raw_reading.clear();
+                if !p.zhuyin_only() && p.flag("input", "space_commits", false) {
+                    let mut out = output(s.engine.reset(false))?;
+                    out.handled = true;
+                    if p.flag("input", "space_after_commit", false) {
+                        out.commit.push(' ');
                     }
-                };
-                data.apply(&current, cookie, out, false)
-            })?;
+                    out
+                } else {
+                    output(s.engine.perform(crate::broker::Op::Space))?
+                }
+            };
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         if self.state.borrow().associated.handles(key) {
@@ -392,19 +399,15 @@ impl Data {
             {
                 return Ok(true);
             }
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    if key.kind == 1 {
-                        pick_associated(&mut s, key.ch - 49)?
-                    } else {
-                        s.associated.key(key)
-                    }
-                };
-                data.apply(&current, cookie, out, false)
-            })?;
+            let out = {
+                let mut s = self.state.borrow_mut();
+                if key.kind == 1 {
+                    pick_associated(&mut s, key.ch - 49)?
+                } else {
+                    s.associated.key(key)
+                }
+            };
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         if self.state.borrow().associated.active() {
@@ -418,50 +421,42 @@ impl Data {
             }
         }
         if self.state.borrow().special.mode == 0 && !Special::starts(key, &p) && self.state.borrow().pinyin.handles(key) {
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    let state = s.snapshot.clone();
-                    let super::service::State { pinyin, engine, .. } = &mut *s;
-                    output(pinyin.key(
-                        key,
-                        engine,
-                        state,
-                        p.flag("input", "alphanumeric", true),
-                        p.flag("input", "pinyin_space_converts", false),
-                    ))?
-                };
-                data.apply(&current, cookie, out, false)
-            })?;
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let state = s.snapshot.clone();
+                let super::service::State { pinyin, engine, .. } = &mut *s;
+                output(pinyin.key(
+                    key,
+                    engine,
+                    state,
+                    p.flag("input", "alphanumeric", true),
+                    p.flag("input", "pinyin_space_converts", false),
+                ))?
+            };
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         if self.state.borrow().special.mode != 0 || Special::starts(key, &p) {
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    let pending = if s.special.mode == 0 {
-                        let mut pending = output(s.engine.reset(false))?;
-                        if !s.pinyin.pending.is_empty() { pending.commit = s.snapshot.preedit.clone(); }
-                        s.pinyin.clear();
-                        s.raw_reading.clear();
-                        pending
-                    } else {
-                        Snapshot::default()
-                    };
-                    let backquote = s.special.mode == 1;
-                    let mut out = s.special.key(key, &p);
-                    if backquote && s.special.mode == 0 && !out.preedit.is_empty() {
-                        out = output(s.engine.perform(crate::broker::Op::Punctuation(out.preedit)))?;
-                    }
-                    out.commit = pending.commit + &out.commit;
-                    out
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let pending = if s.special.mode == 0 {
+                    let mut pending = output(s.engine.reset(false))?;
+                    if !s.pinyin.pending.is_empty() { pending.commit = s.snapshot.preedit.clone(); }
+                    s.pinyin.clear();
+                    s.raw_reading.clear();
+                    pending
+                } else {
+                    Snapshot::default()
                 };
-                data.apply(&current, cookie, out, false)
-            })?;
+                let backquote = s.special.mode == 1;
+                let mut out = s.special.key(key, &p);
+                if backquote && s.special.mode == 0 && !out.preedit.is_empty() {
+                    out = output(s.engine.perform(crate::broker::Op::Punctuation(out.preedit)))?;
+                }
+                out.commit = pending.commit + &out.commit;
+                out
+            };
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         let selected = !state.candidates.is_empty()
@@ -542,19 +537,15 @@ impl Data {
                 return Ok(false);
             }
             let ch = char::from_u32(text[0] as u32).unwrap();
-            let data = self.clone();
-            let current = context.clone();
-            self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
-                let mut out = if ascii && !english && data.chinese() {
-                    output(data.state.borrow_mut().engine.perform(crate::broker::Op::Punctuation(ch.to_string())))?
-                } else {
-                    let mut out = output(data.state.borrow_mut().engine.reset(false))?;
-                    out.commit.push(ch);
-                    out
-                };
-                out.handled = true;
-                data.apply(&current, cookie, out, false)
-            })?;
+            let mut out = if ascii && !english && self.chinese() {
+                output(self.state.borrow_mut().engine.perform(crate::broker::Op::Punctuation(ch.to_string())))?
+            } else {
+                let mut out = output(self.state.borrow_mut().engine.reset(false))?;
+                out.commit.push(ch);
+                out
+            };
+            out.handled = true;
+            self.apply(context, cookie, out, false)?;
             return Ok(true);
         }
         if !state.prediction
@@ -587,22 +578,16 @@ impl Data {
             && !state.preedit.is_empty()
             && !input::pending(&state);
         let cycle = cycle && !mixed_pending;
-        let handled = Rc::new(Cell::new(false));
-        let result_handled = handled.clone();
-        let data = self.clone();
-        let current = context.clone();
-        self.request(
-            context,
-            TF_ES_SYNC | TF_ES_READWRITE,
-            move |cookie| unsafe {
-                let composing = !data.state.borrow().snapshot.preedit.is_empty();
-                if !composing {
-                    // A composition starts here: what was before the cursor last time is no longer known.
-                    data.state.borrow_mut().spacing_prev = None;
-                }
-                let spacing = p.flag("input", "cjk_spacing", false);
-                if !composing && (p.flag("input", "context", true) || spacing) {
-                    let left = range(selection(&current, cookie)?);
+        unsafe {
+            let composing = !self.state.borrow().snapshot.preedit.is_empty();
+            if !composing {
+                // A composition starts here: what was before the cursor last time is no longer known.
+                self.state.borrow_mut().spacing_prev = None;
+            }
+            let spacing = p.flag("input", "cjk_spacing", false);
+            if !composing && (p.flag("input", "context", true) || spacing) {
+                let value = (|| -> Result<String> {
+                    let left = range(selection(context, cookie)?);
                     left.Collapse(cookie, TF_ANCHOR_START)?;
                     let mut moved = 0;
                     // Read the upstream shell's 256 UTF-16 units, then pass only
@@ -620,112 +605,108 @@ impl Data {
                     }
                     let text = String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?;
                     let line = text.rsplit(['\r', '\n', '\u{000b}', '\u{000c}', '\u{0085}', '\u{2028}', '\u{2029}', '\0']).next().unwrap();
-                    let value = std::ffi::CString::new(
-                        line.chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect::<String>(),
-                    ).unwrap();
-                    let value = value.to_str().unwrap();
-                    if spacing {
-                        data.state.borrow_mut().spacing_prev = shanjie_shell::spacing::last(value);
-                    }
-                    if p.flag("input", "context", true) {
-                        output(data.state.borrow_mut().engine.perform(crate::broker::Op::Context(value.into())))?;
-                    }
+                    Ok(line.chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect())
+                })().unwrap_or_default();
+                if spacing {
+                    self.state.borrow_mut().spacing_prev = shanjie_shell::spacing::last(&value);
                 }
-                let out = {
-                    let mut s = data.state.borrow_mut();
-                    let mut out = if bypass {
-                        let mut out = output(s.engine.reset(false))?;
-                        out.handled =
-                            key.kind == 2 && !p.flag("input", "space_after_commit", false);
+                if p.flag("input", "context", true) {
+                    output(self.state.borrow_mut().engine.perform(crate::broker::Op::Context(value)))?;
+                }
+            }
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let mut out = if bypass {
+                    let mut out = output(s.engine.reset(false))?;
+                    out.handled =
+                        key.kind == 2 && !p.flag("input", "space_after_commit", false);
+                    out
+                } else if cycle {
+                    output(s.engine.perform(crate::broker::Op::Cycle))?
+                } else {
+                    let mut raw = s.raw_reading.clone();
+                    if key.kind == 4 {
+                        raw.pop();
+                    }
+                    if key.kind == 1 && key.modifiers == 0 {
+                        raw.push(key.ch as u8 as char);
+                    } else if key.kind == 2 && key.modifiers == 0 {
+                        raw.push(' ');
+                    }
+                    let out = if let Some(out) = s.engine.key_with_latin(key, latin) {
                         out
-                    } else if cycle {
-                        output(s.engine.perform(crate::broker::Op::Cycle))?
                     } else {
-                        let mut raw = s.raw_reading.clone();
-                        if key.kind == 4 {
-                            raw.pop();
+                        // Raw-reading fallback is only for invalid phonetic input.
+                        // Transport failure or a busy learning writer retains the key.
+                        if s.engine.failure() != Some(crate::engine::Failure::Failed) {
+                            return Err(E_FAIL.into());
                         }
-                        if key.kind == 1 && key.modifiers == 0 {
-                            raw.push(key.ch as u8 as char);
-                        } else if key.kind == 2 && key.modifiers == 0 {
-                            raw.push(' ');
+                        if !p.flag("input", "alphanumeric", true)
+                            || raw.is_empty()
+                            || !input::pending(&s.snapshot)
+                        {
+                            return Err(E_FAIL.into());
                         }
-                        let out = if let Some(out) = s.engine.key_with_latin(key, latin) {
-                            out
-                        } else {
-                            // Raw-reading fallback is only for invalid phonetic input.
-                            // Transport failure or a busy learning writer retains the key.
-                            if s.engine.failure() != Some(crate::engine::Failure::Failed) {
-                                return Err(E_FAIL.into());
-                            }
-                            if !p.flag("input", "alphanumeric", true)
-                                || raw.is_empty()
-                                || !input::pending(&s.snapshot)
-                            {
-                                return Err(E_FAIL.into());
-                            }
-                            let mut units: Vec<_> = s.snapshot.preedit.encode_utf16().collect();
-                            let end = (s.snapshot.cursor as usize).min(units.len());
-                            let mut start = end;
-                            while start > 0
-                                && ((0x3105..=0x312f).contains(&units[start - 1])
-                                    || [0x2ca, 0x2c7, 0x2cb, 0x2d9].contains(&units[start - 1]))
-                            {
-                                start -= 1;
-                            }
-                            units.splice(start..end, raw.encode_utf16());
-                            Snapshot {
-                                handled: true,
-                                commit: String::from_utf16(&units).unwrap(),
-                                ..Default::default()
-                            }
-                        };
-                        s.raw_reading = if input::pending(&out) {
-                            raw
-                        } else {
-                            String::new()
-                        };
-                        out
+                        let mut units: Vec<_> = s.snapshot.preedit.encode_utf16().collect();
+                        let end = (s.snapshot.cursor as usize).min(units.len());
+                        let mut start = end;
+                        while start > 0
+                            && ((0x3105..=0x312f).contains(&units[start - 1])
+                                || [0x2ca, 0x2c7, 0x2cb, 0x2d9].contains(&units[start - 1]))
+                        {
+                            start -= 1;
+                        }
+                        units.splice(start..end, raw.encode_utf16());
+                        Snapshot {
+                            handled: true,
+                            commit: String::from_utf16(&units).unwrap(),
+                            ..Default::default()
+                        }
                     };
-                    if delete {
-                        out = output(s.engine.key(key))?;
-                    }
-                    if !p.zhuyin_only() && key.kind == 2 && key.modifiers == 0
-                        && !p.flag("input", "space_inputs_zhuyin", true)
-                        && p.flag("input", "space_commits", false)
-                        && !input::pending(&out) && out.preedit.ends_with(' ') {
-                        let committed = out.commit;
-                        out = output(s.engine.reset(false))?;
-                        out.commit = committed + &out.commit;
-                    }
-                    if p.flag("candidates", "enter_commits", true)
-                        && selected
-                        && key.kind == 3
-                        && key.modifiers == 0
-                        && out.candidates.is_empty()
-                        && !input::pending(&out)
-                        && !out.preedit.is_empty()
-                    {
-                        let committed = out.commit;
-                        out = output(s.engine.key(key))?;
-                        out.commit = committed + &out.commit;
-                    }
+                    s.raw_reading = if input::pending(&out) {
+                        raw
+                    } else {
+                        String::new()
+                    };
                     out
                 };
-                let was_handled = out.handled;
-                data.apply(
-                    &current,
-                    cookie,
-                    out,
-                    selected && !state.prediction && key.kind != 3,
-                )?;
-                result_handled.set(was_handled);
-                Ok(())
-            },
-        )?;
-        Ok(handled.get())
+                if delete {
+                    out = output(s.engine.key(key))?;
+                }
+                if !p.zhuyin_only() && key.kind == 2 && key.modifiers == 0
+                    && !p.flag("input", "space_inputs_zhuyin", true)
+                    && p.flag("input", "space_commits", false)
+                    && !input::pending(&out) && out.preedit.ends_with(' ') {
+                    let committed = out.commit;
+                    out = output(s.engine.reset(false))?;
+                    out.commit = committed + &out.commit;
+                }
+                if p.flag("candidates", "enter_commits", true)
+                    && selected
+                    && key.kind == 3
+                    && key.modifiers == 0
+                    && out.candidates.is_empty()
+                    && !input::pending(&out)
+                    && !out.preedit.is_empty()
+                {
+                    let committed = out.commit;
+                    out = output(s.engine.key(key))?;
+                    out.commit = committed + &out.commit;
+                }
+                out
+            };
+            let was_handled = out.handled;
+            self.apply(
+                context,
+                cookie,
+                out,
+                selected && !state.prediction && key.kind != 3,
+            )?;
+            Ok(was_handled)
+        }
     }
 }
+
 impl ITfKeyEventSink_Impl for Service_Impl {
     fn OnSetFocus(&self, focused: BOOL) -> Result<()> {
         self.data.diagnostic("key_focus",None,None,Some(focused.0));
@@ -781,7 +762,7 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             Ok(handled) => Ok(handled.into()),
             Err(e) => {
                 super::trace(format_args!("key: {e}"));
-                Ok(true.into())
+                Ok((key.0 != VK_TAB.0 as usize).into())
             }
         }
     }

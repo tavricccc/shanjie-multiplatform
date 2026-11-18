@@ -146,6 +146,21 @@ impl Engine {
         Ok(engine)
     }
     pub fn load_lm(&mut self, path: &Path) -> Result<(), EngineError> {
+        self.load_lm_with_shared(path, None)
+    }
+    pub fn new_with_personal_shared(
+        shared: &Shared, model: &Path, layout: Layout, personal: Option<&Path>, packs: u32,
+    ) -> Result<Engine, EngineError> {
+        let mut e = Engine::new_with_personal(&shared.data_dir, layout, personal, packs)?;
+        e.load_lm_with_shared(model, Some(shared))?;
+        e.set_tinylm(shared.tinylm.clone());
+        if let Some(table) = &shared.colloquial {
+            e.colloquial = Some(Arc::new(e.colloquial_on(table.clone(), &shared.data_dir)
+                .map_err(|_| EngineError::LoadFailed)?));
+        }
+        Ok(e)
+    }
+    fn load_lm_with_shared(&mut self, path: &Path, shared: Option<&Shared>) -> Result<(), EngineError> {
         // Test fixture binary models keep their original behavior.
         if path.extension().is_none_or(|x| x != "winmap") {
             return self.load_lm_uncached(path);
@@ -196,8 +211,14 @@ impl Engine {
             cache.push(entry);
             return Ok(());
         }
-        self.load_lm_uncached(path)?;
-        WINDOWS_MODEL_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if let Some(shared) = shared {
+            // The reading table can include personal single-syllable rows.
+            // Always build it and the digit index from this engine's lexicon on a cache miss.
+            self.install_lm(shared.lm.clone(), None)?;
+        } else {
+            self.load_lm_uncached(path)?;
+            WINDOWS_MODEL_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         if cache.len() == 4 {
             cache.remove(0);
         }

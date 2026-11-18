@@ -11,6 +11,13 @@ pub struct Snapshot {
     pub commit: String,
     pub preedit: String,
     pub cursor: u32,
+    /// One editable word in the composed sentence, measured in UTF-16 units.
+    #[serde(default)]
+    pub active_segment: Option<[u32; 2]>,
+    #[serde(default)]
+    pub english_run_utf16_start: u32,
+    #[serde(default)]
+    pub english_run_utf16_len: u32,
     pub columns: u32,
     pub first: u32,
     pub total: u32,

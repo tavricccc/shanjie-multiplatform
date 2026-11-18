@@ -61,25 +61,56 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
      $testContent=$testContent -replace '(?m)^mixed_input=.*',"mixed_input=$([int](($case[3]-band 1)-ne 0))" -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[3]-band 2)-ne 0))"
     }
     if($case[0] -like 'busy*'){$testContent=$testContent -replace '(?m)^learning=.*','learning=1'}
+    $interaction=if($case.Count -gt 4){$case[4]}else{'windows'}
+    if($case[0] -eq 'async-keys'){
+     $testContent=$testContent -replace '(?m)^interaction=.*',"interaction=$interaction" -replace '(?m)^right_action=.*','right_action=none'
+     if($interaction -eq 'shanjie'){$testContent=$testContent -replace '(?m)^prediction=.*','prediction=0'}
+    }
+    if($case[0] -eq 'segment'){
+     $testContent=$testContent -replace '(?m)^mixed_input=.*','mixed_input=0' -replace '(?m)^prediction=.*','prediction=0'
+     if($keyboard -eq 2){$testContent=$testContent -replace '(?m)^anchor=.*','anchor=left'}
+    }
     if($Modes -and $case[0] -notin $Modes){continue}
+    $pipe=$case[0] -eq 'rebuild-pipe'
+    $env:SHANJIE_CORE_LOCAL=if($pipe){$null}else{'1'}
     $name="keyboard$keyboard-$($case[0])-$($case[1].Length)-$($results.Count)"
     $taskProfileRoot=Join-Path $out "$name/profile"
     New-Item -ItemType Directory -Path "$taskProfileRoot/Shanjie" -Force | Out-Null
     $env:LOCALAPPDATA=$taskProfileRoot
+    if($case[0] -like 'rebuild-*') {
+     $testContent=$testContent -replace '(?m)^mixed_input=.*','mixed_input=0' -replace '(?m)^acg_pack=.*','acg_pack=0' -replace '(?m)^learning=.*','learning=1'
+     if($testContent -match '(?m)^dictionary='){$testContent=$testContent -replace '(?m)^dictionary=.*','dictionary=personal.tsv'}else{$testContent=$testContent -replace '(?m)^\[input\]\r?$',"[input]`ndictionary=personal.tsv"}
+     Set-Content "$taskProfileRoot/Shanjie/personal.tsv" 'ㄋㄧˇ 龘 -1' -Encoding utf8NoBOM
+     $personalHash=(Get-FileHash "$taskProfileRoot/Shanjie/personal.tsv").Hash
+     $date=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()/86400
+     $learnedRow="測試`tㄋㄧˇ`t妳`t3`t$([int][Math]::Floor($date))"
+     [IO.File]::WriteAllText("$taskProfileRoot/Shanjie/learning.tsv","#shanjie-learning v1`n$learnedRow`n")
+    }
     Set-Content "$taskProfileRoot/Shanjie/profile.ini" $testContent -Encoding utf8NoBOM
     $start=[Diagnostics.ProcessStartInfo]::new($exe);$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
     $start.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
     foreach($arg in @("$DllRoot/$arch/Shanjie.dll")+$case[0..2]){$start.ArgumentList.Add($arg)}
-    $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2]}
+    $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction;keys=$case[1];expected=$case[2]}
     try {
      $process=[Diagnostics.Process]::Start($start);$stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
      if(!$process.WaitForExit(60000)){$process.Kill();throw 'Owned submission harness timed out'}
      $log=$stdout.GetAwaiter().GetResult();$errorLog=$stderr.GetAwaiter().GetResult();$code=$process.ExitCode;$process.Dispose()
      Set-Content "$out/$name.log" ($log+$errorLog) -Encoding utf8NoBOM
      if($code -or $log -notmatch 'PASS mode='){throw "$arch $name failed ($code): $log $errorLog"}
+     if($case[0] -like 'rebuild-*') {
+      if((Get-FileHash "$taskProfileRoot/Shanjie/personal.tsv").Hash -ne $personalHash -or $learnedRow -notin (Get-Content "$taskProfileRoot/Shanjie/learning.tsv")) {throw 'Rebuild changed the personal dictionary or lost an existing learning row'}
+     }
      Complete-TestStage -Stage $caseStage
     } catch { Complete-TestStage -Stage $caseStage -Status 'failed' -ErrorMessage $_.Exception.Message;throw }
-    $results += [pscustomobject]@{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};keys=$case[1];expected=$case[2];passed=$true}
+    finally {
+     if($pipe) {
+      $stop=Start-Process "$DllRoot/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
+      $null=$stop.Handle
+      if(!$stop.WaitForExit(5000)){ $stop.Kill(); throw 'Isolated submission core stop request timed out' }
+      $stop.Dispose()
+     }
+    }
+    $results += [pscustomobject]@{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction;keys=$case[1];expected=$case[2];passed=$true}
    }
   }
  }
