@@ -2,6 +2,14 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.0-beta.4（Windows pre-release）
+
+詳見 [0.16.0-beta.4 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.4.md)。
+
+- 詞包在背景切換，不打斷輸入；新增箭頭、刪節號與 ※ 等符號候選。
+- 改善 Shift 英文接中文、提早聲調還原、Enter 提交與 TSF 相容性。
+- 英文覆寫改為預設關閉（與上游一致），明確儲存的值保留。
+
 ## 0.16.0-beta.3（Windows pre-release）
 
 詳見 [0.16.0-beta.3 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.3.md)。
