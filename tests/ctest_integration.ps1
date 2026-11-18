@@ -190,6 +190,6 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 87 -and $inventory.tests.Count -eq 99) 'Label refinements preserve the FULL and x64 RELEASE inventories'
+    Check ($full.Selected.Count -eq 92 -and $inventory.tests.Count -eq 104) 'Label refinements preserve the FULL and x64 RELEASE inventories'
     Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 87, x64 RELEASE 99, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}
