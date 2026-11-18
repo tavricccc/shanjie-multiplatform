@@ -23,7 +23,18 @@ impl Engine {
                 }
             }
         }
+        alternatives.extend(Self::windows_symbol_extras(mark).chars().map(|symbol| symbol.to_string()));
         alternatives
+    }
+
+    fn windows_symbol_extras(mark: char) -> &'static str {
+        match mark {
+            '-' | '－' => "→←…⋯",
+            '/' | '／' => "↗↙",
+            '\\' | '＼' => "↖↘",
+            '*' | '＊' => "※",
+            _ => "",
+        }
     }
 
     pub fn set_candidate_anchor(&mut self, right: bool) {
@@ -58,21 +69,7 @@ impl Engine {
             if is_space_unit(&self.syls[start]) { return; }
             if let Some((d, sym)) = digit_of(&self.syls[start])
                 .and_then(|d| self.digit_zhuyin_symbol(d).map(|sym| (d, sym))) {
-                let mut list: Vec<(String, usize)> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
-                list.extend([
-                    (d.to_string(), 1),
-                    (digit_layer::full_width(d).to_string(), 1),
-                    (sym.to_string(), 1),
-                ]);
-                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
-                c.digit_zhuyin = Some((start, sym));
-                if let Some((n, syl, word)) = self.digit_syllable_alt(start + 1) {
-                    list.push((word, 1));
-                    c.dalt = Some(DigitAlt::Syllable { start: start + 1 - n, n, syl });
-                }
-                c.list = list;
-                c.rows = rows;
-                self.cands = Some(c);
+                self.open_digit_candidates(d, start, Some(sym), rows);
                 return;
             }
             let typed = self.syls[start][PUNCT_PREFIX.len()..].to_string();
@@ -111,6 +108,26 @@ impl Engine {
             }
         }
         self.cands = self.make_candidates_with(list, alt);
+    }
+
+    fn open_digit_candidates(&mut self, mark: char, target: usize, reading: Option<char>, rows: Vec<Pred>) {
+        let mut list: Vec<_> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
+        list.extend([(mark.to_string(), 1), (digit_layer::full_width(mark).to_string(), 1)]);
+        let mut cands = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
+        if let Some(symbol) = reading {
+            list.push((symbol.to_string(), 1));
+            cands.digit_zhuyin = Some((target, symbol));
+        }
+        if self.windows_punctuation_candidates {
+            list.extend(Self::windows_symbol_extras(mark).chars().map(|symbol| (symbol.to_string(), 1)));
+        }
+        if let Some((n, syl, word)) = self.digit_syllable_alt(target + 1) {
+            list.push((word, 1));
+            cands.dalt = Some(DigitAlt::Syllable { start: target + 1 - n, n, syl });
+        }
+        cands.list = list;
+        cands.rows = rows;
+        self.cands = Some(cands);
     }
 
     fn digit_zhuyin_symbol(&self, d: char) -> Option<char> {
@@ -253,7 +270,9 @@ mod windows_candidates {
             for (typed, replacement) in [("[", "「"), ("]", "」"), ("［", "「"), ("］", "」"),
                 ("（", "『"), ("）", "』"), ("「", "［"), ("／", "＼"), ("；", "："),
                 ("％", "%"), ("！", "!"), ("＂", "“"), ("|", "↑"), ("｜", "↓"),
-                ("｜", "↕"), ("<", "≤"), (">", "≥"), ("＾", "↑"), ("－", "→"),
+                ("｜", "↕"), ("<", "≤"), (">", "≥"), ("＾", "↑"),
+                ("-", "→"), ("-", "…"), ("－", "←"), ("－", "⋯"),
+                ("/", "↗"), ("／", "↙"), ("\\", "↖"), ("＼", "↘"), ("*", "※"), ("＊", "※"),
                 ("＿", "﹏"), ("｀", "`"), ("·", "・")] {
                 e.reset(ResetMode::Discard);
                 let out = e.insert_windows_punctuation(typed).unwrap();
@@ -385,17 +404,27 @@ mod windows_candidates {
                 assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("1{mark}"));
             }
             let mut e_tokens = setup_digit_engine(lex, right, true, false, 1 << 23);
-            for (key_ch, fw, sym) in [('-', "－", "ㄦ"), ('.', "．", "ㄡ"), ('/', "／", "ㄥ")] {
+            for (key_ch, fw, sym, extras) in [('-', "－", "ㄦ", "→←…⋯"), ('.', "．", "ㄡ", ""), ('/', "／", "ㄥ", "↗↙")] {
                 e_tokens.reset(ResetMode::Discard);
                 for ch in ['1', key_ch, '1'] { e_tokens.key(Key::ch(ch, 0)).unwrap(); }
                 for _ in 0..(if right { 2 } else { 1 }) { e_tokens.key(Key::new(KeyKind::Left)).unwrap(); }
                 let out = e_tokens.key(Key::new(KeyKind::Down)).unwrap();
-                assert_eq!(out.candidates, vec![key_ch.to_string(), fw.into(), sym.into()], "right={right} sym={key_ch}");
+                let mut expected = vec![key_ch.to_string(), fw.into(), sym.into()];
+                expected.extend(extras.chars().map(|ch| ch.to_string()));
+                assert_eq!(out.candidates, expected, "right={right} sym={key_ch}");
                 let out = e_tokens.pick(2).unwrap().unwrap();
                 assert_eq!(out.preedit, format!("1{sym}1"));
                 assert!(!e_tokens.is_punct(1));
                 assert_eq!(e_tokens.syls[1], sym);
             }
+
+            e_tokens.reset(ResetMode::Discard);
+            for ch in "1-1".chars() { e_tokens.key(Key::ch(ch, 0)).unwrap(); }
+            assert_eq!(e_tokens.view(true, String::new()).preedit, "1-1");
+            for _ in 0..(if right { 2 } else { 1 }) { e_tokens.key(Key::new(KeyKind::Left)).unwrap(); }
+            let out = e_tokens.key(Key::new(KeyKind::Down)).unwrap();
+            let index = out.candidates.iter().position(|word| word == "←").unwrap();
+            assert_eq!(e_tokens.pick(index).unwrap().unwrap().preedit, "1←1");
         }
     }
 
