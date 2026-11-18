@@ -165,10 +165,10 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
         @('ui','ui/View.xaml.cs',13),@('add-word','windows/src/word_helper.rs',22),
-        @('candidate','windows/src/candidate.rs',25),@('english','tests/english_keys.cpp',27),
+        @('candidate','windows/src/candidate.rs',30),@('english','tests/english_keys.cpp',27),
         @('submission','tests/submission.cpp',28),@('platform','platform/input_windows.rs',50),
-        @('shared','shared/src/lib.rs',87),@('shared-input','shared/src/input.rs',89),
-        @('docs','README.md',0),@('unknown','tools/unknown.txt',87),@('ci-workflow','.github/workflows/ci.yml',5)
+        @('shared','shared/src/lib.rs',92),@('shared-input','shared/src/input.rs',94),
+        @('docs','README.md',0),@('unknown','tools/unknown.txt',92),@('ci-workflow','.github/workflows/ci.yml',5)
     )
     foreach($scenario in $scenarios){
         $policy=Select-VerificationPlan @($scenario[1])
