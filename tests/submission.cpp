@@ -103,6 +103,10 @@ void keyboardState(bool caps,bool shift) {
 }
 int wmain(int argc,wchar_t** argv) {
  require(argc==5,1); std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
+ auto desktopName=L"Shanjie.Submission."+std::to_wstring(GetCurrentProcessId());
+ auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
+ require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
+ std::puts("PRIVATE DESKTOP ready (never switched)");std::fflush(stdout);
  KeyboardRestore restore; keyboardState(false,false);
  require(SUCCEEDED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)),2);
  HMODULE dll=LoadLibraryW(argv[1]); require(dll!=nullptr,3);

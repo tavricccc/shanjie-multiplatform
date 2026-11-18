@@ -43,13 +43,15 @@
 - 候選窗不做背景 polling；中英提示只在顯示期間開一次性 1400 ms timer。
 - 只有核心回報語意校正還在跑時，TSF 才開 15 ms timer 查詢，完成、逾時、下一鍵或取消組字即停止。
 
-## 重跑
+## 何時量測與去重
+
+依 AGENTS.md，修改按鍵路徑或核心請求時，須以對應來源的產物額外執行 `measure-engine.ps1`；未改這些路徑不量延遲。上游核心測試的延遲斷言與 TSF 功能回歸不是這個 IPC／600 鍵樣本的替代品。需要 x64 release 靜態庫、dist 核心與模型資料、MSVC／Windows SDK；量測使用自己的 profile 並停止自己的核心，不控制已安裝的使用者核心。
 
 ```powershell
-pwsh -File scripts/package.ps1
-pwsh -File scripts/verify-ui.ps1 -Benchmark
 pwsh -File scripts/measure-engine.ps1
-pwsh -File scripts/verify-mode.ps1
+pwsh -File scripts/measure-engine.ps1 -Learning  # 選用：8000 筆合成學習資料
 ```
 
-擷取放在畫面外，不取得前景焦點；輸出在 `build/native-review`、`build/mode-review`、`build/ui-review-final`。
+原本列出的 `verify-mode.ps1`、`verify-ui.ps1` 與封裝驗證由對應的 CTest `release.mode.*`、`release.ui.*`、`release.package` 負責；相同條件的案例已成功就不因本文件重跑。只登記或計畫選中不算通過；必要而未執行的案例，準備相應建置產物後透過 CTest 補缺項。
+
+`verify-ui.ps1 -Benchmark` 在上游 4794ab3 與目前版本都只有參數宣告，沒有使用該開關的額外執行分支；它仍跑相同 UI 驗證，不能當成另一份效能結果。只有需要新的視覺目的才選對應 scenario 加 `-Visual`，離屏擷取不等於前景 App、讀屏或多螢幕驗收。僅編譯、確認產物或開發候選包不因此要求完整驗收；正式發布仍依 `release.ps1` 防護。

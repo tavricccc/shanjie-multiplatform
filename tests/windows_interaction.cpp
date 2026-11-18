@@ -26,7 +26,9 @@ int wmain(int argc,wchar_t** argv) {
     key.kind = 2;
     assert(special.key(key,preferences).commit == L"\U0001f600");
     preferences.backquoteSymbols = true; key.kind = 1; key.ch = '`'; special.key(key,preferences); key.ch = ',';
-    assert(special.key(key,preferences).commit == L"，");
+    // Backquote punctuation stays editable; Unicode and the symbol grid commit directly.
+    auto punctuation=special.key(key,preferences);
+    assert(punctuation.preedit == L"，" && punctuation.commit.empty());
     key.ch = ','; key.modifiers = 6; special.key(key,preferences); key.modifiers = 0; key.kind = 10;
     assert(special.key(key,preferences).selected == 1);
     assert(special.pick(1).commit == L"。");

@@ -1,12 +1,46 @@
 #Requires -Version 7
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
+. "$PSScriptRoot/preserve-output.ps1"
 $upstream = Join-Path $root 'upstream/shanjie'
 $pin = Get-Content (Join-Path $root 'UPSTREAM.json') -Raw | ConvertFrom-Json
 $actual = git -C $upstream rev-parse HEAD
 if ($actual -ne $pin.commit) { throw 'Upstream pin changed; review UPSTREAM.json before building.' }
 if (git -C $upstream status --porcelain) { throw 'Upstream checkout must be clean.' }
 $output = Join-Path $root 'build/core'
+New-Item -ItemType Directory -Path $output -Force | Out-Null
+$null = Initialize-TestTimings -ProjectRoot $root -Name 'prepare-core'
+$null = & "$PSScriptRoot/prepare-english.ps1"
+$english = Join-Path $root 'build/english-words.txt'
+$englishHash = (Get-FileHash -LiteralPath $english -Algorithm SHA256).Hash.ToLowerInvariant()
+$preparationScripts = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'prepare-*.ps1' -File | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName) })
+$cacheInputs = @('UPSTREAM.json','MODEL-SOURCES.json','platform') + $preparationScripts
+$cacheValues = @($pin.commit,$englishHash)
+$key = Get-ContentFingerprint -Root $root -Paths $cacheInputs -Values $cacheValues
+$cacheManifest = Join-Path $output '.prepare-cache.json'
+$cachePaths = @('src','Cargo.toml')
+$cacheCheck = Start-TestStage -Name 'Validate prepared core cache' -Category 'core.cache'
+try {
+    $cacheHit = Test-ContentCache -Root $output -ManifestPath $cacheManifest -Key $key -Paths $cachePaths
+    Complete-TestStage -Stage $cacheCheck -Details @{cache=if($cacheHit){'hit'}else{'miss'};upstream_commit=$pin.commit}
+} catch {
+    Complete-TestStage -Stage $cacheCheck -Status 'failed' -Details @{cache='miss';upstream_commit=$pin.commit} -ErrorMessage $_.Exception.Message
+    throw
+}
+if ($cacheHit) {
+    Write-Host "Prepared core cache hit: upstream $($pin.commit), source tree verified."
+    return
+}
+
+$stage = Start-TestStage -Name 'Generate Windows core overlay' -Category 'core.prepare'
+$previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
+$env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
+try {
+foreach ($relative in $cachePaths) {
+    $old = Join-Path $output $relative
+    if (Test-Path -LiteralPath $old) { Preserve-Output $old }
+}
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 Copy-Item (Join-Path $upstream 'core/src') $output -Recurse -Force
 Copy-Item (Join-Path $upstream 'core/Cargo.toml') $output -Force
@@ -48,3 +82,11 @@ $anchor = 'profile == Profile::Chat && model.file_sha256() == PAIRED_TINYLM_SHA2
 if (!$content.Contains($anchor)) { throw 'Upstream colloquial model pairing changed.' }
 $content = $content.Replace($anchor, 'profile == Profile::Chat && (model.file_sha256() == PAIRED_TINYLM_SHA256 || model.file_sha256() == "356a37beede1a754cb6e963a52d0f20ae6574cbcd332d0b1bfc9686c0a97c5de")')
 Set-Content $colloquial $content -Encoding utf8NoBOM
+    Save-ContentCache -Root $output -ManifestPath $cacheManifest -Key $key -Paths $cachePaths
+    Complete-TestStage -Stage $stage -Status 'passed' -Details @{ cache='miss'; upstream_commit=$pin.commit }
+} catch {
+    Complete-TestStage -Stage $stage -Status 'failed' -ErrorMessage $_.Exception.Message -Details @{ cache='miss'; upstream_commit=$pin.commit }
+    throw
+} finally {
+    $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
+}

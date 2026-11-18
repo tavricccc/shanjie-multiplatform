@@ -1,0 +1,72 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 2,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-x64",
+      "displayName": "Shanjie Windows x64 verification",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/cmake/windows-x64",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "SHANJIE_RELEASE_NATIVE_ROOT": ""
+      }
+    },
+    {
+      "name": "windows-x86",
+      "displayName": "Shanjie Windows x86 verification",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build/cmake/windows-x86",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "SHANJIE_RELEASE_NATIVE_ROOT": ""
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-x86",
+      "configurePreset": "windows-x86",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true,
+        "maxPassedTestOutputSize": 0,
+        "maxFailedTestOutputSize": 0
+      },
+      "execution": {
+        "jobs": 4
+      }
+    },
+    {
+      "name": "windows-x86",
+      "configurePreset": "windows-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true,
+        "maxPassedTestOutputSize": 0,
+        "maxFailedTestOutputSize": 0
+      },
+      "execution": {
+        "jobs": 4
+      }
+    }
+  ]
+}
