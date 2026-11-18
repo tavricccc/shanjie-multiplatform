@@ -26,6 +26,11 @@ public:
     DWORD staticFlags = 0;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
+    void externalText(const std::wstring& value) {
+        TS_TEXTCHANGE change{0,(LONG)text.size(),(LONG)value.size()};
+        text=value; selection.acpStart=selection.acpEnd=change.acpNewEnd;
+        if(sink_){sink_->OnTextChange(0,&change);sink_->OnSelectionChange();}
+    }
     TS_SELECTION_ACP selection{0,0,{TS_AE_NONE,FALSE}};
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** out) override { *out = nullptr; if (iid != IID_IUnknown && iid != IID_ITextStoreACP) return E_NOINTERFACE; *out = this; AddRef(); return S_OK; }
     ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&refs_); }
@@ -562,6 +567,39 @@ int wmain(int argc, wchar_t** argv) {
         localNotify(L"Shanjie.ProfileChanged.v2");
         BOOL test = TRUE; keys->OnTestKeyDown(context.Get(),VK_SHIFT,0,&test); require(!test,117);
         std::puts("Original Shanjie profile: none/page/expand candidate navigation and unchanged Shift passed");
+    }
+    if (!visual && !original) {
+        wchar_t local[32768]; GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+        auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
+        // The baseline commits must not teach a competing word to later cases.
+        require(WritePrivateProfileStringW(L"input",L"learning",L"0",profile.c_str()),1116);
+        localNotify(L"Shanjie.ProfileChanged.v2");
+        waitPreload();
+        // Previous lines and NUL-delimited text must not supply recurrence.
+        std::wstring baseline;
+        for (const auto& prefix : {std::wstring(),std::wstring(L"反映\n"),std::wstring(L"反映\u2028"),std::wstring(L"反映\0",3)}) {
+            store->externalText(prefix);
+            press('Z',1118);press('0',1120);press('3',1122);
+            press('U',1124);press(VK_OEM_2,1126);press('4',1128);
+            press(VK_RETURN,1130);
+            if(prefix.empty()) {
+                baseline=store->text;
+                require(baseline==L"反應",1132);
+            } else {require(store->text==prefix+baseline,1133);}
+        }
+        // The useful pair is farther than eight UTF-16 units from the caret.
+        // Supplementary characters also exercise the 64-character boundary.
+        for (bool supplementary : {false,true}) {
+            std::wstring prefix=L"反映";
+            for(int i=0;i<40;++i)prefix+=supplementary?L"\U0001F600":L"甲";
+            prefix+=L" ";
+            store->externalText(prefix);
+            press('Z',1100);press('0',1102);press('3',1104);
+            press('U',1106);press(VK_OEM_2,1108);press('4',1110);
+            press(VK_RETURN,1112);
+            require(store->text==prefix+L"反映",1114);
+        }
+        std::puts("TSF context recurrence: current-line boundaries, long and supplementary-character prefixes passed");
     }
     if (visual) {
         BOOL shown = TRUE; candidates->IsShown(&shown); require(!shown,61);

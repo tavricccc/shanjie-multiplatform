@@ -605,8 +605,10 @@ impl Data {
                     let left = range(selection(&current, cookie)?);
                     left.Collapse(cookie, TF_ANCHOR_START)?;
                     let mut moved = 0;
-                    left.ShiftStart(cookie, -8, &mut moved, std::ptr::null())?;
-                    let mut text = [0u16; 8];
+                    // Read the upstream shell's 256 UTF-16 units, then pass only
+                    // the current line and the core's last 64 Unicode scalars.
+                    left.ShiftStart(cookie, -256, &mut moved, std::ptr::null())?;
+                    let mut text = [0u16; 256];
                     let mut count = 0;
                     left.GetText(cookie, 0, &mut text, &mut count)?;
                     let mut units = &text[..count as usize];
@@ -616,10 +618,11 @@ impl Data {
                     if units.last().is_some_and(|u| (0xd800..=0xdbff).contains(u)) {
                         units = &units[..units.len() - 1];
                     }
+                    let text = String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?;
+                    let line = text.rsplit(['\r', '\n', '\u{000b}', '\u{000c}', '\u{0085}', '\u{2028}', '\u{2029}', '\0']).next().unwrap();
                     let value = std::ffi::CString::new(
-                        String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?,
-                    )
-                    .unwrap();
+                        line.chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect::<String>(),
+                    ).unwrap();
                     let value = value.to_str().unwrap();
                     if spacing {
                         data.state.borrow_mut().spacing_prev = shanjie_shell::spacing::last(value);
