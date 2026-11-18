@@ -203,7 +203,7 @@ GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯
 pwsh -File scripts/benchmark-verification.ps1 -Commit HEAD
 ```
 
-本次整合後與舊四輪的產品來源不同，舊量測只作歷史參考，不能直接續接後宣稱公平加速。整合分支的匹配基準是此次上游 `4794ab3c54f9edb018885112381ad9c8341c07bc`；Windows 原機要量測新版時可明確加上 `-BaselineCommit 4794ab3c54f9edb018885112381ad9c8341c07bc`。這會建立新的量測集合，沒有覆寫舊四輪；Cloud 未執行任何輪次。歷史證據與待辦見 [CTEST_HANDOFF.md](CTEST_HANDOFF.md)。
+要量測時以 `-BaselineCommit <commit>` 指定比較基準，會建立新的量測集合。
 
 Benchmark 建立三個 detached worktree，各跑冷、暖一次：改造前的原始 `verify.ps1` 加原 CI 的 shared／windows 單元測試、目前提交的相容 `verify.ps1`、目前提交的 CTest FULL。舊 verify 原本不含兩套一般單元測試；執行器以外部命令補上，保持原腳本不變，並分開記錄純 verify 與補充 CI 的耗時，再比較完整相同清冊。預設使用與目前提交共同、尚未採用 CTest 的 origin/main 祖先；無此基準時才用首次加入 CMakeLists.txt 的前一版，也可用 `-BaselineCommit <ref>` 指定。三份產品原始碼、詞庫、模型與 pin 必須一致；不同就拒絕宣稱驗收流程加速。工作副本與報告預設放在 `build/benchmark/`，空間不足時可用 `-OutputRoot <目錄>` 或 `SHANJIE_BENCHMARK_ROOT` 指定其他磁碟。
 

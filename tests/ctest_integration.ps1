@@ -165,10 +165,10 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
         @('ui','ui/View.xaml.cs',14),@('add-word','windows/src/word_helper.rs',22),
-        @('candidate','windows/src/candidate.rs',25),@('english','tests/english_keys.cpp',27),
+        @('candidate','windows/src/candidate.rs',30),@('english','tests/english_keys.cpp',27),
         @('submission','tests/submission.cpp',32),@('platform','platform/input_windows.rs',54),
-        @('shared','shared/src/lib.rs',91),@('shared-input','shared/src/input.rs',93),
-        @('docs','README.md',0),@('unknown','tools/unknown.txt',91),@('ci-workflow','.github/workflows/ci.yml',5)
+        @('shared','shared/src/lib.rs',96),@('shared-input','shared/src/input.rs',98),
+        @('docs','README.md',0),@('unknown','tools/unknown.txt',96),@('ci-workflow','.github/workflows/ci.yml',5)
     )
     foreach($scenario in $scenarios){
         $policy=Select-VerificationPlan @($scenario[1])
@@ -190,6 +190,6 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 91 -and $inventory.tests.Count -eq 104 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
-    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 91, x64 RELEASE 104, fixed CI 5; no native execution'
+    Check ($full.Selected.Count -eq 96 -and $inventory.tests.Count -eq 109 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 96, x64 RELEASE 109, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}

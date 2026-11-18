@@ -122,7 +122,7 @@ impl Data {
         }
         unsafe {
             let status = context.GetStatus()?;
-            if status.dwStaticFlags & TF_SD_READONLY != 0 {
+            if status.dwDynamicFlags & TF_SD_READONLY != 0 {
                 self.diagnostic("wants.readonly",Some(context),Some(vk),Some(0));
                 return Ok(false);
             }
