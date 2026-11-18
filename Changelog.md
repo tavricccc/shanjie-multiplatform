@@ -2,6 +2,14 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.0-beta.3（Windows pre-release）
+
+詳見 [0.16.0-beta.3 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.3.md)。
+
+- 同步善解 v0.8.0 核心與完整詞庫，新增美妝、迷因與直播詞包（預設開啟）及中英混合詞。
+- 組字時參考游標前文，快打時鍵序顛倒或聲調太早按下也能還原。
+- 修正 PowerPoint 文字方塊無法輸入中文與右 Shift 切換。
+
 ## 0.16.0-beta.2（Windows pre-release）
 
 詳見 [0.16.0-beta.2 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.2.md)。
