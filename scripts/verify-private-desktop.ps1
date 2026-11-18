@@ -1,7 +1,8 @@
 #Requires -Version 7
 param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
- 'word-deferred','word-natural','word-stale','word-readonly','word-password','word-invalid','word-empty'),[switch]$ExplicitCore)
+ 'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
+ 'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty'),[switch]$ExplicitCore)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 if(!('ShanjieFixtureProcess' -as [type])) { Add-Type -TypeDefinition @'
