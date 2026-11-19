@@ -60,11 +60,48 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0 (Node.js 24)
         with:
           dotnet-version: 10.0.x
-      - name: Cache upstream models
+      - name: Identify Windows Cargo cache keys
+        id: cargo-cache-key
+        env:
+          SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/config.toml', 'windows/Cargo.toml', 'windows/Cargo.lock', 'shared/Cargo.toml', 'UPSTREAM.json', 'platform/**/*.rs', 'scripts/prepare-core.ps1') }}
+        run: |
+          $rust = (& rustc --version --verbose | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify rustc for the release cache.' }
+          $cargo = (& cargo --version | Out-String).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot identify Cargo for the release cache.' }
+          $identity = @($env:ImageOS, $env:ImageVersion, $rust, $cargo, $env:RUSTFLAGS, $env:CARGO_ENCODED_RUSTFLAGS) -join "`n"
+          $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity))).ToLowerInvariant()
+          "toolchain=$digest" >> $env:GITHUB_OUTPUT
+          "prefix=cargo-release-v1-$digest-$env:SHANJIE_CARGO_CACHE_INPUTS" >> $env:GITHUB_OUTPUT
+      - name: Cache Windows Cargo dependencies and compilation outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
-          path: build/model
-          key: models-${{ hashFiles('MODEL-SOURCES.json') }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            shared/target
+            windows/target
+          key: ${{ steps.cargo-cache-key.outputs.prefix }}-${{ github.sha }}
+          # A version bump changes the project lockfile; Cargo still checks each restored artifact.
+          restore-keys: |
+            ${{ steps.cargo-cache-key.outputs.prefix }}-
+            cargo-release-v1-${{ steps.cargo-cache-key.outputs.toolchain }}-
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          path: ~/.nuget/packages
+          key: windows-nuget-${{ hashFiles('NuGet.Config', 'ui/Shanjie.UI.csproj') }}
+          restore-keys: windows-nuget-
+      - name: Cache Windows model sources and conversion output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          # prepare-models verifies pinned sources and the conversion receipt on every run.
+          path: |
+            build/model
+            dist/data/models/builtin
+          key: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-${{ steps.cargo-cache-key.outputs.toolchain }}-${{ hashFiles('UPSTREAM.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/prepare-models.ps1') }}
+          restore-keys: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-
       - name: Run CTest RELEASE (interactive UI rows are reported as not run)
         run: pwsh -File scripts/test.ps1 -Level RELEASE -BaseRef HEAD -CiSafe
       - name: Upload CTest reports and logs
