@@ -102,6 +102,20 @@ jobs:
             dist/data/models/builtin
           key: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-${{ steps.cargo-cache-key.outputs.toolchain }}-${{ hashFiles('UPSTREAM.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/prepare-models.ps1') }}
           restore-keys: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-
+      - name: Cache upstream core test builds and passing receipts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          # Keep Cargo fingerprints together with the verified generated inputs.
+          # test-core checks each executable and the retained test logs before beta reuse.
+          path: |
+            build/test/core/.source-cache.json
+            build/test/core/Cargo.lock
+            build/test/core/Cargo.toml
+            build/test/core/src
+            build/test/core/tests
+            build/test/core/target
+            build/test/passed-heavy
+          key: windows-core-suite-v1-${{ steps.cargo-cache-key.outputs.toolchain }}-${{ hashFiles('UPSTREAM.json', 'MODEL-SOURCES.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/test-core.ps1', 'scripts/test-support.psm1') }}
       - name: Run CTest RELEASE (interactive UI rows are reported as not run)
         run: pwsh -File scripts/test.ps1 -Level RELEASE -BaseRef HEAD -CiSafe
       - name: Upload CTest reports and logs
@@ -111,6 +125,8 @@ jobs:
           name: windows-ctest-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/reports/**
+            build/test/passed-heavy/*.json
+            build/test/core/target/test-logs/*.txt*
             build/cmake/windows-x64/Testing/Temporary/LastTest.log
             build/cmake/windows-x86/Testing/Temporary/LastTest.log
           if-no-files-found: warn

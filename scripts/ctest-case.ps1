@@ -64,7 +64,10 @@ try {
                     if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
                 }
             }
-            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
+            'core-suite' {
+                $reuseHeavy=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS -eq '1'
+                & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy
+            }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {

@@ -85,9 +85,9 @@ function Get-ContentFingerprint {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
 }
 
-function Get-CoreTestRunKey([object[]]$Binaries,[string]$ResourceRoot,[string]$ModelRoot,[string[]]$Arguments,[int]$MemoryLimit) {
+function Get-CoreTestRunKey([object[]]$Binaries,[string]$ResourceRoot,[string]$ModelRoot,[string[]]$Arguments,[int]$MemoryLimit,[string]$SourceKey) {
     $inputs=@(foreach($binary in $Binaries|Sort-Object Name){"$($binary.Name)=$((Get-FileHash -LiteralPath $binary.Path).Hash)"})
-    $inputs+=@("arguments=$($Arguments -join ' ')","threads=$env:RUST_TEST_THREADS","memory_limit=$MemoryLimit","processors=$([Environment]::ProcessorCount)")
+    $inputs+=@("source=$SourceKey","arguments=$($Arguments -join ' ')","threads=$env:RUST_TEST_THREADS","share_stride=$env:SHANJIE_SHARE_STRIDE","memory_limit=$MemoryLimit","processors=$([Environment]::ProcessorCount)","runner=$env:ImageOS/$env:ImageVersion")
     $inputs+=Get-ContentFingerprint -Root $ResourceRoot -Paths @('data','eval')
     $inputs+=Get-ContentFingerprint -Root $ModelRoot -Paths @('.')
     [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs -join "`n"))).ToLowerInvariant()

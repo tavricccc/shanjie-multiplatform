@@ -26,6 +26,10 @@ function Get-VerificationPresetLabels([string]$Level,[string]$Architecture,[stri
     return @($Labels|Where-Object{$_ -notin 'fast','full','release','core','shared','data','interaction','settings-ui'})
 }
 
+function Test-BetaCoreResultReuse([string]$Level,[bool]$CiSafe,[bool]$Prerelease) {
+    return $Level -eq 'RELEASE' -and $CiSafe -and $Prerelease
+}
+
 function Test-VerificationDocumentation([string]$Path) {
     return ($Path -match '^(docs/|LICENSES/|\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)|README(?:\..*)?$|AGENTS\.md$|Changelog\.md$|UPSTREAM-CHANGES\.md$)' -or $Path -match '\.(md|rst|adoc)$')
 }
@@ -301,4 +305,4 @@ function Assert-FixedCiSelection([object[]]$Rows) {
     if($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual).Count){throw 'CI must contain exactly the fixed lightweight baseline; no missing tests or FULL expansion is allowed.'}
 }
 
-Export-ModuleMember -Function Get-VerificationExceptions,Get-VerificationCompletion,Get-VerificationChanges,Get-VerificationPresetLabels,Read-HarnessCaseResults,Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection
+Export-ModuleMember -Function Get-VerificationExceptions,Get-VerificationCompletion,Get-VerificationChanges,Get-VerificationPresetLabels,Test-BetaCoreResultReuse,Read-HarnessCaseResults,Test-VerificationDocumentation,Select-VerificationPlan,Get-VerificationImpact,Get-AdditionalVerificationPlan,Get-EnglishKeyCases,Get-SubmissionCases,Get-HarnessCasePlan,Assert-FixedCiSelection

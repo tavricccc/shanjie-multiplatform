@@ -42,6 +42,10 @@ Write-Host "PASS verification selection: $selectionCases cases, one CTest policy
 
 $checks=0
 function Check-Rule([bool]$Condition,[string]$Name){$script:checks++;if(!$Condition){throw "FAIL $Name"};Write-Host "ok   $Name"}
+Check-Rule (Test-BetaCoreResultReuse RELEASE $true $true) 'CI-safe beta RELEASE may reuse the long-running core results'
+Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $false)) 'Stable RELEASE executes all core assertions'
+Check-Rule (!(Test-BetaCoreResultReuse RELEASE $false $true)) 'Local beta RELEASE executes all core assertions'
+Check-Rule (!(Test-BetaCoreResultReuse FULL $true $true)) 'FULL executes all core assertions even with a beta channel'
 $latency=@(Get-AdditionalVerificationPlan -Paths @('platform/input_windows.rs','windows/src/tsf/keys.rs','windows/src/broker/client.rs') -Labels @('full'))
 Check-Rule (@($latency|Where-Object id -eq 'engine-latency').Count -eq 1) 'Key/core changes require one independent latency measurement'
 Check-Rule (($latency|Where-Object id -eq 'engine-latency').kind -eq 'required-extra') 'Functional FULL does not substitute for key latency'
