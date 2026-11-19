@@ -262,7 +262,9 @@ int wmain(int argc,wchar_t** argv) {
    auto builds=static_cast<unsigned>(resident());
    type(sequence);
    profile(true,true,"missing.tsv");
-   require(static_cast<unsigned>(resident())==builds+1,223);
+   // A refresh waits for queued keys (a busy pipe) before it starts the rebuild; it still must start while composing.
+   for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,223);
+   require(static_cast<unsigned>(resident())==builds+1&&first->composing,223);
    press(VK_DOWN); press('1');
    const auto firstWord=first->text;
    settle(++builds);
@@ -272,7 +274,12 @@ int wmain(int argc,wchar_t** argv) {
    type(sequence);
    profile(true,true,"personal.tsv");
    profile(false,false,"personal.tsv");
-   require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+   if(static_cast<unsigned>(resident())!=builds) require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+   else {
+     // Deferred behind queued keys: both requests collapse into the latest profile.
+     for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,226);
+     require(static_cast<unsigned>(resident())==builds+1,226); --builds;
+   }
    settle(builds+=2);
    require(first->ends==1 && first->composing,227);
    press(VK_ESCAPE);pump();
