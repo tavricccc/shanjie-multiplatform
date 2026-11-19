@@ -172,7 +172,7 @@ internal static class QuickSetupVerifier
         view.KeyForVerification(VirtualKey.Escape); await Task.Delay(60);
         Check(view.StepForVerification == 0, "Esc should go back");
         view.NextForVerification(); view.NextForVerification(); await Task.Delay(60);
-        Check(view.StepForVerification == 2 && view.RowKeysForVerification.SequenceEqual(["space", "right", "mix", "shift", "learning", "panel"]), "one screen per question");
+        Check(view.StepForVerification == 2 && view.RowKeysForVerification.SequenceEqual(new[] { "space", "right", "mix", "shift", "learning", "panel" }), "one screen per question");
         view.SkipForVerification(); await Closed(settings);
         Check(File.ReadAllText(ProfileStore.Path) == Tuned && !File.Exists(QuickSetupDraft.BackupPath), "skipping changed the settings");
 
@@ -210,7 +210,7 @@ internal static class QuickSetupVerifier
         File.WriteAllText(ProfileStore.Path, both); settings.Vm.Load(); File.Delete(QuickSetupDraft.BackupPath);
         settings.OpenQuickSetup(true); view = settings.QuickSetup!; await Task.Delay(60);
         view.NextForVerification(); view.NextForVerification(); await Task.Delay(60);
-        Check(view.RowShownForVerification("mix") == ViewModels.SettingsViewModel.RawKeyMixingName && view.RowOptionsForVerification("mix").SequenceEqual(["自動判斷", ViewModels.SettingsViewModel.RawKeyMixingName]), "both modes should load as 原鍵混打 among the two single modes");
+        Check(view.RowShownForVerification("mix") == ViewModels.SettingsViewModel.RawKeyMixingName && view.RowOptionsForVerification("mix").SequenceEqual(new[] { "自動判斷", ViewModels.SettingsViewModel.RawKeyMixingName }), "both modes should load as 原鍵混打 among the two single modes");
         view.ActivateForVerification("panel"); view.NextForVerification(); await Task.Delay(60);
         Check(File.ReadAllText(ProfileStore.Path) == both && !File.Exists(QuickSetupDraft.BackupPath), "keeping both modes untouched wrote the file");
         view.NextForVerification(); await Closed(settings);

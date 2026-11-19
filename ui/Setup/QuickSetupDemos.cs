@@ -41,15 +41,15 @@ internal static class QuickSetupDemos
     {
         var frames = TypeNihao(); int key = frames.Count;
         DemoList List(int selected) => new(Nihao, selected, DemoLayout.Rows);
-        if (windows) frames.AddRange([
+        if (windows) frames.AddRange(new DemoFrame[] {
             new("↓", "按 ↓ 打開選字") { Composing = "你好", List = List(0) },
             new("↓", "往下選") { Composing = "你好", List = List(1) },
-            new("Enter", "選好就直接送出", 1800) { Done = "妳好" }]);
-        else frames.AddRange([
+            new("Enter", "選好就直接送出", 1800) { Done = "妳好" } });
+        else frames.AddRange(new DemoFrame[] {
             new("空白", "按空白打開選字") { Composing = "你好", List = List(0) },
             new("→", "移到想要的字") { Composing = "你好", List = List(1) },
             new("Enter", "選好了，還能繼續打") { Composing = "妳好" },
-            new("Enter", "再按一次才送出", 1800) { Done = "妳好" }]);
+            new("Enter", "再按一次才送出", 1800) { Done = "妳好" } });
         return new(frames, key);
     }
     internal static DemoScript Space(SpaceChoice choice, bool spaceAfterCommit)
@@ -69,7 +69,7 @@ internal static class QuickSetupDemos
                 frames.Add(new("空白", spaceAfterCommit ? "字送出去，再補一個空格" : "字直接送出去", 2200) { Done = "你好" + (spaceAfterCommit ? " " : "") });
                 return new(frames, key);
             }
-            case SpaceChoice.Custom: return new([new("", "維持你現在的空白鍵設定", 2000)], 0);
+            case SpaceChoice.Custom: return new(new DemoFrame[] { new("", "維持你現在的空白鍵設定", 2000) }, 0);
             default:
             {
                 var frames = TypeNihao(); int key = frames.Count;
@@ -113,7 +113,7 @@ internal static class QuickSetupDemos
         new("g", "再打一段", 500) { Done = "你", Composing = "g", Panel = "ㄕ", MarkStart = 0, MarkLength = 1 },
         new("j", "再打一段", 1000) { Done = "你", Composing = "gj", Panel = "ㄕㄨ", MarkStart = 0, MarkLength = 2 },
         new("Enter", "按 Enter 就留下英文", 1800) { Done = "你gj" } }, 1);
-    internal static DemoScript MixUnchanged() => new([new("", "維持你現在的混打設定", 2000)], 0);
+    internal static DemoScript MixUnchanged() => new(new DemoFrame[] { new("", "維持你現在的混打設定", 2000) }, 0);
     /// Keeping the settings: nothing to show but the person's own way of typing.
     internal static DemoScript Keep() => new(new DemoFrame[] {
         new("ㄋ", "照你現在的設定打字", 500) { Composing = "ㄋ" },

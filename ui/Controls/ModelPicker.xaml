@@ -11,7 +11,7 @@
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="0,2"/><Setter Property="CornerRadius" Value="8"/></Style>
                         </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate><DataTemplate x:DataType="models:ModelChoice"><TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontSize="12" LineHeight="19"/></DataTemplate></ListView.ItemTemplate>
+                        <ListView.ItemTemplate><DataTemplate x:DataType="models:ModelChoice"><TextBlock Text="{x:Bind Name, Mode=OneTime}" TextWrapping="Wrap" FontSize="12" LineHeight="19"/></DataTemplate></ListView.ItemTemplate>
                     </ListView>
                 </StackPanel>
             </Flyout>
