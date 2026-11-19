@@ -181,6 +181,12 @@ impl Rebuild {
 }
 
 impl Data {
+    /// Before a key: adopt a finished rebuild now instead of waiting for the poll timer,
+    /// so the first key after a layout change already uses the new engine.
+    pub(super) fn poll_rebuild_before_key(self: &Rc<Self>) {
+        let pending = { let slot = self.rebuild.borrow(); slot.desired.is_some() && (slot.building.is_some() || slot.ready.is_some()) };
+        if pending { let _ = self.poll_rebuild(); }
+    }
     pub(super) fn poll_rebuild(self: &Rc<Self>) -> Result<()> {
         let mut slot = self.rebuild.borrow_mut();
         if let Some((generation, build)) = slot.building.as_ref() {
