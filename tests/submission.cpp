@@ -161,6 +161,9 @@ void keyboardState(bool caps,bool shift) {
  require(SetKeyboardState(state),102);require(((GetKeyState(VK_CAPITAL)&1)!=0)==caps,103);
 }
 int wmain(int argc,wchar_t** argv) {
+ std::setvbuf(stdout,nullptr,_IONBF,0);
+ std::setvbuf(stderr,nullptr,_IONBF,0);
+ const auto harnessStart=std::chrono::steady_clock::now();
  require(argc==5,1); std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
  auto desktopName=L"Shanjie.Submission."+std::to_wstring(GetCurrentProcessId());
  auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
@@ -190,8 +193,18 @@ int wmain(int argc,wchar_t** argv) {
  ComPtr<ITfClientId> identifiers;TfClientId serviceClient=TF_CLIENTID_NULL;
  require(SUCCEEDED(thread.As(&identifiers))&&SUCCEEDED(identifiers->GetClientId(ServiceId,&serviceClient)),13);
  ComPtr<ThreadProxy> proxy;proxy.Attach(new ThreadProxy(thread.Get(),true));
+ auto logStage=[&](const char* stage, const char* detail="") {
+   auto status=resident();
+   auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-harnessStart).count();
+   std::printf("STAGE name=%s elapsed_ms=%lld started=%u completed=%u composing=%d ends=%u%s%s\n",
+     stage,(long long)elapsed,static_cast<unsigned>(status),static_cast<unsigned>(status>>32),
+     first->composing?1:0,first->ends,detail[0]?" ":"",detail);
+   std::fflush(stdout);
+ };
+ if(mode.starts_with(L"rebuild-")) logStage("initial-core-start");
  require(SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),14);
  auto start=std::chrono::steady_clock::now();while((resident()>>32)!=(resident()&0xffffffffULL)){require(std::chrono::steady_clock::now()-start<std::chrono::seconds(35),15);Sleep(5);}
+ if(mode.starts_with(L"rebuild-")) logStage("initial-core-ready");
  ComPtr<ITfKeyEventSink> keys;require(SUCCEEDED(service.As(&keys)),16);
  auto context=firstContext;auto store=first;
  auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(5);}};
@@ -261,37 +274,51 @@ int wmain(int argc,wchar_t** argv) {
    };
    auto builds=static_cast<unsigned>(resident());
    type(sequence);
+   require(first->composing && !first->text.empty(),215);
+   logStage("first-profile-update");
    profile(true,true,"missing.tsv");
    // A refresh waits for queued keys (a busy pipe) before it starts the rebuild; it still must start while composing.
    for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,223);
    require(static_cast<unsigned>(resident())==builds+1&&first->composing,223);
+   logStage("first-background-build-started");
    press(VK_DOWN); press('1');
    const auto firstWord=first->text;
    settle(++builds);
+   logStage("first-background-build-settled");
    require(first->composing && first->ends==0 && first->text==firstWord,224);
    press(VK_RETURN); require(first->endedText==firstWord&&!first->composing,225);
+   logStage("first-commit-done");
 
    type(sequence);
+   logStage("second-consecutive-profile-update");
    profile(true,true,"personal.tsv");
    profile(false,false,"personal.tsv");
-   if(static_cast<unsigned>(resident())!=builds) require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+   if(static_cast<unsigned>(resident())!=builds) {
+     require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+     logStage("second-background-build-started","detail=immediate");
+   }
    else {
      // Deferred behind queued keys: both requests collapse into the latest profile.
      for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,226);
      require(static_cast<unsigned>(resident())==builds+1,226); --builds;
+     logStage("second-background-build-started","detail=deferred-collapsed");
    }
    settle(builds+=2);
+   logStage("second-background-build-settled");
    require(first->ends==1 && first->composing,227);
    press(VK_ESCAPE);pump();
    require(first->text==firstWord && first->endedText==firstWord,228);
    type(pack);press(VK_HOME);press(VK_DOWN);
    require(!candidatesContain(expected) && !first->text.ends_with(expected),229);
    press(VK_ESCAPE);press(VK_ESCAPE);
+   logStage("second-pack-check-done");
 
    type(pack);
    const auto oldText=first->text;
+   logStage("third-profile-update");
    profile(true,false,"personal.tsv");
    settle(++builds);
+   logStage("third-background-build-settled");
    require(first->composing && first->text==oldText && first->endedText==firstWord,230);
    press(VK_RETURN);pump();
    type(pack);press(VK_HOME);press(VK_DOWN);
@@ -300,10 +327,14 @@ int wmain(int argc,wchar_t** argv) {
    type(sequence);press(VK_DOWN);
    require(candidatesContain(L"龘") || first->text.ends_with(L"龘"),232);
    press(VK_ESCAPE);press(VK_ESCAPE);
+   logStage("third-pack-and-dict-check-done");
+   logStage("deactivate-and-retire-start");
    profile(false,false,"personal.tsv");
    require(SUCCEEDED(service->Deactivate()),233);deactivated=true;
    const auto afterDeactivate=first->text;
-   settle(++builds);require(!first->composing && first->text==afterDeactivate,234);
+   settle(++builds);
+   logStage("deactivate-and-retire-settled");
+   require(!first->composing && first->text==afterDeactivate,234);
  } else if(mode==L"segment") {
    ComPtr<ITfDisplayAttributeProvider> styling;
    require(SUCCEEDED(service.As(&styling)),235);
