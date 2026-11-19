@@ -272,6 +272,19 @@ int wmain(int argc,wchar_t** argv) {
      }
      return false;
    };
+   // Confirm that the first keys made a round trip before testing profile changes.
+   // A slow cold pipe can leave them unconfirmed until Escape.
+   for(int attempt=0;;++attempt) {
+     require(attempt<5,232);
+     type(sequence);
+     for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);first->text.empty()&&std::chrono::steady_clock::now()<deadline;) pump();
+     const bool confirmed=!first->text.empty();
+     for(int i=0;i<4&&(i==0||first->composing||!first->text.empty());++i){press(VK_ESCAPE);pump();}
+     require(!first->composing&&first->text.empty(),233);
+     std::printf("STAGE warm attempt=%d confirmed=%d\n",attempt,confirmed);
+     if(confirmed) break;
+   }
+   first->ends=0;first->starts=0;first->endedText.clear();first->earlyWrites=0;
    auto builds=static_cast<unsigned>(resident());
    type(sequence);
    require(first->composing && !first->text.empty(),215);
