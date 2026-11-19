@@ -93,7 +93,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
     $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction;keys=$case[1];expected=$case[2]}
     try {
      $process=[Diagnostics.Process]::Start($start);$stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
-     if(!$process.WaitForExit(60000)){$process.Kill();throw 'Owned submission harness timed out'}
+     if(!$process.WaitForExit(60000)){$process.Kill($true);$process.WaitForExit(5000)|Out-Null;$partial=$stdout.GetAwaiter().GetResult();$partialError=$stderr.GetAwaiter().GetResult();throw "Owned submission harness timed out; output so far:`n$partial`n$partialError"}
      $log=$stdout.GetAwaiter().GetResult();$errorLog=$stderr.GetAwaiter().GetResult();$code=$process.ExitCode;$process.Dispose()
      Set-Content "$out/$name.log" ($log+$errorLog) -Encoding utf8NoBOM
      if($code -or $log -notmatch 'PASS mode='){throw "$arch $name failed ($code): $log $errorLog"}
