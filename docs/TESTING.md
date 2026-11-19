@@ -192,7 +192,7 @@ x64、x86 的所有非封裝測試與參數子案例均通過後，才建立 `pa
 
 RELEASE 收據 schema 4 保存驗收前後原始碼身分、固定快照、雙架構封裝許可、候選封裝內容／安裝包、候選 metadata 和 JUnit 的 SHA-256。提升前重新核對，任一架構失敗、缺少必要證據或更動來源、版本、快照／候選產物均失效；schema 3 等沒有快照的舊收據必須重新驗收。後續一般建置改寫 `dist/` 不會取代快照裡已測過的檔案。有效紀錄可重用，不重跑整套。`package.ps1 -Promote -ReportPath <report.json>` 也會執行同一防護，不能直接繞過；它把已驗證的候選包複製至 `dist/Shanjie-Windows-Setup.exe`，確認複製後雜湊，再寫 `dist/release.json` 的本機完整驗收標記。
 
-GitHub Actions 的 Release job 跑 `RELEASE -CiSafe` 並匯出 CI artifact。x64 和 x86 的 Cargo 產物各有獨立的鍵與路徑，兩個架構共用 registry 與 host 套件。產物依 Rust、MSVC、Windows SDK、編譯設定及來源選擇快取，registry 可跨工具鏈版本還原。Cargo 指紋、core overlay 收據及模型雜湊會核對還原內容。NuGet 及內建模型轉換產物也有快取。RELEASE 用 Thin LTO 與 8 個 codegen units 編譯封裝用的 DLL 與工具。Windows Rust 單元與混打回歸共用 release profile 的測試執行檔，快取身分斷言仍在獨立程序執行。互動驗收另依本機 RELEASE 清冊執行。
+GitHub Actions 的 Release job 跑 `RELEASE -CiSafe` 並匯出 CI artifact。x64 和 x86 的 Cargo 產物各有獨立的鍵與路徑，兩個架構共用 registry 與 host 套件。產物依 Rust、MSVC、Windows SDK、編譯設定及來源選擇快取，registry 可跨工具鏈版本還原。Cargo 指紋、core overlay 收據及模型雜湊會核對還原內容。NuGet 及內建模型轉換產物也有快取。x64 的發布建置與測試使用 Thin LTO 與 8 個 codegen units，x86 沿用 Fat LTO 與 1 個 codegen unit。Windows Rust 單元與混打回歸共用各自架構的測試執行檔，快取身分斷言仍在獨立程序執行。互動驗收另依本機 RELEASE 清冊執行。
 
 遠端發布保留上游 #86 的 `scripts/release.py`：先檢查平台產物、來源 manifest 與 SHA-256；只續作同來源草稿，發布過的 Release 不覆寫，artifact 名稱包含 run attempt。這套遠端發布交易與本機完整驗收收據各自保留原有防護，不用 CI-safe 產物冒充本機 RELEASE。既有 Linux 發布 job 原樣保留，本次未新增 Linux 工作。
 
