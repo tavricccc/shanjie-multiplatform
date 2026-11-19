@@ -14,6 +14,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# These harnesses use assert() as test assertions; remove Release NDEBUG instead of overriding with /UNDEBUG (D9025).
+foreach(config IN ITEMS RELEASE RELWITHDEBINFO MINSIZEREL)
+  string(REGEX REPLACE "(^| )[/-]DNDEBUG([ ]|$)" " " CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
+endforeach()
+
 set(SHANJIE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(SHANJIE_TESTS "${SHANJIE_ROOT}/tests")
 set(SHANJIE_SUPPORT "${SHANJIE_TESTS}/support")
@@ -30,18 +35,12 @@ if(SHANJIE_RELEASE_NATIVE_ROOT)
   set(SHANJIE_NATIVE_DIR "${SHANJIE_RELEASE_NATIVE_ROOT}/${SHANJIE_ARCH}")
 endif()
 
-function(shanjie_keep_assertions target)
-  # CMake's Release flags define NDEBUG; these harnesses use assert() as test assertions.
-  target_compile_options(${target} PRIVATE /UNDEBUG)
-endfunction()
-
 function(shanjie_harness target source)
   add_executable(${target} ${source})
   target_include_directories(${target} PRIVATE "${SHANJIE_SUPPORT}")
   target_compile_definitions(${target} PRIVATE UNICODE _UNICODE NOMINMAX)
   target_compile_options(${target} PRIVATE /EHsc /O2 /W4 /utf-8)
   target_link_libraries(${target} PRIVATE ole32 oleaut32 uuid user32 gdi32)
-  shanjie_keep_assertions(${target})
 endfunction()
 
 # Shared by candidate-host and interaction harnesses; compile once per architecture/configuration.
@@ -49,7 +48,6 @@ add_library(shanjie_test_engine OBJECT "${SHANJIE_SUPPORT}/engine.cpp")
 target_include_directories(shanjie_test_engine PRIVATE "${SHANJIE_SUPPORT}" "${SHANJIE_ROOT}/upstream/shanjie/core/include")
 target_compile_definitions(shanjie_test_engine PRIVATE UNICODE _UNICODE NOMINMAX)
 target_compile_options(shanjie_test_engine PRIVATE /EHsc /O2 /W4 /utf-8)
-shanjie_keep_assertions(shanjie_test_engine)
 
 # These match the harnesses previously compiled in verify.ps1 and its regression scripts.
 shanjie_harness(shanjie_tsf_smoke "${SHANJIE_TESTS}/tsf_smoke.cpp")
@@ -71,7 +69,6 @@ add_executable(shanjie_candidate_host EXCLUDE_FROM_ALL
 target_include_directories(shanjie_candidate_host PRIVATE "${SHANJIE_SUPPORT}" "${SHANJIE_ROOT}/upstream/shanjie/core/include")
 target_compile_definitions(shanjie_candidate_host PRIVATE UNICODE _UNICODE NOMINMAX)
 target_compile_options(shanjie_candidate_host PRIVATE /EHsc /O2 /W4 /utf-8)
-shanjie_keep_assertions(shanjie_candidate_host)
 target_link_libraries(shanjie_candidate_host PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
   ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp psapi advapi32 bcrypt ntdll ws2_32 userenv)
@@ -82,7 +79,6 @@ add_executable(shanjie_mode_smoke EXCLUDE_FROM_ALL
 target_include_directories(shanjie_mode_smoke PRIVATE "${SHANJIE_SUPPORT}")
 target_compile_definitions(shanjie_mode_smoke PRIVATE UNICODE _UNICODE NOMINMAX)
 target_compile_options(shanjie_mode_smoke PRIVATE /EHsc /O2 /W4 /utf-8)
-shanjie_keep_assertions(shanjie_mode_smoke)
 target_link_libraries(shanjie_mode_smoke PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
   ole32 oleaut32 uuid user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv)
@@ -97,7 +93,6 @@ add_executable(shanjie_windows_interaction EXCLUDE_FROM_ALL
 target_include_directories(shanjie_windows_interaction PRIVATE "${SHANJIE_SUPPORT}" "${SHANJIE_ROOT}/upstream/shanjie/core/include")
 target_compile_definitions(shanjie_windows_interaction PRIVATE UNICODE _UNICODE NOMINMAX)
 target_compile_options(shanjie_windows_interaction PRIVATE /EHsc /O2 /W4 /utf-8)
-shanjie_keep_assertions(shanjie_windows_interaction)
 target_link_libraries(shanjie_windows_interaction PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
   ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv)

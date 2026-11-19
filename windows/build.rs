@@ -24,4 +24,16 @@ fn main() {
         println!("cargo:rerun-if-changed={resource}");
         println!("cargo:rustc-link-arg-cdylib={resource}");
     }
+    // COM looks these up by name in the DLL. PRIVATE keeps them out of the
+    // import library and preserves the undecorated DLL names on x86 and x64.
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        for symbol in [
+            "DllCanUnloadNow",
+            "DllGetClassObject",
+            "DllRegisterServer",
+            "DllUnregisterServer",
+        ] {
+            println!("cargo:rustc-link-arg-cdylib=/EXPORT:{symbol},PRIVATE");
+        }
+    }
 }
