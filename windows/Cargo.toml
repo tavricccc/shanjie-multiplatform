@@ -40,5 +40,5 @@ windows = { version = "0.62.2", features = [
 [workspace]
 
 [profile.release]
-lto = "thin"
-codegen-units = 8
+lto = "fat"
+codegen-units = 1

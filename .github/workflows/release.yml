@@ -63,7 +63,7 @@ jobs:
       - name: Identify Windows Cargo cache keys
         id: cargo-cache-key
         env:
-          SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'windows/*.rc', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'assets/mode/**', 'ui/Assets/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
+          SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/windows-release-x64.toml', 'windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'windows/*.rc', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'assets/mode/**', 'ui/Assets/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
         run: pwsh -NoProfile -File scripts/cargo-cache-key.ps1 -Profile release
       - name: Cache Cargo registry downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
@@ -91,9 +91,9 @@ jobs:
           path: |
             shared/target
             windows/target/x86_64-pc-windows-msvc/release
-          key: ${{ steps.cargo-cache-key.outputs.prefix }}-x86_64-pc-windows-msvc-${{ steps.cargo-cache-key.outputs.inputs }}
+          key: ${{ steps.cargo-cache-key.outputs.x64_prefix }}-x86_64-pc-windows-msvc-${{ steps.cargo-cache-key.outputs.inputs }}
           # Cargo revalidates restored artifacts within the same target, toolchain and profile.
-          restore-keys: ${{ steps.cargo-cache-key.outputs.prefix }}-x86_64-pc-windows-msvc-
+          restore-keys: ${{ steps.cargo-cache-key.outputs.x64_prefix }}-x86_64-pc-windows-msvc-
       - name: Cache Windows x86 Cargo compilation outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:

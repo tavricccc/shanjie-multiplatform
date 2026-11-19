@@ -333,4 +333,12 @@ function Get-ExclusiveTestTimings([object[]]$Events) {
     }
 }
 
-Export-ModuleMember -Function Get-CoreTestRunKey,Copy-TestTools,Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings
+function Get-WindowsCargoReleaseArgs([string]$Architecture) {
+    '--release'
+    if ($Architecture -eq 'x64') {
+        '--config'
+        Join-Path (Split-Path $PSScriptRoot -Parent) '.cargo/windows-release-x64.toml'
+    }
+}
+
+Export-ModuleMember -Function Get-CoreTestRunKey,Copy-TestTools,Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings,Get-WindowsCargoReleaseArgs

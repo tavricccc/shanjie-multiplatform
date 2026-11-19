@@ -58,10 +58,11 @@ try {
             'windows-unit' {
                 $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
                 $profile = if ($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') { 'release' } else { 'test' }
+                $cargoProfile = @(if ($profile -eq 'release') { Get-WindowsCargoReleaseArgs $Architecture })
                 Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target;profile=$profile;test_threads=1} -Action {
                     $compile = @{target=$target;profile=$profile;compiled_units=0;fresh_units=0}
                     $executables = @(Invoke-Timed -Name "Compile Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows.compile' -Details $compile -Action {
-                        cargo test --profile $profile --manifest-path windows/Cargo.toml --lib --target $target --no-run --message-format=json-render-diagnostics |
+                        cargo test @cargoProfile --manifest-path windows/Cargo.toml --lib --target $target --no-run --message-format=json-render-diagnostics |
                             ForEach-Object {
                                 $message = ConvertFrom-Json -InputObject $_
                                 if ($message.reason -eq 'compiler-artifact') {

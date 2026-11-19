@@ -41,7 +41,12 @@ foreach ($part in $parts.GetEnumerator()) {
 }
 "toolchain=$($digests.toolchain)" >> $env:GITHUB_OUTPUT
 "native=$($digests.native)" >> $env:GITHUB_OUTPUT
-"prefix=cargo-$Profile-v2-$env:RUNNER_OS-$($digests.toolchain)-$($digests.native)-$($digests.config)" >> $env:GITHUB_OUTPUT
+$prefix = "cargo-$Profile-v2-$env:RUNNER_OS-$($digests.toolchain)-$($digests.native)-$($digests.config)"
+"prefix=$prefix" >> $env:GITHUB_OUTPUT
+if ($Profile -eq 'release') {
+    $x64Config = (Get-FileHash -LiteralPath "$root/.cargo/windows-release-x64.toml").Hash.ToLowerInvariant()
+    "x64_prefix=$prefix-$x64Config" >> $env:GITHUB_OUTPUT
+}
 "inputs=$env:SHANJIE_CARGO_CACHE_INPUTS" >> $env:GITHUB_OUTPUT
 Write-Host $rust
 Write-Host $cargo

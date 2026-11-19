@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 $target=if($Architecture -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
-$cargoProfile=@(if($Release){'--release'})
+$cargoProfile=@(if($Release){Get-WindowsCargoReleaseArgs $Architecture})
 $cacheCase='mixed_regression::sessions_on_one_model_share_the_digit_tables'
 # This assertion inspects process-wide cache identity. Other tests use enough
 # lexicons to evict its entries while it opens the two sessions.
