@@ -164,7 +164,9 @@ int wmain(int argc,wchar_t** argv) {
  std::setvbuf(stdout,nullptr,_IONBF,0);
  std::setvbuf(stderr,nullptr,_IONBF,0);
  const auto harnessStart=std::chrono::steady_clock::now();
- require(argc==5,1); std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
+ require(argc==5||(argc>5&&argc%2==1&&std::wstring_view(argv[2])==L"input-digits"),1);
+ std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
+ const bool digitBatch=mode==L"input-digits";
  auto desktopName=L"Shanjie.Submission."+std::to_wstring(GetCurrentProcessId());
  auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
  require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
@@ -186,10 +188,17 @@ int wmain(int argc,wchar_t** argv) {
  ComPtr<ITfThreadMgr> thread;require(SUCCEEDED(CoCreateInstance(CLSID_TF_ThreadMgr,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&thread))),8);
  ComPtr<ITfThreadMgrEx> extended;require(SUCCEEDED(thread.As(&extended)),9);
  TfClientId client;require(SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),9);
- ComPtr<ITfDocumentMgr> document;require(SUCCEEDED(thread->CreateDocumentMgr(&document)),10);
- ComPtr<Store> first;first.Attach(new Store);ComPtr<ITfContext> firstContext;TfEditCookie cookie;
- require(SUCCEEDED(document->CreateContext(client,0,static_cast<ITextStoreACP*>(first.Get()),&firstContext,&cookie)),11);
- require(SUCCEEDED(document->Push(firstContext.Get()))&&SUCCEEDED(thread->SetFocus(document.Get())),12);
+ ComPtr<ITfDocumentMgr> document;
+ ComPtr<Store> first;
+ ComPtr<ITfContext> firstContext;
+ auto createDocument=[&]{
+   require(SUCCEEDED(thread->CreateDocumentMgr(document.ReleaseAndGetAddressOf())),10);
+   first.Attach(new Store);
+   TfEditCookie cookie;
+   require(SUCCEEDED(document->CreateContext(client,0,static_cast<ITextStoreACP*>(first.Get()),firstContext.ReleaseAndGetAddressOf(),&cookie)),11);
+   require(SUCCEEDED(document->Push(firstContext.Get()))&&SUCCEEDED(thread->SetFocus(document.Get())),12);
+ };
+ createDocument();
  ComPtr<ITfClientId> identifiers;TfClientId serviceClient=TF_CLIENTID_NULL;
  require(SUCCEEDED(thread.As(&identifiers))&&SUCCEEDED(identifiers->GetClientId(ServiceId,&serviceClient)),13);
  ComPtr<ThreadProxy> proxy;proxy.Attach(new ThreadProxy(thread.Get(),true));
@@ -241,7 +250,7 @@ int wmain(int argc,wchar_t** argv) {
    return eaten!=FALSE;
  };
  bool deactivated=false;
- if(mode!=L"async-keys" && mode!=L"segment" && !mode.starts_with(L"rebuild-")) for(wchar_t vk:sequence)press(vk);
+ if(mode!=L"async-keys" && mode!=L"segment" && !mode.starts_with(L"rebuild-") && !mode.starts_with(L"input-")) for(wchar_t vk:sequence)press(vk);
  if(mode.starts_with(L"rebuild-")) {
    const std::wstring pack=sequence==L"SU3" ? L"QI SU6" : L"PO NE2";
    const auto type=[&](const std::wstring& characters){for(wchar_t key:characters)press(key);};
@@ -550,12 +559,35 @@ int wmain(int argc,wchar_t** argv) {
      require(first->text==stable+expected && !first->composing,290);
    }
  } else if(mode.starts_with(L"input-")) {
-   if(mode==L"input-space-commit") {
-     require(store->text==expected && store->endedText==expected && !store->composing,70);
-   } else {
-     std::printf("INPUT composing=%d text=%s committed=%s\n",store->composing,utf8(store->text).c_str(),utf8(store->endedText).c_str());
-     require(store->text==expected && store->endedText.empty() && store->composing,71);
-     press(VK_RETURN);require(store->text==expected&&store->endedText==expected&&!store->composing,72);
+   const auto initialLoadCounts=digitBatch ? resident() : 0;
+   for(int argument=3;argument<argc;argument+=2){
+     const int index=(argument-3)/2;
+     const auto caseStart=std::chrono::steady_clock::now();
+     if(digitBatch)std::printf("STAGE name=input-digits index=%d\n",index);
+     if(index){
+       // Retire the preceding context and candidate UI while keeping the loaded engine.
+       require(SUCCEEDED(keys->OnSetFocus(FALSE))&&SUCCEEDED(thread->SetFocus(nullptr))&&SUCCEEDED(document->Pop(TF_POPF_ALL)),270);
+       ComPtr<ITfUIElementMgr> manager;ComPtr<IEnumTfUIElements> elements;
+       ComPtr<ITfUIElement> element;ULONG count=0;
+       require(SUCCEEDED(thread.As(&manager))&&SUCCEEDED(manager->EnumUIElements(&elements))&&elements->Next(1,&element,&count)==S_FALSE&&count==0,271);
+       createDocument();
+       context=firstContext;store=first;
+       require(store->text.empty()&&store->endedText.empty()&&!store->composing&&store->ends==0,272);
+     }
+     const std::wstring_view want=argv[argument+1];
+     for(wchar_t vk:std::wstring_view(argv[argument]))press(vk);
+     if(mode==L"input-space-commit") {
+       require(store->text==want && store->endedText==want && !store->composing,70);
+     } else {
+       std::printf("INPUT composing=%d text=%s committed=%s\n",store->composing,utf8(store->text).c_str(),utf8(store->endedText).c_str());
+       require(store->text==want && store->endedText.empty() && store->composing,71);
+       press(VK_RETURN);require(store->text==want&&store->endedText==want&&!store->composing,72);
+     }
+     if(digitBatch){
+       require(resident()==initialLoadCounts,273);
+       const auto elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-caseStart).count();
+       std::printf("INPUT PASS index=%d elapsed_ms=%.3f\n",index,elapsed);
+     }
    }
  } else if(mode.starts_with(L"retire-")) {
    require(store->text==expected&&store->composing,200);

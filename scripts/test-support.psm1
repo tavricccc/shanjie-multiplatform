@@ -161,12 +161,14 @@ function Complete-TestStage {
         [Parameter(Mandatory)]$Stage,
         [ValidateSet('passed','failed','skipped')][string]$Status = 'passed',
         [hashtable]$Details = @{},
-        [string]$ErrorMessage
+        [string]$ErrorMessage,
+        [Nullable[double]]$DurationMilliseconds
     )
 
     $Stage.Watch.Stop()
     $stageDetails = $Stage.Details.Clone()
     foreach($key in $Details.Keys){$stageDetails[$key]=$Details[$key]}
+    $elapsed = $DurationMilliseconds ?? $Stage.Watch.Elapsed.TotalMilliseconds
     $event = [ordered]@{
         schema = 1
         id = $Stage.Id
@@ -176,7 +178,7 @@ function Complete-TestStage {
         category = $Stage.Category
         status = $Status
         started_utc = $Stage.Started.ToString('O')
-        duration_ms = [Math]::Round($Stage.Watch.Elapsed.TotalMilliseconds, 3)
+        duration_ms = [Math]::Round($elapsed, 3)
         details = $stageDetails
         test_name = $env:SHANJIE_CTEST_TEST_NAME
         attempt = if($env:SHANJIE_CTEST_ATTEMPT){[int]$env:SHANJIE_CTEST_ATTEMPT}else{1}
@@ -188,7 +190,7 @@ function Complete-TestStage {
         $path = Join-Path $directory ("{0}-{1}-{2}.json" -f (Get-Date -Format 'yyyyMMddTHHmmssfffZ'),$PID,[guid]::NewGuid().ToString('N'))
         [IO.File]::WriteAllText($path, ($event | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
     }
-    Write-Host ('[TIME] {0}/{1} {2:F3}s ({3})' -f $Stage.Category,$Stage.Name,$Stage.Watch.Elapsed.TotalSeconds,$Status)
+    Write-Host ('[TIME] {0}/{1} {2:F3}s ({3})' -f $Stage.Category,$Stage.Name,($elapsed/1000),$Status)
 }
 
 function Wait-TestCoreReady {
