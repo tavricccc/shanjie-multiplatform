@@ -109,7 +109,7 @@ pwsh -File scripts/test.ps1 -Level AFFECTED -RetryFailures
 
 `scripts/verify.ps1` 與 `scripts/test-core.ps1` 保留作為舊入口、核心除錯與 benchmark 對照；日常與 PR 驗收使用上列分級入口。上游核心測試原有的記憶體使用限制排程仍保留，混打測試的快取身分斷言使用獨立 Cargo 程序，避免其他案例淘汰它正在比對的快取；`engine_lm` 與 `engine_replay` 延遲斷言仍各自序列執行。CTest 對模型使用、核心 fixture 與 UI 工作加鎖；私人桌面案例各用獨立 profile，不註冊輸入法、不切換桌面、不讀寫真實使用者資料。
 
-保留上游 #100 的核心通過結果快取與只同步變更內容：AFFECTED／直接呼叫 `test-core.ps1` 可重用完全一致的 executable、參數、資料、模型及日誌；報告須明列重用、沒有重跑斷言。FULL／RELEASE 及 benchmark 必須實際執行核心斷言，不能將結果快取命中當成同覆蓋率加速。直接使用 `test-core.ps1 -Rerun` 可強制執行。保留 #96 的工具私人副本與 WinUI 啟動前隔離；截圖只在 `verify-ui.ps1 -Visual` 要求時產生。
+保留上游 #100 的核心通過結果快取與只同步變更內容。AFFECTED 與直接呼叫 `test-core.ps1` 可重用輸入與日誌完全一致的通過結果。Beta 的 `RELEASE -CiSafe` 每次執行一般核心回歸，長句、引擎共享、延遲回放五個測試執行檔可在來源、工具鏈、執行檔、參數、資料、模型及日誌完全吻合時重用通過收據。報告須列出重用項目。FULL、正式版 RELEASE、本機完整 RELEASE 和 benchmark 必須實際執行核心斷言。`test-core.ps1 -Rerun` 可強制實跑。保留 #96 的工具私人副本與 WinUI 啟動前隔離。截圖只在 `verify-ui.ps1 -Visual` 要求時產生。
 
 ### 建置與 Rust
 

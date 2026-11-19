@@ -157,7 +157,7 @@ FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查�
 
 - C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本的編譯 fallback 保留上游 #100 的 `Invoke-HarnessBuild` 快取，不再反覆編譯相同內容。
 - Cargo target 保留既有增量 fingerprint；產品 build 明確指定工作樹的 `windows/target`，外部 `CARGO_TARGET_DIR` 不會讓複製 DLL／工具／staticlib 的路徑失配。上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取，失效時也只同步位元組有變的檔案，不破壞未修改來源的時間戳。
-- 保留 #100 的核心通過結果快取：直接呼叫 `test-core.ps1` 或 AFFECTED 可重用相同 executable、參數、執行緒／記憶體限制、資料、模型及輸出日誌的成功結果，報告明示 `core_result_reused`。FULL／RELEASE 和直接 CTest 強制 `-Rerun`，每次實際執行核心斷言；失敗的明確重跑會先讓舊成功收據失效。`test-core.ps1 -Rerun` 可手動強制執行。
+- AFFECTED 和直接呼叫 `test-core.ps1` 可沿用 #100 的整套核心通過收據，報告會列 `core_result_reused`。Beta 的 `RELEASE -CiSafe` 每次執行一般核心回歸。`engine_cap`、`engine_share`、`engine_lm`、`engine_replay` 和 `engine_newword` 在來源、編譯器、runner 版本、執行檔、參數、模型、測試資料及日誌雜湊全數吻合時重用通過收據，報告會列 `core_reused_binaries`。FULL、正式版 RELEASE、本機完整 RELEASE、直接 CTest 和 benchmark 實跑所有核心斷言。`test-core.ps1 -Rerun` 可手動強制實跑。
 - Windows Rust 單元測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink；測試範圍與斷言均保留。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
