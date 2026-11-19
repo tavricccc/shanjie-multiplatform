@@ -53,20 +53,8 @@ pub fn finish(status: &str, message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::broker::CreateNamedPipeW;
     use std::{io::Read, os::windows::io::FromRawHandle};
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn CreateNamedPipeW(
-            name: *const u16,
-            open: u32,
-            mode: u32,
-            instances: u32,
-            out: u32,
-            input: u32,
-            timeout: u32,
-            security: *const std::ffi::c_void,
-        ) -> *mut std::ffi::c_void;
-    }
     #[test]
     fn only_setup_pipes_with_hex_ids_are_accepted() {
         assert!(valid(r"\\.\pipe\ShanjieSetup-0123abcdEF"));

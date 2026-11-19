@@ -15,7 +15,7 @@ type Raw = *mut c_void;
 mod identity;
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    fn CreateNamedPipeW(
+    pub(crate) fn CreateNamedPipeW(
         name: *const u16,
         access: u32,
         mode: u32,
@@ -59,7 +59,7 @@ unsafe extern "system" {
     ) -> i32;
 }
 #[repr(C)]
-struct Security {
+pub(crate) struct Security {
     length: u32,
     descriptor: Raw,
     inherit: i32,
