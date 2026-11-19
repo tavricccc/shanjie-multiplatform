@@ -726,6 +726,7 @@ impl ITfKeyEventSink_Impl for Service_Impl {
         if system_shortcut(key) {
             return Ok(false.into());
         }
+        self.data.poll_rebuild_before_key();
         let result=self.data.wants(context.ok()?, key, flags);
         self.data.diagnostic("test_down.exit",context.as_ref(),Some(key),Some(match &result{Ok(v)=>*v as i32,Err(e)=>e.code().0}));
         Ok(result?.into())
@@ -742,6 +743,7 @@ impl ITfKeyEventSink_Impl for Service_Impl {
     fn OnKeyDown(&self, context: Ref<ITfContext>, key: WPARAM, flags: LPARAM) -> Result<BOOL> {
         self.data.diagnostic("down.enter",context.as_ref(),Some(key),None);
         self.data.key_handoff(context.as_ref())?;
+        self.data.poll_rebuild_before_key();
         self.data.observe_modifier(key, true);
         self.data.ctrl_event(context.as_ref(),key,flags,true)?;
         if self.data.add_word_shortcut(key) {

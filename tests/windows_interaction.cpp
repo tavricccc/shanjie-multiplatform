@@ -161,6 +161,8 @@ int wmain(int argc,wchar_t** argv) {
     std::ofstream(wrongModel / L"classes.sjc") << "wrong class pairing";
     assert(!wrong.open(wrongData,0,0,true));
     std::filesystem::copy_file(modelRoot / L"builtin/classes.sjc",wrongModel / L"classes.sjc",std::filesystem::copy_options::overwrite_existing);
+    // The release snapshot is read-only and copy_file keeps that attribute; the next rewrite must land.
+    std::filesystem::permissions(wrongModel / L"classes.sjc",std::filesystem::perms::owner_write,std::filesystem::perm_options::add);
     assert(wrong.open(wrongData,0,0,true));
     std::ofstream(wrongModel / L"classes.sjc") << "changed after cache warmup";
     shanjie::Engine invalidCached; assert(!invalidCached.open(wrongData,0,0,true));

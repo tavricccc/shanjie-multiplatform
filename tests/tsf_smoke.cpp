@@ -258,8 +258,15 @@ int wmain(int argc, wchar_t** argv) {
             require(store->text==prefix+L"你",1226); press(VK_RETURN,1227);
             require(WritePrivateProfileStringW(L"input",L"keyboard",L"2",profile.c_str()),1229);
             require(WritePrivateProfileStringW(L"input",L"zhuyin_only",L"1",profile.c_str()),1230);
+            auto queued=residentStatus();
             localNotify(L"Shanjie.ProfileChanged.v2");
-            waitPreload();
+            // Wait for the worker without pumping messages, so the poll timer cannot adopt
+            // the build: the next key itself must switch to the new layout.
+            for (auto start=Clock::now();;Sleep(5)) {
+                auto now=residentStatus();
+                if ((now & 0xffffffffULL) != (queued & 0xffffffffULL) && (now >> 32) == (now & 0xffffffffULL)) break;
+                require(Clock::now()-start < std::chrono::seconds(15),1252);
+            }
             prefix+=L"你";
             for (wchar_t key : std::wstring(L"NE3HZ3")) press(key,1231);
             require(store->text==prefix+L"ㄋㄧˇㄏㄠˇ",1233);

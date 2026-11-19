@@ -238,7 +238,7 @@ function Get-HarnessCasePlan([object[]]$Rows) {
                     selected=$row.selected; reason=$row.reason; status='not-run'; attempts=@(); flaky=$false
                 }
             }
-        } elseif($row.name -match '^release\.ui\.startup\.(clean|reopen|different-directory)$') {
+        } elseif($row.name -match '^release\.ui\.startup\.(clean|reopen|different-directory|glass-fallback)$') {
             $phase=$Matches[1]
             [pscustomobject]@{
                 name="$($row.name)/$phase";parent=$row.name;preset=$row.preset;category='ui.startup'

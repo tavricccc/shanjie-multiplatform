@@ -43,7 +43,7 @@ if ($CandidateHostOnly) { return }
 # A saved downloaded model survives closing and reopening the settings: separate processes, isolated profile, a package the scan really validates.
 # Set isolation before XAML starts: the OS may load an installed IME before
 # OnLaunched sets its profile. Keep that IME's core in this process as well.
-function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$RuntimeRoot/ui",[string]$ModelId) {
+function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$RuntimeRoot/ui",[string]$ModelId,[switch]$GlassFailure) {
     $start=[Diagnostics.ProcessStartInfo]::new("$RuntimeRoot/ui/Shanjie.UI.exe")
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
     $profile=[IO.Path]::Combine($Arguments[1],'profile')
@@ -55,6 +55,8 @@ function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$Runti
     $start.WorkingDirectory=$WorkingDirectory
     $start.Environment.Remove('SHANJIE_MODEL_STARTUP_ID')|Out-Null
     if($ModelId){$start.Environment['SHANJIE_MODEL_STARTUP_ID']=$ModelId}
+    $start.Environment.Remove('SHANJIE_TEST_GLASS_FAIL')|Out-Null
+    if($GlassFailure){$start.Environment['SHANJIE_TEST_GLASS_FAIL']='1'}
     foreach($argument in $Arguments){$start.ArgumentList.Add($argument)}
     $process=[Diagnostics.Process]::Start($start)
     try {
@@ -63,15 +65,16 @@ function Invoke-UiFixture([string[]]$Arguments,[string]$WorkingDirectory="$Runti
     } finally {$process.Dispose()}
 }
 if($Scenario -in 'all','startup'){
-    $startupPhases=if($Phases){$Phases}else{@('clean','reopen','different-directory')}
+    $startupPhases=if($Phases){$Phases}else{@('clean','reopen','different-directory','glass-fallback')}
     foreach($phase in $startupPhases){
-        if($phase -notin 'clean','reopen','different-directory'){throw "Unknown startup phase: $phase"}
+        if($phase -notin 'clean','reopen','different-directory','glass-fallback'){throw "Unknown startup phase: $phase"}
         $startupOutput=Join-Path $uiRoot "startup-$phase"
         $null=New-Item -ItemType Directory -Path "$startupOutput/profile/Shanjie" -Force
         if($phase -ne 'clean'){Copy-Item "$root/profiles/windows.ini" "$startupOutput/profile/Shanjie/profile.ini"}
         $working=if($phase -eq 'different-directory'){$uiRoot}else{"$RuntimeRoot/ui"}
         Invoke-Timed -Name "WinUI startup ($phase)" -Category 'ui.startup' -Details @{architecture='x64';phase=$phase} -Action {
-            Invoke-UiFixture -Arguments @('--verify-startup',$startupOutput) -WorkingDirectory $working
+            # glass-fallback: the composition glass is unavailable (Windows 10 builds without it); the window still opens.
+            Invoke-UiFixture -Arguments @('--verify-startup',$startupOutput) -WorkingDirectory $working -GlassFailure:($phase -eq 'glass-fallback')
             if((Get-Content "$startupOutput/result.txt" -Raw) -ne 'PASS'){throw "Settings startup $phase failed."}
         }
     }
