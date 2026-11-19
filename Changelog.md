@@ -2,6 +2,14 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.0（Windows）
+
+詳見 [0.16.0 版本說明](docs/releases/RELEASE-NOTES-0.16.0.md)。
+
+- 整合 0.16.0-beta.1 至 beta.4：善解 v0.8.0 核心與詞庫、快速設定、外觀與動畫選項、純注音輸出、背景切換詞包。
+- 英文覆寫改為預設關閉，中英混打改為單選。
+- 修正部分 Windows 10 無法開啟設定與安裝視窗，以及切換設定後第一個鍵沿用舊設定。
+
 ## 0.16.0-beta.3（Windows pre-release）
 
 詳見 [0.16.0-beta.3 版本說明](docs/releases/RELEASE-NOTES-0.16.0-beta.3.md)。
