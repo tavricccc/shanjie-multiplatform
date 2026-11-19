@@ -190,6 +190,6 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 96 -and $inventory.tests.Count -eq 109 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    Check ($full.Selected.Count -eq 96 -and $inventory.tests.Count -eq 110 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
     Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 96, x64 RELEASE 109, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}
