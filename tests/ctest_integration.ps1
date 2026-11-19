@@ -164,7 +164,7 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     }
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
-        @('ui','ui/View.xaml.cs',14),@('add-word','windows/src/word_helper.rs',22),
+        @('ui','ui/View.xaml.cs',15),@('add-word','windows/src/word_helper.rs',22),
         @('candidate','windows/src/candidate.rs',30),@('english','tests/english_keys.cpp',27),
         @('submission','tests/submission.cpp',32),@('platform','platform/input_windows.rs',54),
         @('shared','shared/src/lib.rs',96),@('shared-input','shared/src/input.rs',98),
