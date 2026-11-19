@@ -70,8 +70,8 @@ internal sealed partial class GlassWindow : IDisposable
         AppWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(Handle));
 
         Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().EnsureSystemDispatcherQueue();
+        // Without the composition glass (some Windows 10 builds), the window opens on a solid surface.
         glass = sj_glass_create(0);
-        if (glass == 0) throw new InvalidOperationException(Marshal.PtrToStringUTF8(Interop.Native.sj_error()));
 
         island.Initialize(AppWindow.Id);
         island.Content = content;
@@ -86,7 +86,20 @@ internal sealed partial class GlassWindow : IDisposable
         open.Add(this);
     }
 
-    void ApplyTheme() { if (!disposed) sj_glass_appearance(glass, content.ActualTheme == ElementTheme.Dark, sj_glass_solid(), tint, pureBlack); }
+    /// <summary>Whether the window draws on a solid surface because the glass could not be created.</summary>
+    internal bool SolidFallback => glass == 0;
+
+    void ApplyTheme()
+    {
+        if (disposed) return;
+        bool dark = content.ActualTheme == ElementTheme.Dark;
+        if (glass != 0) { sj_glass_appearance(glass, dark, sj_glass_solid(), tint, pureBlack); return; }
+        byte c = dark ? (pureBlack ? (byte)0 : (byte)32) : (byte)243;
+        var surface = new SolidColorBrush(Windows.UI.Color.FromArgb(255, c, c, c));
+        if (content is Microsoft.UI.Xaml.Controls.Panel panel) panel.Background = surface;
+        else if (content is Microsoft.UI.Xaml.Controls.UserControl { Content: Microsoft.UI.Xaml.Controls.Panel inner }) inner.Background = surface;
+        else if (content is Microsoft.UI.Xaml.Controls.Control control) control.Background = surface;
+    }
 
     void Center(double width, double height)
     {

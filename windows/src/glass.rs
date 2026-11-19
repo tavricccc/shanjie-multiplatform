@@ -176,7 +176,8 @@ impl Glass {
         unsafe {
             SetLayeredWindowAttributes(window, Default::default(), 255, LWA_ALPHA)?;
             let on: i32 = 1;
-            DwmSetWindowAttribute(window, DWMWA_USE_HOSTBACKDROPBRUSH, &on as *const _ as _, 4)?;
+            // Windows 11 only; Windows 10 answers E_INVALIDARG and the backdrop brush then draws nothing.
+            let _ = DwmSetWindowAttribute(window, DWMWA_USE_HOSTBACKDROPBRUSH, &on as *const _ as _, 4);
             let corner = DWMWCP_DONOTROUND;
             let _ = DwmSetWindowAttribute(window, DWMWA_WINDOW_CORNER_PREFERENCE, &corner as *const _ as _, 4);
         }
@@ -483,6 +484,11 @@ impl<T> Tap for T {}
 
 #[no_mangle]
 pub extern "C" fn sj_glass_create(owner: isize) -> *mut Glass {
+    // Verification only: exercise the solid fallback of systems without the glass APIs.
+    if std::env::var_os("SHANJIE_TEST_PROFILE").is_some() && std::env::var("SHANJIE_TEST_GLASS_FAIL").as_deref() == Ok("1") {
+        crate::bridge::failure("glass unavailable (test)");
+        return std::ptr::null_mut();
+    }
     let owner = (owner != 0).then_some(HWND(owner as _));
     match Glass::new(owner) {
         Ok(glass) => Box::into_raw(Box::new(glass)),
