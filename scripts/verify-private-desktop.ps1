@@ -35,6 +35,8 @@ try {
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}
   $start.ArgumentList.Add("$Payload/$arch/Shanjie.dll");$start.ArgumentList.Add($scenario)
   $server=$null;$child=$null
+   # Only scenarios that open the word popup use its broker-backed inspection.
+   if($scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
    $serverStart=[Diagnostics.ProcessStartInfo]::new("$Payload/tools/shanjie-core.exe")
    $serverStart.UseShellExecute=$false;$serverStart.CreateNoWindow=$true
    foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT','SHANJIE_HEADLESS')){$serverStart.Environment[$key]=$start.Environment[$key]}
@@ -43,6 +45,7 @@ try {
    foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT')){$probeEnvironment[$key]=[Environment]::GetEnvironmentVariable($key);[Environment]::SetEnvironmentVariable($key,$start.Environment[$key])}
    try{Wait-TestCoreReady -CorePath "$Payload/tools/shanjie-core.exe" -OutputDirectory $fixture | Out-Null}
    finally{foreach($key in $probeEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$probeEnvironment[$key])}}
+   }
   $child=[Diagnostics.Process]::Start($start)
   $stdout=$child.StandardOutput.ReadToEndAsync();$stderr=$child.StandardError.ReadToEndAsync()
   if(!$child.WaitForExit(25000)){
@@ -56,7 +59,7 @@ try {
   Write-Output $log.Trim()
   if($server){if(!$server.HasExited){$server.Kill();if(!$server.WaitForExit(5000)){throw 'Owned fixture core did not exit.'}};$server.Dispose();[void]$ownedServers.Remove($server)}
   if($code){throw "Compatibility fixture failed: $scenario ($code)"}
-  Complete-TestStage -Stage $caseStage -Details @{scenario=$scenario;architecture=$arch;profile=$fixture;explicit_core=$true}
+   Complete-TestStage -Stage $caseStage -Details @{scenario=$scenario;architecture=$arch;profile=$fixture;explicit_core=[bool]$server}
   $caseCompleted=$true
   } catch {
    if(!$caseCompleted){Complete-TestStage -Stage $caseStage -Status 'failed' -Details @{scenario=$scenario} -ErrorMessage $_.Exception.Message}
