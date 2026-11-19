@@ -161,6 +161,8 @@ void keyboardState(bool caps,bool shift) {
  require(SetKeyboardState(state),102);require(((GetKeyState(VK_CAPITAL)&1)!=0)==caps,103);
 }
 int wmain(int argc,wchar_t** argv) {
+ // Unbuffered: a harness killed on timeout still leaves the stage it reached.
+ setvbuf(stdout,nullptr,_IONBF,0);
  require(argc==5,1); std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
  auto desktopName=L"Shanjie.Submission."+std::to_wstring(GetCurrentProcessId());
  auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
@@ -239,11 +241,15 @@ int wmain(int argc,wchar_t** argv) {
      const auto setting=[&](std::string_view name, std::string value){auto at=content.find(name);require(at!=std::string::npos,217);at+=name.size();content.replace(at,content.find_first_of("\r\n",at)-at,value);};
      setting("acg_pack=",enable?"1":"0");setting("rerank=",rerank?"1":"0");setting("dictionary=",dictionary);
      std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<content;out.close();localNotify(L"Shanjie.ProfileChanged.v2");
+     std::printf("STAGE profile pack=%d rerank=%d dictionary=%s status=%llx\n",enable,rerank,dictionary,(unsigned long long)resident());
    };
    auto settle=[&](unsigned builds){
-     auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(25);
+     auto begun=std::chrono::steady_clock::now();
+     std::printf("STAGE settle want=%u status=%llx\n",builds,(unsigned long long)resident());
+     auto deadline=begun+std::chrono::seconds(25);
      do { pump(); require(std::chrono::steady_clock::now()<deadline,218); } while((resident()>>32)<builds);
      pump();
+     std::printf("STAGE settled status=%llx ms=%lld\n",(unsigned long long)resident(),(long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-begun).count());
    };
    auto candidatesContain=[&](const std::wstring& wanted){
      ComPtr<ITfUIElementMgr> manager;require(SUCCEEDED(thread.As(&manager)),219);
