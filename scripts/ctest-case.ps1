@@ -57,14 +57,15 @@ try {
             }
             'windows-unit' {
                 $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
+                $cargoProfile = @(if ($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') { '--release' })
                 # Installer journal and progress tests share a process-wide sink.
                 Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target;test_threads=1} -Action {
-                    cargo test --manifest-path windows/Cargo.toml --lib --target $target -- --test-threads=1
+                    cargo test @cargoProfile --manifest-path windows/Cargo.toml --lib --target $target -- --test-threads=1
                     if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
                 }
             }
             'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
-            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" }
+            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }

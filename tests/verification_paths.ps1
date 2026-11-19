@@ -51,6 +51,16 @@ try {
         Assert-PathCheck ((Get-Content -LiteralPath "$output/Shanjie.dll" -Raw) -ceq "current:$expected`:shanjie_windows.dll") "Copy current $Architecture DLL with a redirected environment and stale products"
         foreach($name in $products){Assert-PathCheck ((Get-Content -LiteralPath (Join-Path $fixed $name) -Raw) -ceq "current:$expected`:$name") "Current $Architecture product at the fixed path: $name"}
         Assert-PathCheck ($buildArguments[[Array]::IndexOf($buildArguments,'--target-dir')+1] -ceq "$root/windows/target") 'Keep the existing incremental target root'
+        $PackageTargetsOnly=$true
+        & $buildAction
+        $bins=@(for($index=0;$index -lt $buildArguments.Count;$index++){
+            if($buildArguments[$index] -eq '--bin'){$buildArguments[$index+1]}
+        })
+        $expectedBins=@(if($Architecture -eq 'x64'){
+            $products | Where-Object { $_.EndsWith('.exe') } | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) }
+        })
+        Assert-PathCheck ('--lib' -in $buildArguments -and ($bins -join ';') -ceq ($expectedBins -join ';')) "RELEASE builds only packaged $Architecture targets"
+        $PackageTargetsOnly=$false
     }
     Assert-PathCheck (!(Test-Path -LiteralPath $env:CARGO_TARGET_DIR)) 'The ambient target directory was not used'
     Assert-PathCheck ((Get-Content -LiteralPath "$root/dist/x64/Shanjie.dll" -Raw) -ceq 'current:x86_64-pc-windows-msvc:shanjie_windows.dll') 'The x86 build did not overwrite the x64 DLL'

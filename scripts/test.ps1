@@ -240,7 +240,7 @@ try {
     if($Level -eq 'RELEASE'){
         # Build both architectures before freezing any input or linking harnesses.
         Invoke-Timed -Name 'Build both release architectures' -Category 'build.product' -Details @{architecture='all'} -Action {
-            & "$PSScriptRoot/build.ps1" -Architecture all
+            & "$PSScriptRoot/build.ps1" -Architecture all -PackageTargetsOnly
             & "$PSScriptRoot/prepare-licenses.ps1"
         }
         $snapshot=Invoke-Timed -Name 'Seal dual-architecture release snapshot' -Category 'release.snapshot' -Action {New-ReleaseSnapshot $root $runId $sourceStart}
