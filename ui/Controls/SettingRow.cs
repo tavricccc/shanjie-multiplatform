@@ -71,7 +71,7 @@ public sealed partial class SettingCard : StackPanel
         Loaded += (_, _) =>
         {
             // Directly under a note (not a group title) a card needs its own gap.
-            if (Parent is Panel panel && panel.Children.IndexOf(this) is > 0 and var i && panel.Children[i - 1] is TextBlock note && note.Style == Application.Current.Resources["SjNote"]) Margin = new Thickness(0, 12, 0, 0);
+            if (Parent is Panel panel && panel.Children.IndexOf(this) is > 0 and var i && panel.Children[i - 1] is TextBlock note && ReferenceEquals(note.Style, Application.Current.Resources["SjNote"])) Margin = new Thickness(0, 12, 0, 0);
             bool first = true; foreach (var child in Children) if (child is SettingRow row && child.Visibility == Visibility.Visible) { row.Divided = !first; first = false; }
         };
     }

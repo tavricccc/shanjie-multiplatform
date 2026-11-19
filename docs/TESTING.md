@@ -98,7 +98,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-upstream-data.ps1` | `fast.upstream-data`, `full.dist-data` | 上游詞庫、詞包、模型清冊及建置後檔案完整性 |
 | 測試框架本身 | `fast.infrastructure` | 影響分類（含上游 19 情境）、fixture、完整子案例、重試歷程、空快取、必要輸入、探測 timeout 與計時階層；另含 Cargo／移動路徑、整合快取自檢與上游 13 個 Python 發布交易測試（FakeGitHub，無網路發布） |
 | `prepare-core.ps1`、Rust `shared/windows --lib` | `fast.prepare-core`, `fast.rust.*` | 與 CI 相同的 core overlay 與 Rust 單元測試 |
-| `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；原本依實體記憶體排程與 `engine_lm`／`engine_replay` 序列延遲斷言不變 |
+| `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；優先排程耗時較長的模型測試，依實體記憶體與可用 CPU 限制並行。`engine_lm`／`engine_replay`／`engine_newword` 各自使用單執行緒序列跑 |
 | ignored `mixed_regression` | `full.mixed-regression.x64` | 使用建置模型與資料執行混打、數字回歸 |
 | `tests/tsf_smoke.cpp` | standard、cold 各一項 | 真實 TSF context、標準 profile 與無模型冷啟動；不註冊輸入法 |
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
@@ -157,8 +157,9 @@ FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查�
 
 - C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本的編譯 fallback 保留上游 #100 的 `Invoke-HarnessBuild` 快取，不再反覆編譯相同內容。
 - Cargo target 保留既有增量 fingerprint；產品 build 明確指定工作樹的 `windows/target`，外部 `CARGO_TARGET_DIR` 不會讓複製 DLL／工具／staticlib 的路徑失配。上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取，失效時也只同步位元組有變的檔案，不破壞未修改來源的時間戳。
-- 保留 #100 的核心通過結果快取：直接呼叫 `test-core.ps1` 或 AFFECTED 可重用相同 executable、參數、執行緒／記憶體限制、資料、模型及輸出日誌的成功結果，報告明示 `core_result_reused`。FULL／RELEASE 和直接 CTest 強制 `-Rerun`，每次實際執行核心斷言；失敗的明確重跑會先讓舊成功收據失效。`test-core.ps1 -Rerun` 可手動強制執行。
-- Windows Rust 單元測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink；測試範圍與斷言均保留。
+- AFFECTED 和直接呼叫 `test-core.ps1` 可沿用 #100 的整套核心通過收據，報告會列 `core_result_reused`。Beta 的 `RELEASE -CiSafe` 每次執行一般核心回歸。`engine_cap`、`engine_share`、`engine_lm`、`engine_replay` 和 `engine_newword` 在來源、編譯器、runner 版本、執行檔、參數、模型、測試資料及日誌雜湊全數吻合時重用通過收據，報告會列 `core_reused_binaries`。FULL、正式版 RELEASE、本機完整 RELEASE、直接 CTest 和 benchmark 實跑所有核心斷言。`test-core.ps1 -Rerun` 可手動強制實跑。
+- Windows Rust 單元測試分別記錄 Cargo 編譯時間與測試執行時間。RELEASE 使用相同的最佳化 profile，可重用指紋相符的產品依賴。測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink。
+- 每個架構的 36 個 `input-digits` 案例依三種混打設定各啟動一次 submission harness。每案重新建立 TSF document、context 及 text store，清除候選和組字，並沿用該組已載入的引擎。報告保留每案的預期文字、通過結果、耗時與 harness PID。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
 - 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/`（RELEASE 時指向本次快照）的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
@@ -191,7 +192,7 @@ x64、x86 的所有非封裝測試與參數子案例均通過後，才建立 `pa
 
 RELEASE 收據 schema 4 保存驗收前後原始碼身分、固定快照、雙架構封裝許可、候選封裝內容／安裝包、候選 metadata 和 JUnit 的 SHA-256。提升前重新核對，任一架構失敗、缺少必要證據或更動來源、版本、快照／候選產物均失效；schema 3 等沒有快照的舊收據必須重新驗收。後續一般建置改寫 `dist/` 不會取代快照裡已測過的檔案。有效紀錄可重用，不重跑整套。`package.ps1 -Promote -ReportPath <report.json>` 也會執行同一防護，不能直接繞過；它把已驗證的候選包複製至 `dist/Shanjie-Windows-Setup.exe`，確認複製後雜湊，再寫 `dist/release.json` 的本機完整驗收標記。
 
-GitHub Actions 的既有 Release job 仍能跑較長的 RELEASE -CiSafe，再匯出 CI artifact；標記明確表示它不是本機完整驗收。日常 PR 的固定輕量 CI 不變。本機正式入口不 push、建立 tag 或呼叫 GitHub Release，遠端動作另需授權。
+GitHub Actions 的 Release job 跑 `RELEASE -CiSafe` 並匯出 CI artifact。x64 和 x86 的 Cargo 產物各有獨立的鍵與路徑，兩個架構共用 registry 與 host 套件。產物依 Rust、MSVC、Windows SDK、編譯設定及來源選擇快取，registry 可跨工具鏈版本還原。Cargo 指紋、core overlay 收據及模型雜湊會核對還原內容。NuGet 及內建模型轉換產物也有快取。x64 的發布建置與測試使用 Thin LTO 與 8 個 codegen units，x86 沿用 Fat LTO 與 1 個 codegen unit。Windows Rust 單元與混打回歸共用各自架構的測試執行檔，快取身分斷言仍在獨立程序執行。互動驗收另依本機 RELEASE 清冊執行。
 
 遠端發布保留上游 #86 的 `scripts/release.py`：先檢查平台產物、來源 manifest 與 SHA-256；只續作同來源草稿，發布過的 Release 不覆寫，artifact 名稱包含 run attempt。這套遠端發布交易與本機完整驗收收據各自保留原有防護，不用 CI-safe 產物冒充本機 RELEASE。既有 Linux 發布 job 原樣保留，本次未新增 Linux 工作。
 

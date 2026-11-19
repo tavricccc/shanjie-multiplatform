@@ -57,14 +57,36 @@ try {
             }
             'windows-unit' {
                 $target = if ($Architecture -eq 'x64') { 'x86_64-pc-windows-msvc' } else { 'i686-pc-windows-msvc' }
-                # Installer journal and progress tests share a process-wide sink.
-                Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target;test_threads=1} -Action {
-                    cargo test --manifest-path windows/Cargo.toml --lib --target $target -- --test-threads=1
-                    if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
+                $profile = if ($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') { 'release' } else { 'test' }
+                $cargoProfile = @(if ($profile -eq 'release') { Get-WindowsCargoReleaseArgs $Architecture })
+                Invoke-Timed -Name "Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows' -Details @{target=$target;profile=$profile;test_threads=1} -Action {
+                    $compile = @{target=$target;profile=$profile;compiled_units=0;fresh_units=0}
+                    $executables = @(Invoke-Timed -Name "Compile Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows.compile' -Details $compile -Action {
+                        cargo test @cargoProfile --manifest-path windows/Cargo.toml --lib --target $target --no-run --message-format=json-render-diagnostics |
+                            ForEach-Object {
+                                $message = ConvertFrom-Json -InputObject $_
+                                if ($message.reason -eq 'compiler-artifact') {
+                                    if ($message.fresh) { $compile.fresh_units++ } else { $compile.compiled_units++ }
+                                    if ($message.profile.test -and $message.executable) { $message.executable }
+                                } elseif ($message.reason -eq 'compiler-message' -and $message.message.rendered) {
+                                    Write-Host $message.message.rendered
+                                }
+                            }
+                        if ($LASTEXITCODE) { throw "Windows Rust unit test compilation failed for $Architecture." }
+                    })
+                    if ($executables.Count -ne 1) { throw "Expected one Windows Rust library test executable for $Architecture." }
+                    # Installer journal and progress tests share a process-wide sink.
+                    Invoke-Timed -Name "Run Windows Rust unit tests ($Architecture)" -Category 'rust.unit.windows.run' -Details @{ target=$target;test_threads=1 } -Action {
+                        & $executables[0] --test-threads=1
+                        if ($LASTEXITCODE) { throw "Windows Rust unit tests failed for $Architecture." }
+                    }
                 }
             }
-            'core-suite' { & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED') }
-            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" }
+            'core-suite' {
+                $reuseHeavy=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS -eq '1'
+                & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy
+            }
+            'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }

@@ -161,9 +161,12 @@ void keyboardState(bool caps,bool shift) {
  require(SetKeyboardState(state),102);require(((GetKeyState(VK_CAPITAL)&1)!=0)==caps,103);
 }
 int wmain(int argc,wchar_t** argv) {
- // Unbuffered: a harness killed on timeout still leaves the stage it reached.
- setvbuf(stdout,nullptr,_IONBF,0);
- require(argc==5,1); std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
+ std::setvbuf(stdout,nullptr,_IONBF,0);
+ std::setvbuf(stderr,nullptr,_IONBF,0);
+ const auto harnessStart=std::chrono::steady_clock::now();
+ require(argc==5||(argc>5&&argc%2==1&&std::wstring_view(argv[2])==L"input-digits"),1);
+ std::wstring mode=argv[2],sequence=argv[3],expected=argv[4];
+ const bool digitBatch=mode==L"input-digits";
  auto desktopName=L"Shanjie.Submission."+std::to_wstring(GetCurrentProcessId());
  auto desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
  require(desktop!=nullptr&&SetThreadDesktop(desktop),980);
@@ -185,15 +188,32 @@ int wmain(int argc,wchar_t** argv) {
  ComPtr<ITfThreadMgr> thread;require(SUCCEEDED(CoCreateInstance(CLSID_TF_ThreadMgr,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&thread))),8);
  ComPtr<ITfThreadMgrEx> extended;require(SUCCEEDED(thread.As(&extended)),9);
  TfClientId client;require(SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),9);
- ComPtr<ITfDocumentMgr> document;require(SUCCEEDED(thread->CreateDocumentMgr(&document)),10);
- ComPtr<Store> first;first.Attach(new Store);ComPtr<ITfContext> firstContext;TfEditCookie cookie;
- require(SUCCEEDED(document->CreateContext(client,0,static_cast<ITextStoreACP*>(first.Get()),&firstContext,&cookie)),11);
- require(SUCCEEDED(document->Push(firstContext.Get()))&&SUCCEEDED(thread->SetFocus(document.Get())),12);
+ ComPtr<ITfDocumentMgr> document;
+ ComPtr<Store> first;
+ ComPtr<ITfContext> firstContext;
+ auto createDocument=[&]{
+   require(SUCCEEDED(thread->CreateDocumentMgr(document.ReleaseAndGetAddressOf())),10);
+   first.Attach(new Store);
+   TfEditCookie cookie;
+   require(SUCCEEDED(document->CreateContext(client,0,static_cast<ITextStoreACP*>(first.Get()),firstContext.ReleaseAndGetAddressOf(),&cookie)),11);
+   require(SUCCEEDED(document->Push(firstContext.Get()))&&SUCCEEDED(thread->SetFocus(document.Get())),12);
+ };
+ createDocument();
  ComPtr<ITfClientId> identifiers;TfClientId serviceClient=TF_CLIENTID_NULL;
  require(SUCCEEDED(thread.As(&identifiers))&&SUCCEEDED(identifiers->GetClientId(ServiceId,&serviceClient)),13);
  ComPtr<ThreadProxy> proxy;proxy.Attach(new ThreadProxy(thread.Get(),true));
+ auto logStage=[&](const char* stage, const char* detail="") {
+   auto status=resident();
+   auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-harnessStart).count();
+   std::printf("STAGE name=%s elapsed_ms=%lld started=%u completed=%u composing=%d ends=%u%s%s\n",
+     stage,(long long)elapsed,static_cast<unsigned>(status),static_cast<unsigned>(status>>32),
+     first->composing?1:0,first->ends,detail[0]?" ":"",detail);
+   std::fflush(stdout);
+ };
+ if(mode.starts_with(L"rebuild-")) logStage("initial-core-start");
  require(SUCCEEDED(service->ActivateEx(proxy.Get(),serviceClient,TF_TMAE_UIELEMENTENABLEDONLY)),14);
  auto start=std::chrono::steady_clock::now();while((resident()>>32)!=(resident()&0xffffffffULL)){require(std::chrono::steady_clock::now()-start<std::chrono::seconds(35),15);Sleep(5);}
+ if(mode.starts_with(L"rebuild-")) logStage("initial-core-ready");
  ComPtr<ITfKeyEventSink> keys;require(SUCCEEDED(service.As(&keys)),16);
  auto context=firstContext;auto store=first;
  auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(5);}};
@@ -230,7 +250,7 @@ int wmain(int argc,wchar_t** argv) {
    return eaten!=FALSE;
  };
  bool deactivated=false;
- if(mode!=L"async-keys" && mode!=L"segment" && !mode.starts_with(L"rebuild-")) for(wchar_t vk:sequence)press(vk);
+ if(mode!=L"async-keys" && mode!=L"segment" && !mode.starts_with(L"rebuild-") && !mode.starts_with(L"input-")) for(wchar_t vk:sequence)press(vk);
  if(mode.starts_with(L"rebuild-")) {
    const std::wstring pack=sequence==L"SU3" ? L"QI SU6" : L"PO NE2";
    const auto type=[&](const std::wstring& characters){for(wchar_t key:characters)press(key);};
@@ -241,15 +261,11 @@ int wmain(int argc,wchar_t** argv) {
      const auto setting=[&](std::string_view name, std::string value){auto at=content.find(name);require(at!=std::string::npos,217);at+=name.size();content.replace(at,content.find_first_of("\r\n",at)-at,value);};
      setting("acg_pack=",enable?"1":"0");setting("rerank=",rerank?"1":"0");setting("dictionary=",dictionary);
      std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<content;out.close();localNotify(L"Shanjie.ProfileChanged.v2");
-     std::printf("STAGE profile pack=%d rerank=%d dictionary=%s status=%llx\n",enable,rerank,dictionary,(unsigned long long)resident());
    };
    auto settle=[&](unsigned builds){
-     auto begun=std::chrono::steady_clock::now();
-     std::printf("STAGE settle want=%u status=%llx\n",builds,(unsigned long long)resident());
-     auto deadline=begun+std::chrono::seconds(25);
+     auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(25);
      do { pump(); require(std::chrono::steady_clock::now()<deadline,218); } while((resident()>>32)<builds);
      pump();
-     std::printf("STAGE settled status=%llx ms=%lld\n",(unsigned long long)resident(),(long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-begun).count());
    };
    auto candidatesContain=[&](const std::wstring& wanted){
      ComPtr<ITfUIElementMgr> manager;require(SUCCEEDED(thread.As(&manager)),219);
@@ -265,8 +281,8 @@ int wmain(int argc,wchar_t** argv) {
      }
      return false;
    };
-   // The first keys of a cold pipe core can outlast the 0.75 s request timeout on a slow runner; the
-   // service then holds them as unconfirmed until Esc. Warm the core before the measured steps.
+   // Confirm that the first keys made a round trip before testing profile changes.
+   // A slow cold pipe can leave them unconfirmed until Escape.
    for(int attempt=0;;++attempt) {
      require(attempt<5,232);
      type(sequence);
@@ -280,37 +296,51 @@ int wmain(int argc,wchar_t** argv) {
    first->ends=0;first->starts=0;first->endedText.clear();first->earlyWrites=0;
    auto builds=static_cast<unsigned>(resident());
    type(sequence);
+   require(first->composing && !first->text.empty(),215);
+   logStage("first-profile-update");
    profile(true,true,"missing.tsv");
    // A refresh waits for queued keys (a busy pipe) before it starts the rebuild; it still must start while composing.
    for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,223);
    require(static_cast<unsigned>(resident())==builds+1&&first->composing,223);
+   logStage("first-background-build-started");
    press(VK_DOWN); press('1');
    const auto firstWord=first->text;
    settle(++builds);
+   logStage("first-background-build-settled");
    require(first->composing && first->ends==0 && first->text==firstWord,224);
    press(VK_RETURN); require(first->endedText==firstWord&&!first->composing,225);
+   logStage("first-commit-done");
 
    type(sequence);
+   logStage("second-consecutive-profile-update");
    profile(true,true,"personal.tsv");
    profile(false,false,"personal.tsv");
-   if(static_cast<unsigned>(resident())!=builds) require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+   if(static_cast<unsigned>(resident())!=builds) {
+     require(static_cast<unsigned>(resident())==builds+1,226); // Two requests, only the first worker started.
+     logStage("second-background-build-started","detail=immediate");
+   }
    else {
      // Deferred behind queued keys: both requests collapse into the latest profile.
      for(auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);static_cast<unsigned>(resident())==builds;pump()) require(std::chrono::steady_clock::now()<deadline,226);
      require(static_cast<unsigned>(resident())==builds+1,226); --builds;
+     logStage("second-background-build-started","detail=deferred-collapsed");
    }
    settle(builds+=2);
+   logStage("second-background-build-settled");
    require(first->ends==1 && first->composing,227);
    press(VK_ESCAPE);pump();
    require(first->text==firstWord && first->endedText==firstWord,228);
    type(pack);press(VK_HOME);press(VK_DOWN);
    require(!candidatesContain(expected) && !first->text.ends_with(expected),229);
    press(VK_ESCAPE);press(VK_ESCAPE);
+   logStage("second-pack-check-done");
 
    type(pack);
    const auto oldText=first->text;
+   logStage("third-profile-update");
    profile(true,false,"personal.tsv");
    settle(++builds);
+   logStage("third-background-build-settled");
    require(first->composing && first->text==oldText && first->endedText==firstWord,230);
    press(VK_RETURN);pump();
    type(pack);press(VK_HOME);press(VK_DOWN);
@@ -319,10 +349,14 @@ int wmain(int argc,wchar_t** argv) {
    type(sequence);press(VK_DOWN);
    require(candidatesContain(L"龘") || first->text.ends_with(L"龘"),232);
    press(VK_ESCAPE);press(VK_ESCAPE);
+   logStage("third-pack-and-dict-check-done");
+   logStage("deactivate-and-retire-start");
    profile(false,false,"personal.tsv");
    require(SUCCEEDED(service->Deactivate()),233);deactivated=true;
    const auto afterDeactivate=first->text;
-   settle(++builds);require(!first->composing && first->text==afterDeactivate,234);
+   settle(++builds);
+   logStage("deactivate-and-retire-settled");
+   require(!first->composing && first->text==afterDeactivate,234);
  } else if(mode==L"segment") {
    ComPtr<ITfDisplayAttributeProvider> styling;
    require(SUCCEEDED(service.As(&styling)),235);
@@ -525,12 +559,35 @@ int wmain(int argc,wchar_t** argv) {
      require(first->text==stable+expected && !first->composing,290);
    }
  } else if(mode.starts_with(L"input-")) {
-   if(mode==L"input-space-commit") {
-     require(store->text==expected && store->endedText==expected && !store->composing,70);
-   } else {
-     std::printf("INPUT composing=%d text=%s committed=%s\n",store->composing,utf8(store->text).c_str(),utf8(store->endedText).c_str());
-     require(store->text==expected && store->endedText.empty() && store->composing,71);
-     press(VK_RETURN);require(store->text==expected&&store->endedText==expected&&!store->composing,72);
+   const auto initialLoadCounts=digitBatch ? resident() : 0;
+   for(int argument=3;argument<argc;argument+=2){
+     const int index=(argument-3)/2;
+     const auto caseStart=std::chrono::steady_clock::now();
+     if(digitBatch)std::printf("STAGE name=input-digits index=%d\n",index);
+     if(index){
+       // Retire the preceding context and candidate UI while keeping the loaded engine.
+       require(SUCCEEDED(keys->OnSetFocus(FALSE))&&SUCCEEDED(thread->SetFocus(nullptr))&&SUCCEEDED(document->Pop(TF_POPF_ALL)),270);
+       ComPtr<ITfUIElementMgr> manager;ComPtr<IEnumTfUIElements> elements;
+       ComPtr<ITfUIElement> element;ULONG count=0;
+       require(SUCCEEDED(thread.As(&manager))&&SUCCEEDED(manager->EnumUIElements(&elements))&&elements->Next(1,&element,&count)==S_FALSE&&count==0,271);
+       createDocument();
+       context=firstContext;store=first;
+       require(store->text.empty()&&store->endedText.empty()&&!store->composing&&store->ends==0,272);
+     }
+     const std::wstring_view want=argv[argument+1];
+     for(wchar_t vk:std::wstring_view(argv[argument]))press(vk);
+     if(mode==L"input-space-commit") {
+       require(store->text==want && store->endedText==want && !store->composing,70);
+     } else {
+       std::printf("INPUT composing=%d text=%s committed=%s\n",store->composing,utf8(store->text).c_str(),utf8(store->endedText).c_str());
+       require(store->text==want && store->endedText.empty() && store->composing,71);
+       press(VK_RETURN);require(store->text==want&&store->endedText==want&&!store->composing,72);
+     }
+     if(digitBatch){
+       require(resident()==initialLoadCounts,273);
+       const auto elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-caseStart).count();
+       std::printf("INPUT PASS index=%d elapsed_ms=%.3f\n",index,elapsed);
+     }
    }
  } else if(mode.starts_with(L"retire-")) {
    require(store->text==expected&&store->composing,200);

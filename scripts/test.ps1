@@ -15,7 +15,8 @@ $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
-$version=(Get-Content -LiteralPath "$root/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json).version
+$channel=Get-Content -LiteralPath "$root/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json
+$version=$channel.version
 $sourceStart=$null;$sourceEnd=$null;$releaseData=$null;$snapshot=$null;$packagingPermit=$null
 $requestedLevel=$Level
 $changeSet=if($Level -eq 'CI'){[pscustomobject]@{Paths=@();Error=$null;Range=$null;EffectiveBase=$null}}else{Get-VerificationChanges $root $BaseRef $ChangeScope}
@@ -31,6 +32,7 @@ Start-Transcript -Path $consoleLog -Force | Out-Null
 $previousRunId=$env:SHANJIE_TEST_RUN_ID
 $previousTimingsDirectory=$env:SHANJIE_TEST_TIMINGS_DIR
 $previousLevel=$env:SHANJIE_TEST_LEVEL
+$previousCoreReuse=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS
 $previousSnapshotId=$env:SHANJIE_RELEASE_SNAPSHOT_ID
 $previousSnapshotHash=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256
 $previousPermit=$env:SHANJIE_RELEASE_PACKAGING_PERMIT
@@ -39,6 +41,7 @@ $env:SHANJIE_RELEASE_SNAPSHOT_ID=$null
 $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$null
 $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$null
 $env:SHANJIE_TEST_LEVEL=$Level
+$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS=if(Test-BetaCoreResultReuse $Level ([bool]$CiSafe) ($channel.prerelease -eq $true)){'1'}else{$null}
 $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
 $whole=[Diagnostics.Stopwatch]::StartNew()
@@ -240,7 +243,7 @@ try {
     if($Level -eq 'RELEASE'){
         # Build both architectures before freezing any input or linking harnesses.
         Invoke-Timed -Name 'Build both release architectures' -Category 'build.product' -Details @{architecture='all'} -Action {
-            & "$PSScriptRoot/build.ps1" -Architecture all
+            & "$PSScriptRoot/build.ps1" -Architecture all -PackageTargetsOnly
             & "$PSScriptRoot/prepare-licenses.ps1"
         }
         $snapshot=Invoke-Timed -Name 'Seal dual-architecture release snapshot' -Category 'release.snapshot' -Action {New-ReleaseSnapshot $root $runId $sourceStart}
@@ -341,6 +344,11 @@ try {
         $notes.Add("Core assertions reused a verified passing result instead of executing again: $($hit.details.receipt)")
         foreach($result in $testResults|Where-Object name -eq $hit.test_name){$result|Add-Member -NotePropertyName core_result_reused -NotePropertyValue $true}
     }
+    foreach($hit in $timings|Where-Object{ $_.category -eq 'core.heavy-result-cache' -and $_.details.cache -eq 'hit' }){
+        $reused=@($hit.details.binaries)
+        $notes.Add("Beta release reused prior passing results for $($reused -join ', '): $($hit.details.receipt). These binaries did not run again.")
+        foreach($result in $testResults|Where-Object name -eq $hit.test_name){$result|Add-Member -NotePropertyName core_reused_binaries -NotePropertyValue $reused}
+    }
     $caseRows=@(
         foreach($row in $selectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$true}}
         foreach($row in $unselectedByPreset.Values | ForEach-Object { $_ }){[pscustomobject]@{name=$row.name;preset=$row.preset;reason=$row.reason;selected=$false}}
@@ -412,6 +420,7 @@ try {
     $env:SHANJIE_TEST_RUN_ID=$previousRunId
     $env:SHANJIE_TEST_TIMINGS_DIR=$previousTimingsDirectory
     $env:SHANJIE_TEST_LEVEL=$previousLevel
+    $env:SHANJIE_REUSE_HEAVY_CORE_RESULTS=$previousCoreReuse
     $env:SHANJIE_RELEASE_SNAPSHOT_ID=$previousSnapshotId
     $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$previousSnapshotHash
     $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$previousPermit

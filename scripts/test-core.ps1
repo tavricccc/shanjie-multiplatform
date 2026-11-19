@@ -5,15 +5,15 @@
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot)
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot,[switch]$ReuseHeavyResults)
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 function Get-MemoryUse {
     $os = Get-CimInstance Win32_OperatingSystem
     100 * (1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize)
 }
-# Runs up to one binary per core, starting the next only under the memory limit; prints a failed binary's output.
-function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArguments, [int]$limit) {
+# Start the next binary only under the memory limit and print failed output.
+function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$arguments, [int]$limit, [int]$maxProcesses) {
     $logs = Join-Path $directory 'target/test-logs'
     New-Item -ItemType Directory $logs -Force | Out-Null
     $env:CARGO_MANIFEST_DIR = $directory  # what cargo test gives each binary
@@ -29,12 +29,12 @@ function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$skipArgum
             if ($job.Process.ExitCode) { $failed += $job; Write-Host ("FAIL {0} ({1:F3}s)" -f $job.Name,$seconds) } else { Write-Host ("ok   {0} ({1:F3}s)" -f $job.Name,$seconds) }
         }
         # A binary just started has not loaded its models yet: wait a moment before judging the memory again.
-        if ($queue.Count -and $running.Count -lt [Environment]::ProcessorCount -and ($running.Count -eq 0 -or (Get-MemoryUse) -lt $limit) -and
+        if ($queue.Count -and $running.Count -lt $maxProcesses -and ($running.Count -eq 0 -or (Get-MemoryUse) -lt $limit) -and
             !($running | Where-Object { $_.Started.Elapsed.TotalSeconds -lt 3 })) {
             $next = $queue.Dequeue()
             $log = Join-Path $logs (($next.Name -replace '[^\w-]', '_') + '.txt')
             $stage = Start-TestStage -Name $next.Name -Category 'core.test'
-            $process = Start-Process -FilePath $next.Path -ArgumentList $skipArguments -WorkingDirectory $directory -NoNewWindow -PassThru `
+            $process = Start-Process -FilePath $next.Path -ArgumentList $arguments -WorkingDirectory $directory -NoNewWindow -PassThru `
                 -RedirectStandardOutput $log -RedirectStandardError "$log.err"
             $null = $process.Handle  # keeps the exit code readable after the process ends
             $running += [pscustomobject]@{ Name = $next.Name; Path=$next.Path; Process = $process; Log = $log; Started = [Diagnostics.Stopwatch]::StartNew(); Stage=$stage }
@@ -207,7 +207,7 @@ try {
     $cargoVersion = (& cargo --version 2>&1 | Out-String).Trim()
     $testKey = Get-ContentFingerprint -Root $root -Paths @(
         'build/core/src','build/core/Cargo.toml','upstream/shanjie/core/tests','upstream/shanjie/core/Cargo.toml',
-        'scripts/test-core.ps1'
+        'scripts/test-core.ps1','MODEL-SOURCES.json','.cargo/config.toml'
     ) -Values @($upstreamPin,$rustVersion,$cargoVersion,$env:RUSTFLAGS,$env:CARGO_ENCODED_RUSTFLAGS)
     $testManifest = Join-Path $tree '.source-cache.json'
     $testPaths = @('src','tests','Cargo.toml')
@@ -284,8 +284,8 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     $skipArguments = foreach ($skip in $skips) { '--skip'; $skip }
     $selected = if ($Tests) { $Tests } else { Get-ChildItem -LiteralPath "$tree/tests" -Filter *.rs | ForEach-Object BaseName }
     $arguments = @(foreach ($test in $selected) { '--test'; $test }) + @(if (!$NoUnitTests) { '--lib' })
-    # Build every test binary once, then run them side by side: each binary has few tests and they mostly
-    # decode on one thread, so cargo's one-binary-at-a-time run leaves most cores idle.
+    # Build every test binary once. Budget libtest threads across the binaries
+    # instead of letting each binary create a full set of runner threads.
     $built = Invoke-Timed -Name 'Compile upstream core test binaries' -Category 'core.compile' -Details @{ test_binaries=$selected.Count; unit_tests=(!$NoUnitTests); cargo_profile='release';cache='Cargo target fingerprints' } -Action {
         $output = cargo test --release --no-run --message-format=json --manifest-path "$tree/Cargo.toml" @arguments
         if ($LASTEXITCODE) {
@@ -300,14 +300,19 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
     if(!@($binaries).Count){throw 'Cargo returned no upstream core test executables.'}
-    # Preserve #100's passing-result reuse, keyed by the actual executables,
-    # arguments and isolated input contents. CTest FULL/RELEASE explicitly pass -Rerun.
-    $key=Get-CoreTestRunKey -Binaries @($binaries) -ResourceRoot $resources -ModelRoot $modelFixture -Arguments $skipArguments -MemoryLimit $MemoryLimit
+    $processors = [Environment]::ProcessorCount
+    $jobs = [Math]::Clamp([int][Math]::Floor($processors / 2), 1, 4)
+    $threads = [int][Math]::Floor($processors / $jobs)
+    $parallelArguments = $skipArguments + @("--test-threads=$threads")
+    $latencyArguments = $skipArguments + @('--test-threads=1')
+    # AFFECTED can reuse the full suite. CI-safe beta releases always run the
+    # routine cases and validate a separate receipt for the expensive binaries.
+    $key=Get-CoreTestRunKey -Binaries @($binaries) -ResourceRoot $resources -ModelRoot $modelFixture -Arguments ($parallelArguments + @('--test-threads=1')) -MemoryLimit $MemoryLimit -SourceKey $testKey
     $passed=Join-Path $base "passed/$key.json"
-    $resultCacheHit=Test-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
     $cacheStage=Start-TestStage -Name 'Validate upstream passing-result cache' -Category 'core.result-cache'
-    Complete-TestStage -Stage $cacheStage -Details @{cache=if($resultCacheHit -and !$Rerun){'hit'}else{'miss'};key=$key;receipt=$passed;forced=[bool]$Rerun;binaries=@($binaries).Count}
-    if($resultCacheHit -and !$Rerun){
+    $resultCacheHit=!$Rerun -and !$ReuseHeavyResults -and (Test-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs'))
+    Complete-TestStage -Stage $cacheStage -Details @{cache=if($resultCacheHit){'hit'}else{'miss'};key=$key;receipt=$passed;forced=[bool]$Rerun;binaries=@($binaries).Count}
+    if($resultCacheHit){
         Write-Host "CACHED upstream tests: identical binaries, arguments, data, models and retained logs ($key). Assertions were not re-executed; use -Rerun to force them."
         return
     }
@@ -316,9 +321,30 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     # These suites assert per-key latency. Isolate them from other binaries and
     # from each other's test cases; parallel decoding is not a latency baseline.
     $latency = @('engine_lm','engine_replay','engine_newword')
-    Invoke-TestBinaries @($binaries | Where-Object Name -notin $latency) $tree $skipArguments $MemoryLimit
-    foreach ($name in $latency) {
-        Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree ($skipArguments + @('--test-threads=1')) $MemoryLimit
+    $heavy = @('engine_cap','engine_share') + $latency
+    $heavyLogs = @(foreach($name in $heavy) { "target/test-logs/$name.txt"; "target/test-logs/$name.txt.err" })
+    $heavyReceipt = Join-Path $base "passed-heavy/$key.json"
+    $allHeavySelected = @($binaries | Where-Object Name -in $heavy).Count -eq $heavy.Count
+    $heavyCacheStage = Start-TestStage -Name 'Validate long-running core test receipt' -Category 'core.heavy-result-cache'
+    $heavyCacheHit = $ReuseHeavyResults -and !$Rerun -and $allHeavySelected -and (Test-ContentCache -Root $tree -ManifestPath $heavyReceipt -Key $key -Paths $heavyLogs)
+    Complete-TestStage -Stage $heavyCacheStage -Details @{cache=if($heavyCacheHit){'hit'}else{'miss'};key=$key;receipt=$heavyReceipt;enabled=($ReuseHeavyResults -and !$Rerun);binaries=$heavy}
+    if($heavyCacheHit){
+        Write-Host "REUSED upstream test results for $($heavy -join ', ') ($key). Routine core regressions execute in this run."
+        $binaries = @($binaries | Where-Object Name -notin $heavy)
+    } elseif(Test-Path -LiteralPath $heavyReceipt) {
+        Preserve-Output $heavyReceipt
     }
-    Save-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
+    # Start the long model suites first so shorter suites fill the remaining slots.
+    $longest = @('engine_cap','engine_share','engine_english','engine_pool_recur','engine_learn','engine_digits','engine_pack')
+    $parallel = @(foreach($name in $longest) { $binaries | Where-Object Name -eq $name })
+    $parallel += @($binaries | Where-Object Name -notin ($latency + $longest))
+    Write-Host "Upstream core tests: $jobs processes with $threads libtest threads each (memory limit $MemoryLimit%)."
+    Invoke-TestBinaries $parallel $tree $parallelArguments $MemoryLimit $jobs
+    if(!$heavyCacheHit){
+        foreach ($name in $latency) {
+            Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree $latencyArguments $MemoryLimit 1
+        }
+        Save-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
+        if($allHeavySelected){Save-ContentCache -Root $tree -ManifestPath $heavyReceipt -Key $key -Paths $heavyLogs}
+    }
 } finally { Pop-Location }

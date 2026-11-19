@@ -16,6 +16,7 @@ Expect 'docs only' @('docs/DESIGN.md','Changelog.md','README.md') $false @() $tr
 Expect 'windows-style separators' @('docs\ARCHITECTURE.md') $false @() $true
 Expect 'release script' @('scripts/release.py') $false @('fast','test-framework')
 Expect 'release workflow' @('.github/workflows/release.yml') $false @('fast','test-framework')
+Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.ps1') $false @('fast','test-framework')
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
@@ -42,6 +43,10 @@ Write-Host "PASS verification selection: $selectionCases cases, one CTest policy
 
 $checks=0
 function Check-Rule([bool]$Condition,[string]$Name){$script:checks++;if(!$Condition){throw "FAIL $Name"};Write-Host "ok   $Name"}
+Check-Rule (Test-BetaCoreResultReuse RELEASE $true $true) 'CI-safe beta RELEASE may reuse the long-running core results'
+Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $false)) 'Stable RELEASE executes all core assertions'
+Check-Rule (!(Test-BetaCoreResultReuse RELEASE $false $true)) 'Local beta RELEASE executes all core assertions'
+Check-Rule (!(Test-BetaCoreResultReuse FULL $true $true)) 'FULL executes all core assertions even with a beta channel'
 $latency=@(Get-AdditionalVerificationPlan -Paths @('platform/input_windows.rs','windows/src/tsf/keys.rs','windows/src/broker/client.rs') -Labels @('full'))
 Check-Rule (@($latency|Where-Object id -eq 'engine-latency').Count -eq 1) 'Key/core changes require one independent latency measurement'
 Check-Rule (($latency|Where-Object id -eq 'engine-latency').kind -eq 'required-extra') 'Functional FULL does not substitute for key latency'

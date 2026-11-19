@@ -119,7 +119,7 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<IClassFactory> factory; require(SUCCEEDED(factoryFn(ServiceId,IID_PPV_ARGS(&factory))),5);
     ComPtr<ITfTextInputProcessorEx> service; require(SUCCEEDED(factory->CreateInstance(nullptr,IID_PPV_ARGS(&service))),6);
     ComPtr<ITfThreadMgr> thread; require(SUCCEEDED(CoCreateInstance(CLSID_TF_ThreadMgr,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&thread))),7);
-    TfClientId client;
+    TfClientId client = TF_CLIENTID_NULL;
     if(visual) {require(SUCCEEDED(thread->Activate(&client)),8);}
     else {ComPtr<ITfThreadMgrEx> extended;require(SUCCEEDED(thread.As(&extended))&&SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),8);}
     ComPtr<ITfDocumentMgr> document; require(SUCCEEDED(thread->CreateDocumentMgr(&document)),9);
@@ -155,7 +155,7 @@ int wmain(int argc, wchar_t** argv) {
     auto residentStatus = (unsigned long long (__cdecl*)())GetProcAddress(dll,"sj_resident_status");
     auto liveObjects = (unsigned (__cdecl*)())GetProcAddress(dll,"sj_tsf_objects");
     require(residentStatus && liveObjects,460);
-    auto waitPreload = [&]() {
+    auto waitPreload = [&](unsigned minimumLoads=0) {
         auto start = Clock::now();
         auto settled=start;
         auto status=residentStatus();
@@ -165,10 +165,17 @@ int wmain(int argc, wchar_t** argv) {
             while (PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&msg);
             auto next=residentStatus();
             if(next!=status) {status=next;settled=Clock::now();}
-            require(Clock::now()-start < std::chrono::seconds(15),461);
+            if (Clock::now()-start >= std::chrono::seconds(15)) {
+                std::printf("Preload stalled: need %u loads, started=%u completed=%u\n",
+                    minimumLoads,static_cast<unsigned>(status),static_cast<unsigned>(status>>32));
+                require(false,461);
+            }
             Sleep(5);
-        } while ((status >> 32) != (status & 0xffffffffULL) || Clock::now()-settled<std::chrono::milliseconds(35));
-        std::printf("Background preload wait: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-start).count());
+        } while (static_cast<unsigned>(status) < minimumLoads || (status >> 32) != (status & 0xffffffffULL) ||
+            Clock::now()-settled<std::chrono::milliseconds(35));
+        std::printf("Background preload wait: %.3f ms (started=%u completed=%u)\n",
+            std::chrono::duration<double,std::milli>(Clock::now()-start).count(),
+            static_cast<unsigned>(status),static_cast<unsigned>(status>>32));
     };
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
@@ -514,16 +521,19 @@ int wmain(int argc, wchar_t** argv) {
         localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforePinyinReload && noCandidates(),342);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),380);
+        const auto restartLoad = static_cast<unsigned>(residentStatus())+1;
         localNotify(L"Shanjie.Restart.v2");
         require(store->text == beforePinyinReload && noCandidates(),381);
+        waitPreload(restartLoad);
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
         press(VK_RETURN,391); // With Enter-to-select, the second Enter submits the composition.
+        const auto mixedLoad = static_cast<unsigned>(residentStatus())+1;
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"0",profile.c_str()),512);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"0",profile.c_str()),513);
         localNotify(L"Shanjie.ProfileChanged.v2");
-        waitPreload();
+        waitPreload(mixedLoad);
         for (int spaces : {0,1,2}) {
             for (wchar_t key : std::wstring(L"SU3CL35K4G4")) press(key,514);
             auto beforeEnglish = store->text; auto englishCaret = store->selection.acpStart;
@@ -576,13 +586,13 @@ int wmain(int argc, wchar_t** argv) {
             press('G',1025);press('4',1027);press(VK_DOWN,1029);
             BSTR first=nullptr;require(SUCCEEDED(candidates->GetString(0,&first)),1031);
             std::wstring before(first);SysFreeString(first);
-            press(VK_RIGHT,1032);UINT count=0;candidates->GetCount(&count);
+            press(VK_RIGHT,1032);UINT rightCount=0;candidates->GetCount(&rightCount);
             if(std::wstring(action)==L"expand") {
-                require(count>9,1034);press(VK_DOWN,1035);candidates->GetSelection(&selection);require(selection==3,1037);
+                require(rightCount>9,1034);press(VK_DOWN,1035);candidates->GetSelection(&selection);require(selection==3,1037);
             } else if(std::wstring(action)==L"page") {
                 BSTR next=nullptr;require(SUCCEEDED(candidates->GetString(0,&next)),1038);
                 require(std::wstring(next)!=before,1039);SysFreeString(next);
-            } else {candidates->GetSelection(&selection);require(selection==1&&count<=9,1040);}
+            } else {candidates->GetSelection(&selection);require(selection==1&&rightCount<=9,1040);}
             press(VK_ESCAPE,1041);press(VK_ESCAPE,1043);
         }
         // The template turns the single-Shift switch on as upstream does; turned off, Shift passes through untouched.
@@ -664,4 +674,5 @@ int wmain(int argc, wchar_t** argv) {
     store.Reset(); proxy.Reset(); identifiers.Reset(); thread->Deactivate(); thread.Reset(); factory.Reset();
     auto unload = (HRESULT (WINAPI*)())GetProcAddress(dll,"DllCanUnloadNow"); require(unload && unload() == S_FALSE && liveObjects()==0,55);
     FreeLibrary(dll); CoUninitialize(); std::puts("TSF composition, caret, commit, cancel, candidates, and COM lifetime passed");
+    return 0;
 }

@@ -1,10 +1,10 @@
 #Requires -Version 7
-param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain, [switch]$CargoVerbose)
+param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain, [switch]$CargoVerbose, [switch]$PackageTargetsOnly)
 $ErrorActionPreference = 'Stop'
 # Default builds both: x86 is the DLL that 32-bit apps on 64-bit Windows load.
 if ($Architecture -eq 'all') {
-    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose
-    & $PSCommandPath -Architecture x86 -UseExistingCore -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose
+    & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose -PackageTargetsOnly:$PackageTargetsOnly
+    & $PSCommandPath -Architecture x86 -UseExistingCore -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose -PackageTargetsOnly:$PackageTargetsOnly
     return
 }
 $root = Split-Path $PSScriptRoot -Parent
@@ -62,7 +62,16 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup
     $env:SHANJIE_SETUP_RESOURCE = Join-Path $objects 'setup.res'
     Invoke-Timed -Name 'Rust Windows release build' -Category 'build.rust.release' -Details @{ architecture=$Architecture; target=$target; incremental='Cargo fingerprints' } -Action {
         # Match every DLL/tool copy and the CMake staticlib path, even with CARGO_TARGET_DIR set.
-        $cargoArguments=@('build','--release','--manifest-path','windows/Cargo.toml','--target',$target,'--target-dir',"$root/windows/target")
+        $cargoArguments=@('build') + @(Get-WindowsCargoReleaseArgs $Architecture) +
+            @('--manifest-path','windows/Cargo.toml','--target',$target,'--target-dir',"$root/windows/target")
+        if($PackageTargetsOnly){
+            $cargoArguments+='--lib'
+            if($Architecture -eq 'x64'){
+                foreach($tool in 'shanjie-manager','shanjie-core','shanjie-word-helper','shanjie-setup','shanjie-pack'){
+                    $cargoArguments+=@('--bin',$tool)
+                }
+            }
+        }
         if($CargoVerbose){$cargoArguments+='-vv'}
         & cargo @cargoArguments
         if ($LASTEXITCODE) { throw 'Rust Windows build failed.' }

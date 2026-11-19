@@ -126,6 +126,7 @@ foreach($file in @($binary,"$resources/data/input.txt","$resources/eval/input.tx
     [IO.File]::WriteAllText($file,$text)
 }
 Check ($first -cne (Get-CoreTestRunKey $binaries $resources $models @('--skip','another-fixture') 80)) 'Changed arguments invalidate the core key'
+Check ($first -cne (Get-CoreTestRunKey $binaries $resources $models $arguments 80 -SourceKey 'changed core source or toolchain')) 'Changed core source or toolchain invalidates the core key'
 $logs=Join-Path $ResultRoot 'target/test-logs';$null=New-Item -ItemType Directory -Path $logs -Force
 [IO.File]::WriteAllText("$logs/fixture.txt",'test fixture ... ok')
 $receipt=Join-Path $ResultRoot 'passed.json'

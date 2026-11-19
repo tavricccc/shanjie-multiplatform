@@ -97,7 +97,7 @@ int wmain(int argc,wchar_t** argv) {
         }
         press(VK_OEM_3);press('2',true);require(store->text==L"，。／；－＠",942);
         auto before=store->text;
-        if(std::getenv("SHANJIE_TEST_PINYIN")){press('N');press('I');before+=L"ni";}
+        if(GetEnvironmentVariableW(L"SHANJIE_TEST_PINYIN",nullptr,0)>0){press('N');press('I');before+=L"ni";}
         press(VK_OEM_3);press('U');for(auto ch:std::wstring(L"FF0C"))press(ch);
         auto code=store->text;store->externalCaret((LONG)before.size());
         MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
@@ -122,7 +122,7 @@ int wmain(int argc,wchar_t** argv) {
         for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
         require(store->text==L"0123456789+-*/.",934);
         press(VK_RETURN,false,false,false);
-        const wchar_t* typing=std::getenv("SHANJIE_TEST_ETEN")?L"NE3":L"SU3";
+        const wchar_t* typing=GetEnvironmentVariableW(L"SHANJIE_TEST_ETEN",nullptr,0)>0?L"NE3":L"SU3";
         for(auto ch:std::wstring(typing))press(ch);
         press(VK_NUMPAD1);press(VK_DIVIDE);
         require(store->text==L"0123456789+-*/.你1/",935);

@@ -1,0 +1,3 @@
+[profile.release]
+lto = "thin"
+codegen-units = 8

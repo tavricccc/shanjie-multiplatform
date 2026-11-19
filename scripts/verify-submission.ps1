@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([string]$ResultRoot,[string]$DllRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Modes,[ValidateSet(1,2)][int[]]$Keyboards=@(1,2),[string]$HarnessPath,[string]$PayloadRoot)
+param([string]$ResultRoot,[string]$DllRoot,[ValidateSet('x64','x86')][string[]]$Architectures=@('x64','x86'),[string[]]$Modes,[ValidateSet(1,2)][int[]]$Keyboards=@(1,2),[string]$HarnessPath,[string]$PayloadRoot,[int]$TimeoutSeconds=0)
 $ErrorActionPreference='Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
@@ -55,7 +55,18 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
   }
   foreach($keyboard in $Keyboards) {
    $cases=Get-SubmissionCases $keyboard
-   foreach($case in $cases) {
+   $groups=[Collections.Generic.List[object]]::new()
+   $digitModes=[Collections.Generic.HashSet[int]]::new()
+   foreach($entry in $cases){
+    if($Modes -and $entry[0] -notin $Modes){continue}
+    if($entry[0] -ne 'input-digits'){$groups.Add((,$entry));continue}
+    if($digitModes.Add($entry[3])){
+     $groups.Add(@($cases | Where-Object {$_[0] -eq 'input-digits' -and $_[3] -eq $entry[3]}))
+    }
+   }
+   foreach($group in $groups) {
+    $case=$group[0]
+    $digitBatch=$case[0] -eq 'input-digits'
     $testContent=$content -replace '(?m)^keyboard=.*',('keyboard='+$keyboard)
     if($case.Count -gt 3) {
      $testContent=$testContent -replace '(?m)^mixed_input=.*',"mixed_input=$([int](($case[3]-band 1)-ne 0))" -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[3]-band 2)-ne 0))"
@@ -70,7 +81,6 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
      $testContent=$testContent -replace '(?m)^mixed_input=.*','mixed_input=0' -replace '(?m)^prediction=.*','prediction=0'
      if($keyboard -eq 2){$testContent=$testContent -replace '(?m)^anchor=.*','anchor=left'}
     }
-    if($Modes -and $case[0] -notin $Modes){continue}
     $pipe=$case[0] -eq 'rebuild-pipe'
     $env:SHANJIE_CORE_LOCAL=if($pipe){$null}else{'1'}
     $name="keyboard$keyboard-$($case[0])-$($case[1].Length)-$($results.Count)"
@@ -89,28 +99,75 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
     Set-Content "$taskProfileRoot/Shanjie/profile.ini" $testContent -Encoding utf8NoBOM
     $start=[Diagnostics.ProcessStartInfo]::new($exe);$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
     $start.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
-    foreach($arg in @("$DllRoot/$arch/Shanjie.dll")+$case[0..2]){$start.ArgumentList.Add($arg)}
-    $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details @{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction;keys=$case[1];expected=$case[2]}
-    try {
-     $process=[Diagnostics.Process]::Start($start);$stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
-     if(!$process.WaitForExit(60000)){$process.Kill($true);$process.WaitForExit(5000)|Out-Null;$partial=$stdout.GetAwaiter().GetResult();$partialError=$stderr.GetAwaiter().GetResult();throw "Owned submission harness timed out; output so far:`n$partial`n$partialError"}
-     $log=$stdout.GetAwaiter().GetResult();$errorLog=$stderr.GetAwaiter().GetResult();$code=$process.ExitCode;$process.Dispose()
-     Set-Content "$out/$name.log" ($log+$errorLog) -Encoding utf8NoBOM
-     if($code -or $log -notmatch 'PASS mode='){throw "$arch $name failed ($code): $log $errorLog"}
-     if($case[0] -like 'rebuild-*') {
-      if((Get-FileHash "$taskProfileRoot/Shanjie/personal.tsv").Hash -ne $personalHash -or $learnedRow -notin (Get-Content "$taskProfileRoot/Shanjie/learning.tsv")) {throw 'Rebuild changed the personal dictionary or lost an existing learning row'}
-     }
-     Complete-TestStage -Stage $caseStage
-    } catch { Complete-TestStage -Stage $caseStage -Status 'failed' -ErrorMessage $_.Exception.Message;throw }
-    finally {
-     if($pipe) {
-      $stop=Start-Process "$DllRoot/tools/shanjie-core.exe" -ArgumentList '--stop' -WindowStyle Hidden -PassThru
-      $null=$stop.Handle
-      if(!$stop.WaitForExit(5000)){ $stop.Kill(); throw 'Isolated submission core stop request timed out' }
-      $stop.Dispose()
-     }
+    $start.StandardErrorEncoding=$start.StandardOutputEncoding
+    $start.ArgumentList.Add("$DllRoot/$arch/Shanjie.dll")
+    $start.ArgumentList.Add($case[0])
+    foreach($entry in $group){$start.ArgumentList.Add($entry[1]);$start.ArgumentList.Add($entry[2])}
+    $identity=@{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction}
+    if($digitBatch){
+     $caseStage=Start-TestStage -Name "Submission digit batch $arch/$name" -Category 'submission.batch' -Details ($identity+@{cases=$group.Count})
+    }else{
+     $caseStage=Start-TestStage -Name "Submission case $arch/$name" -Category 'submission.case' -Details ($identity+@{keys=$case[1];expected=$case[2]})
     }
-    $results += [pscustomobject]@{architecture=$arch;keyboard=$keyboard;mode=$case[0];mix=if($case.Count -gt 3){$case[3]}else{1};interaction=$interaction;keys=$case[1];expected=$case[2];passed=$true}
+    $timeoutMs=1000 * $(if($TimeoutSeconds -gt 0){$TimeoutSeconds}elseif($pipe){120}else{60})
+    $process=$null;$worker=$null
+    try {
+      try {
+      if($pipe){
+       # The DLL does not auto-start a core from elevated hosts, including CI.
+       $corePath="$DllRoot/tools/shanjie-core.exe"
+       $worker=Invoke-Timed -Name 'Start isolated submission core' -Category 'core.lifecycle' -Action {
+        Start-Process $corePath -ArgumentList '--serve' -WindowStyle Hidden -RedirectStandardOutput "$out/$name.core.out.log" -RedirectStandardError "$out/$name.core.err.log" -PassThru
+       }
+       Wait-TestCoreReady -CorePath $corePath -OutputDirectory (Join-Path $out $name) | Out-Null
+      }
+      $process=[Diagnostics.Process]::Start($start)
+      $harnessPid=$process.Id
+      $stdout=$process.StandardOutput.ReadToEndAsync()
+      $stderr=$process.StandardError.ReadToEndAsync()
+      $timedOut=!$process.WaitForExit($timeoutMs)
+      if($timedOut){
+       if(!$process.HasExited){$process.Kill($true)}
+       $process.WaitForExit()
+      }
+      $log=$stdout.GetAwaiter().GetResult();$errorLog=$stderr.GetAwaiter().GetResult();$code=$process.ExitCode
+      Set-Content "$out/$name.log" "$log`n--- stderr ---`n$errorLog" -Encoding utf8NoBOM
+      if($digitBatch){
+       $confirmations=[regex]::Matches($log,'(?m)^INPUT PASS index=(\d+) elapsed_ms=([\d.]+)\r?$')
+       for($index=0;$index -lt $confirmations.Count;$index++){
+        $marker=$confirmations[$index]
+        if($index -ge $group.Count -or [int]$marker.Groups[1].Value -ne $index){throw "Invalid digit batch results in $out/$name.log"}
+        $entry=$group[$index]
+        $event=Start-TestStage -Name "Submission case $arch/$name/$index" -Category 'submission.case' -Details ($identity+@{keys=$entry[1];expected=$entry[2]})
+        Complete-TestStage -Stage $event -Details @{harness_pid=$harnessPid} -DurationMilliseconds ([double]$marker.Groups[2].Value)
+       }
+      }
+      if($timedOut){
+       $lastStage=($log -split '\r?\n' -match '^STAGE ' | Select-Object -Last 1) ?? '<none>'
+       $tail=($log -split '\r?\n' | Select-Object -Last 60) -join "`n"
+       $timeoutLog="$out/$name.timeout.log"
+       $detail="Owned submission harness timed out ($arch/$name after ${timeoutMs}ms). Last stage: $lastStage"
+       Set-Content $timeoutLog "$detail`n--- stdout tail ---`n$tail`n--- stderr ---`n$errorLog" -Encoding utf8NoBOM
+       throw "$detail See $timeoutLog"
+      }
+      if($code -or $log -notmatch 'PASS mode=' -or ($digitBatch -and $confirmations.Count -ne $group.Count)){throw "$arch $name failed ($code): $log $errorLog"}
+      if($worker){
+       & $corePath --stop *> "$out/$name.core.stop.log"
+       if($LASTEXITCODE -or !$worker.WaitForExit(5000)){throw 'Isolated submission core did not stop cleanly.'}
+      }
+      if($case[0] -like 'rebuild-*') {
+       if((Get-FileHash "$taskProfileRoot/Shanjie/personal.tsv").Hash -ne $personalHash -or $learnedRow -notin (Get-Content "$taskProfileRoot/Shanjie/learning.tsv")) {throw 'Rebuild changed the personal dictionary or lost an existing learning row'}
+      }
+     } finally {
+      if($process){$process.Dispose()}
+      if($worker){
+       if(!$worker.HasExited){$worker.Kill();$worker.WaitForExit()}
+       $worker.Dispose()
+      }
+     }
+     Complete-TestStage -Stage $caseStage -Details @{harness_pid=$harnessPid}
+    } catch { Complete-TestStage -Stage $caseStage -Status 'failed' -ErrorMessage $_.Exception.Message;throw }
+    foreach($entry in $group){$results += [pscustomobject]($identity+@{keys=$entry[1];expected=$entry[2];harness_pid=$harnessPid;passed=$true})}
    }
   }
  }

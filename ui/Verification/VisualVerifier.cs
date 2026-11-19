@@ -29,7 +29,7 @@ internal static class VisualVerifier
         var installed = settings.Vm.AvailableModels.ToList();
         Models.ModelChoice a = new("fixture-a", "測試配套 A（已下載）"), b = new("fixture-b", "測試配套 B（已下載）");
         b=b with{InstalledSpec=Models.ModelCatalog.Known()[0]};
-        settings.Vm.RefreshModels([a, b]); settings.Vm.SelectModel(b.Id); settings.Vm.DictionaryText = "ㄇㄠ 貓";
+        settings.Vm.RefreshModels(new[] { a, b }); settings.Vm.SelectModel(b.Id); settings.Vm.DictionaryText = "ㄇㄠ 貓";
         string draft = settings.Vm.DictionaryText; byte[] saved = File.ReadAllBytes(Models.ProfileStore.Path);
         async Task Expect(string id, string what)
         {
@@ -38,15 +38,15 @@ internal static class VisualVerifier
                 throw new InvalidDataException(what + $": shown={settings.ShownModelForVerification}, draft={settings.Vm.ModelId}");
         }
         await Expect(b.Id, "Selector after selection");
-        settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Rescan with the same index");
-        settings.ShowSection(MainWindow.Pages.Appearance); await Task.Delay(60); settings.Vm.RefreshModels([a, b]);
+        settings.Vm.RefreshModels(new[] { a, b }); await Expect(b.Id, "Rescan with the same index");
+        settings.ShowSection(MainWindow.Pages.Appearance); await Task.Delay(60); settings.Vm.RefreshModels(new[] { a, b });
         settings.ShowSection(MainWindow.Pages.General); await Expect(b.Id, "Rescan while another category is shown");
-        settings.Vm.RefreshModels([a, b]); settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Consecutive rescans");
-        settings.Vm.RefreshModels([b, a]); await Expect(b.Id, "Reordered list");
+        settings.Vm.RefreshModels(new[] { a, b }); settings.Vm.RefreshModels(new[] { a, b }); await Expect(b.Id, "Consecutive rescans");
+        settings.Vm.RefreshModels(new[] { b, a }); await Expect(b.Id, "Reordered list");
         if (settings.Vm.ModelVariant != 1) throw new InvalidDataException("Reordered list kept a stale index");
-        settings.Vm.RefreshModels([a]);
+        settings.Vm.RefreshModels(new[] { a });
         if (settings.Vm.ModelId != b.Id || !settings.Vm.ModelHelp.Contains("不存在")) throw new InvalidDataException("Missing model lost the draft or its fallback notice");
-        settings.Vm.RefreshModels([a, b]); await Expect(b.Id, "Model listed again");
+        settings.Vm.RefreshModels(new[] { a, b }); await Expect(b.Id, "Model listed again");
         if (!File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved)) throw new InvalidDataException("Rescans saved the profile");
         settings.Vm.Status = ""; settings.ShowModelNotice();
         if (!settings.Vm.Status.Contains("目前使用「" + b.Name)) throw new InvalidDataException("An older chosen model did not point to the built-in set");

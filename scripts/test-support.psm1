@@ -85,9 +85,9 @@ function Get-ContentFingerprint {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
 }
 
-function Get-CoreTestRunKey([object[]]$Binaries,[string]$ResourceRoot,[string]$ModelRoot,[string[]]$Arguments,[int]$MemoryLimit) {
+function Get-CoreTestRunKey([object[]]$Binaries,[string]$ResourceRoot,[string]$ModelRoot,[string[]]$Arguments,[int]$MemoryLimit,[string]$SourceKey) {
     $inputs=@(foreach($binary in $Binaries|Sort-Object Name){"$($binary.Name)=$((Get-FileHash -LiteralPath $binary.Path).Hash)"})
-    $inputs+=@("arguments=$($Arguments -join ' ')","threads=$env:RUST_TEST_THREADS","memory_limit=$MemoryLimit","processors=$([Environment]::ProcessorCount)")
+    $inputs+=@("source=$SourceKey","arguments=$($Arguments -join ' ')","threads=$env:RUST_TEST_THREADS","share_stride=$env:SHANJIE_SHARE_STRIDE","memory_limit=$MemoryLimit","processors=$([Environment]::ProcessorCount)","runner=$env:ImageOS/$env:ImageVersion")
     $inputs+=Get-ContentFingerprint -Root $ResourceRoot -Paths @('data','eval')
     $inputs+=Get-ContentFingerprint -Root $ModelRoot -Paths @('.')
     [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs -join "`n"))).ToLowerInvariant()
@@ -161,12 +161,14 @@ function Complete-TestStage {
         [Parameter(Mandatory)]$Stage,
         [ValidateSet('passed','failed','skipped')][string]$Status = 'passed',
         [hashtable]$Details = @{},
-        [string]$ErrorMessage
+        [string]$ErrorMessage,
+        [Nullable[double]]$DurationMilliseconds
     )
 
     $Stage.Watch.Stop()
     $stageDetails = $Stage.Details.Clone()
     foreach($key in $Details.Keys){$stageDetails[$key]=$Details[$key]}
+    $elapsed = $DurationMilliseconds ?? $Stage.Watch.Elapsed.TotalMilliseconds
     $event = [ordered]@{
         schema = 1
         id = $Stage.Id
@@ -176,7 +178,7 @@ function Complete-TestStage {
         category = $Stage.Category
         status = $Status
         started_utc = $Stage.Started.ToString('O')
-        duration_ms = [Math]::Round($Stage.Watch.Elapsed.TotalMilliseconds, 3)
+        duration_ms = [Math]::Round($elapsed, 3)
         details = $stageDetails
         test_name = $env:SHANJIE_CTEST_TEST_NAME
         attempt = if($env:SHANJIE_CTEST_ATTEMPT){[int]$env:SHANJIE_CTEST_ATTEMPT}else{1}
@@ -188,7 +190,7 @@ function Complete-TestStage {
         $path = Join-Path $directory ("{0}-{1}-{2}.json" -f (Get-Date -Format 'yyyyMMddTHHmmssfffZ'),$PID,[guid]::NewGuid().ToString('N'))
         [IO.File]::WriteAllText($path, ($event | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
     }
-    Write-Host ('[TIME] {0}/{1} {2:F3}s ({3})' -f $Stage.Category,$Stage.Name,$Stage.Watch.Elapsed.TotalSeconds,$Status)
+    Write-Host ('[TIME] {0}/{1} {2:F3}s ({3})' -f $Stage.Category,$Stage.Name,($elapsed/1000),$Status)
 }
 
 function Wait-TestCoreReady {
@@ -331,4 +333,12 @@ function Get-ExclusiveTestTimings([object[]]$Events) {
     }
 }
 
-Export-ModuleMember -Function Get-CoreTestRunKey,Copy-TestTools,Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings
+function Get-WindowsCargoReleaseArgs([string]$Architecture) {
+    '--release'
+    if ($Architecture -eq 'x64') {
+        '--config'
+        Join-Path (Split-Path $PSScriptRoot -Parent) '.cargo/windows-release-x64.toml'
+    }
+}
+
+Export-ModuleMember -Function Get-CoreTestRunKey,Copy-TestTools,Get-RelativeFileEntries,Get-ContentFingerprint,Test-ContentCache,Save-ContentCache,Initialize-TestTimings,Start-TestStage,Complete-TestStage,Wait-TestCoreReady,Invoke-Timed,Export-TestTimingSummary,Read-CtestResults,Get-ExclusiveTestTimings,Get-WindowsCargoReleaseArgs
