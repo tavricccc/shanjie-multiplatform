@@ -39,7 +39,7 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
-        '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/verify-(changed|selection)\.ps1|tests/verify_selection\.ps1)$' {
+        '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
         '^(platform/|scripts/prepare-core\.ps1$)' {

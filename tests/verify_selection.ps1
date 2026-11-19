@@ -16,6 +16,7 @@ Expect 'docs only' @('docs/DESIGN.md','Changelog.md','README.md') $false @() $tr
 Expect 'windows-style separators' @('docs\ARCHITECTURE.md') $false @() $true
 Expect 'release script' @('scripts/release.py') $false @('fast','test-framework')
 Expect 'release workflow' @('.github/workflows/release.yml') $false @('fast','test-framework')
+Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.ps1') $false @('fast','test-framework')
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
