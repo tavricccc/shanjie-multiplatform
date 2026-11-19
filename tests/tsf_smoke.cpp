@@ -155,7 +155,7 @@ int wmain(int argc, wchar_t** argv) {
     auto residentStatus = (unsigned long long (__cdecl*)())GetProcAddress(dll,"sj_resident_status");
     auto liveObjects = (unsigned (__cdecl*)())GetProcAddress(dll,"sj_tsf_objects");
     require(residentStatus && liveObjects,460);
-    auto waitPreload = [&]() {
+    auto waitPreload = [&](unsigned minimumLoads=0) {
         auto start = Clock::now();
         auto settled=start;
         auto status=residentStatus();
@@ -165,10 +165,17 @@ int wmain(int argc, wchar_t** argv) {
             while (PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&msg);
             auto next=residentStatus();
             if(next!=status) {status=next;settled=Clock::now();}
-            require(Clock::now()-start < std::chrono::seconds(15),461);
+            if (Clock::now()-start >= std::chrono::seconds(15)) {
+                std::printf("Preload stalled: need %u loads, started=%u completed=%u\n",
+                    minimumLoads,static_cast<unsigned>(status),static_cast<unsigned>(status>>32));
+                require(false,461);
+            }
             Sleep(5);
-        } while ((status >> 32) != (status & 0xffffffffULL) || Clock::now()-settled<std::chrono::milliseconds(35));
-        std::printf("Background preload wait: %.3f ms\n",std::chrono::duration<double,std::milli>(Clock::now()-start).count());
+        } while (static_cast<unsigned>(status) < minimumLoads || (status >> 32) != (status & 0xffffffffULL) ||
+            Clock::now()-settled<std::chrono::milliseconds(35));
+        std::printf("Background preload wait: %.3f ms (started=%u completed=%u)\n",
+            std::chrono::duration<double,std::milli>(Clock::now()-start).count(),
+            static_cast<unsigned>(status),static_cast<unsigned>(status>>32));
     };
     PROCESS_MEMORY_COUNTERS_EX memory{}; memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(),(PROCESS_MEMORY_COUNTERS*)&memory,sizeof(memory)))
@@ -514,16 +521,19 @@ int wmain(int argc, wchar_t** argv) {
         localNotify(L"Shanjie.ProfileChanged.v2");
         require(store->text == beforePinyinReload && noCandidates(),342);
         require(WritePrivateProfileStringW(L"input",L"keyboard",L"1",profile.c_str()),380);
+        const auto restartLoad = static_cast<unsigned>(residentStatus())+1;
         localNotify(L"Shanjie.Restart.v2");
         require(store->text == beforePinyinReload && noCandidates(),381);
+        waitPreload(restartLoad);
         press('S',382); press('U',384); press('3',386); press(VK_DOWN,388); press(VK_RETURN,390);
         require(noCandidates(),392); // Explicit restart reloads the directly edited keyboard and preserves pending pinyin.
         press(VK_RETURN,391); // With Enter-to-select, the second Enter submits the composition.
+        const auto mixedLoad = static_cast<unsigned>(residentStatus())+1;
         require(WritePrivateProfileStringW(L"input",L"mixed_input",L"1",profile.c_str()),400);
         require(WritePrivateProfileStringW(L"input",L"space_commits",L"0",profile.c_str()),512);
         require(WritePrivateProfileStringW(L"candidates",L"space_operates",L"0",profile.c_str()),513);
         localNotify(L"Shanjie.ProfileChanged.v2");
-        waitPreload();
+        waitPreload(mixedLoad);
         for (int spaces : {0,1,2}) {
             for (wchar_t key : std::wstring(L"SU3CL35K4G4")) press(key,514);
             auto beforeEnglish = store->text; auto englishCaret = store->selection.acpStart;
