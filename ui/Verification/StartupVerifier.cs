@@ -28,6 +28,8 @@ internal static class StartupVerifier
         await Task.Delay(100);
         if (settings.FindName("Nav") is null || settings.FindName("ModelSelector") is null)
             throw new InvalidDataException("Main settings resources did not load");
+        if ((Environment.GetEnvironmentVariable("SHANJIE_TEST_GLASS_FAIL") == "1") != settings.Host.SolidFallback)
+            throw new InvalidDataException("Glass fallback did not match the fixture");
         var error = new InvalidOperationException("Public diagnostic fixture", new IOException("Public inner exception"));
         error.Data["RestrictedDescription"] = "Public resource failure";
         string log = StartupDiagnostics.Write(error, "startup-verifier") ?? throw new IOException("Startup log not written");

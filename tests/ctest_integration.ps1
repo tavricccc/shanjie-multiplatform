@@ -64,13 +64,13 @@ $caseScenarios=@($english|ForEach-Object{$_[1]}|Sort-Object -Unique)
 Check (@(Compare-Object $scenarios $caseScenarios).Count -eq 0) 'Every English scenario has a CTest row'
 Check (@($english|Where-Object{$_[1] -eq 'digit-navigation'}).Count -eq 2) 'Both mixing modes retain digit-navigation coverage'
 $rows=@(
-    foreach($phase in 'clean','reopen','different-directory'){[pscustomobject]@{name="release.ui.startup.$phase";preset='windows-x64';selected=$true;reason='fixture'}}
+    foreach($phase in 'clean','reopen','different-directory','glass-fallback'){[pscustomobject]@{name="release.ui.startup.$phase";preset='windows-x64';selected=$true;reason='fixture'}}
     foreach($keyboard in 1,3,2){[pscustomobject]@{name="release.ui.disabled.keyboard$keyboard";preset='windows-x64';selected=$true;reason='fixture'}}
 )
 $plan=@(Get-HarnessCasePlan $rows)
-Check ($plan.Count -eq 9) 'Startup and initial/reopen UI checks produce nine subcases'
+Check ($plan.Count -eq 10) 'Startup and initial/reopen UI checks produce ten subcases'
 Check (@($plan|Where-Object status -ne 'not-run').Count -eq 0) 'Planning UI coverage never claims execution'
-Check (@($plan.name|Sort-Object -Unique).Count -eq 9) 'UI subcase identities are unique'
+Check (@($plan.name|Sort-Object -Unique).Count -eq 10) 'UI subcase identities are unique'
 foreach($case in $plan){Check ($case.parameters.architecture -eq 'x64') 'WinUI subcases keep their x64 host identity'}
 
 # Exercise the actual level branches, so broad changes keep mapped UI checks in
