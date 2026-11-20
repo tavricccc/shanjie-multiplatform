@@ -252,6 +252,8 @@ impl Engine {
         // upstream punctuation key does before dispatching.
         self.late = None;
         self.late_in = None;
+        self.last_short = None;
+        self.last_auto = None;
         // The direct Windows insertion entry bypasses key_original's digit boundary.
         // Materialize earlier digits and Shift-English before the later literal.
         let mut commit = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };

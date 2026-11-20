@@ -71,6 +71,7 @@ impl Engine {
         engine.pack_text = Some(pack_text).filter(|text| !text.is_empty());
         engine.pack_oov_len = pack_oov_len;
         engine.digit_table = windows_digit_table(data);
+        engine.auto_table = std::fs::read_to_string(data.join("english.tsv")).ok().and_then(|t| AutoTable::parse(&t)).map(Arc::new);
         if let Ok(text) = std::fs::read_to_string(data.join("mixed-words.tsv")) { engine.set_mixed_words(&text); }
         match std::fs::read_to_string(data.join("english-next.tsv")) {
             Ok(text) => engine.en_table = Some(Arc::new(EnglishTable::parse(&text).map_err(|_| EngineError::LoadFailed)?)),
