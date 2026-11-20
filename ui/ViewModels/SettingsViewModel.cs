@@ -105,6 +105,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CandidateHelp))] public partial bool EnterCommits { get; set; }
     [ObservableProperty] public partial bool UpCycles { get; set; }
     [ObservableProperty] public partial bool BackspaceDeletes { get; set; }
+    [ObservableProperty] public partial bool EnglishHint { get; set; }
     [ObservableProperty] public partial string DictionaryText { get; set; } = "";
     [ObservableProperty] public partial int Theme { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CustomAccent))] public partial int AccentMode { get; set; }

@@ -29,6 +29,7 @@ pub struct Candidates {
     pub size: Cell<u32>,
     pub anchor_right: Cell<bool>,
     pub reading_panel: Cell<bool>,
+    pub english_hint: Cell<bool>,
     owner: Weak<Data>,
     view: Cell<HWND>,
     _count: Count,
@@ -63,6 +64,7 @@ pub unsafe fn new(
         size: Cell::new(size),
         anchor_right: Cell::new(true),
         reading_panel: Cell::new(false),
+        english_hint: Cell::new(true),
         owner,
         view: Cell::new(HWND::default()),
         _count: Count::new(),
@@ -124,7 +126,7 @@ impl Candidates {
         range: &ITfRange,
         state: Snapshot,
     ) -> Result<()> {
-        let state = crate::input::panel_view(state, self.reading_panel.get());
+        let state = crate::input::panel_view(state, self.reading_panel.get(), self.english_hint.get());
         if state.candidates.is_empty() && state.preedit.is_empty() && state.english_run_utf16_len == 0 {
             self.close();
             return Ok(());
@@ -217,6 +219,7 @@ impl Candidates {
         if let Some(host) = host.as_mut() {
             host.appearance = self.appearance.get();
             host.anchor_right = self.anchor_right.get();
+            host.english_hint = self.english_hint.get();
             host.publish(
                 self.snapshot.borrow().clone(),
                 self.theme.get(),
