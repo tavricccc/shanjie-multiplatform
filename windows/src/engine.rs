@@ -228,6 +228,7 @@ impl Engine {
             // A new engine starts with the core's defaults, so every switch is sent each time.
             e.operation(|h, o| shanjie_engine_set_prediction(h, config.prediction as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_fuzzy(h, config.fuzzy, o))?;
+            e.operation(|h, o| shanjie_engine_set_tone3(h, config.tone3 as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank(h, config.rerank as u32, o))?;
             e.operation(|h, o| shanjie_engine_set_rerank_level(h, config.rerank_level, o))?;
             e.operation(|h, o| shanjie_engine_set_profile(h, config.ranking, o))?;

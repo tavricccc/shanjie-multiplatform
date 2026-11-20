@@ -752,7 +752,6 @@ fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
 
     for (keys, want) in [
         ("9x6", "來"),
-        ("o1 ", "杯"),
         ("8d ", "咖"),
         ("8e ", "嘎"),
         ("8w ", "他"),
@@ -766,6 +765,19 @@ fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
         }
         assert_eq!(preedit, want, "keys={keys}");
     }
+    // Upstream PR #80 (english.tsv) reads context-free reversed "o1 " as English "o1"
+    // at the closing key (Revert::Auto) with Esc restoring "杯"; with auto-English off it stays "杯".
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.key(Key::ch('o', 0)).unwrap();
+    e.key(Key::ch('1', 0)).unwrap();
+    assert_eq!(e.key(Key::new(KeyKind::Space)).unwrap().preedit, "o1", "keys=o1  (auto-English on)");
+    assert_eq!(e.key(Key::new(KeyKind::Esc)).unwrap().preedit, "杯", "Esc restores o1  to 杯");
+    e.set_english_auto(false).unwrap();
+    e.reset(shanjie_core::engine::ResetMode::Discard);
+    e.key(Key::ch('o', 0)).unwrap();
+    e.key(Key::ch('1', 0)).unwrap();
+    assert_eq!(e.key(Key::new(KeyKind::Space)).unwrap().preedit, "杯", "keys=o1  (auto-English off)");
+    e.set_english_auto(true).unwrap();
 
     // 連續快打整句測試：倒序按鍵流是否能正確辨識為中文，而非退化為英數字串
     e.reset(shanjie_core::engine::ResetMode::Discard);
@@ -812,4 +824,94 @@ fn fast_typing_digits_recover_reordered_syllables_in_upstream_english_mode() {
         e.key(Key::ch(ch, modifiers)).unwrap();
     }
     assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "RTX4090");
+}
+
+#[test]
+#[ignore = "Reads the built data and model in dist/data; scripts/verify.ps1 and the release job run it after the build"]
+fn tone3_sandhi_and_auto_english_coexist_with_windows_modes() {
+    let data = test_data_root();
+    let model = data.join("models/builtin/bigram.winmap");
+    let press = |e: &mut Engine, keys: &str| {
+        let mut out = None;
+        for ch in keys.chars() {
+            let key = if ch == ' ' { Key::new(KeyKind::Space) } else { Key::ch(ch, 0) };
+            out = Some(e.key_with_latin(key, ch.is_ascii_alphabetic().then_some(ch)).unwrap());
+        }
+        out.unwrap()
+    };
+    let all_candidates = |e: &mut Engine| {
+        let mut out = e.key(Key::new(KeyKind::Down)).unwrap();
+        let total = out.total as usize;
+        let mut items = Vec::with_capacity(total);
+        let mut last_page_len = out.candidates.len();
+        while items.len() < total {
+            last_page_len = out.candidates.len();
+            for cand in &out.candidates {
+                if items.len() < total { items.push(cand.clone()); }
+            }
+            if items.len() < total {
+                out = e.key(Key::new(KeyKind::Space)).unwrap();
+            }
+        }
+        (items, last_page_len)
+    };
+
+    for right in [false, true] {
+        for mixed in [false, true] {
+            let mut e = Engine::new_with_personal(&data, Layout::Standard, None, shanjie_core::engine::PACK_ALL).unwrap();
+            e.load_lm(&model).unwrap();
+            e.set_windows_input_options((1 << 21) | (1 << 23));
+            e.set_candidate_anchor(right);
+            e.set_mixed_input(mixed);
+            e.set_upstream_english(!mixed, false, true, true).unwrap();
+            assert!(e.tone3());
+            assert!(e.auto_table_loaded(), "english.tsv must load through Windows resident cache");
+
+            for (keys, want) in [("ji6vu;3", "我想"), ("vul6ru,7", "小姐")] {
+                e.reset(ResetMode::Discard);
+                let out = press(&mut e, keys);
+                assert_eq!(out.preedit, want, "right={right} mixed={mixed} keys={keys}");
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want);
+            }
+
+            // 506 stays literal digits in both the upstream digit layer and raw-key mixing.
+            e.reset(ResetMode::Discard);
+            assert_eq!(press(&mut e, "506").preedit, "506", "right={right} mixed={mixed}");
+            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "506");
+
+            // Turning tone3 off stops accepting unaccepted second-tone syllables.
+            e.set_tone3(false).unwrap();
+            e.reset(ResetMode::Discard);
+            assert_ne!(press(&mut e, "ji6vu;3").preedit, "我想", "tone3 off right={right} mixed={mixed}");
+            e.set_tone3(true).unwrap();
+            e.reset(ResetMode::Discard);
+
+            // Closing-key auto-English runs in upstream English mode (overwrite=0) and stays out of raw-key mixing.
+            let speech = press(&mut e, "speech ");
+            if !mixed {
+                assert_eq!(speech.preedit, "speech", "right={right}");
+                let token_cands = e.key(Key::new(KeyKind::Down)).unwrap().candidates;
+                assert_eq!(token_cands[0], "speech", "right={right} token_cands={token_cands:?}");
+                assert!(token_cands.iter().any(|w| w == "SPEECH") && token_cands.len() >= 4, "right={right} token_cands={token_cands:?}");
+                let picked_upper = token_cands.iter().position(|w| w == "SPEECH").unwrap();
+                assert_eq!(e.pick(picked_upper).unwrap().unwrap().preedit, "SPEECH", "right={right}");
+                let token_cands2 = e.key(Key::new(KeyKind::Down)).unwrap().candidates;
+                let zh_idx = token_cands2.len() - 1;
+                let picked_zh = e.pick(zh_idx).unwrap().unwrap();
+                assert_eq!(picked_zh.preedit, token_cands2[zh_idx], "right={right} zh fallback");
+                assert_ne!(picked_zh.preedit, "SPEECH", "right={right}");
+
+                e.reset(ResetMode::Discard);
+                assert_eq!(press(&mut e, "speech ").preedit, "speech", "right={right}");
+                let undone = e.key(Key::new(KeyKind::Esc)).unwrap();
+                assert!(!undone.preedit.is_empty() && undone.preedit != "speech", "Esc undoes Space auto-English");
+                let (cands, last_page_len) = all_candidates(&mut e);
+                assert!(cands.len() >= 2 && cands[cands.len() - 2..] == ["speech", "SPEECH"], "right={right} cands={cands:?}");
+                let upper_idx = last_page_len - 1;
+                assert_eq!(e.pick(upper_idx).unwrap().unwrap().preedit, "SPEECH", "right={right}");
+            } else {
+                assert_eq!(speech.preedit, "speech ", "raw-key mixing keeps its own literal space");
+            }
+        }
+    }
 }

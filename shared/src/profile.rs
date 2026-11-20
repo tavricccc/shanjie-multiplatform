@@ -15,7 +15,7 @@ pub const FUZZY_KEYS: [&str; 5] = ["fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "
 /// replaces the list.
 pub const CHAT_APPS: &str = "discord.exe;line.exe;slack.exe;telegram.exe;whatsapp.exe;whatsapp.root.exe;messenger.exe";
 /// Settings that change how the core is built: a change to any of them opens a new engine.
-pub const REBUILD: [(&str, &str); 28] = [
+pub const REBUILD: [(&str, &str); 29] = [
     ("input", "keyboard"),
     ("engine", "ranking"),
     ("engine", "chat_apps"),
@@ -33,6 +33,7 @@ pub const REBUILD: [(&str, &str); 28] = [
     ("engine", FUZZY_KEYS[2]),
     ("engine", FUZZY_KEYS[3]),
     ("engine", FUZZY_KEYS[4]),
+    ("engine", "tone3_sandhi"),
     ("input", "english_key_order"),
     ("candidates", "anchor"),
     ("input", "learning"),
@@ -359,7 +360,7 @@ pub fn dictionary_content(text: &str) -> Result<String> {
 /// Personal choices a preset never carries: they stay with the user when loading one.
 const PERSONAL: [(&str, &[&str]); 3] = [
     ("engine", &["ranking", "chat_apps", "demote", "acg_pack", "quote_pack", "it_pack", "beauty_pack", "meme_pack", "model_id", "model_revision", "rerank", "rerank_level",
-        "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent"]),
+        "fuzzy_en_eng", "fuzzy_zh_z", "fuzzy_ch_c", "fuzzy_sh_s", "fuzzy_adjacent", "tone3_sandhi"]),
     (
         "input",
         &["dictionary", "keyboard", "learning", "context", "chinese", "full_width", "cjk_spacing", "english_overwrite"],
@@ -788,6 +789,24 @@ mod tests {
         let mut old = Document::parse("[profile]\nschema=8\n").unwrap();
         old.migrate();
         assert!(!old.zhuyin_only());
+    }
+    #[test]
+    fn tone3_sandhi_defaults_on_and_stays_personal() {
+        assert!(REBUILD.contains(&("engine", "tone3_sandhi")));
+        for windows in [true, false] {
+            assert!(template(windows).flag("engine", "tone3_sandhi", false));
+        }
+        let mut old = Document::parse("[profile]\nschema=8\ninteraction=windows\n").unwrap();
+        old.migrate();
+        assert!(old.flag("engine", "tone3_sandhi", false));
+        old.set("engine", "tone3_sandhi", 0);
+        old.migrate();
+        assert!(!old.flag("engine", "tone3_sandhi", true));
+        for windows in [true, false] {
+            let merged = Document::parse(&preset(&old.content(), windows).unwrap()).unwrap();
+            assert!(!merged.flag("engine", "tone3_sandhi", true));
+        }
+        assert!(!export_preset(&old.content(), "public").unwrap().contains("tone3_sandhi="));
     }
     #[test]
     fn space_symbol_toggle_defaults_and_preset_round_trip() {

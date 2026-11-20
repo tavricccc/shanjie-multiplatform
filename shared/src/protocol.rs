@@ -64,6 +64,9 @@ pub struct Config {
     /// shanjie_engine_set_fuzzy bits: the four sound pairs, then adjacent keys.
     #[serde(default)]
     pub fuzzy: u32,
+    /// shanjie_engine_set_tone3: third-tone sandhi, default on as upstream.
+    #[serde(default = "on")]
+    pub tone3: bool,
     #[serde(default)]
     pub quotes: bool,
 }
@@ -92,6 +95,7 @@ impl Default for Config {
             rerank: true,
             rerank_level: standard(),
             fuzzy: 0,
+            tone3: true,
             quotes: false,
         }
     }
@@ -117,6 +121,7 @@ impl Config {
             rerank: p.flag("engine", "rerank", true),
             rerank_level: crate::profile::RERANK_LEVELS.iter().position(|l| *l == p.get("engine", "rerank_level", "standard")).unwrap_or(1) as u32,
             fuzzy: p.fuzzy(),
+            tone3: p.flag("engine", "tone3_sandhi", true),
             quotes: p.flag("engine", "quote_pack", false),
         }
     }
@@ -171,5 +176,19 @@ mod pack_tests {
             let preset = crate::profile::preset(&profile.content(), true).unwrap();
             assert!(!crate::profile::Document::parse(&preset).unwrap().flag("engine", key, true));
         }
+    }
+
+    #[test]
+    fn tone3_config_defaults_on_and_preserves_opt_out() {
+        let mut profile = crate::profile::Document::parse("[profile]\nschema=9\n").unwrap();
+        assert!(Config::from_profile(&profile, 0).tone3);
+        profile.set("engine", "tone3_sandhi", 0);
+        let config = Config::from_profile(&profile, 0);
+        assert!(!config.tone3);
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().tone3);
+        let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+        legacy.as_object_mut().unwrap().remove("tone3");
+        assert!(serde_json::from_value::<Config>(legacy).unwrap().tone3);
     }
 }
