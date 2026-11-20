@@ -809,6 +809,30 @@ mod tests {
         assert!(!export_preset(&old.content(), "public").unwrap().contains("tone3_sandhi="));
     }
     #[test]
+    fn english_hint_defaults_on_and_coexists_with_tone3_sandhi() {
+        assert!(!REBUILD.contains(&("candidates", "english_hint")));
+        assert!(REBUILD.contains(&("engine", "tone3_sandhi")));
+        for windows in [true, false] {
+            let doc = template(windows);
+            assert!(doc.flag("candidates", "english_hint", false));
+            assert!(doc.flag("engine", "tone3_sandhi", false));
+        }
+        let mut old = Document::parse("[profile]\nschema=8\ninteraction=windows\n").unwrap();
+        old.migrate();
+        assert!(old.flag("candidates", "english_hint", true));
+        assert!(old.flag("engine", "tone3_sandhi", false));
+        old.set("candidates", "english_hint", 0);
+        old.set("engine", "tone3_sandhi", 0);
+        let shared = export_preset(&old.content(), "english-hint").unwrap();
+        assert!(shared.contains("english_hint=0") && !shared.contains("tone3_sandhi="));
+        let imported = Document::parse(&import_preset(&old.content(), &shared).unwrap()).unwrap();
+        assert!(!imported.flag("candidates", "english_hint", true));
+        assert!(!imported.flag("engine", "tone3_sandhi", true));
+        let reset = Document::parse(&preset(&old.content(), true).unwrap()).unwrap();
+        assert!(reset.flag("candidates", "english_hint", false));
+        assert!(!reset.flag("engine", "tone3_sandhi", true));
+    }
+    #[test]
     fn space_symbol_toggle_defaults_and_preset_round_trip() {
         let mut old = Document::parse("[profile]\nschema=6\ninteraction=windows\n").unwrap();
         old.migrate();

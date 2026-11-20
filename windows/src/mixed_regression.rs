@@ -890,6 +890,15 @@ fn tone3_sandhi_and_auto_english_coexist_with_windows_modes() {
             let speech = press(&mut e, "speech ");
             if !mixed {
                 assert_eq!(speech.preedit, "speech", "right={right}");
+                assert_eq!(speech.english_run_utf16_len, 0, "Space auto-English produces a finished token");
+                let speech_snapshot = shanjie_shell::protocol::Snapshot {
+                    preedit: speech.preedit.clone(),
+                    english_run_utf16_start: speech.english_run_utf16_start,
+                    english_run_utf16_len: speech.english_run_utf16_len,
+                    ..Default::default()
+                };
+                assert_eq!(shanjie_shell::input::panel_view(speech_snapshot.clone(), false, true).english_run_utf16_len, 0);
+                assert_eq!(shanjie_shell::input::panel_view(speech_snapshot, false, false).english_run_utf16_len, 0);
                 let token_cands = e.key(Key::new(KeyKind::Down)).unwrap().candidates;
                 assert_eq!(token_cands[0], "speech", "right={right} token_cands={token_cands:?}");
                 assert!(token_cands.iter().any(|w| w == "SPEECH") && token_cands.len() >= 4, "right={right} token_cands={token_cands:?}");
@@ -909,6 +918,26 @@ fn tone3_sandhi_and_auto_english_coexist_with_windows_modes() {
                 assert!(cands.len() >= 2 && cands[cands.len() - 2..] == ["speech", "SPEECH"], "right={right} cands={cands:?}");
                 let upper_idx = last_page_len - 1;
                 assert_eq!(e.pick(upper_idx).unwrap().unwrap().preedit, "SPEECH", "right={right}");
+
+                // Tone-key auto-English opens an English run; PR #121 english_hint controls only the panel hint
+                // without altering the run underline or Esc replay.
+                e.reset(ResetMode::Discard);
+                let tone_run = press(&mut e, "ps4");
+                assert_eq!(tone_run.preedit, "ps4", "right={right}");
+                assert_eq!(tone_run.english_run_utf16_len, 3, "right={right}");
+                let run_snapshot = shanjie_shell::protocol::Snapshot {
+                    preedit: tone_run.preedit.clone(),
+                    english_run_utf16_start: tone_run.english_run_utf16_start,
+                    english_run_utf16_len: tone_run.english_run_utf16_len,
+                    ..Default::default()
+                };
+                assert_eq!(shanjie_shell::input::panel_view(run_snapshot.clone(), false, true).english_run_utf16_len, 3);
+                let hidden = shanjie_shell::input::panel_view(run_snapshot.clone(), false, false);
+                assert!(hidden.preedit.is_empty() && hidden.english_run_utf16_len == 0);
+                let underlined = shanjie_shell::input::panel_view(run_snapshot, true, false);
+                assert!(underlined.preedit == "ps4" && underlined.english_run_utf16_len == 3);
+                let replayed = e.key(Key::new(KeyKind::Esc)).unwrap();
+                assert!(replayed.english_run_utf16_len == 0 && !replayed.preedit.is_empty() && replayed.preedit != "ps4", "right={right} replayed={}", replayed.preedit);
             } else {
                 assert_eq!(speech.preedit, "speech ", "raw-key mixing keeps its own literal space");
             }
