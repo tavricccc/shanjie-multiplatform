@@ -649,7 +649,7 @@ impl Host {
         ((mix(size.0, self.panel.0), mix(size.1, self.panel.1)), (place(origin.0, self.origin.0), place(origin.1, self.origin.1)))
     }
     unsafe fn animate(&self) {
-        if self.moving() {
+        if self.opened.is_some() || self.glide.is_some() || self.morph.is_some() {
             SetTimer(Some(self.window), TIMER, 8, None);
         }
     }
@@ -1029,13 +1029,13 @@ unsafe extern "system" fn procedure(window: HWND, message: u32, wp: WPARAM, lp: 
         }
         if message == WM_TIMER && wp.0 == TIMER {
             let host = &mut *ptr;
-            let _ = host.display();
             if !host.moving() {
                 host.opened = None;
                 host.glide = None;
                 host.morph = None;
                 let _ = KillTimer(Some(window), TIMER);
             }
+            let _ = host.display();
             return LRESULT(0);
         }
         if [
