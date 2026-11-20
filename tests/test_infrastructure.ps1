@@ -88,7 +88,7 @@ foreach($branch in $ast.FindAll({param($node)$node -is [Management.Automation.La
     . ([scriptblock]::Create($branch.Extent.Text))
 }
 Assert-Check ($presets.Count -eq 2 -and $presets[0] -ceq 'windows-x64' -and $presets[1] -ceq 'windows-x86') 'RELEASE retains two separate architecture presets'
-foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-SelectedTests','Invoke-CtestSelection') {
+foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-TestNumericProperty','Read-CtestPreviousFailures','Merge-CtestPreviousFailures','Get-CtestExecutionWaves','Get-SelectedTests','Invoke-CtestSelection') {
     $definition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$false)
     . ([scriptblock]::Create($definition.Extent.Text))
 }
@@ -106,6 +106,23 @@ $inventory=[pscustomobject]@{tests=@(
 $selection=Get-SelectedTests $inventory @('english') 'windows-x64'
 Assert-Check ($selection.Selected.Count -eq 2) 'Report explicitly includes required fixture setup'
 Assert-Check ($selection.Omitted.Count -eq 0) 'A required fixture is not simultaneously reported omitted'
+$waveInventory=[pscustomobject]@{tests=@(
+    [pscustomobject]@{name='fast.prepare-core';properties=@([pscustomobject]@{name='FIXTURES_SETUP';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.core-suite';properties=@([pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=4})},
+    [pscustomobject]@{name='fast.rust.windows';properties=@([pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.english.caps.x64';properties=@([pscustomobject]@{name='PROCESSORS';value=1})}
+)}
+$waves=@(Get-CtestExecutionWaves $waveInventory @($waveInventory.tests | ForEach-Object {[pscustomobject]@{name=$_.name}}))
+Assert-Check ($waves.Count -eq 2 -and $waves[0].tag -eq 'heavy' -and ($waves[0].tests.name -join ',') -eq 'fast.prepare-core,full.core-suite') 'Multi-processor heavy suite forms an upfront priority wave with its required fixture setup'
+Assert-Check ($waves[1].tag -eq 'remaining' -and ($waves[1].tests.name -join ',') -eq 'fast.rust.windows,full.english.caps.x64' -and ($waves[1].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Remaining wave excludes already-completed setup fixtures instead of rerunning them'
+$singleWave=@(Get-CtestExecutionWaves $waveInventory @([pscustomobject]@{name='fast.prepare-core'},[pscustomobject]@{name='fast.rust.windows'}))
+Assert-Check ($singleWave.Count -eq 1 -and $singleWave[0].tag -eq '') 'Single-processor selections stay in one CTest wave'
+$mockCostFile=Join-Path $ResultRoot 'CTestCostData.txt'
+[IO.File]::WriteAllText($mockCostFile,"heavy 1 10`nshort_12 1 1`n---`nshort_12`n",[Text.UTF8Encoding]::new($false))
+Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'CTestCostData previous-failure section is parsed before multi-wave execution'
+[IO.File]::WriteAllText($mockCostFile,"heavy 2 10`nshort_12 1 1`n---`n",[Text.UTF8Encoding]::new($false))
+Merge-CtestPreviousFailures $mockCostFile @('short_12')
+Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'Passing wave 1 preserves previous-failure priority for upcoming waves'
 
 $reportRoot=$ResultRoot;$Jobs=1;$RetryFailures=$true;$script:ctestReports=@();$script:mockCalls=@()
 function ctest {
@@ -138,8 +155,13 @@ Assert-Check ($retried.attempts[0].failure -eq 'first failure') 'First failure t
 $firstJUnit=$script:ctestReports[0].junit
 $firstBytes=[IO.File]::ReadAllText($firstJUnit)
 $RetryFailures=$false
-Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='release.package'}) -ReportTag 'package'
+$TestLoad=6
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='release.package'}) -ReportTag 'package' -ExcludeFixtureSetup @('CoreOverlay')
+$TestLoad=0
 Assert-Check ($script:ctestReports[-1].junit -ne $firstJUnit -and [IO.File]::ReadAllText($firstJUnit) -ceq $firstBytes) 'Deferred package has its own JUnit and retains architecture evidence'
+Assert-Check ('--test-load' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'--test-load')+1] -eq '6') 'Optional TestLoad forwards --test-load to CTest'
+Assert-Check ('-FS' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'-FS')+1] -eq '^(CoreOverlay)$') 'Subsequent waves pass -FS to avoid rerunning completed fixture setup'
+Assert-Check ('--schedule-random' -notin $script:mockCalls[0] -and '--schedule-random' -notin $script:mockCalls[-1]) 'Scheduling never enables --schedule-random'
 Remove-Item Function:ctest
 & "$root/tests/release_guard.ps1" -ResultRoot (Join-Path $ResultRoot 'release-guard')
 # Windows fixture plumbing: the real TSF payload must use sealed bytes and data,

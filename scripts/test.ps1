@@ -7,7 +7,8 @@ param(
     [switch]$RetryFailures,
     [switch]$CiSafe,
     [switch]$PlanOnly,
-    [ValidateSet('x64','x86')][string]$Architecture='x64'
+    [ValidateSet('x64','x86')][string]$Architecture='x64',
+    [ValidateRange(0,1024)][double]$TestLoad=0
 )
 $ErrorActionPreference='Stop'
 if($Architecture -eq 'x86' -and $Level -notin 'AFFECTED','RELEASE'){throw '-Architecture x86 is supported by AFFECTED/RELEASE; CI, FAST and FULL use the x64 baseline.'}
@@ -50,6 +51,7 @@ $pathReasons=[ordered]@{}
 $selectedByPreset=[ordered]@{}
 $unselectedByPreset=[ordered]@{}
 $inventoryByPreset=[ordered]@{}
+$schedulingByPreset=[ordered]@{}
 $presets=@()
 $testResults=@()
 $ctestReports=@()
@@ -95,6 +97,120 @@ function Get-TestFixtureProperty($Test,[string]$PropertyName) {
     $property=$Test.properties | Where-Object name -eq $PropertyName | Select-Object -First 1
     if (!$property) { return @() }
     return @($property.value | ForEach-Object { ([string]$_ -split ';') })
+}
+function Get-TestNumericProperty($Test,[string]$PropertyName,[double]$DefaultValue=0) {
+    $property=$Test.properties | Where-Object name -eq $PropertyName | Select-Object -First 1
+    if (!$property -or $null -eq $property.value) { return $DefaultValue }
+    $parsed=0.0
+    if ([double]::TryParse([string]$property.value,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$parsed)) { return $parsed }
+    return $DefaultValue
+}
+function Get-CtestCostDataPath([string]$BinaryDirectory) {
+    Join-Path $BinaryDirectory 'Testing/Temporary/CTestCostData.txt'
+}
+function Read-CtestPreviousFailures([string]$CostDataPath) {
+    if (!$CostDataPath -or !(Test-Path -LiteralPath $CostDataPath)) { return @() }
+    $lines = Get-Content -LiteralPath $CostDataPath
+    $sepIndex = [Array]::IndexOf($lines, '---')
+    if ($sepIndex -lt 0 -or $sepIndex -ge ($lines.Count - 1)) { return @() }
+    return @($lines[($sepIndex + 1)..($lines.Count - 1)] | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+function Merge-CtestPreviousFailures([string]$CostDataPath, [string[]]$PreservedNames) {
+    if (!$CostDataPath -or !$PreservedNames -or !$PreservedNames.Count -or !(Test-Path -LiteralPath $CostDataPath)) { return }
+    $lines = @(Get-Content -LiteralPath $CostDataPath)
+    $sepIndex = [Array]::IndexOf($lines, '---')
+    $costRows = if ($sepIndex -ge 0) { if ($sepIndex -gt 0) { @($lines[0..($sepIndex - 1)]) } else { @() } } else { $lines }
+    $existing = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $failedRows = [Collections.Generic.List[string]]::new()
+    if ($sepIndex -ge 0 -and $sepIndex -lt ($lines.Count - 1)) {
+        foreach ($entry in $lines[($sepIndex + 1)..($lines.Count - 1)]) {
+            $trimmed = $entry.Trim()
+            if ($trimmed -and $existing.Add($trimmed)) { $failedRows.Add($trimmed) }
+        }
+    }
+    foreach ($name in $PreservedNames) {
+        if ($name -and $existing.Add($name)) { $failedRows.Add($name) }
+    }
+    $output = [Collections.Generic.List[string]]::new()
+    foreach ($row in $costRows) { $output.Add($row) }
+    $output.Add('---')
+    foreach ($row in $failedRows) { $output.Add($row) }
+    [IO.File]::WriteAllText($CostDataPath, (($output -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
+}
+# Separate multi-processor heavy suites (e.g. full.core-suite with PROCESSORS 4)
+# into an upfront priority wave so CTest's single-slot backfill cannot starve
+# them behind dozens of short 1-processor tests.
+function Get-CtestExecutionWaves($Inventory,[object[]]$Selected) {
+    if (!$Selected -or !$Selected.Count) { return @() }
+    $byName=@{}
+    if ($Inventory -and $Inventory.tests) {
+        foreach ($item in $Inventory.tests) { $byName[$item.name]=$item }
+    }
+    $heavyMultiProc=@(
+        foreach ($row in $Selected) {
+            $meta=$byName[$row.name]
+            if ($meta -and (Get-TestNumericProperty $meta 'PROCESSORS' 1) -ge 2) { $row }
+        }
+    )
+    if (!$heavyMultiProc.Count -or $heavyMultiProc.Count -eq $Selected.Count) {
+        return @(
+            [pscustomobject]@{
+                tag=''
+                tests=@($Selected)
+                exclude_setup_fixtures=@()
+                reason='Single wave ordered by CTest per-architecture CTestCostData.txt and initial COST hints.'
+            }
+        )
+    }
+    $requiredFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($row in $heavyMultiProc) {
+        $meta=$byName[$row.name]
+        if ($meta) {
+            foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_REQUIRED')) {
+                if ($fixture) { [void]$requiredFixtures.Add($fixture) }
+            }
+        }
+    }
+    $wave1Names=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $wave1Tests=[Collections.Generic.List[object]]::new()
+    $completedFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($row in $Selected) {
+        $meta=$byName[$row.name]
+        if (!$meta) { continue }
+        $setups=@(Get-TestFixtureProperty $meta 'FIXTURES_SETUP' | Where-Object { $_ -and $requiredFixtures.Contains($_) })
+        if ($setups.Count) {
+            if ($wave1Names.Add($row.name)) { $wave1Tests.Add($row) }
+            foreach ($fixture in $setups) { [void]$completedFixtures.Add($fixture) }
+        }
+    }
+    foreach ($row in $heavyMultiProc) {
+        if ($wave1Names.Add($row.name)) { $wave1Tests.Add($row) }
+    }
+    $wave2Tests=@($Selected | Where-Object { !$wave1Names.Contains($_.name) })
+    if (!$wave2Tests.Count) {
+        return @(
+            [pscustomobject]@{
+                tag=''
+                tests=@($Selected)
+                exclude_setup_fixtures=@()
+                reason='All selected tests belong to the heavy priority group; single CTest wave.'
+            }
+        )
+    }
+    return @(
+        [pscustomobject]@{
+            tag='heavy'
+            tests=@($wave1Tests)
+            exclude_setup_fixtures=@()
+            reason='Priority wave for multi-processor heavy suites so 1-processor tests cannot starve them via backfill.'
+        },
+        [pscustomobject]@{
+            tag='remaining'
+            tests=@($wave2Tests)
+            exclude_setup_fixtures=@($completedFixtures | Sort-Object)
+            reason='Remaining 1-processor tests scheduled longest-first by per-architecture CTestCostData.txt and initial COST.'
+        }
+    )
 }
 function Get-SelectedTests($Inventory,[string[]]$Levels,[string]$Preset) {
     $selected=[Collections.Generic.List[object]]::new()
@@ -155,10 +271,12 @@ function Invoke-CmakeBuild([string]$Preset,[object[]]$Tests) {
         Complete-TestStage -Stage $stage -Details @{preset=$Preset;targets=$targets;cache='CMake incremental build'}
     } catch { $status='failed';$errorMessage=$_.Exception.Message;Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;targets=$targets} -ErrorMessage $errorMessage;throw }
 }
-function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests,[string]$ReportTag='') {
+function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests,[string]$ReportTag='',[string[]]$ExcludeFixtureSetup=@()) {
     if (!$Tests.Count) { return }
     $names=@($Tests | ForEach-Object name)
     $regex='^(' + (($names | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+    $loadVar=Get-Variable -Name TestLoad -ErrorAction SilentlyContinue
+    $loadLimit=if($loadVar -and $null -ne $loadVar.Value){[double]$loadVar.Value}else{0.0}
     $stage=Start-TestStage -Name "CTest execution ($Preset)" -Category 'ctest.run'
     $status='passed';$errorMessage=$null
     $previousAttempt=$env:SHANJIE_CTEST_ATTEMPT
@@ -170,8 +288,13 @@ function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[
             $log=Join-Path $reportRoot "ctest-$Preset$suffix.log"
             $junit=Join-Path $reportRoot "junit-$Preset$suffix.xml"
             $ctestArguments=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--test-output-size-passed','0','--test-output-size-failed','0','--output-log',$log,'--output-junit',$junit,'--parallel',"$Jobs",'--no-tests=error')
+            if($loadLimit -gt 0){$ctestArguments+=@('--test-load',"$loadLimit")}
+            if($ExcludeFixtureSetup -and $ExcludeFixtureSetup.Count){
+                $fixtureRegex='^(' + (($ExcludeFixtureSetup | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+                $ctestArguments+=@('-FS',$fixtureRegex)
+            }
             if($attempt -eq 1){$ctestArguments+=@('-R',$regex)}else{$ctestArguments+='--rerun-failed'}
-            $script:ctestReports += [pscustomobject]@{preset=$Preset;attempt=$attempt;log=$log;junit=$junit;tests=$names;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
+            $script:ctestReports += [pscustomobject]@{preset=$Preset;wave=$ReportTag;attempt=$attempt;log=$log;junit=$junit;tests=$names;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
             $env:SHANJIE_CTEST_ATTEMPT="$attempt"
             & ctest @ctestArguments
             $ctestExit=$LASTEXITCODE
@@ -301,7 +424,28 @@ try {
             if(!$selected.Count){continue}
             if($snapshot){$null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles}
             Invoke-CmakeBuild $preset $selected
-            Invoke-CtestSelection $preset (Join-Path $root "build/cmake/$preset") $selected
+            $binaryDirectory=Join-Path $root "build/cmake/$preset"
+            $costDataPath=Get-CtestCostDataPath $binaryDirectory
+            $waves=@(Get-CtestExecutionWaves $inventoryByPreset[$preset] $selected)
+            $schedulingByPreset[$preset]=[ordered]@{
+                cost_data_path=$costDataPath
+                cost_data_existed_before=(Test-Path -LiteralPath $costDataPath)
+                waves=@($waves | ForEach-Object { [ordered]@{ tag=$_.tag; count=$_.tests.Count; tests=@($_.tests | ForEach-Object name); exclude_setup_fixtures=$_.exclude_setup_fixtures; reason=$_.reason } })
+            }
+            $priorFailed=@(if($waves.Count -gt 1){Read-CtestPreviousFailures $costDataPath})
+            for($waveIndex=0;$waveIndex -lt $waves.Count;$waveIndex++) {
+                $wave=$waves[$waveIndex]
+                Invoke-CtestSelection $preset $binaryDirectory $wave.tests -ReportTag $wave.tag -ExcludeFixtureSetup $wave.exclude_setup_fixtures
+                if($priorFailed.Count -and $waveIndex -lt ($waves.Count - 1)){
+                    $upcoming=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+                    for($nextIndex=$waveIndex+1;$nextIndex -lt $waves.Count;$nextIndex++){
+                        foreach($upcomingRow in $waves[$nextIndex].tests){[void]$upcoming.Add($upcomingRow.name)}
+                    }
+                    $carryOver=@($priorFailed | Where-Object { $upcoming.Contains($_) })
+                    if($carryOver.Count){Merge-CtestPreviousFailures $costDataPath $carryOver}
+                }
+            }
+            $schedulingByPreset[$preset]['cost_data_exists_after']=(Test-Path -LiteralPath $costDataPath)
             if($snapshot){
                 $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
                 Assert-ReleaseRuntimeFixture $snapshot (Join-Path $root "build/cmake/$preset/test-payload-$($snapshot.id)") $preset.Substring(8)
@@ -404,6 +548,12 @@ try {
         ctest=$ctestReports
         retry_failures=[bool]$RetryFailures
         ci_safe=[bool]$CiSafe
+        scheduling=[ordered]@{
+            schedule_random=$false
+            test_load=$TestLoad
+            core_cost_history=(Join-Path $root 'build/test/core-cost-data.json')
+            presets=$schedulingByPreset
+        }
         cache=[ordered]@{cmake='incremental targets keyed by source and architecture';cargo='Cargo fingerprint cache';models='content hashes and pinned input receipts';ui='source/toolchain key plus output hashes';worktree_cache='reused when valid'}
         comparison=[ordered]@{legacy_seconds=$null;full_seconds=$null;saved_seconds=$null;speedup_percent=$null;status='not-measured';benchmark_command='pwsh -File scripts/benchmark-verification.ps1'}
         junit=$ctestReports

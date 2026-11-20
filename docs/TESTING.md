@@ -98,7 +98,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-upstream-data.ps1` | `fast.upstream-data`, `full.dist-data` | 上游詞庫、詞包、模型清冊及建置後檔案完整性 |
 | 測試框架本身 | `fast.infrastructure` | 影響分類（含上游 19 情境）、fixture、完整子案例、重試歷程、空快取、必要輸入、探測 timeout 與計時階層；另含 Cargo／移動路徑、整合快取自檢與上游 13 個 Python 發布交易測試（FakeGitHub，無網路發布） |
 | `prepare-core.ps1`、Rust `shared/windows --lib` | `fast.prepare-core`, `fast.rust.*` | 與 CI 相同的 core overlay 與 Rust 單元測試 |
-| `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；優先排程耗時較長的模型測試，依實體記憶體與可用 CPU 限制並行。`engine_lm`／`engine_replay`／`engine_newword` 各自使用單執行緒序列跑 |
+| `test-core.ps1` | `full.core-suite` | 上游 library 與所有整合測試 binaries；優先以單執行緒序列跑延遲隔離組（`engine_lm`、`engine_replay`、`engine_newword`），再依歷史耗時與上次失敗動態排序並行執行其餘重型測試（含 `engine_cap`、`engine_share`、`engine_auto_english`、`engine_tone3` 等），並維持實體記憶體與可用 CPU 限制 |
 | ignored `mixed_regression` | `full.mixed-regression.x64` | 使用建置模型與資料執行混打、數字回歸 |
 | `tests/tsf_smoke.cpp` | standard、cold 各一項 | 真實 TSF context、標準 profile 與無模型冷啟動；不註冊輸入法 |
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
@@ -152,6 +152,15 @@ FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查�
 `verify-input-features.ps1 -CaseIndices 0` 必須只選第零組，不可把數值 0 當成沒有篩選而跑整套；選測回歸會檢查此邊界，預設未提供篩選時仍保留完整案例。
 
 路徑提示不是行級語意分析；其他檔案若實際改到按鍵／核心請求，仍適用 AGENTS 的正向規則。AGENTS、TESTING、ARCHITECTURE、PERFORMANCE 的變更會提示核對新增要求，**不會自動理解任意 Markdown 自然語言**。新增要求須同步唯一模組與選測回歸；只在 Markdown 提到某支腳本不會自動變成必跑命令。純文件仍略過建置／測試，CI 仍只執行固定五項。
+
+## 排程順序與歷史耗時
+
+CTest 與核心測試統一採用「上次失敗優先，其次耗時較長優先」原則，讓重型測試與延遲敏感案例盡早開始，縮短重大失敗的等待時間。排程不啟用 `--schedule-random`，不改變測試選取規則、層級定義或任何斷言。
+
+- **冷啟動與多波次重型優先**：`CMakeLists.txt` 依實測耗時為各測試設定初始 `COST`。在 `scripts/test.ps1` 中，當選中集合同時包含多核心重型測試（`PROCESSORS >= 2`，例如 `full.core-suite`）與單核心測試時，會先將多核心重型測試連同其必要 `FIXTURES_SETUP` 排在第一波次（`heavy`），避免 CTest 平行排程時以大量短測試回填而將多核心測試餓死到最後；其餘單核心測試在第二波次（`remaining`）以 `-FS` 排除已完成的 setup fixture，不再重跑 fixture，並依成本降序執行。各波次各自保存獨立日誌與 JUnit XML，不互相覆寫，並寫入 `report.json` 的 `scheduling` 欄位。
+- **CTest 歷史耗時與跨波次失敗記憶**：CTest 於各架構 build 目錄獨立維護 `Testing/Temporary/CTestCostData.txt`（`windows-x64` 與 `windows-x86` 分開記錄，不混用跨架構耗時）。首輪無歷史時依冷啟動 `COST` 降序；後續輪次自動套用各案例實測歷史耗時，並將上次失敗項目置頂。多波次執行時，前一波次通過前會保留屬於後續波次的上次失敗清單，避免前波次寫回 `CTestCostData.txt` 時清除後續波次的失敗優先權。
+- **系統負載與資源限制**：`scripts/test.ps1` 提供選用 `-TestLoad <N>` 轉傳 CTest `--test-load`，可與成本降序排程並存。既有的 `FIXTURES_SETUP`／`FIXTURES_REQUIRED`、`RESOURCE_LOCK`（兩組模型 runtime slots、`core-build`、`cargo-windows-*`、`interactive-ui`）及 `-Jobs` 平行度限制完整保留。
+- **核心測試動態排程**：`scripts/test-core.ps1` 先單執行緒序列執行延遲隔離組（`engine_lm`、`engine_replay`、`engine_newword`，冷啟動依 `engine_lm` → `engine_replay` → `engine_newword` 排序），再依動態成本降序並行執行其餘核心測試（冷啟動基準涵蓋 `engine_cap`、`engine_share`、`engine_learn`、`engine_auto_english`、`engine_pool_recur`、`engine_digits`、`engine_english`、`engine_pack`、`engine_fuzzy`、`engine_tone3` 等）。每次執行結束在 `finally` 更新 `build/test/core-cost-data.json`（預設路徑，可用 `-CostHistoryPath` 覆寫），以 `0.7 * 舊均值 + 0.3 * 新實測` 平滑更新並記錄 `failed_last`；上次失敗者下次置頂，歷史檔損毀時自動警告並回退至冷啟動基準，實體記憶體門檻 `-MemoryLimit` 與並行限制維持不變。
 
 ## 重複工作與隔離
 

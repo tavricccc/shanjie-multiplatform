@@ -137,8 +137,10 @@ Check (!(Test-ContentCache -Root $ResultRoot -ManifestPath $receipt -Key $first 
 
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile("$project/scripts/test-core.ps1",[ref]$tokens,[ref]$errors)
-$sync=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Sync-ChangedFiles'},$false)
-. ([scriptblock]::Create($sync.Extent.Text))
+foreach($fn in 'Sync-ChangedFiles','Get-CoreBaselineCosts','Read-CoreCostHistory','Get-OrderedCoreBinaries','Update-CoreCostHistory'){
+    $node=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn},$false)
+    . ([scriptblock]::Create($node.Extent.Text))
+}
 $sourceTree=Join-Path $ResultRoot 'source';$output=Join-Path $ResultRoot 'tree'
 $null=New-Item -ItemType Directory -Path $sourceTree,"$output/target" -Force
 [IO.File]::WriteAllText("$sourceTree/core.rs",'source fixture')
@@ -148,6 +150,29 @@ Check ((Sync-ChangedFiles $sourceTree $output) -eq 1) 'Changed-file sync writes 
 Check ((Sync-ChangedFiles $sourceTree $output) -eq 0) 'Changed-file sync does not rewrite identical source'
 Check ((Get-Item "$output/core.rs").LastWriteTimeUtc -eq $stamp) 'Unchanged source timestamps are preserved'
 Check ((Get-Content "$output/target/keep" -Raw) -eq 'incremental output') 'Cargo target outputs survive source sync'
+
+$baseline=Get-CoreBaselineCosts
+$sampleLatency=@('engine_newword','engine_replay','engine_lm' | ForEach-Object {[pscustomobject]@{Name=$_}})
+$orderedLatency=@(Get-OrderedCoreBinaries $sampleLatency @{} $baseline | ForEach-Object Name)
+Check (($orderedLatency -join ',') -eq 'engine_lm,engine_replay,engine_newword') 'Cold-start latency suite prioritizes engine_lm then engine_replay before engine_newword'
+$sampleParallel=@('short_case','engine_tone3','engine_auto_english','engine_cap','engine_share' | ForEach-Object {[pscustomobject]@{Name=$_}})
+$orderedParallel=@(Get-OrderedCoreBinaries $sampleParallel @{} $baseline | ForEach-Object Name)
+Check (($orderedParallel -join ',') -eq 'engine_cap,engine_share,engine_auto_english,engine_tone3,short_case') 'Cold-start parallel core ordering prioritizes heavy suites including engine_auto_english and engine_tone3'
+$costFile=Join-Path $ResultRoot 'core-cost-data.json'
+Update-CoreCostHistory $costFile @(
+    [pscustomobject]@{Name='short_case';DurationSeconds=180.0;Failed=$false},
+    [pscustomobject]@{Name='engine_tone3';DurationSeconds=12.0;Failed=$true},
+    [pscustomobject]@{Name='engine_cap';DurationSeconds=90.0;Failed=$false}
+)
+$loadedHistory=Read-CoreCostHistory $costFile
+$orderedDynamic=@(Get-OrderedCoreBinaries $sampleParallel $loadedHistory $baseline | ForEach-Object Name)
+Check ($orderedDynamic[0] -eq 'engine_tone3' -and $orderedDynamic[1] -eq 'short_case' -and $orderedDynamic[2] -eq 'engine_share') 'Dynamic core cost history prioritizes previously failed suites and observed long durations'
+Update-CoreCostHistory $costFile @([pscustomobject]@{Name='short_case';DurationSeconds=80.0;Failed=$false})
+$smoothed=Read-CoreCostHistory $costFile
+Check ([Math]::Abs([double]$smoothed['short_case']['avg_seconds'] - 150.0) -lt 0.01 -and $smoothed['short_case']['runs'] -eq 2) 'Core cost history updates smoothed moving averages across runs'
+$corruptCost=Join-Path $ResultRoot 'corrupt-cost.json'
+[IO.File]::WriteAllText($corruptCost,'{not-json')
+Check ((Read-CoreCostHistory $corruptCost).Count -eq 0) 'Corrupted core cost history falls back safely to cold-start baselines'
 "PASS CTest integration: $checks checks; no Windows acceptance executed"
 
 # Use the configured inventory when available (including the lightweight CI
@@ -192,5 +217,11 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
     Check ($full.Selected.Count -eq 96 -and $inventory.tests.Count -eq 110 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    $costByName=@{}
+    foreach($item in $inventory.tests){
+        $costProp=$item.properties | Where-Object name -eq 'COST' | Select-Object -First 1
+        if($costProp){$costByName[$item.name]=[double]$costProp.value}
+    }
+    Check ($costByName['full.core-suite'] -gt $costByName['fast.rust.windows'] -and $costByName['fast.rust.windows'] -gt $costByName['release.ui.verify'] -and $costByName['release.ui.verify'] -gt $costByName['full.submission.async-keys.x64'] -and $costByName['full.submission.async-keys.x64'] -gt $costByName['full.private.tsf-compat.shift-right.x64']) 'Configured CTest inventory preserves descending cold-start COST priorities for heavy suites'
     Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 96, x64 RELEASE 109, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}
