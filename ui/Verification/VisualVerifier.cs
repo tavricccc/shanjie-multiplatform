@@ -292,6 +292,19 @@ internal static class VisualVerifier
                 throw new InvalidDataException(pack.Key + " opt-out was replaced by an operation preset");
             toggle.SetToggleForVerification(true);settings.Vm.Save();settings.Vm.Load();
         }
+        {
+            var toggle = (Controls.SettingToggle)settings.FindName("Tone3SandhiToggle");
+            if (!settings.Vm.Tone3Sandhi) throw new InvalidDataException("tone3_sandhi must default on");
+            byte[] before = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(false);
+            if (!settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(before))
+                throw new InvalidDataException("tone3_sandhi must remain an unsaved draft");
+            settings.Vm.Save(); settings.Vm.Load();
+            settings.Vm.Preset(false); settings.Vm.Save(); settings.Vm.Load();
+            if (Models.ProfileStore.Load().Flag("engine", "tone3_sandhi", true))
+                throw new InvalidDataException("tone3_sandhi opt-out was replaced by an operation preset");
+            toggle.SetToggleForVerification(true); settings.Vm.Save(); settings.Vm.Load();
+        }
         foreach (int variant in Enumerable.Range(0,settings.Vm.AvailableModels.Count).Reverse()) {
             settings.SetModelForVerification(variant); await Task.Delay(60);
             if(settings.Vm.ModelVariant!=variant) throw new InvalidDataException("Model selector binding failed");

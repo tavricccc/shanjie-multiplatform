@@ -50,6 +50,7 @@ public partial class SettingsViewModel
             FuzzyEnEng = profile.Flag("engine", "fuzzy_en_eng", false); FuzzyZhZ = profile.Flag("engine", "fuzzy_zh_z", false);
             FuzzyChC = profile.Flag("engine", "fuzzy_ch_c", false); FuzzyShS = profile.Flag("engine", "fuzzy_sh_s", false);
             FuzzyAdjacent = profile.Flag("engine", "fuzzy_adjacent", false);
+            Tone3Sandhi = profile.Flag("engine", "tone3_sandhi", true);
             ShiftToggle = profile.Flag("shortcuts", "shift_toggle", Interaction == 0); ShiftSide = profile.Number("shortcuts", "shift_side", 0);
             CtrlSpaceToggle = profile.Flag("shortcuts", "ctrl_space_toggle", false); WidthToggle = profile.Flag("shortcuts", "shift_space_toggle", Interaction == 0);
             CtrlPunctuation = profile.Flag("shortcuts", "ctrl_punctuation", Interaction == 0);
@@ -152,6 +153,7 @@ public partial class SettingsViewModel
             ("engine","prediction",Prediction), ("engine","demote",Demote), ("engine","acg_pack",AcgPack), ("engine","quote_pack",QuotePack), ("engine","it_pack",ItPack), ("engine","beauty_pack",BeautyPack), ("engine","meme_pack",MemePack),
             ("engine","rerank",Rerank), ("engine","fuzzy_en_eng",FuzzyEnEng), ("engine","fuzzy_zh_z",FuzzyZhZ),
             ("engine","fuzzy_ch_c",FuzzyChC), ("engine","fuzzy_sh_s",FuzzyShS), ("engine","fuzzy_adjacent",FuzzyAdjacent),
+            ("engine","tone3_sandhi",Tone3Sandhi),
             ("engine","model_id",ModelId), ("engine","model_revision",ModelRevision),
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
