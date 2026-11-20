@@ -43,6 +43,7 @@ jobs:
           SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'assets/mode/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
         run: pwsh -NoProfile -File scripts/cargo-cache-key.ps1 -Profile test
       - name: Cache Cargo registry downloads
+        id: cache-cargo-registry
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
           path: |
@@ -52,6 +53,7 @@ jobs:
           key: cargo-registry-v1-${{ runner.os }}-${{ hashFiles('windows/Cargo.lock', 'shared/Cargo.toml', 'upstream/shanjie/core/Cargo.toml') }}
           restore-keys: cargo-registry-v1-${{ runner.os }}-
       - name: Cache Cargo x64 test compilation outputs
+        id: cache-cargo-x64
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
         with:
           path: |
@@ -60,9 +62,22 @@ jobs:
             windows/target/x86_64-pc-windows-msvc/debug
           key: ${{ steps.cargo-cache-key.outputs.prefix }}-x86_64-pc-windows-msvc-${{ steps.cargo-cache-key.outputs.inputs }}
           restore-keys: ${{ steps.cargo-cache-key.outputs.prefix }}-x86_64-pc-windows-msvc-
+      - name: Collect runner environment diagnostics
+        env:
+          CACHE_HIT_REGISTRY: ${{ steps.cache-cargo-registry.outputs.cache-hit }}
+          CACHE_HIT_CARGO_X64: ${{ steps.cache-cargo-x64.outputs.cache-hit }}
+        run: |
+          $cacheSpec = @{
+            cargo_registry = @{ hit = $env:CACHE_HIT_REGISTRY; paths = @('~/.cargo/registry/index', '~/.cargo/registry/cache', '~/.cargo/registry/src') }
+            cargo_x64_test = @{ hit = $env:CACHE_HIT_CARGO_X64; paths = @('shared/target', 'windows/target/debug', 'windows/target/x86_64-pc-windows-msvc/debug') }
+          } | ConvertTo-Json -Depth 4 -Compress
+          pwsh -NoProfile -File scripts/runner-diagnostics.ps1 -Phase pre -RunnerLabel windows-2025-vs2026 -TestLevel CI -Jobs 4 -CacheSpecJson $cacheSpec
       # Cargo still validates its inputs and executes both suites on a cache hit.
       - name: Configure and run the fixed lightweight CTest baseline
         run: pwsh -File scripts/test.ps1 -Level CI -CiSafe
+      - name: Record runner performance diagnostics
+        if: always()
+        run: pwsh -NoProfile -File scripts/runner-diagnostics.ps1 -Phase post -RunnerLabel windows-2025-vs2026 -TestLevel CI -Jobs 4
       - name: Upload machine-readable test reports and failure logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)

@@ -50,6 +50,116 @@ $env:SHANJIE_REUSE_HEAVY_CORE_RESULTS=if(Test-BetaCoreResultReuse $Level ([bool]
 $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
 $whole=[Diagnostics.Stopwatch]::StartNew()
+$resourceSampler=$null
+function Start-ResourceSampler {
+    try {
+        if (-not ('Shanjie.NativePerfSampler' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace Shanjie {
+    public static class NativePerfSampler {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct FILETIME { public uint Low; public uint High; }
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MEMORYSTATUSEX {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetSystemTimes(out FILETIME idle, out FILETIME kernel, out FILETIME user);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX stat);
+        public static ulong ToUInt64(FILETIME ft) { return ((ulong)ft.High << 32) | ft.Low; }
+        public static bool Sample(out ulong idle, out ulong total, out double usedMb, out double usedPct) {
+            idle = 0; total = 0; usedMb = 0; usedPct = 0;
+            FILETIME i, k, u;
+            if (!GetSystemTimes(out i, out k, out u)) return false;
+            idle = ToUInt64(i);
+            total = ToUInt64(k) + ToUInt64(u);
+            var m = new MEMORYSTATUSEX();
+            m.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            if (!GlobalMemoryStatusEx(ref m) || m.ullTotalPhys == 0) return false;
+            usedMb = (m.ullTotalPhys - m.ullAvailPhys) / (1024.0 * 1024.0);
+            usedPct = (double)(m.ullTotalPhys - m.ullAvailPhys) * 100.0 / (double)m.ullTotalPhys;
+            return true;
+        }
+    }
+}
+'@ -ErrorAction Stop
+        }
+        [uint64]$i0 = 0; [uint64]$t0 = 0; [double]$m0 = 0; [double]$p0 = 0
+        if (![Shanjie.NativePerfSampler]::Sample([ref]$i0, [ref]$t0, [ref]$m0, [ref]$p0)) { return $null }
+        $state = [hashtable]::Synchronized(@{
+            prevIdle = $i0; prevTotal = $t0
+            cpuSum = 0.0; cpuCount = 0; cpuPeak = 0.0
+            ramPeakMb = $m0; ramPeakPct = $p0; memSamples = 1
+        })
+        $timer = [System.Timers.Timer]::new(1000)
+        $timer.AutoReset = $true
+        $sub = Register-ObjectEvent -InputObject $timer -EventName Elapsed -MessageData $state -Action {
+            $st = $Event.MessageData
+            [uint64]$i1 = 0; [uint64]$t1 = 0; [double]$m1 = 0; [double]$p1 = 0
+            if ([Shanjie.NativePerfSampler]::Sample([ref]$i1, [ref]$t1, [ref]$m1, [ref]$p1)) {
+                $dTotal = $t1 - $st.prevTotal
+                $dIdle = $i1 - $st.prevIdle
+                if ($dTotal -gt 0) {
+                    $busy = [Math]::Clamp((1.0 - ([double]$dIdle / [double]$dTotal)) * 100.0, 0.0, 100.0)
+                    $st.cpuSum += $busy
+                    $st.cpuCount++
+                    if ($busy -gt $st.cpuPeak) { $st.cpuPeak = $busy }
+                }
+                $st.prevIdle = $i1; $st.prevTotal = $t1
+                $st.memSamples++
+                if ($m1 -gt $st.ramPeakMb) { $st.ramPeakMb = $m1 }
+                if ($p1 -gt $st.ramPeakPct) { $st.ramPeakPct = $p1 }
+            }
+        }
+        $timer.Start()
+        return [pscustomobject]@{ Timer = $timer; Subscription = $sub; State = $state }
+    } catch {
+        return $null
+    }
+}
+function Stop-ResourceSampler($Sampler) {
+    if (!$Sampler) {
+        return [ordered]@{ cpu_avg_percent = 'unavailable'; cpu_peak_percent = 'unavailable'; ram_peak_used_mb = 'unavailable'; ram_peak_percent = 'unavailable'; sample_count = 0 }
+    }
+    try { $Sampler.Timer.Stop() } catch {}
+    try { Unregister-Event -SubscriptionId $Sampler.Subscription.Id -Force -ErrorAction SilentlyContinue } catch {}
+    try { Remove-Job -Id $Sampler.Subscription.Id -Force -ErrorAction SilentlyContinue } catch {}
+    try { $Sampler.Timer.Dispose() } catch {}
+    $st = $Sampler.State
+    # Take one final sample so short runs still capture overall CPU/RAM deltas.
+    try {
+        [uint64]$i1 = 0; [uint64]$t1 = 0; [double]$m1 = 0; [double]$p1 = 0
+        if ([Shanjie.NativePerfSampler]::Sample([ref]$i1, [ref]$t1, [ref]$m1, [ref]$p1)) {
+            $dTotal = $t1 - $st.prevTotal
+            $dIdle = $i1 - $st.prevIdle
+            if ($dTotal -gt 0) {
+                $busy = [Math]::Clamp((1.0 - ([double]$dIdle / [double]$dTotal)) * 100.0, 0.0, 100.0)
+                $st.cpuSum += $busy; $st.cpuCount++
+                if ($busy -gt $st.cpuPeak) { $st.cpuPeak = $busy }
+            }
+            if ($m1 -gt $st.ramPeakMb) { $st.ramPeakMb = $m1 }
+            if ($p1 -gt $st.ramPeakPct) { $st.ramPeakPct = $p1 }
+        }
+    } catch {}
+    return [ordered]@{
+        cpu_avg_percent = if ($st.cpuCount -gt 0) { [Math]::Round($st.cpuSum / $st.cpuCount, 1) } else { 'unavailable' }
+        cpu_peak_percent = if ($st.cpuCount -gt 0) { [Math]::Round($st.cpuPeak, 1) } else { 'unavailable' }
+        ram_peak_used_mb = [Math]::Round($st.ramPeakMb, 1)
+        ram_peak_percent = [Math]::Round($st.ramPeakPct, 1)
+        sample_count = [int]$st.cpuCount
+    }
+}
 $changedPaths=@()
 $pathReasons=[ordered]@{}
 $selectedByPreset=[ordered]@{}
@@ -474,6 +584,7 @@ try {
         foreach($path in $changedPaths){Write-Host "$path : $($pathReasons[$path])"}
         return
     }
+    $resourceSampler=Start-ResourceSampler
     $presets=@(if(!$skipTests){'windows-x64'})
     if($Level -eq 'RELEASE'){$presets+=@('windows-x86')}
     if(!$skipTests -and $Level -eq 'AFFECTED' -and $Architecture -eq 'x86'){$presets+=@('windows-x86')}
@@ -599,6 +710,7 @@ try {
     }
 } finally {
     $whole.Stop()
+    $resourceUsage=Stop-ResourceSampler $resourceSampler
     try { $testResults=@(Read-CtestResults $ctestReports) }
     catch { $overallStatus='failed';$failureMessage=$_.Exception.Message;$notes.Add("Could not read CTest JUnit: $failureMessage") }
     if($diagnosticReports.Count){
@@ -671,6 +783,8 @@ try {
         plan_only=[bool]$PlanOnly
         status=$overallStatus
         wall_seconds=[Math]::Round($whole.Elapsed.TotalSeconds,3)
+        ctest_parallel=$Jobs
+        resource_usage=$resourceUsage
         base_ref=$BaseRef
         change_scope=$ChangeScope
         change_range=$changeSet.Range

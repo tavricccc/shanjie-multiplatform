@@ -259,4 +259,55 @@ $sample=@(
 )
 $exclusive=@(Get-ExclusiveTestTimings $sample)
 Assert-Check (($exclusive | Where-Object id -eq 'parent').exclusive_duration_ms -eq 20) 'Exclusive timing subtracts the union of overlapping child stages'
+
+# Runner environment diagnostics: schema, unavailable fallback, secret redaction and post-run aggregation.
+$diagDir=Join-Path $ResultRoot 'runner-diagnostics'
+$diagCacheFixture=Join-Path $diagDir 'cache-fixture'
+$null=New-Item -ItemType Directory -Path $diagCacheFixture -Force
+[IO.File]::WriteAllBytes((Join-Path $diagCacheFixture 'sample.bin'), [byte[]]::new(262144))
+$diagJsonPath=Join-Path $diagDir 'runner-diagnostics.json'
+$diagReportPath=Join-Path $diagDir 'mock-report.json'
+[IO.File]::WriteAllText($diagReportPath, (@{
+    level='CI'; status='passed'; wall_seconds=12.345; ctest_parallel=4
+    selection=@{ selected=@(@{name='fast.upstream-data'}, @{name='fast.rust.windows'}) }
+    resource_usage=@{ cpu_avg_percent=32.5; cpu_peak_percent=78.4; ram_peak_used_mb=8192.5; ram_peak_percent=50.0; sample_count=12 }
+    timings=@(
+        @{ category='build.cmake.configure'; name='CMake configure (windows-x64)'; status='passed'; duration_ms=190; exclusive_duration_ms=190 },
+        @{ category='ctest.run'; name='CTest execution (windows-x64)'; status='passed'; duration_ms=12100; exclusive_duration_ms=12100 }
+    )
+    results=@(
+        @{ name='fast.upstream-data'; preset='windows-x64'; status='passed'; duration_seconds=0.6 },
+        @{ name='fast.rust.windows'; preset='windows-x64'; status='passed'; duration_seconds=9.5 }
+    )
+} | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+$diagCacheSpec=(@{
+    cargo_fixture=@{ hit='true'; paths=@($diagCacheFixture) }
+    missing_cache=@{ hit=''; paths=@((Join-Path $diagDir 'does-not-exist')) }
+} | ConvertTo-Json -Depth 4 -Compress)
+$prevGhToken=$env:GITHUB_TOKEN; $prevSecret=$env:SHANJIE_TEST_FAKE_SECRET
+$env:GITHUB_TOKEN='ghp_FakeSecretToken12345678901234567890'
+$env:SHANJIE_TEST_FAKE_SECRET='github_pat_DoNotLeak9876543210'
+try {
+    & "$root/scripts/runner-diagnostics.ps1" -Phase pre -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -CacheSpecJson $diagCacheSpec -Quiet
+    $preRaw=[IO.File]::ReadAllText($diagJsonPath)
+    Assert-Check ($preRaw -notlike '*FakeSecretToken*' -and $preRaw -notlike '*DoNotLeak*') 'Runner diagnostics never emit environment secret values'
+    $preObj=ConvertFrom-Json -InputObject $preRaw
+    Assert-Check ($preObj.schema -eq 1 -and $preObj.phase -eq 'pre' -and $preObj.environment.runner.image_label -eq 'windows-2025-vs2026' -and $preObj.environment.cpu.logical_processors -gt 0 -and $preObj.environment.memory.total_physical_mb -gt 0 -and $preObj.environment.toolchain.powershell -and $preObj.cache.cargo_fixture.hit -eq $true -and $preObj.cache.cargo_fixture.restored_size_mb -gt 0 -and $preObj.cache.missing_cache.hit -eq 'unavailable') 'Pre-phase runner diagnostics capture hardware, toolchain, cache and unavailable markers'
+    & "$root/scripts/runner-diagnostics.ps1" -Phase post -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -TestReportPath $diagReportPath -Quiet
+    $postObj=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($diagJsonPath))
+    Assert-Check ($postObj.phase -eq 'post' -and $postObj.environment.git_and_test.selected_test_count -eq 2 -and $postObj.runtime_performance.cpu_peak_percent -eq 78.4 -and $postObj.runtime_performance.ram_peak_used_mb -eq 8192.5 -and $postObj.runtime_performance.stage_timings.Count -eq 2 -and $postObj.runtime_performance.test_durations[0].name -eq 'fast.rust.windows' -and $postObj.attribution_notes.Count -ge 2) 'Post-phase runner diagnostics merge runtime metrics, stage timings, test durations and attribution notes'
+} finally {
+    $env:GITHUB_TOKEN=$prevGhToken; $env:SHANJIE_TEST_FAKE_SECRET=$prevSecret
+}
+$diagAst=[System.Management.Automation.Language.Parser]::ParseFile("$root/scripts/runner-diagnostics.ps1",[ref]$tokens,[ref]$errors)
+$protectFn=$diagAst.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Protect-DiagnosticText'},$false)
+$diskFn=$diagAst.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-DiskInfo'},$false)
+. ([scriptblock]::Create($protectFn.Extent.Text))
+. ([scriptblock]::Create($diskFn.Extent.Text))
+$redacted=Protect-DiagnosticText 'https://alice:topsecret@github.com/org/repo.git ghp_1234567890abcdefghij Bearer SecretToken12345 api_key=mysecret99'
+Assert-Check ($redacted -notlike '*topsecret*' -and $redacted -notlike '*1234567890abcdefghij*' -and $redacted -notlike '*SecretToken12345*' -and $redacted -notlike '*mysecret99*') 'Diagnostic sanitizer redacts credentials, tokens and bearer headers'
+$missingDisk=Get-DiskInfo 'Z:'
+Assert-Check ($missingDisk.total_gb -eq 'unavailable' -and $missingDisk.media_type -eq 'unavailable') 'Unavailable disk queries report explicit unavailable values without guessing'
+$ciYaml=[IO.File]::ReadAllText("$root/.github/workflows/ci.yml")
+Assert-Check ($ciYaml -match 'runner-diagnostics\.ps1 -Phase pre' -and $ciYaml -match 'runner-diagnostics\.ps1 -Phase post' -and $ciYaml -match 'scripts/test\.ps1 -Level CI -CiSafe') 'CI workflow records runner diagnostics while keeping the fixed lightweight CI command'
 'PASS impact, harness plans, fixtures, retry history, empty caches, required inputs, and probe deadline'

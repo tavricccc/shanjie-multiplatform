@@ -171,6 +171,15 @@ CTest 與核心測試統一採用「上次失敗優先，其次耗時較長優�
 - **flaky 重試與首次失敗保留**：啟用 `-RetryFailures` 時，僅針對失敗項目執行一次 `--rerun-failed`，絕不自動把整套測試重跑一遍；首次失敗的日誌、JUnit XML、`results[].attempts[0].failure` 與 `flaky_tests` 均完整保留且不被覆寫。若重試成功救回且該波次因 `--stop-on-failure` 尚有未啟動案例，只針對未啟動項目補跑一次（獨立 `-resume` 日誌與 JUnit），已通過項目不重跑。
 - **結構化報告、選擇性診斷與 RELEASE 防護**：`report.json` 的 `failure_handling` 記錄停止政策、是否提前停止、首次失敗摘要、已執行與未啟動案例數，未啟動案例於 `results` 明列原因而非 PASS。失敗後若需額外診斷特定案例，可顯式指定 `-DiagnosticTests <案例名稱...>`，診斷結果保存於獨立 `-diag` JUnit 與 `failure_handling.diagnostics`，不會改變失敗狀態。任何必要前置失敗都不會核發 `packaging-permit.json` 或授權正式發布提升。
 
+## Runner 環境診斷與效能紀錄
+
+`.github/workflows/ci.yml` 與 `.github/workflows/release.yml` 在既有 Windows job 的建置測試前後呼叫 `scripts/runner-diagnostics.ps1`（不新增額外 job、不安裝診斷工具、不更動既有快取鍵與固定 CI 五項）：
+
+- **執行前環境摘要（`-Phase pre`）**：於 Job Log 印出並寫入 `build/reports/runner-diagnostics.json`，涵蓋 Runner OS／Image 標籤與版本／Windows Build／架構、CPU 廠牌／型號／邏輯與實體核心數／時脈／虛擬化與 Hypervisor 狀態、實體記憶體與系統提交量、系統與工作磁碟容量與媒體類型、開發工具版本（Visual Studio、MSVC、CMake、Ninja、Rustc、Cargo、PowerShell）、Git 與 CTest 設定，以及各快取命中狀態與還原大小（MB）。任何因權限或環境無法可靠取得的欄位一律標示 `unavailable`，不填入推測值。
+- **執行期間效能彙整（`-Phase post`）**：`scripts/test.ps1` 執行期間透過低開銷 Windows kernel32 API（`GetSystemTimes`、`GlobalMemoryStatusEx`）取樣 CPU 平均／峰值與實體 RAM 峰值並寫入 `report.json` 的 `resource_usage`；測試結束（`if: always()`）由 `-Phase post` 合併整體 wall-clock、CTest 平行度、實際選取測試數、各階段建置與測試耗時與逐案耗時，隨既有 `build/reports/**` Actions Artifact 保存。
+- **機密資訊防護**：診斷腳本採嚴格白名單存取環境欄位，不列舉或傾印一般環境變數，並對輸出中的憑證 URL、GitHub token、Bearer 標頭與常見機密鍵值執行遮蔽。
+- **跨 Run 比較歸因界線**：JSON 內建 `comparison_dimensions` 與 `attribution_notes`，跨 Run 比對耗時必須同時檢視硬體規格、映像版本、工具鏈、快取命中與還原大小、平行度與實際測試數量，以及共享宿主的未知噪音因素，不可單憑 CPU 型號不同便將耗時差異完全歸因於 CPU。
+
 ## 重複工作與隔離
 
 - C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本的編譯 fallback 保留上游 #100 的 `Invoke-HarnessBuild` 快取，不再反覆編譯相同內容。
