@@ -117,6 +117,17 @@ Assert-Check ($waves.Count -eq 2 -and $waves[0].tag -eq 'heavy' -and ($waves[0].
 Assert-Check ($waves[1].tag -eq 'remaining' -and ($waves[1].tests.name -join ',') -eq 'fast.rust.windows,full.english.caps.x64' -and ($waves[1].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Remaining wave excludes already-completed setup fixtures instead of rerunning them'
 $singleWave=@(Get-CtestExecutionWaves $waveInventory @([pscustomobject]@{name='fast.prepare-core'},[pscustomobject]@{name='fast.rust.windows'}))
 Assert-Check ($singleWave.Count -eq 1 -and $singleWave[0].tag -eq '') 'Single-processor selections stay in one CTest wave'
+$gatedInventory=[pscustomobject]@{tests=@(
+    [pscustomobject]@{name='fast.upstream-data';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='fast.prepare-core';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='FIXTURES_SETUP';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='fast.rust.windows';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.core-suite';properties=@([pscustomobject]@{name='LABELS';value=@('full;core')},[pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=4})},
+    [pscustomobject]@{name='full.english.caps.x64';properties=@([pscustomobject]@{name='LABELS';value=@('full;english')},[pscustomobject]@{name='PROCESSORS';value=1})}
+)}
+$gatedWaves=@(Get-CtestExecutionWaves $gatedInventory @($gatedInventory.tests | ForEach-Object {[pscustomobject]@{name=$_.name}}))
+Assert-Check ($gatedWaves.Count -eq 3 -and $gatedWaves[0].tag -eq 'fast' -and ($gatedWaves[0].tests.name -join ',') -eq 'fast.prepare-core,fast.upstream-data,fast.rust.windows') 'FAST baseline forms an upfront gate before heavy and remaining waves'
+Assert-Check ($gatedWaves[1].tag -eq 'heavy' -and ($gatedWaves[1].tests.name -join ',') -eq 'full.core-suite' -and ($gatedWaves[1].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Heavy wave reuses completed FAST setup fixtures via -FS'
+Assert-Check ($gatedWaves[2].tag -eq 'remaining' -and ($gatedWaves[2].tests.name -join ',') -eq 'full.english.caps.x64' -and ($gatedWaves[2].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Remaining wave also excludes fixtures completed in earlier waves'
 $mockCostFile=Join-Path $ResultRoot 'CTestCostData.txt'
 [IO.File]::WriteAllText($mockCostFile,"heavy 1 10`nshort_12 1 1`n---`nshort_12`n",[Text.UTF8Encoding]::new($false))
 Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'CTestCostData previous-failure section is parsed before multi-wave execution'
@@ -124,7 +135,7 @@ Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_
 Merge-CtestPreviousFailures $mockCostFile @('short_12')
 Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'Passing wave 1 preserves previous-failure priority for upcoming waves'
 
-$reportRoot=$ResultRoot;$Jobs=1;$RetryFailures=$true;$script:ctestReports=@();$script:mockCalls=@()
+$reportRoot=$ResultRoot;$Jobs=1;$RetryFailures=$true;$FailurePolicy='fail-fast';$script:ctestReports=@();$script:diagnosticReports=@();$script:mockCalls=@();$script:stoppedAfterWave=$null
 function ctest {
     $script:mockCalls+=,@($args)
     $attempt=$script:mockCalls.Count
@@ -142,6 +153,7 @@ function ctest {
 }
 Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='stable'},[pscustomobject]@{name='retry'})
 Assert-Check ($script:mockCalls.Count -eq 2) 'Retry at most once'
+Assert-Check ('--stop-on-failure' -in $script:mockCalls[0]) 'Fail-fast policy passes --stop-on-failure to CTest by default'
 Assert-Check ('--rerun-failed' -in $script:mockCalls[1]) 'Retry asks CTest for failed rows only'
 foreach($option in '--test-output-size-passed','--test-output-size-failed'){
     Assert-Check ($script:mockCalls[0][[Array]::IndexOf($script:mockCalls[0],$option)+1] -eq '0') 'JUnit keeps complete output for coverage comparison'
@@ -162,6 +174,35 @@ Assert-Check ($script:ctestReports[-1].junit -ne $firstJUnit -and [IO.File]::Rea
 Assert-Check ('--test-load' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'--test-load')+1] -eq '6') 'Optional TestLoad forwards --test-load to CTest'
 Assert-Check ('-FS' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'-FS')+1] -eq '^(CoreOverlay)$') 'Subsequent waves pass -FS to avoid rerunning completed fixture setup'
 Assert-Check ('--schedule-random' -notin $script:mockCalls[0] -and '--schedule-random' -notin $script:mockCalls[-1]) 'Scheduling never enables --schedule-random'
+$FailurePolicy='continue'
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='retry'}) -ReportTag 'continue'
+Assert-Check ('--stop-on-failure' -notin $script:mockCalls[-1]) 'Continue policy omits --stop-on-failure'
+$FailurePolicy='fail-fast'
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='retry'}) -ReportTag 'diag' -DiagnosticOnly
+Assert-Check ($script:diagnosticReports.Count -eq 1 -and '--stop-on-failure' -notin $script:mockCalls[-1]) 'Explicit diagnostic runs are tracked separately without mutating main CTest reports'
+$script:ctestReports=@();$script:mockCalls=@();$RetryFailures=$true
+function ctest {
+    $script:mockCalls+=,@($args)
+    $call=$script:mockCalls.Count
+    $junit=$args[[Array]::IndexOf($args,'--output-junit')+1]
+    $log=$args[[Array]::IndexOf($args,'--output-log')+1]
+    if($call -eq 1){
+        $xml='<testsuite><testcase name="passed_first" classname="passed_first" time="0.1"/><testcase name="flaky_mid" classname="flaky_mid" time="0.2"><failure message="Failed"/><system-out>flaky initial failure</system-out></testcase></testsuite>'
+        $global:LASTEXITCODE=8
+    }elseif($call -eq 2){
+        $xml='<testsuite><testcase name="flaky_mid" classname="flaky_mid" time="0.2"/></testsuite>'
+        $global:LASTEXITCODE=0
+    }else{
+        $xml='<testsuite><testcase name="unstarted_tail" classname="unstarted_tail" time="0.1"/></testsuite>'
+        $global:LASTEXITCODE=0
+    }
+    [IO.File]::WriteAllText($junit,$xml)
+    [IO.File]::WriteAllText($log,"mock resume call $call")
+}
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='passed_first'},[pscustomobject]@{name='flaky_mid'},[pscustomobject]@{name='unstarted_tail'}) -ReportTag 'wave'
+$resumeResults=@(Read-CtestResults $script:ctestReports)
+Assert-Check ($script:mockCalls.Count -eq 3 -and ('--rerun-failed' -in $script:mockCalls[1]) -and ('^(unstarted_tail)$' -in $script:mockCalls[2])) 'Recovering a flaky failure resumes only unstarted rows without rerunning passed tests'
+Assert-Check (($resumeResults | Where-Object name -eq 'flaky_mid').flaky -and ($resumeResults | Where-Object name -eq 'flaky_mid').attempts[0].failure -eq 'flaky initial failure' -and ($resumeResults | Where-Object name -eq 'unstarted_tail').status -eq 'passed') 'Flaky retry plus tail resume preserves first failure evidence and completes the wave'
 Remove-Item Function:ctest
 & "$root/tests/release_guard.ps1" -ResultRoot (Join-Path $ResultRoot 'release-guard')
 # Windows fixture plumbing: the real TSF payload must use sealed bytes and data,

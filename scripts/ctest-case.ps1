@@ -84,7 +84,8 @@ try {
             }
             'core-suite' {
                 $reuseHeavy=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS -eq '1'
-                & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy
+                $stopOnFailure=$env:SHANJIE_TEST_STOP_ON_FAILURE -eq '1'
+                & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy -StopOnFailure:$stopOnFailure
             }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }

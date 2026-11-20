@@ -137,7 +137,7 @@ Check (!(Test-ContentCache -Root $ResultRoot -ManifestPath $receipt -Key $first 
 
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile("$project/scripts/test-core.ps1",[ref]$tokens,[ref]$errors)
-foreach($fn in 'Sync-ChangedFiles','Get-CoreBaselineCosts','Read-CoreCostHistory','Get-OrderedCoreBinaries','Update-CoreCostHistory'){
+foreach($fn in 'Sync-ChangedFiles','Get-CoreBaselineCosts','Read-CoreCostHistory','Get-OrderedCoreBinaries','Update-CoreCostHistory','Invoke-TestBinaries'){
     $node=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn},$false)
     . ([scriptblock]::Create($node.Extent.Text))
 }
@@ -173,6 +173,19 @@ Check ([Math]::Abs([double]$smoothed['short_case']['avg_seconds'] - 150.0) -lt 0
 $corruptCost=Join-Path $ResultRoot 'corrupt-cost.json'
 [IO.File]::WriteAllText($corruptCost,'{not-json')
 Check ((Read-CoreCostHistory $corruptCost).Count -eq 0) 'Corrupted core cost history falls back safely to cold-start baselines'
+$coreStopDir=Join-Path $ResultRoot 'core-stop-on-failure'
+$null=New-Item -ItemType Directory -Path $coreStopDir -Force
+$unstartedMarker=Join-Path $coreStopDir 'unstarted.ran'
+$failCmd=Join-Path $coreStopDir 'fail_first.cmd'
+$unstartedCmd=Join-Path $coreStopDir 'skip_second.cmd'
+[IO.File]::WriteAllText($failCmd,"@echo off`r`necho simulated core failure`r`nexit /b 1`r`n")
+[IO.File]::WriteAllText($unstartedCmd,"@echo off`r`necho ran > `"$unstartedMarker`"`r`nexit /b 0`r`n")
+$stopMetrics=[Collections.Generic.List[object]]::new()
+$stopThrew=$false
+try {
+    Invoke-TestBinaries @([pscustomobject]@{Name='fail_first';Path=$failCmd},[pscustomobject]@{Name='skip_second';Path=$unstartedCmd}) $coreStopDir @() 95 1 $stopMetrics -StopOnFailure
+} catch { $stopThrew=$_.Exception.Message -like '*stopped early with 1 unstarted*' }
+Check ($stopThrew -and !(Test-Path -LiteralPath $unstartedMarker) -and $stopMetrics.Count -eq 1 -and $stopMetrics[0].Failed) 'Core test runner stops unstarted binaries after first failure while recording failure metrics'
 "PASS CTest integration: $checks checks; no Windows acceptance executed"
 
 # Use the configured inventory when available (including the lightweight CI

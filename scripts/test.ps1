@@ -8,7 +8,9 @@ param(
     [switch]$CiSafe,
     [switch]$PlanOnly,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
-    [ValidateRange(0,1024)][double]$TestLoad=0
+    [ValidateRange(0,1024)][double]$TestLoad=0,
+    [ValidateSet('fail-fast','continue')][string]$FailurePolicy='fail-fast',
+    [string[]]$DiagnosticTests=@()
 )
 $ErrorActionPreference='Stop'
 if($Architecture -eq 'x86' -and $Level -notin 'AFFECTED','RELEASE'){throw '-Architecture x86 is supported by AFFECTED/RELEASE; CI, FAST and FULL use the x64 baseline.'}
@@ -37,10 +39,12 @@ $previousCoreReuse=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS
 $previousSnapshotId=$env:SHANJIE_RELEASE_SNAPSHOT_ID
 $previousSnapshotHash=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256
 $previousPermit=$env:SHANJIE_RELEASE_PACKAGING_PERMIT
+$previousStopOnFailure=$env:SHANJIE_TEST_STOP_ON_FAILURE
 # A nested test invocation must not inherit another run's sealed inputs/permit.
 $env:SHANJIE_RELEASE_SNAPSHOT_ID=$null
 $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$null
 $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$null
+$env:SHANJIE_TEST_STOP_ON_FAILURE=if($FailurePolicy -eq 'fail-fast'){'1'}else{$null}
 $env:SHANJIE_TEST_LEVEL=$Level
 $env:SHANJIE_REUSE_HEAVY_CORE_RESULTS=if(Test-BetaCoreResultReuse $Level ([bool]$CiSafe) ($channel.prerelease -eq $true)){'1'}else{$null}
 $env:SHANJIE_TEST_RUN_ID=$runId
@@ -55,6 +59,9 @@ $schedulingByPreset=[ordered]@{}
 $presets=@()
 $testResults=@()
 $ctestReports=@()
+$diagnosticReports=@()
+$diagnosticResults=@()
+$stoppedAfterWave=$null
 $overallStatus='passed'
 $failureMessage=$null
 $requestedLabels=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -140,19 +147,124 @@ function Merge-CtestPreviousFailures([string]$CostDataPath, [string[]]$Preserved
 # Separate multi-processor heavy suites (e.g. full.core-suite with PROCESSORS 4)
 # into an upfront priority wave so CTest's single-slot backfill cannot starve
 # them behind dozens of short 1-processor tests.
+# When both FAST baseline checks and broader regressions are selected, gate
+# subsequent waves behind the FAST baseline so baseline failures stop early.
 function Get-CtestExecutionWaves($Inventory,[object[]]$Selected) {
     if (!$Selected -or !$Selected.Count) { return @() }
     $byName=@{}
     if ($Inventory -and $Inventory.tests) {
         foreach ($item in $Inventory.tests) { $byName[$item.name]=$item }
     }
-    $heavyMultiProc=@(
+    $waves=[Collections.Generic.List[object]]::new()
+    $assigned=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $completedFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+
+    $fastRows=@(
         foreach ($row in $Selected) {
+            $meta=$byName[$row.name]
+            $labels=if($meta){@(Get-TestLabels $meta)}else{@()}
+            if ('fast' -in $labels) { $row }
+        }
+    )
+    if ($fastRows.Count -and $fastRows.Count -lt $Selected.Count) {
+        $fastReq=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($row in $fastRows) {
+            $meta=$byName[$row.name]
+            if ($meta) {
+                foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_REQUIRED')) {
+                    if ($fixture) { [void]$fastReq.Add($fixture) }
+                }
+            }
+        }
+        $fastWave=[Collections.Generic.List[object]]::new()
+        foreach ($row in $Selected) {
+            $meta=$byName[$row.name]
+            if (!$meta) { continue }
+            $setups=@(Get-TestFixtureProperty $meta 'FIXTURES_SETUP' | Where-Object { $_ -and $fastReq.Contains($_) })
+            if ($setups.Count -and $assigned.Add($row.name)) {
+                $fastWave.Add($row)
+                foreach ($fixture in $setups) { [void]$completedFixtures.Add($fixture) }
+            }
+        }
+        foreach ($row in $fastRows) {
+            if ($assigned.Add($row.name)) {
+                $fastWave.Add($row)
+                $meta=$byName[$row.name]
+                if ($meta) {
+                    foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_SETUP')) {
+                        if ($fixture) { [void]$completedFixtures.Add($fixture) }
+                    }
+                }
+            }
+        }
+        if ($fastWave.Count -lt $Selected.Count) {
+            $waves.Add([pscustomobject]@{
+                tag='fast'
+                tests=@($fastWave)
+                exclude_setup_fixtures=@()
+                reason='FAST baseline gate runs first so baseline failures stop before heavy suites and broader regressions.'
+            })
+        } else {
+            $assigned.Clear()
+            $completedFixtures.Clear()
+        }
+    }
+
+    $remainingPool=@($Selected | Where-Object { !$assigned.Contains($_.name) })
+    $heavyMultiProc=@(
+        foreach ($row in $remainingPool) {
             $meta=$byName[$row.name]
             if ($meta -and (Get-TestNumericProperty $meta 'PROCESSORS' 1) -ge 2) { $row }
         }
     )
-    if (!$heavyMultiProc.Count -or $heavyMultiProc.Count -eq $Selected.Count) {
+    if ($heavyMultiProc.Count) {
+        $excludeBeforeHeavy=@($completedFixtures | Sort-Object)
+        $requiredFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($row in $heavyMultiProc) {
+            $meta=$byName[$row.name]
+            if ($meta) {
+                foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_REQUIRED')) {
+                    if ($fixture -and !$completedFixtures.Contains($fixture)) { [void]$requiredFixtures.Add($fixture) }
+                }
+            }
+        }
+        $heavyWave=[Collections.Generic.List[object]]::new()
+        foreach ($row in $remainingPool) {
+            $meta=$byName[$row.name]
+            if (!$meta) { continue }
+            $setups=@(Get-TestFixtureProperty $meta 'FIXTURES_SETUP' | Where-Object { $_ -and $requiredFixtures.Contains($_) })
+            if ($setups.Count -and $assigned.Add($row.name)) {
+                $heavyWave.Add($row)
+                foreach ($fixture in $setups) { [void]$completedFixtures.Add($fixture) }
+            }
+        }
+        foreach ($row in $heavyMultiProc) {
+            if ($assigned.Add($row.name)) {
+                $heavyWave.Add($row)
+                $meta=$byName[$row.name]
+                if ($meta) {
+                    foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_SETUP')) {
+                        if ($fixture) { [void]$completedFixtures.Add($fixture) }
+                    }
+                }
+            }
+        }
+        $postHeavy=@($Selected | Where-Object { !$assigned.Contains($_.name) })
+        if ($waves.Count -gt 0 -or $postHeavy.Count -gt 0) {
+            $waves.Add([pscustomobject]@{
+                tag='heavy'
+                tests=@($heavyWave)
+                exclude_setup_fixtures=$excludeBeforeHeavy
+                reason='Priority wave for multi-processor heavy suites so 1-processor tests cannot starve them via backfill.'
+            })
+        } else {
+            $assigned.Clear()
+            $completedFixtures.Clear()
+        }
+    }
+
+    $finalRemaining=@($Selected | Where-Object { !$assigned.Contains($_.name) })
+    if ($waves.Count -eq 0) {
         return @(
             [pscustomobject]@{
                 tag=''
@@ -162,55 +274,15 @@ function Get-CtestExecutionWaves($Inventory,[object[]]$Selected) {
             }
         )
     }
-    $requiredFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($row in $heavyMultiProc) {
-        $meta=$byName[$row.name]
-        if ($meta) {
-            foreach ($fixture in (Get-TestFixtureProperty $meta 'FIXTURES_REQUIRED')) {
-                if ($fixture) { [void]$requiredFixtures.Add($fixture) }
-            }
-        }
-    }
-    $wave1Names=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $wave1Tests=[Collections.Generic.List[object]]::new()
-    $completedFixtures=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($row in $Selected) {
-        $meta=$byName[$row.name]
-        if (!$meta) { continue }
-        $setups=@(Get-TestFixtureProperty $meta 'FIXTURES_SETUP' | Where-Object { $_ -and $requiredFixtures.Contains($_) })
-        if ($setups.Count) {
-            if ($wave1Names.Add($row.name)) { $wave1Tests.Add($row) }
-            foreach ($fixture in $setups) { [void]$completedFixtures.Add($fixture) }
-        }
-    }
-    foreach ($row in $heavyMultiProc) {
-        if ($wave1Names.Add($row.name)) { $wave1Tests.Add($row) }
-    }
-    $wave2Tests=@($Selected | Where-Object { !$wave1Names.Contains($_.name) })
-    if (!$wave2Tests.Count) {
-        return @(
-            [pscustomobject]@{
-                tag=''
-                tests=@($Selected)
-                exclude_setup_fixtures=@()
-                reason='All selected tests belong to the heavy priority group; single CTest wave.'
-            }
-        )
-    }
-    return @(
-        [pscustomobject]@{
-            tag='heavy'
-            tests=@($wave1Tests)
-            exclude_setup_fixtures=@()
-            reason='Priority wave for multi-processor heavy suites so 1-processor tests cannot starve them via backfill.'
-        },
-        [pscustomobject]@{
+    if ($finalRemaining.Count) {
+        $waves.Add([pscustomobject]@{
             tag='remaining'
-            tests=@($wave2Tests)
+            tests=@($finalRemaining)
             exclude_setup_fixtures=@($completedFixtures | Sort-Object)
             reason='Remaining 1-processor tests scheduled longest-first by per-architecture CTestCostData.txt and initial COST.'
-        }
-    )
+        })
+    }
+    return @($waves)
 }
 function Get-SelectedTests($Inventory,[string[]]$Levels,[string]$Preset) {
     $selected=[Collections.Generic.List[object]]::new()
@@ -271,43 +343,85 @@ function Invoke-CmakeBuild([string]$Preset,[object[]]$Tests) {
         Complete-TestStage -Stage $stage -Details @{preset=$Preset;targets=$targets;cache='CMake incremental build'}
     } catch { $status='failed';$errorMessage=$_.Exception.Message;Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;targets=$targets} -ErrorMessage $errorMessage;throw }
 }
-function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests,[string]$ReportTag='',[string[]]$ExcludeFixtureSetup=@()) {
+function Invoke-CtestSelection([string]$Preset,[string]$BinaryDirectory,[object[]]$Tests,[string]$ReportTag='',[string[]]$ExcludeFixtureSetup=@(),[switch]$DiagnosticOnly) {
     if (!$Tests.Count) { return }
     $names=@($Tests | ForEach-Object name)
     $regex='^(' + (($names | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
     $loadVar=Get-Variable -Name TestLoad -ErrorAction SilentlyContinue
     $loadLimit=if($loadVar -and $null -ne $loadVar.Value){[double]$loadVar.Value}else{0.0}
+    $policyVar=Get-Variable -Name FailurePolicy -ErrorAction SilentlyContinue
+    $policy=if($policyVar -and $policyVar.Value){[string]$policyVar.Value}else{'fail-fast'}
+    $stopOnFailure=(!$DiagnosticOnly) -and ($policy -eq 'fail-fast')
     $stage=Start-TestStage -Name "CTest execution ($Preset)" -Category 'ctest.run'
     $status='passed';$errorMessage=$null
     $previousAttempt=$env:SHANJIE_CTEST_ATTEMPT
     $previousParent=$env:SHANJIE_TEST_PARENT_STAGE_ID
     $env:SHANJIE_TEST_PARENT_STAGE_ID=$stage.Id
+    $waveReports=[Collections.Generic.List[object]]::new()
     try {
-        for($attempt=1;$attempt -le $(if($RetryFailures){2}else{1});$attempt++) {
+        $maxAttempts=if($RetryFailures -and !$DiagnosticOnly){2}else{1}
+        $ctestExit=0
+        for($attempt=1;$attempt -le $maxAttempts;$attempt++) {
             $suffix=$(if($ReportTag){"-$ReportTag"})+$(if($attempt -gt 1){'-retry'})
             $log=Join-Path $reportRoot "ctest-$Preset$suffix.log"
             $junit=Join-Path $reportRoot "junit-$Preset$suffix.xml"
             $ctestArguments=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--test-output-size-passed','0','--test-output-size-failed','0','--output-log',$log,'--output-junit',$junit,'--parallel',"$Jobs",'--no-tests=error')
+            if($stopOnFailure){$ctestArguments+='--stop-on-failure'}
             if($loadLimit -gt 0){$ctestArguments+=@('--test-load',"$loadLimit")}
             if($ExcludeFixtureSetup -and $ExcludeFixtureSetup.Count){
                 $fixtureRegex='^(' + (($ExcludeFixtureSetup | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
                 $ctestArguments+=@('-FS',$fixtureRegex)
             }
             if($attempt -eq 1){$ctestArguments+=@('-R',$regex)}else{$ctestArguments+='--rerun-failed'}
-            $script:ctestReports += [pscustomobject]@{preset=$Preset;wave=$ReportTag;attempt=$attempt;log=$log;junit=$junit;tests=$names;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
+            $reportEntry=[pscustomobject]@{preset=$Preset;wave=$ReportTag;attempt=$attempt;log=$log;junit=$junit;tests=$names;stop_on_failure=$stopOnFailure;diagnostic=[bool]$DiagnosticOnly;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
+            $waveReports.Add($reportEntry)
+            if($DiagnosticOnly){$script:diagnosticReports += $reportEntry}else{$script:ctestReports += $reportEntry}
             $env:SHANJIE_CTEST_ATTEMPT="$attempt"
             & ctest @ctestArguments
             $ctestExit=$LASTEXITCODE
             $lastTest=Join-Path $BinaryDirectory 'Testing/Temporary/LastTest.log'
             if(Test-Path -LiteralPath $lastTest){Copy-Item -LiteralPath $lastTest -Destination (Join-Path $reportRoot "LastTest-$Preset$suffix.log") -Force}
-            if(!$ctestExit){break}
+            if(!$ctestExit){
+                # If attempt 1 stopped early due to --stop-on-failure and retry
+                # recovered the flaky test, execute only the unstarted rows once.
+                if($attempt -gt 1 -and $stopOnFailure){
+                    $executed=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+                    foreach($r in (Read-CtestResults @($waveReports))){[void]$executed.Add($r.name)}
+                    $unstarted=@($names | Where-Object { !$executed.Contains($_) })
+                    if($unstarted.Count){
+                        $resumeSuffix=$(if($ReportTag){"-$ReportTag"})+'-resume'
+                        $resumeLog=Join-Path $reportRoot "ctest-$Preset$resumeSuffix.log"
+                        $resumeJunit=Join-Path $reportRoot "junit-$Preset$resumeSuffix.xml"
+                        $resumeRegex='^(' + (($unstarted | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+                        $resumeArgs=@('--test-dir',$BinaryDirectory,'-C','Release','--output-on-failure','--test-output-size-passed','0','--test-output-size-failed','0','--output-log',$resumeLog,'--output-junit',$resumeJunit,'--parallel',"$Jobs",'--no-tests=error','--stop-on-failure')
+                        if($loadLimit -gt 0){$resumeArgs+=@('--test-load',"$loadLimit")}
+                        if($ExcludeFixtureSetup -and $ExcludeFixtureSetup.Count){
+                            $fixtureRegex='^(' + (($ExcludeFixtureSetup | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+                            $resumeArgs+=@('-FS',$fixtureRegex)
+                        }
+                        $resumeArgs+=@('-R',$resumeRegex)
+                        $resumeEntry=[pscustomobject]@{preset=$Preset;wave=$ReportTag;attempt=1;resumed=$true;log=$resumeLog;junit=$resumeJunit;tests=$unstarted;stop_on_failure=$true;diagnostic=$false;snapshot_id=$env:SHANJIE_RELEASE_SNAPSHOT_ID;snapshot_sha256=$env:SHANJIE_RELEASE_SNAPSHOT_SHA256}
+                        $waveReports.Add($resumeEntry)
+                        $script:ctestReports += $resumeEntry
+                        $env:SHANJIE_CTEST_ATTEMPT='1'
+                        & ctest @resumeArgs
+                        $ctestExit=$LASTEXITCODE
+                        if(Test-Path -LiteralPath $lastTest){Copy-Item -LiteralPath $lastTest -Destination (Join-Path $reportRoot "LastTest-$Preset$resumeSuffix.log") -Force}
+                        $log=$resumeLog;$junit=$resumeJunit
+                    }
+                }
+                break
+            }
         }
-        if($ctestExit){throw "CTest failed for $Preset (exit $ctestExit); see $log and $junit."}
+        if($ctestExit){
+            if(!$DiagnosticOnly){$script:stoppedAfterWave=if($ReportTag){$ReportTag}else{'single'}}
+            throw "CTest failed for $Preset (exit $ctestExit); see $log and $junit."
+        }
     } catch { $status='failed';$errorMessage=$_.Exception.Message;throw }
     finally {
         $env:SHANJIE_CTEST_ATTEMPT=$previousAttempt
         $env:SHANJIE_TEST_PARENT_STAGE_ID=$previousParent
-        Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;selected_tests=$names.Count;log=$log;junit=$junit} -ErrorMessage $errorMessage
+        Complete-TestStage -Stage $stage -Status $status -Details @{preset=$Preset;wave=$ReportTag;selected_tests=$names.Count;stop_on_failure=$stopOnFailure;log=$log;junit=$junit} -ErrorMessage $errorMessage
     }
 }
 
@@ -468,16 +582,41 @@ try {
     $overallStatus='failed'
     $failureMessage=$_.Exception.Message
     Write-Host "FAILED: $failureMessage"
+    if($DiagnosticTests -and $DiagnosticTests.Count -and !$PlanOnly -and $inventoryByPreset.Count){
+        Write-Host "Running explicitly requested post-failure diagnostic tests: $($DiagnosticTests -join ', ')"
+        foreach($diagPreset in $inventoryByPreset.Keys){
+            $inv=$inventoryByPreset[$diagPreset]
+            if(!$inv -or !$inv.tests){continue}
+            $matched=@($inv.tests | Where-Object { $_.name -in $DiagnosticTests } | ForEach-Object { [pscustomobject]@{name=$_.name;preset=$diagPreset} })
+            if(!$matched.Count){continue}
+            try {
+                Invoke-CmakeBuild $diagPreset $matched
+                Invoke-CtestSelection $diagPreset (Join-Path $root "build/cmake/$diagPreset") $matched -ReportTag 'diag' -DiagnosticOnly
+            } catch {
+                $notes.Add("Post-failure diagnostic execution on $diagPreset reported failure: $($_.Exception.Message)")
+            }
+        }
+    }
 } finally {
     $whole.Stop()
     try { $testResults=@(Read-CtestResults $ctestReports) }
     catch { $overallStatus='failed';$failureMessage=$_.Exception.Message;$notes.Add("Could not read CTest JUnit: $failureMessage") }
+    if($diagnosticReports.Count){
+        try { $diagnosticResults=@(Read-CtestResults $diagnosticReports) }
+        catch { $notes.Add("Could not read diagnostic CTest JUnit: $($_.Exception.Message)") }
+    }
+    $firstFailure=$testResults | Where-Object { $_.status -ne 'passed' } | Select-Object -First 1
     $observed=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach($result in $testResults){[void]$observed.Add("$($result.preset)::$($result.name)")}
+    $executedCount=$testResults.Count
     foreach($selected in @($selectedByPreset.Values | ForEach-Object { $_ })) {
         $key="$($selected.preset)::$($selected.name)"
-        if(!$observed.Contains($key)){$testResults+=,[pscustomobject]@{name=$selected.name;class=$null;preset=$selected.preset;status='not-run';duration_seconds=$null;failure=$null;reason=if($overallStatus -eq 'failed'){'CTest did not return a JUnit result; see the stage failure and log.'}else{'Selected in the plan but not started.'};log=$null}}
+        if(!$observed.Contains($key)){
+            $notRunReason=if($overallStatus -eq 'failed' -and $FailurePolicy -eq 'fail-fast' -and $firstFailure){"Stopped early after failure in $($firstFailure.preset)::$($firstFailure.name)."}elseif($overallStatus -eq 'failed'){'CTest did not return a JUnit result; see the stage failure and log.'}else{'Selected in the plan but not started.'}
+            $testResults+=,[pscustomobject]@{name=$selected.name;class=$null;preset=$selected.preset;status='not-run';duration_seconds=$null;failure=$null;reason=$notRunReason;log=$null}
+        }
     }
+    $notRunRows=@($testResults | Where-Object status -eq 'not-run')
     if($overallStatus -eq 'passed' -and @($testResults | Where-Object status -NE 'passed').Count){
         $overallStatus='failed'
         $failureMessage='Some selected tests failed or did not run; see the per-test results and CTest logs.'
@@ -548,6 +687,17 @@ try {
         ctest=$ctestReports
         retry_failures=[bool]$RetryFailures
         ci_safe=[bool]$CiSafe
+        failure_handling=[ordered]@{
+            policy=$FailurePolicy
+            stop_on_failure=($FailurePolicy -eq 'fail-fast')
+            stopped_early=($overallStatus -eq 'failed' -and $FailurePolicy -eq 'fail-fast' -and $notRunRows.Count -gt 0)
+            stopped_after_wave=$stoppedAfterWave
+            executed_tests=$executedCount
+            not_run_tests=$notRunRows.Count
+            not_run_names=@($notRunRows | ForEach-Object name)
+            first_failure=if($firstFailure){[ordered]@{name=$firstFailure.name;preset=$firstFailure.preset;status=$firstFailure.status;duration_seconds=$firstFailure.duration_seconds;failure=$firstFailure.failure;log=$firstFailure.log;junit=$firstFailure.junit}}else{$null}
+            diagnostics=[ordered]@{requested=@($DiagnosticTests);reports=$diagnosticReports;results=$diagnosticResults}
+        }
         scheduling=[ordered]@{
             schedule_random=$false
             test_load=$TestLoad
@@ -574,6 +724,7 @@ try {
     $env:SHANJIE_RELEASE_SNAPSHOT_ID=$previousSnapshotId
     $env:SHANJIE_RELEASE_SNAPSHOT_SHA256=$previousSnapshotHash
     $env:SHANJIE_RELEASE_PACKAGING_PERMIT=$previousPermit
+    $env:SHANJIE_TEST_STOP_ON_FAILURE=$previousStopOnFailure
 }
 if($overallStatus -ne 'passed'){throw $failureMessage}
 if($Level -eq 'RELEASE' -and $CiSafe -and $env:GITHUB_ACTIONS -eq 'true'){
