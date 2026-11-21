@@ -334,7 +334,7 @@ function Get-EnvironmentSnapshot([string]$ProjectRoot, [string]$ImageLabel, [str
 function Find-LatestTestReport([string]$ProjectRoot, [Nullable[DateTimeOffset]]$NotBeforeUtc = $null) {
     $reportsDir = Join-Path $ProjectRoot 'build/reports'
     if (!(Test-Path -LiteralPath $reportsDir)) { return $null }
-    $cutoff = if ($null -ne $NotBeforeUtc) { $NotBeforeUtc.Value.UtcDateTime.AddSeconds(-2) } else { $null }
+    $cutoff = if ($null -ne $NotBeforeUtc) { ([DateTimeOffset]$NotBeforeUtc).UtcDateTime.AddSeconds(-2) } else { $null }
     $candidate = Get-ChildItem -LiteralPath $reportsDir -Directory -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTimeUtc -Descending |
         ForEach-Object { Join-Path $_.FullName 'report.json' } |

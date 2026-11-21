@@ -297,6 +297,7 @@ try {
     & "$root/scripts/runner-diagnostics.ps1" -Phase post -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -TestReportPath $diagReportPath -Quiet
     $postObj=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($diagJsonPath))
     Assert-Check ($postObj.phase -eq 'post' -and $postObj.environment.git_and_test.selected_test_count -eq 2 -and $postObj.runtime_performance.cpu_peak_percent -eq 78.4 -and $postObj.runtime_performance.ram_peak_used_mb -eq 8192.5 -and $postObj.runtime_performance.stage_timings.Count -eq 2 -and $postObj.runtime_performance.test_durations[0].name -eq 'fast.rust.windows' -and $postObj.attribution_notes.Count -ge 2) 'Post-phase runner diagnostics merge runtime metrics, stage timings, test durations and attribution notes'
+    & "$root/scripts/runner-diagnostics.ps1" -Phase post -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -Quiet
 } finally {
     $env:GITHUB_TOKEN=$prevGhToken; $env:SHANJIE_TEST_FAKE_SECRET=$prevSecret
 }
