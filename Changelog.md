@@ -2,6 +2,14 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.1-beta.1（Windows pre-release）
+
+詳見 [0.16.1-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.16.1-beta.1.md)。
+
+- 同步善解 main `1752033f`：三聲變調（預設開啟）、收尾鍵英文／注音自動比較。
+- 新增英文段提示開關（預設開啟）。
+- 修正候選窗動畫最後一格未繪出。
+
 ## 0.16.0（Windows）
 
 詳見 [0.16.0 版本說明](docs/releases/RELEASE-NOTES-0.16.0.md)。
