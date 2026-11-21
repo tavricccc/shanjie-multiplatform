@@ -1,4 +1,4 @@
-# Resolve changes once for every architecture; --no-renames keeps both sides of
+﻿# Resolve changes once for every architecture; --no-renames keeps both sides of
 # moves, including source files moved under docs/.
 function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
     $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
@@ -39,7 +39,7 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
-        '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
+        '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|runner-diagnostics|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
         '^(platform/|scripts/prepare-core\.ps1$)' {

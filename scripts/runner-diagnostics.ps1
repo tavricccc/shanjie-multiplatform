@@ -331,13 +331,20 @@ function Get-EnvironmentSnapshot([string]$ProjectRoot, [string]$ImageLabel, [str
     }
 }
 
-function Find-LatestTestReport([string]$ProjectRoot) {
+function Find-LatestTestReport([string]$ProjectRoot, [Nullable[DateTimeOffset]]$NotBeforeUtc = $null) {
     $reportsDir = Join-Path $ProjectRoot 'build/reports'
     if (!(Test-Path -LiteralPath $reportsDir)) { return $null }
+    $cutoff = if ($null -ne $NotBeforeUtc) { $NotBeforeUtc.Value.UtcDateTime.AddSeconds(-2) } else { $null }
     $candidate = Get-ChildItem -LiteralPath $reportsDir -Directory -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTimeUtc -Descending |
         ForEach-Object { Join-Path $_.FullName 'report.json' } |
-        Where-Object { Test-Path -LiteralPath $_ } |
+        Where-Object {
+            if (!(Test-Path -LiteralPath $_)) { return $false }
+            if ($null -ne $cutoff) {
+                return ((Get-Item -LiteralPath $_).LastWriteTimeUtc -ge $cutoff)
+            }
+            return $true
+        } |
         Select-Object -First 1
     return $candidate
 }
@@ -400,7 +407,14 @@ $runtimePerf = [ordered]@{
 }
 
 if ($Phase -eq 'post') {
-    $reportFile = if ($TestReportPath -and (Test-Path -LiteralPath $TestReportPath)) { $TestReportPath } else { Find-LatestTestReport $root }
+    $notBefore = $null
+    if ($existing -and $existing.ContainsKey('collected_utc') -and $existing['collected_utc']) {
+        $parsedUtc = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse([string]$existing['collected_utc'], [ref]$parsedUtc)) {
+            $notBefore = [Nullable[DateTimeOffset]]$parsedUtc
+        }
+    }
+    $reportFile = if ($TestReportPath -and (Test-Path -LiteralPath $TestReportPath)) { $TestReportPath } else { Find-LatestTestReport $root $notBefore }
     if ($reportFile -and (Test-Path -LiteralPath $reportFile)) {
         try {
             $testReport = Get-Content -LiteralPath $reportFile -Raw | ConvertFrom-Json
