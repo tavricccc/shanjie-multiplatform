@@ -138,13 +138,13 @@ jobs:
           key: windows-core-suite-v2-${{ steps.cargo-cache-key.outputs.toolchain }}-${{ steps.cargo-cache-key.outputs.native }}-${{ hashFiles('UPSTREAM.json', 'MODEL-SOURCES.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/test-core.ps1', 'scripts/test-support.psm1') }}
       - name: Collect runner environment diagnostics
         env:
-          CACHE_HIT_REGISTRY: ${{ steps.cache-cargo-registry.outputs.cache-hit }}
-          CACHE_HIT_HOST: ${{ steps.cache-cargo-host.outputs.cache-hit }}
-          CACHE_HIT_X64: ${{ steps.cache-cargo-x64.outputs.cache-hit }}
-          CACHE_HIT_X86: ${{ steps.cache-cargo-x86.outputs.cache-hit }}
-          CACHE_HIT_NUGET: ${{ steps.cache-nuget.outputs.cache-hit }}
-          CACHE_HIT_MODELS: ${{ steps.cache-models.outputs.cache-hit }}
-          CACHE_HIT_CORE: ${{ steps.cache-core-suite.outputs.cache-hit }}
+          CACHE_HIT_REGISTRY: ${{ steps.cache-cargo-registry.outputs.cache-hit == 'true' }}
+          CACHE_HIT_HOST: ${{ steps.cache-cargo-host.outputs.cache-hit == 'true' }}
+          CACHE_HIT_X64: ${{ steps.cache-cargo-x64.outputs.cache-hit == 'true' }}
+          CACHE_HIT_X86: ${{ steps.cache-cargo-x86.outputs.cache-hit == 'true' }}
+          CACHE_HIT_NUGET: ${{ steps.cache-nuget.outputs.cache-hit == 'true' }}
+          CACHE_HIT_MODELS: ${{ steps.cache-models.outputs.cache-hit == 'true' }}
+          CACHE_HIT_CORE: ${{ steps.cache-core-suite.outputs.cache-hit == 'true' }}
         run: |
           $cacheSpec = @{
             cargo_registry = @{ hit = $env:CACHE_HIT_REGISTRY; paths = @('~/.cargo/registry/index', '~/.cargo/registry/cache', '~/.cargo/registry/src') }

@@ -64,8 +64,8 @@ jobs:
           restore-keys: ${{ steps.cargo-cache-key.outputs.prefix }}-x86_64-pc-windows-msvc-
       - name: Collect runner environment diagnostics
         env:
-          CACHE_HIT_REGISTRY: ${{ steps.cache-cargo-registry.outputs.cache-hit }}
-          CACHE_HIT_CARGO_X64: ${{ steps.cache-cargo-x64.outputs.cache-hit }}
+          CACHE_HIT_REGISTRY: ${{ steps.cache-cargo-registry.outputs.cache-hit == 'true' }}
+          CACHE_HIT_CARGO_X64: ${{ steps.cache-cargo-x64.outputs.cache-hit == 'true' }}
         run: |
           $cacheSpec = @{
             cargo_registry = @{ hit = $env:CACHE_HIT_REGISTRY; paths = @('~/.cargo/registry/index', '~/.cargo/registry/cache', '~/.cargo/registry/src') }

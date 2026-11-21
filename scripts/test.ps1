@@ -51,14 +51,15 @@ $env:SHANJIE_TEST_RUN_ID=$runId
 $env:SHANJIE_TEST_TIMINGS_DIR=$eventsRoot
 $whole=[Diagnostics.Stopwatch]::StartNew()
 $resourceSampler=$null
-function Start-ResourceSampler {
+function Start-ResourceSampler([int]$IntervalMs = 1000) {
     try {
         if (-not ('Shanjie.NativePerfSampler' -as [type])) {
             Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 namespace Shanjie {
-    public static class NativePerfSampler {
+    public sealed class NativePerfSampler : IDisposable {
         [StructLayout(LayoutKind.Sequential)]
         public struct FILETIME { public uint Low; public uint High; }
         [StructLayout(LayoutKind.Sequential)]
@@ -91,39 +92,79 @@ namespace Shanjie {
             usedPct = (double)(m.ullTotalPhys - m.ullAvailPhys) * 100.0 / (double)m.ullTotalPhys;
             return true;
         }
+        private readonly object _gate = new object();
+        private Timer _timer;
+        private ulong _prevIdle;
+        private ulong _prevTotal;
+        private double _cpuSum;
+        private int _cpuCount;
+        private double _cpuPeak;
+        private double _ramPeakMb;
+        private double _ramPeakPct;
+        private bool _stopped;
+        private NativePerfSampler(ulong i0, ulong t0, double m0, double p0, int intervalMs) {
+            _prevIdle = i0;
+            _prevTotal = t0;
+            _ramPeakMb = m0;
+            _ramPeakPct = p0;
+            _timer = new Timer(_ => Record(), null, intervalMs, intervalMs);
+        }
+        public static NativePerfSampler Start(int intervalMs) {
+            if (intervalMs <= 0) intervalMs = 1000;
+            ulong i0, t0; double m0, p0;
+            if (!Sample(out i0, out t0, out m0, out p0)) return null;
+            return new NativePerfSampler(i0, t0, m0, p0, intervalMs);
+        }
+        private void Record() {
+            lock (_gate) {
+                if (_stopped) return;
+                RecordLocked();
+            }
+        }
+        private void RecordLocked() {
+            ulong i1, t1; double m1, p1;
+            if (!Sample(out i1, out t1, out m1, out p1)) return;
+            if (t1 > _prevTotal) {
+                ulong dTotal = t1 - _prevTotal;
+                ulong dIdle = i1 >= _prevIdle ? (i1 - _prevIdle) : 0;
+                double busy = Math.Clamp((1.0 - ((double)dIdle / (double)dTotal)) * 100.0, 0.0, 100.0);
+                _cpuSum += busy;
+                _cpuCount++;
+                if (busy > _cpuPeak) _cpuPeak = busy;
+            }
+            _prevIdle = i1;
+            _prevTotal = t1;
+            if (m1 > _ramPeakMb) _ramPeakMb = m1;
+            if (p1 > _ramPeakPct) _ramPeakPct = p1;
+        }
+        public void StopAndSnapshot(out int cpuCount, out double cpuAvg, out double cpuPeak, out double ramPeakMb, out double ramPeakPct) {
+            lock (_gate) {
+                if (!_stopped) {
+                    _stopped = true;
+                    RecordLocked();
+                }
+                cpuCount = _cpuCount;
+                cpuAvg = _cpuCount > 0 ? _cpuSum / _cpuCount : 0.0;
+                cpuPeak = _cpuPeak;
+                ramPeakMb = _ramPeakMb;
+                ramPeakPct = _ramPeakPct;
+            }
+            Dispose();
+        }
+        public void Dispose() {
+            Timer t;
+            lock (_gate) {
+                _stopped = true;
+                t = _timer;
+                _timer = null;
+            }
+            if (t != null) t.Dispose();
+        }
     }
 }
 '@ -ErrorAction Stop
         }
-        [uint64]$i0 = 0; [uint64]$t0 = 0; [double]$m0 = 0; [double]$p0 = 0
-        if (![Shanjie.NativePerfSampler]::Sample([ref]$i0, [ref]$t0, [ref]$m0, [ref]$p0)) { return $null }
-        $state = [hashtable]::Synchronized(@{
-            prevIdle = $i0; prevTotal = $t0
-            cpuSum = 0.0; cpuCount = 0; cpuPeak = 0.0
-            ramPeakMb = $m0; ramPeakPct = $p0; memSamples = 1
-        })
-        $timer = [System.Timers.Timer]::new(1000)
-        $timer.AutoReset = $true
-        $sub = Register-ObjectEvent -InputObject $timer -EventName Elapsed -MessageData $state -Action {
-            $st = $Event.MessageData
-            [uint64]$i1 = 0; [uint64]$t1 = 0; [double]$m1 = 0; [double]$p1 = 0
-            if ([Shanjie.NativePerfSampler]::Sample([ref]$i1, [ref]$t1, [ref]$m1, [ref]$p1)) {
-                $dTotal = $t1 - $st.prevTotal
-                $dIdle = $i1 - $st.prevIdle
-                if ($dTotal -gt 0) {
-                    $busy = [Math]::Clamp((1.0 - ([double]$dIdle / [double]$dTotal)) * 100.0, 0.0, 100.0)
-                    $st.cpuSum += $busy
-                    $st.cpuCount++
-                    if ($busy -gt $st.cpuPeak) { $st.cpuPeak = $busy }
-                }
-                $st.prevIdle = $i1; $st.prevTotal = $t1
-                $st.memSamples++
-                if ($m1 -gt $st.ramPeakMb) { $st.ramPeakMb = $m1 }
-                if ($p1 -gt $st.ramPeakPct) { $st.ramPeakPct = $p1 }
-            }
-        }
-        $timer.Start()
-        return [pscustomobject]@{ Timer = $timer; Subscription = $sub; State = $state }
+        return [Shanjie.NativePerfSampler]::Start($IntervalMs)
     } catch {
         return $null
     }
@@ -132,32 +173,14 @@ function Stop-ResourceSampler($Sampler) {
     if (!$Sampler) {
         return [ordered]@{ cpu_avg_percent = 'unavailable'; cpu_peak_percent = 'unavailable'; ram_peak_used_mb = 'unavailable'; ram_peak_percent = 'unavailable'; sample_count = 0 }
     }
-    try { $Sampler.Timer.Stop() } catch {}
-    try { Unregister-Event -SubscriptionId $Sampler.Subscription.Id -Force -ErrorAction SilentlyContinue } catch {}
-    try { Remove-Job -Id $Sampler.Subscription.Id -Force -ErrorAction SilentlyContinue } catch {}
-    try { $Sampler.Timer.Dispose() } catch {}
-    $st = $Sampler.State
-    # Take one final sample so short runs still capture overall CPU/RAM deltas.
-    try {
-        [uint64]$i1 = 0; [uint64]$t1 = 0; [double]$m1 = 0; [double]$p1 = 0
-        if ([Shanjie.NativePerfSampler]::Sample([ref]$i1, [ref]$t1, [ref]$m1, [ref]$p1)) {
-            $dTotal = $t1 - $st.prevTotal
-            $dIdle = $i1 - $st.prevIdle
-            if ($dTotal -gt 0) {
-                $busy = [Math]::Clamp((1.0 - ([double]$dIdle / [double]$dTotal)) * 100.0, 0.0, 100.0)
-                $st.cpuSum += $busy; $st.cpuCount++
-                if ($busy -gt $st.cpuPeak) { $st.cpuPeak = $busy }
-            }
-            if ($m1 -gt $st.ramPeakMb) { $st.ramPeakMb = $m1 }
-            if ($p1 -gt $st.ramPeakPct) { $st.ramPeakPct = $p1 }
-        }
-    } catch {}
+    [int]$cpuCount = 0; [double]$cpuAvg = 0; [double]$cpuPeak = 0; [double]$ramPeakMb = 0; [double]$ramPeakPct = 0
+    $Sampler.StopAndSnapshot([ref]$cpuCount, [ref]$cpuAvg, [ref]$cpuPeak, [ref]$ramPeakMb, [ref]$ramPeakPct)
     return [ordered]@{
-        cpu_avg_percent = if ($st.cpuCount -gt 0) { [Math]::Round($st.cpuSum / $st.cpuCount, 1) } else { 'unavailable' }
-        cpu_peak_percent = if ($st.cpuCount -gt 0) { [Math]::Round($st.cpuPeak, 1) } else { 'unavailable' }
-        ram_peak_used_mb = [Math]::Round($st.ramPeakMb, 1)
-        ram_peak_percent = [Math]::Round($st.ramPeakPct, 1)
-        sample_count = [int]$st.cpuCount
+        cpu_avg_percent = if ($cpuCount -gt 0) { [Math]::Round($cpuAvg, 1) } else { 'unavailable' }
+        cpu_peak_percent = if ($cpuCount -gt 0) { [Math]::Round($cpuPeak, 1) } else { 'unavailable' }
+        ram_peak_used_mb = [Math]::Round($ramPeakMb, 1)
+        ram_peak_percent = [Math]::Round($ramPeakPct, 1)
+        sample_count = $cpuCount
     }
 }
 $changedPaths=@()
