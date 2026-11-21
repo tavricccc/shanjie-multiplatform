@@ -91,10 +91,14 @@ pub fn pending(s: &Snapshot) -> bool {
 }
 /// What the candidate panel draws. Without the reading panel it only gets what upstream's panel shows: the composition
 /// stays in the App, so a state with no candidates and no hint closes the panel. Hints always draw.
-pub fn panel_view(mut s: Snapshot, reading_panel: bool) -> Snapshot {
+pub fn panel_view(mut s: Snapshot, reading_panel: bool, english_hint: bool) -> Snapshot {
     if !reading_panel && !s.reading_hint {
         s.preedit.clear();
         s.cursor = 0;
+    }
+    // Without the hint an English run alone gives the panel nothing to show; with a composition row the run stays for its underline.
+    if !english_hint && s.preedit.is_empty() {
+        s.english_run_utf16_len = 0;
     }
     s
 }

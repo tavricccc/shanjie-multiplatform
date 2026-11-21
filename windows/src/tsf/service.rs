@@ -897,6 +897,7 @@ impl Data {
                     .anchor_right
                     .set(current.get("candidates", "anchor", "right") == "right");
                 c.data.reading_panel.set(current.reading_panel());
+                c.data.english_hint.set(current.flag("candidates", "english_hint", true));
             }
         }
         if let Some(engine) = retired { resident::retire(engine); }
@@ -1115,6 +1116,7 @@ impl ITfTextInputProcessorEx_Impl for Service_Impl {
                 .anchor_right
                 .set(preferences.get("candidates", "anchor", "right") == "right");
             candidates.data.reading_panel.set(preferences.reading_panel());
+            candidates.data.english_hint.set(preferences.flag("candidates", "english_hint", true));
             candidates.data.appearance.set(crate::appearance::Appearance::from_document(&preferences));
             self.data.state.borrow_mut().candidates = Some(candidates);
             let keys: ITfKeystrokeMgr = thread.cast()?;

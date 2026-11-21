@@ -255,6 +255,8 @@ pub struct Host {
     work_height: f32,
     /// The candidate target is the character right of the cursor (profile `anchor=right`).
     pub anchor_right: bool,
+    /// Show the "空白：英文斷開" hint while an English run is open (profile `english_hint`).
+    pub english_hint: bool,
 }
 /// The visible grid items: whole rows, moved only as far as needed to keep the selection inside.
 fn grid_window(count: usize, selected: Option<usize>, start: usize, max_rows: usize) -> (usize, usize) {
@@ -316,6 +318,7 @@ impl Host {
                 work_width: 0.0,
                 work_height: 0.0,
                 anchor_right: true,
+                english_hint: true,
             });
             let module = crate::tsf::module();
             let wc = WNDCLASSW {
@@ -471,7 +474,7 @@ impl Host {
                 mark = Some((start, len.min(units.len() - start)));
             }
             let english_end = self.state.english_run_utf16_start + self.state.english_run_utf16_len;
-            if self.state.english_run_utf16_len != 0 {
+            if self.english_hint && self.state.english_run_utf16_len != 0 {
                 if !text.is_empty() { text.extend("  ".encode_utf16()); }
                 text.extend("空白：英文斷開".encode_utf16());
             }

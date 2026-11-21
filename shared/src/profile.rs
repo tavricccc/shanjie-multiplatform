@@ -678,13 +678,20 @@ mod tests {
             reading_hint,
             ..Default::default()
         };
-        let closed = crate::input::panel_view(state(&[], false), false);
+        let closed = crate::input::panel_view(state(&[], false), false, true);
         assert!(closed.preedit.is_empty() && closed.candidates.is_empty(), "nothing left to draw: the panel closes");
-        let listed = crate::input::panel_view(state(&["好"], false), false);
+        let listed = crate::input::panel_view(state(&["好"], false), false, true);
         assert!(listed.preedit.is_empty() && listed.candidates.len() == 1, "candidates without the sentence row");
-        assert_eq!(crate::input::panel_view(state(&["ㄕㄨ", "gj"], true), false).preedit, "gj", "a hint always draws");
-        let on = crate::input::panel_view(state(&[], false), true);
+        assert_eq!(crate::input::panel_view(state(&["ㄕㄨ", "gj"], true), false, true).preedit, "gj", "a hint always draws");
+        let on = crate::input::panel_view(state(&[], false), true, true);
         assert!(on.preedit == "gj" && on.cursor == 2);
+    }
+    #[test]
+    fn the_english_hint_switch_only_removes_the_hint_only_panel() {
+        let run = |preedit: &str| crate::protocol::Snapshot { preedit: preedit.into(), english_run_utf16_len: 3, ..Default::default() };
+        assert_eq!(crate::input::panel_view(run("你hel"), false, true).english_run_utf16_len, 3, "hint on keeps the run");
+        assert_eq!(crate::input::panel_view(run("你hel"), false, false).english_run_utf16_len, 0, "hint off and nothing else to draw: the panel closes");
+        assert_eq!(crate::input::panel_view(run("你hel"), true, false).english_run_utf16_len, 3, "the sentence row keeps its run underline");
     }
     #[test]
     fn dictionary_newlines_preserve_rows_and_scores() {

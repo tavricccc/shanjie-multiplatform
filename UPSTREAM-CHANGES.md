@@ -114,11 +114,12 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 - 上游 0.6.1 把「依按鍵順序判斷英文」預設改為開；新設定檔照上游，既有設定檔保留原本的值（多半是關）。
 - 上游 0.6.1 的「單按 Shift 切換中英」（`shanjie_engine_set_ascii`，每個 App 各自記住）沒有接上；Windows 沿用自己的 Shift 切換，兩個範本預設都開。
 - 組字面板（`[candidates] reading_panel`）是 Windows 專屬，**原鍵混打需要它**，兩個範本預設關閉。關閉時與上游相同：組字只在 App 內，沒有候選也沒有提示就不顯示面板。開啟後在候選窗位置顯示整句組字，好處是游標移進句子時會標出游標所在的字，使用者可依需要開啟；游標在句尾時不標，上游沒有這個面板。
+- 英文段提示（`[candidates] english_hint`，預設開，與上游一致）：英文段開著時，面板在組字列後接「空白：英文斷開」，上游是獨立一行；Windows 可在設定關閉，關閉後只剩沒有組字列時面板不顯示。
 - 原鍵混打（`[input] mixed_input`，鍵名不變）是 Windows 專屬的混打方式：按鍵排不成合法注音就當英文，原始按鍵留在組字區，面板提示注音，聲調完成後轉中文，Enter 保留原文。選用時組字面板固定開啟，不改寫 `reading_panel` 的值，離開這個模式就回到原值。
 - 候選中 Tab：上游是關閉候選並繼續處理這個鍵（`core` 的兜底分支）。Windows 操作預設的 Tab 與 → 共用 `[candidates] right_action`，範本預設 `expand`，對齊微軟注音；善解操作預設的 Tab 與上游相同。
 - 候選窗方向：上游預設橫排，可在設定改直排（`shanjie_engine_set_candidate_vertical`），Linux 前端也可選；Windows 所有範本一律直式，沒有設定也沒有橫向繪製，候選的直式畫法是 Windows 自己的，沒有接上游這個函式。舊設定的 `[candidates] layout` 讀入時丟棄（任何值都無害），下次儲存就消失。`profiles/*.ini` 保留這一行並加註解，因為 Linux 前端會讀。
 - 範本預設：兩個範本的混打方式都是上游判斷（`upstream_english=1`、`mixed_input=0`），上游判斷不支援的配置（倚天、拼音）沒有作用。善解範本改成與上游相同：`space_operates=1`（空白開候選、候選中換頁）、`shift_toggle=1`、`learning=1`、`caps_lock_english=1`、`forget_candidate=1`（上游 ⌘⌫，Windows 是 Ctrl＋Shift＋Backspace）。只影響新設定檔與缺少的鍵，已存的值不改。混打方式是單選（關閉、上游判斷、原鍵混打，`mixed_input` 與 `upstream_english` 最多一個為 1）：0.9.0 到 0.15.x 的「兩者並用」已移除，原鍵混打開著的設定檔讀入時一律把 `upstream_english` 設 0（兩者並用變成原鍵混打，它原本就先判斷；缺少 `upstream_english` 時也不會從範本補成 1）。
-- 善解範本仍與上游不同：`add_word=1`（雙 Ctrl 加詞，上游沒有）；`glass_tint=42`（上游 0，Windows 玻璃視窗有最低濃度，候選窗不讀它）；上游「瀏覽器第一個字不顯示預測」與英文段提示「空白：英文斷開」Windows 沒有。
+- 善解範本仍與上游不同：`add_word=1`（雙 Ctrl 加詞，上游沒有）；`glass_tint=42`（上游 0，Windows 玻璃視窗有最低濃度，候選窗不讀它）；上游「瀏覽器第一個字不顯示預測」Windows 沒有。
 - 「自動檢查更新」是 Windows 設定頁「關於」的選項，預設開，存在 `%LOCALAPPDATA%\Shanjie\update-auto.txt`，不在 `profile.ini`，上游沒有對應。開啟時由隱藏排程 `ShanjieUpdateCheck` 在登入與之後每 24 小時向 GitHub 查詢，排程同一版一天最多通知一次，開啟設定程式時只要有新版就通知；都不自動下載。
 - Windows 的玻璃視窗（設定、安裝、更新卡片）有最低濃度，任何背景最多透出 20%，「玻璃濃度」從這個下限調到不透明，避免深色背景蓋過文字；次要文字也加深。
 - 「更新通道」是 Windows 設定頁「關於」的選項（正式版／測試版），存在 `%LOCALAPPDATA%\Shanjie\update-channel.txt`，不在 `profile.ini`，上游沒有對應。預設是正式版；正在執行測試版（版本號帶 `-beta.N`）且尚未選擇時預設測試版。

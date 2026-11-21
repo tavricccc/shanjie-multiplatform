@@ -84,6 +84,7 @@ public partial class SettingsViewModel
             ZhuyinOnly = profile.Flag("input", "zhuyin_only", false);
             EnterCommits = profile.Flag("candidates", "enter_commits", Interaction == 0); EnterToCursor = profile.Flag("candidates", "enter_to_cursor", false); UpCycles = profile.Flag("candidates", "up_cycles", Interaction == 0);
             BackspaceDeletes = profile.Flag("candidates", "backspace_deletes", false);
+            EnglishHint = profile.Flag("candidates", "english_hint", true);
             if (readDictionary)
             {
                 var dictionary = Path.Combine(Path.GetDirectoryName(ProfileStore.Path)!, profile.Read("input", "dictionary", "dictionary.tsv"));
@@ -165,7 +166,7 @@ public partial class SettingsViewModel
             ("input","space_inputs_zhuyin",SpaceInputsZhuyin),
             ("input","zhuyin_only",ZhuyinOnly),
             ("candidates","space_pages",SpacePages), ("candidates","wrap_pages",WrapPages), ("candidates","right_action",new[] { "none", "page", "expand" }[RightAction]), ("candidates","enter_commits",EnterCommits), ("candidates","enter_to_cursor",EnterToCursor),
-            ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes),
+            ("candidates","up_cycles",UpCycles), ("candidates","backspace_deletes",BackspaceDeletes), ("candidates","english_hint",EnglishHint),
             ("shortcuts","shift_toggle",ShiftToggle), ("shortcuts","shift_side",ShiftSide), ("shortcuts","ctrl_space_toggle",CtrlSpaceToggle), ("shortcuts","shift_space_toggle",WidthToggle),
             ("shortcuts","ctrl_punctuation",CtrlPunctuation), ("shortcuts","backquote_symbols",BackquoteSymbols), ("shortcuts","code_input",CodeInput),
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
