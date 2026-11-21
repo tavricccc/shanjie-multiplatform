@@ -20,6 +20,8 @@ public sealed partial class MainWindow : UserControl
             if (e.PropertyName == nameof(Vm.GlassTint)) Host.Tint = (float)(Vm.GlassTint / 100);
             if (e.PropertyName is nameof(Vm.AccentMode) or nameof(Vm.AccentColor) or nameof(Vm.PureBlack) or nameof(Vm.AnimationMode)) appearance.Apply();
             if (e.PropertyName == nameof(Vm.HasChanges) && Vm.HasChanges && StatusBar.Severity == InfoBarSeverity.Success) StatusBar.IsOpen = false;
+            // An open bar with no message is an empty strip that eats the bottom of the page.
+            if (e.PropertyName == nameof(Vm.Status) && string.IsNullOrWhiteSpace(Vm.Status)) StatusBar.IsOpen = false;
         };
         Differences.Text = "Windows 操作預設採微軟注音的常用鍵位，Tab 與 → 展開表格，關閉即時預測、選字後聯想及善解的額外標點／聲調操作；Esc、候選讀音項與符號鍵盤等仍有差異，見專案文件。載入預設後可逐項調整，再按儲存套用。\n候選順序仍由善解的詞庫、模型與學習決定。微軟的手寫／部首辨識、雲端功能、舊版引擎與私有詞庫格式不包含在善解中。";
         RefreshPresets(); ShowLoadFeedback();
