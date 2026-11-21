@@ -282,6 +282,7 @@ $diagReportPath=Join-Path $diagDir 'mock-report.json'
 } | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 $diagCacheSpec=(@{
     cargo_fixture=@{ hit='true'; paths=@($diagCacheFixture) }
+    miss_cache=@{ hit='false'; paths=@((Join-Path $diagDir 'does-not-exist')) }
     missing_cache=@{ hit=''; paths=@((Join-Path $diagDir 'does-not-exist')) }
 } | ConvertTo-Json -Depth 4 -Compress)
 $prevGhToken=$env:GITHUB_TOKEN; $prevSecret=$env:SHANJIE_TEST_FAKE_SECRET
@@ -292,7 +293,7 @@ try {
     $preRaw=[IO.File]::ReadAllText($diagJsonPath)
     Assert-Check ($preRaw -notlike '*FakeSecretToken*' -and $preRaw -notlike '*DoNotLeak*') 'Runner diagnostics never emit environment secret values'
     $preObj=ConvertFrom-Json -InputObject $preRaw
-    Assert-Check ($preObj.schema -eq 1 -and $preObj.phase -eq 'pre' -and $preObj.environment.runner.image_label -eq 'windows-2025-vs2026' -and $preObj.environment.cpu.logical_processors -gt 0 -and $preObj.environment.memory.total_physical_mb -gt 0 -and $preObj.environment.toolchain.powershell -and $preObj.cache.cargo_fixture.hit -eq $true -and $preObj.cache.cargo_fixture.restored_size_mb -gt 0 -and $preObj.cache.missing_cache.hit -eq 'unavailable') 'Pre-phase runner diagnostics capture hardware, toolchain, cache and unavailable markers'
+    Assert-Check ($preObj.schema -eq 1 -and $preObj.phase -eq 'pre' -and $preObj.environment.runner.image_label -eq 'windows-2025-vs2026' -and $preObj.environment.cpu.logical_processors -gt 0 -and $preObj.environment.memory.total_physical_mb -gt 0 -and $preObj.environment.toolchain.powershell -and $preObj.cache.cargo_fixture.hit -eq $true -and $preObj.cache.cargo_fixture.restored_size_mb -gt 0 -and $preObj.cache.miss_cache.hit -eq $false -and $preObj.cache.missing_cache.hit -eq 'unavailable') 'Pre-phase runner diagnostics capture hardware, toolchain, cache and unavailable markers'
     & "$root/scripts/runner-diagnostics.ps1" -Phase post -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -TestReportPath $diagReportPath -Quiet
     $postObj=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($diagJsonPath))
     Assert-Check ($postObj.phase -eq 'post' -and $postObj.environment.git_and_test.selected_test_count -eq 2 -and $postObj.runtime_performance.cpu_peak_percent -eq 78.4 -and $postObj.runtime_performance.ram_peak_used_mb -eq 8192.5 -and $postObj.runtime_performance.stage_timings.Count -eq 2 -and $postObj.runtime_performance.test_durations[0].name -eq 'fast.rust.windows' -and $postObj.attribution_notes.Count -ge 2) 'Post-phase runner diagnostics merge runtime metrics, stage timings, test durations and attribution notes'
@@ -310,4 +311,15 @@ $missingDisk=Get-DiskInfo 'Z:'
 Assert-Check ($missingDisk.total_gb -eq 'unavailable' -and $missingDisk.media_type -eq 'unavailable') 'Unavailable disk queries report explicit unavailable values without guessing'
 $ciYaml=[IO.File]::ReadAllText("$root/.github/workflows/ci.yml")
 Assert-Check ($ciYaml -match 'runner-diagnostics\.ps1 -Phase pre' -and $ciYaml -match 'runner-diagnostics\.ps1 -Phase post' -and $ciYaml -match 'scripts/test\.ps1 -Level CI -CiSafe') 'CI workflow records runner diagnostics while keeping the fixed lightweight CI command'
+foreach($fnName in 'Start-ResourceSampler','Stop-ResourceSampler') {
+    $fnDef=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fnName},$false)
+    . ([scriptblock]::Create($fnDef.Extent.Text))
+}
+$sampler=Start-ResourceSampler -IntervalMs 100
+try {
+    & pwsh -NoProfile -Command 'Start-Sleep -Milliseconds 450'
+} finally {
+    $sampled=Stop-ResourceSampler $sampler
+}
+Assert-Check ($sampled.sample_count -ge 2 -and $sampled.ram_peak_used_mb -gt 0) "Background resource sampler records samples during blocking child processes (got $($sampled.sample_count))"
 'PASS impact, harness plans, fixtures, retry history, empty caches, required inputs, and probe deadline'
