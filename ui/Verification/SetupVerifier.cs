@@ -68,6 +68,12 @@ internal static class SetupVerifier
                 await beta.CheckAsync(CancellationToken.None);
                 Check(beta.Choices.Count == 1 && beta.Latest?.Version == "0.15.4" && !beta.Latest.Prerelease, "Stable release did not replace the older beta");
             }
+            // Without a manual choice the channel follows the installed build, so upgrading to the stable release leaves the beta channel.
+            using (var upgraded = new UpdateService("0.15.4", data[1], uri)) Check(upgraded.Channel == UpdateChannel.Stable, "A stable build without a manual choice stayed on the beta channel");
+            // A manual choice is kept across upgrades.
+            using (var chosen = new UpdateService("0.15.4-beta.2", data[0], uri)) Check(chosen.Channel == UpdateChannel.Prerelease, "A manual channel choice was lost on upgrade");
+            File.WriteAllText(Path.Combine(data[0], "update-channel.txt"), "stable");
+            using (var kept = new UpdateService("0.15.4-beta.2", data[0], uri)) Check(kept.Channel == UpdateChannel.Stable, "A beta build overrode the manual stable choice");
         }
         finally
         {
