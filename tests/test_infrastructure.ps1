@@ -88,7 +88,7 @@ foreach($branch in $ast.FindAll({param($node)$node -is [Management.Automation.La
     . ([scriptblock]::Create($branch.Extent.Text))
 }
 Assert-Check ($presets.Count -eq 2 -and $presets[0] -ceq 'windows-x64' -and $presets[1] -ceq 'windows-x86') 'RELEASE retains two separate architecture presets'
-foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-SelectedTests','Invoke-CtestSelection') {
+foreach($name in 'Get-TestLabels','Get-TestFixtureProperty','Get-TestNumericProperty','Read-CtestPreviousFailures','Merge-CtestPreviousFailures','Get-CtestExecutionWaves','Get-SelectedTests','Invoke-CtestSelection') {
     $definition=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$false)
     . ([scriptblock]::Create($definition.Extent.Text))
 }
@@ -106,8 +106,36 @@ $inventory=[pscustomobject]@{tests=@(
 $selection=Get-SelectedTests $inventory @('english') 'windows-x64'
 Assert-Check ($selection.Selected.Count -eq 2) 'Report explicitly includes required fixture setup'
 Assert-Check ($selection.Omitted.Count -eq 0) 'A required fixture is not simultaneously reported omitted'
+$waveInventory=[pscustomobject]@{tests=@(
+    [pscustomobject]@{name='fast.prepare-core';properties=@([pscustomobject]@{name='FIXTURES_SETUP';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.core-suite';properties=@([pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=4})},
+    [pscustomobject]@{name='fast.rust.windows';properties=@([pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.english.caps.x64';properties=@([pscustomobject]@{name='PROCESSORS';value=1})}
+)}
+$waves=@(Get-CtestExecutionWaves $waveInventory @($waveInventory.tests | ForEach-Object {[pscustomobject]@{name=$_.name}}))
+Assert-Check ($waves.Count -eq 2 -and $waves[0].tag -eq 'heavy' -and ($waves[0].tests.name -join ',') -eq 'fast.prepare-core,full.core-suite') 'Multi-processor heavy suite forms an upfront priority wave with its required fixture setup'
+Assert-Check ($waves[1].tag -eq 'remaining' -and ($waves[1].tests.name -join ',') -eq 'fast.rust.windows,full.english.caps.x64' -and ($waves[1].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Remaining wave excludes already-completed setup fixtures instead of rerunning them'
+$singleWave=@(Get-CtestExecutionWaves $waveInventory @([pscustomobject]@{name='fast.prepare-core'},[pscustomobject]@{name='fast.rust.windows'}))
+Assert-Check ($singleWave.Count -eq 1 -and $singleWave[0].tag -eq '') 'Single-processor selections stay in one CTest wave'
+$gatedInventory=[pscustomobject]@{tests=@(
+    [pscustomobject]@{name='fast.upstream-data';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='fast.prepare-core';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='FIXTURES_SETUP';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='fast.rust.windows';properties=@([pscustomobject]@{name='LABELS';value=@('ci;fast;full')},[pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=1})},
+    [pscustomobject]@{name='full.core-suite';properties=@([pscustomobject]@{name='LABELS';value=@('full;core')},[pscustomobject]@{name='FIXTURES_REQUIRED';value=@('CoreOverlay')},[pscustomobject]@{name='PROCESSORS';value=4})},
+    [pscustomobject]@{name='full.english.caps.x64';properties=@([pscustomobject]@{name='LABELS';value=@('full;english')},[pscustomobject]@{name='PROCESSORS';value=1})}
+)}
+$gatedWaves=@(Get-CtestExecutionWaves $gatedInventory @($gatedInventory.tests | ForEach-Object {[pscustomobject]@{name=$_.name}}))
+Assert-Check ($gatedWaves.Count -eq 3 -and $gatedWaves[0].tag -eq 'fast' -and ($gatedWaves[0].tests.name -join ',') -eq 'fast.prepare-core,fast.upstream-data,fast.rust.windows') 'FAST baseline forms an upfront gate before heavy and remaining waves'
+Assert-Check ($gatedWaves[1].tag -eq 'heavy' -and ($gatedWaves[1].tests.name -join ',') -eq 'full.core-suite' -and ($gatedWaves[1].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Heavy wave reuses completed FAST setup fixtures via -FS'
+Assert-Check ($gatedWaves[2].tag -eq 'remaining' -and ($gatedWaves[2].tests.name -join ',') -eq 'full.english.caps.x64' -and ($gatedWaves[2].exclude_setup_fixtures -join ',') -eq 'CoreOverlay') 'Remaining wave also excludes fixtures completed in earlier waves'
+$mockCostFile=Join-Path $ResultRoot 'CTestCostData.txt'
+[IO.File]::WriteAllText($mockCostFile,"heavy 1 10`nshort_12 1 1`n---`nshort_12`n",[Text.UTF8Encoding]::new($false))
+Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'CTestCostData previous-failure section is parsed before multi-wave execution'
+[IO.File]::WriteAllText($mockCostFile,"heavy 2 10`nshort_12 1 1`n---`n",[Text.UTF8Encoding]::new($false))
+Merge-CtestPreviousFailures $mockCostFile @('short_12')
+Assert-Check (((Read-CtestPreviousFailures $mockCostFile) -join ',') -eq 'short_12') 'Passing wave 1 preserves previous-failure priority for upcoming waves'
 
-$reportRoot=$ResultRoot;$Jobs=1;$RetryFailures=$true;$script:ctestReports=@();$script:mockCalls=@()
+$reportRoot=$ResultRoot;$Jobs=1;$RetryFailures=$true;$FailurePolicy='fail-fast';$script:ctestReports=@();$script:diagnosticReports=@();$script:mockCalls=@();$script:stoppedAfterWave=$null
 function ctest {
     $script:mockCalls+=,@($args)
     $attempt=$script:mockCalls.Count
@@ -125,6 +153,7 @@ function ctest {
 }
 Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='stable'},[pscustomobject]@{name='retry'})
 Assert-Check ($script:mockCalls.Count -eq 2) 'Retry at most once'
+Assert-Check ('--stop-on-failure' -in $script:mockCalls[0]) 'Fail-fast policy passes --stop-on-failure to CTest by default'
 Assert-Check ('--rerun-failed' -in $script:mockCalls[1]) 'Retry asks CTest for failed rows only'
 foreach($option in '--test-output-size-passed','--test-output-size-failed'){
     Assert-Check ($script:mockCalls[0][[Array]::IndexOf($script:mockCalls[0],$option)+1] -eq '0') 'JUnit keeps complete output for coverage comparison'
@@ -138,8 +167,42 @@ Assert-Check ($retried.attempts[0].failure -eq 'first failure') 'First failure t
 $firstJUnit=$script:ctestReports[0].junit
 $firstBytes=[IO.File]::ReadAllText($firstJUnit)
 $RetryFailures=$false
-Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='release.package'}) -ReportTag 'package'
+$TestLoad=6
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='release.package'}) -ReportTag 'package' -ExcludeFixtureSetup @('CoreOverlay')
+$TestLoad=0
 Assert-Check ($script:ctestReports[-1].junit -ne $firstJUnit -and [IO.File]::ReadAllText($firstJUnit) -ceq $firstBytes) 'Deferred package has its own JUnit and retains architecture evidence'
+Assert-Check ('--test-load' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'--test-load')+1] -eq '6') 'Optional TestLoad forwards --test-load to CTest'
+Assert-Check ('-FS' -in $script:mockCalls[-1] -and $script:mockCalls[-1][[Array]::IndexOf($script:mockCalls[-1],'-FS')+1] -eq '^(CoreOverlay)$') 'Subsequent waves pass -FS to avoid rerunning completed fixture setup'
+Assert-Check ('--schedule-random' -notin $script:mockCalls[0] -and '--schedule-random' -notin $script:mockCalls[-1]) 'Scheduling never enables --schedule-random'
+$FailurePolicy='continue'
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='retry'}) -ReportTag 'continue'
+Assert-Check ('--stop-on-failure' -notin $script:mockCalls[-1]) 'Continue policy omits --stop-on-failure'
+$FailurePolicy='fail-fast'
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='retry'}) -ReportTag 'diag' -DiagnosticOnly
+Assert-Check ($script:diagnosticReports.Count -eq 1 -and '--stop-on-failure' -notin $script:mockCalls[-1]) 'Explicit diagnostic runs are tracked separately without mutating main CTest reports'
+$script:ctestReports=@();$script:mockCalls=@();$RetryFailures=$true
+function ctest {
+    $script:mockCalls+=,@($args)
+    $call=$script:mockCalls.Count
+    $junit=$args[[Array]::IndexOf($args,'--output-junit')+1]
+    $log=$args[[Array]::IndexOf($args,'--output-log')+1]
+    if($call -eq 1){
+        $xml='<testsuite><testcase name="passed_first" classname="passed_first" time="0.1"/><testcase name="flaky_mid" classname="flaky_mid" time="0.2"><failure message="Failed"/><system-out>flaky initial failure</system-out></testcase></testsuite>'
+        $global:LASTEXITCODE=8
+    }elseif($call -eq 2){
+        $xml='<testsuite><testcase name="flaky_mid" classname="flaky_mid" time="0.2"/></testsuite>'
+        $global:LASTEXITCODE=0
+    }else{
+        $xml='<testsuite><testcase name="unstarted_tail" classname="unstarted_tail" time="0.1"/></testsuite>'
+        $global:LASTEXITCODE=0
+    }
+    [IO.File]::WriteAllText($junit,$xml)
+    [IO.File]::WriteAllText($log,"mock resume call $call")
+}
+Invoke-CtestSelection 'windows-x64' $ResultRoot @([pscustomobject]@{name='passed_first'},[pscustomobject]@{name='flaky_mid'},[pscustomobject]@{name='unstarted_tail'}) -ReportTag 'wave'
+$resumeResults=@(Read-CtestResults $script:ctestReports)
+Assert-Check ($script:mockCalls.Count -eq 3 -and ('--rerun-failed' -in $script:mockCalls[1]) -and ('^(unstarted_tail)$' -in $script:mockCalls[2])) 'Recovering a flaky failure resumes only unstarted rows without rerunning passed tests'
+Assert-Check (($resumeResults | Where-Object name -eq 'flaky_mid').flaky -and ($resumeResults | Where-Object name -eq 'flaky_mid').attempts[0].failure -eq 'flaky initial failure' -and ($resumeResults | Where-Object name -eq 'unstarted_tail').status -eq 'passed') 'Flaky retry plus tail resume preserves first failure evidence and completes the wave'
 Remove-Item Function:ctest
 & "$root/tests/release_guard.ps1" -ResultRoot (Join-Path $ResultRoot 'release-guard')
 # Windows fixture plumbing: the real TSF payload must use sealed bytes and data,
@@ -196,4 +259,55 @@ $sample=@(
 )
 $exclusive=@(Get-ExclusiveTestTimings $sample)
 Assert-Check (($exclusive | Where-Object id -eq 'parent').exclusive_duration_ms -eq 20) 'Exclusive timing subtracts the union of overlapping child stages'
+
+# Runner environment diagnostics: schema, unavailable fallback, secret redaction and post-run aggregation.
+$diagDir=Join-Path $ResultRoot 'runner-diagnostics'
+$diagCacheFixture=Join-Path $diagDir 'cache-fixture'
+$null=New-Item -ItemType Directory -Path $diagCacheFixture -Force
+[IO.File]::WriteAllBytes((Join-Path $diagCacheFixture 'sample.bin'), [byte[]]::new(262144))
+$diagJsonPath=Join-Path $diagDir 'runner-diagnostics.json'
+$diagReportPath=Join-Path $diagDir 'mock-report.json'
+[IO.File]::WriteAllText($diagReportPath, (@{
+    level='CI'; status='passed'; wall_seconds=12.345; ctest_parallel=4
+    selection=@{ selected=@(@{name='fast.upstream-data'}, @{name='fast.rust.windows'}) }
+    resource_usage=@{ cpu_avg_percent=32.5; cpu_peak_percent=78.4; ram_peak_used_mb=8192.5; ram_peak_percent=50.0; sample_count=12 }
+    timings=@(
+        @{ category='build.cmake.configure'; name='CMake configure (windows-x64)'; status='passed'; duration_ms=190; exclusive_duration_ms=190 },
+        @{ category='ctest.run'; name='CTest execution (windows-x64)'; status='passed'; duration_ms=12100; exclusive_duration_ms=12100 }
+    )
+    results=@(
+        @{ name='fast.upstream-data'; preset='windows-x64'; status='passed'; duration_seconds=0.6 },
+        @{ name='fast.rust.windows'; preset='windows-x64'; status='passed'; duration_seconds=9.5 }
+    )
+} | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+$diagCacheSpec=(@{
+    cargo_fixture=@{ hit='true'; paths=@($diagCacheFixture) }
+    missing_cache=@{ hit=''; paths=@((Join-Path $diagDir 'does-not-exist')) }
+} | ConvertTo-Json -Depth 4 -Compress)
+$prevGhToken=$env:GITHUB_TOKEN; $prevSecret=$env:SHANJIE_TEST_FAKE_SECRET
+$env:GITHUB_TOKEN='ghp_FakeSecretToken12345678901234567890'
+$env:SHANJIE_TEST_FAKE_SECRET='github_pat_DoNotLeak9876543210'
+try {
+    & "$root/scripts/runner-diagnostics.ps1" -Phase pre -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -CacheSpecJson $diagCacheSpec -Quiet
+    $preRaw=[IO.File]::ReadAllText($diagJsonPath)
+    Assert-Check ($preRaw -notlike '*FakeSecretToken*' -and $preRaw -notlike '*DoNotLeak*') 'Runner diagnostics never emit environment secret values'
+    $preObj=ConvertFrom-Json -InputObject $preRaw
+    Assert-Check ($preObj.schema -eq 1 -and $preObj.phase -eq 'pre' -and $preObj.environment.runner.image_label -eq 'windows-2025-vs2026' -and $preObj.environment.cpu.logical_processors -gt 0 -and $preObj.environment.memory.total_physical_mb -gt 0 -and $preObj.environment.toolchain.powershell -and $preObj.cache.cargo_fixture.hit -eq $true -and $preObj.cache.cargo_fixture.restored_size_mb -gt 0 -and $preObj.cache.missing_cache.hit -eq 'unavailable') 'Pre-phase runner diagnostics capture hardware, toolchain, cache and unavailable markers'
+    & "$root/scripts/runner-diagnostics.ps1" -Phase post -OutputPath $diagJsonPath -RunnerLabel 'windows-2025-vs2026' -TestLevel CI -Jobs 4 -TestReportPath $diagReportPath -Quiet
+    $postObj=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($diagJsonPath))
+    Assert-Check ($postObj.phase -eq 'post' -and $postObj.environment.git_and_test.selected_test_count -eq 2 -and $postObj.runtime_performance.cpu_peak_percent -eq 78.4 -and $postObj.runtime_performance.ram_peak_used_mb -eq 8192.5 -and $postObj.runtime_performance.stage_timings.Count -eq 2 -and $postObj.runtime_performance.test_durations[0].name -eq 'fast.rust.windows' -and $postObj.attribution_notes.Count -ge 2) 'Post-phase runner diagnostics merge runtime metrics, stage timings, test durations and attribution notes'
+} finally {
+    $env:GITHUB_TOKEN=$prevGhToken; $env:SHANJIE_TEST_FAKE_SECRET=$prevSecret
+}
+$diagAst=[System.Management.Automation.Language.Parser]::ParseFile("$root/scripts/runner-diagnostics.ps1",[ref]$tokens,[ref]$errors)
+$protectFn=$diagAst.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Protect-DiagnosticText'},$false)
+$diskFn=$diagAst.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-DiskInfo'},$false)
+. ([scriptblock]::Create($protectFn.Extent.Text))
+. ([scriptblock]::Create($diskFn.Extent.Text))
+$redacted=Protect-DiagnosticText 'https://alice:topsecret@github.com/org/repo.git ghp_1234567890abcdefghij Bearer SecretToken12345 api_key=mysecret99'
+Assert-Check ($redacted -notlike '*topsecret*' -and $redacted -notlike '*1234567890abcdefghij*' -and $redacted -notlike '*SecretToken12345*' -and $redacted -notlike '*mysecret99*') 'Diagnostic sanitizer redacts credentials, tokens and bearer headers'
+$missingDisk=Get-DiskInfo 'Z:'
+Assert-Check ($missingDisk.total_gb -eq 'unavailable' -and $missingDisk.media_type -eq 'unavailable') 'Unavailable disk queries report explicit unavailable values without guessing'
+$ciYaml=[IO.File]::ReadAllText("$root/.github/workflows/ci.yml")
+Assert-Check ($ciYaml -match 'runner-diagnostics\.ps1 -Phase pre' -and $ciYaml -match 'runner-diagnostics\.ps1 -Phase post' -and $ciYaml -match 'scripts/test\.ps1 -Level CI -CiSafe') 'CI workflow records runner diagnostics while keeping the fixed lightweight CI command'
 'PASS impact, harness plans, fixtures, retry history, empty caches, required inputs, and probe deadline'

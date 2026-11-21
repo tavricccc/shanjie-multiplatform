@@ -135,7 +135,7 @@
                         <TextBlock Text="組字面板與讀音" Style="{StaticResource SjGroupTitle}"/>
                         <controls:SettingCard>
                             <controls:SettingToggle x:Name="ReadingPanelToggle" Label="組字面板" Description="{x:Bind Vm.ReadingPanelHelp, Mode=OneWay}" IsEnabled="{x:Bind Vm.CanChooseReadingPanel, Mode=OneWay}" IsOn="{x:Bind Vm.ReadingPanelShown, Mode=TwoWay}"/>
-                            <controls:SettingToggle Label="英文段提示" Description="英文段沒有候選時，面板顯示「空白：英文斷開」。" IsOn="{x:Bind Vm.EnglishHint, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="EnglishHintToggle" Label="英文段提示" Description="英文段沒有候選時，面板顯示「空白：英文斷開」。" IsOn="{x:Bind Vm.EnglishHint, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="沒有組字時，聲調鍵輸入聲調符號" Description="善解特有操作：例如標準鍵盤 3 輸入 ˇ，留在組字區，Enter 才提交。關閉時輸入原本的數字。" IsOn="{x:Bind Vm.StandaloneTones, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="標點保留未完成的注音" Description="關閉時與上游相同：讀音還沒打完就按標點，未完成的注音會丟掉，標點直接進組字。開啟時注音留著，標點排在後面，補完聲調才一起轉換。" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.PunctuationKeepsReading, Mode=TwoWay}"/>
                         </controls:SettingCard>
@@ -223,13 +223,14 @@
                             <controls:SettingToggle x:Name="MemePackToggle" Label="迷因與直播用語" Description="139 個迷因、網路及直播用語，與上游相同，預設開啟；變更會重新載入核心。" IsOn="{x:Bind Vm.MemePack, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Text="模糊輸入" Style="{StaticResource SjGroupTitle}"/>
-                        <TextBlock Style="{StaticResource SjNote}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。預設全部關閉；變更會重新載入核心。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。三聲變調預設開啟，其餘預設關閉；變更會重新載入核心。"/>
                         <controls:SettingCard>
                             <controls:SettingToggle Label="ㄣ／ㄥ" IsOn="{x:Bind Vm.FuzzyEnEng, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄓ／ㄗ" IsOn="{x:Bind Vm.FuzzyZhZ, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄔ／ㄘ" IsOn="{x:Bind Vm.FuzzyChC, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄕ／ㄙ" IsOn="{x:Bind Vm.FuzzyShS, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="鄰鍵打錯" Description="打出詞庫沒有的讀音時，改用鍵盤上左右相鄰的鍵來猜；只適用標準注音鍵盤。" IsEnabled="{x:Bind Vm.SupportsFuzzyAdjacent, Mode=OneWay}" IsOn="{x:Bind Vm.FuzzyAdjacent, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="Tone3SandhiToggle" Label="三聲變調" Description="照實際讀音打的變調（眨眼打 ㄓㄚˊ ㄧㄢˇ、小姐打 ㄒㄧㄠˊ ˙ㄐㄧㄝ）也解得出來；預設開啟，變更會重新載入核心。" IsOn="{x:Bind Vm.Tone3Sandhi, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
                             <controls:SettingRow Stacked="True"><Button Content="清除已儲存的選字學習" Click="ClearLearning"/></controls:SettingRow>

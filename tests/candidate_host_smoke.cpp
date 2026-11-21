@@ -80,29 +80,65 @@ int wmain(int argc,wchar_t** argv) {
             assert(longer > listed && back == listed);
             // Timed, with motion on: a width on screen between the two ends, moving one way, landing exactly.
             presenter.hide(); SetEnvironmentVariableW(L"SHANJIE_VERIFY_MOTION",L"1");
+            auto currentWidth = [&]() -> LONG {
+                RECT r{}; GetClientRect(presenter.window(),&r); return r.right-MulDiv(32,dpi,96);
+            };
+            auto waitSettled = [&](double minMs,double quietMs,double maxMs) {
+                double started = clockMs(), lastTimer = started;
+                for (;;) {
+                    MSG pump;
+                    while (PeekMessageW(&pump,nullptr,0,0,PM_REMOVE)) {
+                        if (pump.message == WM_TIMER && pump.hwnd == presenter.window()) lastTimer = clockMs();
+                        DispatchMessageW(&pump);
+                    }
+                    double now = clockMs();
+                    if (now-started >= maxMs || (now-started >= minMs && now-lastTimer >= quietMs)) break;
+                    MsgWaitForMultipleObjects(0,nullptr,FALSE,25,QS_ALLINPUT);
+                }
+                MSG tail; while (PeekMessageW(&tail,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&tail);
+            };
             auto glide = [&](const std::wstring& text,bool withList,LONG from,LONG to,const char* name) {
                 std::vector<LONG> seen; shanjie::Snapshot panel; panel.preedit = text; panel.cursor = (unsigned)text.size();
                 if (withList) { panel.candidates = {L"你",L"妳",L"擬"}; panel.selected = 0; panel.total = 3; }
                 presenter.publish(panel,preferences,caret,96,true);
-                double started = clockMs();
-                while (clockMs()-started < 400) {
-                    MSG pump; while (PeekMessageW(&pump,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&pump);
-                    RECT r{}; GetClientRect(presenter.window(),&r); LONG w = r.right-MulDiv(32,dpi,96);
+                auto record = [&]() {
+                    LONG w = currentWidth();
                     if (seen.empty() || seen.back() != w) seen.push_back(w);
-                    Sleep(1);
+                };
+                record();
+                double started = clockMs(), lastTimer = started;
+                unsigned timers = 0;
+                constexpr double minMs = 220.0, quietMs = 50.0, maxMs = 1500.0;
+                for (;;) {
+                    MSG pump;
+                    while (PeekMessageW(&pump,nullptr,0,0,PM_REMOVE)) {
+                        bool isTimer = (pump.message == WM_TIMER && pump.hwnd == presenter.window());
+                        DispatchMessageW(&pump);
+                        if (isTimer) { lastTimer = clockMs(); ++timers; }
+                        record();
+                    }
+                    double now = clockMs();
+                    if (now-started >= maxMs) break;
+                    if (now-started >= minMs && now-lastTimer >= quietMs && seen.back() == to) break;
+                    MsgWaitForMultipleObjects(0,nullptr,FALSE,25,QS_ALLINPUT);
                 }
-                std::printf("Glide %s: %ld to %ld through %zu widths\n",name,from,to,seen.size());
+                MSG tail; while (PeekMessageW(&tail,nullptr,0,0,PM_REMOVE)) { DispatchMessageW(&tail); record(); }
+                double elapsed = clockMs()-started;
+                std::printf("Glide %s: %ld to %ld through %zu widths (last=%ld, timers=%u, elapsed=%.1fms)\n",name,from,to,seen.size(),seen.back(),timers,elapsed);
+                if (seen.back() != to) {
+                    std::printf("  widths:"); for (LONG w : seen) std::printf(" %ld",w); std::printf("\n");
+                }
                 std::fflush(stdout);
                 assert(seen.back() == to); assert(seen.size() >= 5);
                 // One way, give or take the curve's slight overshoot near the end.
                 for (size_t i = 1; i < seen.size(); ++i) assert(to > from ? seen[i] >= seen[i-1]-2 : seen[i] <= seen[i-1]+2);
             };
             presenter.publish([&]{ shanjie::Snapshot s; s.preedit = L"ㄋ"; s.cursor = 1; return s; }(),preferences,caret,96,true);
-            Sleep(400); { MSG pump; while (PeekMessageW(&pump,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&pump); }
+            waitSettled(240.0,50.0,1500.0);
             glide(L"你好你好你好你好你好你好你好你好",false,one,sixteen,"panel grows");
             glide(L"ㄋ",false,sixteen,one,"panel shrinks");
             presenter.hide(); presenter.publish([&]{ shanjie::Snapshot s; s.preedit = L"你"; s.cursor = 1; s.candidates = {L"你",L"妳",L"擬"}; s.selected = 0; s.total = 3; return s; }(),preferences,caret,96,true);
-            Sleep(400); { MSG pump; while (PeekMessageW(&pump,nullptr,0,0,PM_REMOVE)) DispatchMessageW(&pump); }
+            waitSettled(240.0,50.0,1500.0);
             glide(L"你好你好你好你好你好你好你好你好",true,listed,longer,"with a list grows");
             glide(L"你",true,longer,listed,"with a list shrinks");
             SetEnvironmentVariableW(L"SHANJIE_VERIFY_MOTION",nullptr);

@@ -5,31 +5,135 @@
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot,[switch]$ReuseHeavyResults)
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot,[switch]$ReuseHeavyResults,[string]$CostHistoryPath,[switch]$StopOnFailure)
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 function Get-MemoryUse {
     $os = Get-CimInstance Win32_OperatingSystem
     100 * (1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize)
 }
+function Get-CoreBaselineCosts {
+    # Seed cold-start estimates (seconds) from observed full-suite runs; dynamic history overrides them over time.
+    @{
+        'engine_cap' = 135.0
+        'engine_share' = 100.0
+        'engine_lm' = 85.0
+        'engine_replay' = 79.0
+        'engine_learn' = 73.0
+        'engine_auto_english' = 72.0
+        'engine_pool_recur' = 66.0
+        'engine_digits' = 66.0
+        'engine_english' = 62.0
+        'engine_pack' = 43.0
+        'engine_fuzzy' = 40.0
+        'engine_tone3' = 39.0
+        'engine' = 34.0
+        'engine_rerank' = 29.0
+        'core' = 26.0
+        'engine_colloquial' = 26.0
+        'reading_decode' = 20.0
+        'engine_newword' = 3.0
+    }
+}
+function Read-CoreCostHistory([string]$Path) {
+    $history = @{}
+    if (!$Path -or !(Test-Path -LiteralPath $Path)) { return $history }
+    try {
+        $parsed = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -AsHashtable
+        if ($parsed -and $parsed.ContainsKey('entries') -and $parsed['entries'] -is [System.Collections.IDictionary]) {
+            foreach ($key in $parsed['entries'].Keys) { $history[$key] = $parsed['entries'][$key] }
+        }
+    } catch {
+        Write-Warning "Ignoring unreadable core cost history at ${Path}: $($_.Exception.Message)"
+    }
+    return $history
+}
+function Get-OrderedCoreBinaries([object[]]$Binaries, [hashtable]$History, [hashtable]$BaselineCosts) {
+    if (!$Binaries) { return @() }
+    @(
+        $Binaries | Sort-Object `
+            @{ Expression = { if ($History -and $History.ContainsKey($_.Name) -and $History[$_.Name]['failed_last']) { 0 } else { 1 } }; Ascending = $true }, `
+            @{ Expression = {
+                if ($History -and $History.ContainsKey($_.Name) -and $null -ne $History[$_.Name]['avg_seconds']) { [double]$History[$_.Name]['avg_seconds'] }
+                elseif ($BaselineCosts -and $BaselineCosts.ContainsKey($_.Name)) { [double]$BaselineCosts[$_.Name] }
+                else { 0.0 }
+            }; Descending = $true }, `
+            @{ Expression = { $_.Name }; Ascending = $true }
+    )
+}
+function Update-CoreCostHistory([string]$Path, [object[]]$CompletedRuns) {
+    if (!$Path -or !$CompletedRuns -or !$CompletedRuns.Count) { return }
+    $entries = Read-CoreCostHistory $Path
+    $now = [DateTimeOffset]::UtcNow.ToString('O')
+    foreach ($run in $CompletedRuns) {
+        $name = [string]$run.Name
+        $actual = [Math]::Max(0.0, [double]$run.DurationSeconds)
+        $failed = [bool]$run.Failed
+        if ($entries.ContainsKey($name) -and $null -ne $entries[$name]['avg_seconds']) {
+            $previousAvg = [double]$entries[$name]['avg_seconds']
+            $runs = [int]($entries[$name]['runs'] ?? 1) + 1
+            $avg = [Math]::Round((0.7 * $previousAvg + 0.3 * $actual), 3)
+        } else {
+            $runs = 1
+            $avg = [Math]::Round($actual, 3)
+        }
+        $entries[$name] = [ordered]@{
+            avg_seconds = $avg
+            last_seconds = [Math]::Round($actual, 3)
+            runs = $runs
+            failed_last = $failed
+            updated_utc = $now
+        }
+    }
+    $orderedEntries = [ordered]@{}
+    foreach ($key in ($entries.Keys | Sort-Object)) { $orderedEntries[$key] = $entries[$key] }
+    $payload = [ordered]@{
+        schema = 1
+        updated_utc = $now
+        entries = $orderedEntries
+    }
+    $parent = Split-Path -Parent $Path
+    if ($parent) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    $temporary = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
+    [IO.File]::WriteAllText($temporary, ($payload | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporary -Destination $Path -Force
+}
 # Start the next binary only under the memory limit and print failed output.
-function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$arguments, [int]$limit, [int]$maxProcesses) {
+function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$arguments, [int]$limit, [int]$maxProcesses, [Collections.Generic.List[object]]$Metrics = $null, [switch]$StopOnFailure) {
     $logs = Join-Path $directory 'target/test-logs'
     New-Item -ItemType Directory $logs -Force | Out-Null
     $env:CARGO_MANIFEST_DIR = $directory  # what cargo test gives each binary
     $queue = [Collections.Generic.Queue[object]]::new([object[]]@($binaries))
     $running = @(); $failed = @()
+    $skippedAfterFailure = [Collections.Generic.List[string]]::new()
+    $halted = $false
     while ($queue.Count -or $running.Count) {
         foreach ($job in @($running | Where-Object { $_.Process.HasExited })) {
             $running = @($running | Where-Object { $_ -ne $job })
             $job.Process.WaitForExit()
             $seconds = $job.Started.Elapsed.TotalSeconds
             $status = if ($job.Process.ExitCode) { 'failed' } else { 'passed' }
+            if ($null -ne $Metrics) {
+                $Metrics.Add([pscustomobject]@{ Name = $job.Name; DurationSeconds = [Math]::Round($seconds, 3); Failed = [bool]$job.Process.ExitCode })
+            }
             Complete-TestStage -Stage $job.Stage -Status $status -Details @{ executable=$job.Path; exit_code=$job.Process.ExitCode }
-            if ($job.Process.ExitCode) { $failed += $job; Write-Host ("FAIL {0} ({1:F3}s)" -f $job.Name,$seconds) } else { Write-Host ("ok   {0} ({1:F3}s)" -f $job.Name,$seconds) }
+            if ($job.Process.ExitCode) {
+                $failed += $job
+                Write-Host ("FAIL {0} ({1:F3}s)" -f $job.Name,$seconds)
+                if ($StopOnFailure -and !$halted) {
+                    $halted = $true
+                    while ($queue.Count) { $skippedAfterFailure.Add($queue.Dequeue().Name) }
+                    if ($skippedAfterFailure.Count) {
+                        Write-Host ("Stop-on-failure triggered by {0}; skipping {1} unstarted core test binary(s) while draining {2} active binary(s)." -f $job.Name, $skippedAfterFailure.Count, $running.Count)
+                    }
+                }
+            } else {
+                Write-Host ("ok   {0} ({1:F3}s)" -f $job.Name,$seconds)
+            }
+            $job.Process.Dispose()
         }
         # A binary just started has not loaded its models yet: wait a moment before judging the memory again.
-        if ($queue.Count -and $running.Count -lt $maxProcesses -and ($running.Count -eq 0 -or (Get-MemoryUse) -lt $limit) -and
+        if (!$halted -and $queue.Count -and $running.Count -lt $maxProcesses -and ($running.Count -eq 0 -or (Get-MemoryUse) -lt $limit) -and
             !($running | Where-Object { $_.Started.Elapsed.TotalSeconds -lt 3 })) {
             $next = $queue.Dequeue()
             $log = Join-Path $logs (($next.Name -replace '[^\w-]', '_') + '.txt')
@@ -43,7 +147,10 @@ function Invoke-TestBinaries($binaries, [string]$directory, [string[]]$arguments
         Start-Sleep -Milliseconds 250
     }
     foreach ($job in $failed) { Write-Host "---- $($job.Name)"; Get-Content $job.Log, "$($job.Log).err" }
-    if ($failed) { throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')" }
+    if ($failed) {
+        $skipNote = if ($skippedAfterFailure.Count) { "; stopped early with $($skippedAfterFailure.Count) unstarted binary(s)" } else { '' }
+        throw "Upstream tests failed: $(($failed | ForEach-Object Name) -join ', ')$skipNote"
+    }
 }
 function Sync-ChangedFiles([string]$Source, [string]$Destination) {
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -334,17 +441,31 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     } elseif(Test-Path -LiteralPath $heavyReceipt) {
         Preserve-Output $heavyReceipt
     }
-    # Start the long model suites first so shorter suites fill the remaining slots.
-    $longest = @('engine_cap','engine_share','engine_english','engine_pool_recur','engine_learn','engine_digits','engine_pack')
-    $parallel = @(foreach($name in $longest) { $binaries | Where-Object Name -eq $name })
-    $parallel += @($binaries | Where-Object Name -notin ($latency + $longest))
-    Write-Host "Upstream core tests: $jobs processes with $threads libtest threads each (memory limit $MemoryLimit%)."
-    Invoke-TestBinaries $parallel $tree $parallelArguments $MemoryLimit $jobs
-    if(!$heavyCacheHit){
-        foreach ($name in $latency) {
-            Invoke-TestBinaries @($binaries | Where-Object Name -eq $name) $tree $latencyArguments $MemoryLimit 1
+    $resolvedCostPath = if ($CostHistoryPath) { $CostHistoryPath } else { Join-Path $base 'core-cost-data.json' }
+    $failFastCore = [bool]$StopOnFailure -or ($env:SHANJIE_TEST_STOP_ON_FAILURE -eq '1')
+    $baselineCosts = Get-CoreBaselineCosts
+    $costHistory = Read-CoreCostHistory $resolvedCostPath
+    $latencyBinaries = @(Get-OrderedCoreBinaries @($binaries | Where-Object Name -in $latency) $costHistory $baselineCosts)
+    $parallelBinaries = @(Get-OrderedCoreBinaries @($binaries | Where-Object Name -notin $latency) $costHistory $baselineCosts)
+    $runMetrics = [Collections.Generic.List[object]]::new()
+    try {
+        if (!$heavyCacheHit -and $latencyBinaries.Count) {
+            Write-Host ("Core latency-isolated priority order (1 process, 1 thread): {0}" -f (($latencyBinaries | ForEach-Object Name) -join ', '))
+            foreach ($binary in $latencyBinaries) {
+                Invoke-TestBinaries @($binary) $tree $latencyArguments $MemoryLimit 1 $runMetrics -StopOnFailure:$failFastCore
+            }
         }
-        Save-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
-        if($allHeavySelected){Save-ContentCache -Root $tree -ManifestPath $heavyReceipt -Key $key -Paths $heavyLogs}
+        if ($parallelBinaries.Count) {
+            $preview = @($parallelBinaries | Select-Object -First 10 | ForEach-Object Name) -join ', '
+            Write-Host "Upstream core tests: $jobs processes with $threads libtest threads each (memory limit $MemoryLimit%)."
+            Write-Host "Core parallel priority order (top 10): $preview"
+            Invoke-TestBinaries $parallelBinaries $tree $parallelArguments $MemoryLimit $jobs $runMetrics -StopOnFailure:$failFastCore
+        }
+        if (!$heavyCacheHit) {
+            Save-ContentCache -Root $tree -ManifestPath $passed -Key $key -Paths @('target/test-logs')
+            if ($allHeavySelected) { Save-ContentCache -Root $tree -ManifestPath $heavyReceipt -Key $key -Paths $heavyLogs }
+        }
+    } finally {
+        Update-CoreCostHistory $resolvedCostPath @($runMetrics)
     }
 } finally { Pop-Location }

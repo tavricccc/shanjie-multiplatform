@@ -52,6 +52,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool FuzzyChC { get; set; }
     [ObservableProperty] public partial bool FuzzyShS { get; set; }
     [ObservableProperty] public partial bool FuzzyAdjacent { get; set; }
+    [ObservableProperty] public partial bool Tone3Sandhi { get; set; }
     /// Adjacent keys only exist for the standard layout (upstream fuzzy-input section 2.2).
     public bool SupportsFuzzyAdjacent => Keyboard is 0 or 1;
     [ObservableProperty] public partial bool EnglishKeyOrder { get; set; }

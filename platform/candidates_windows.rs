@@ -102,6 +102,21 @@ impl Engine {
         let start = self.cursor;
         if self.is_punct(start) {
             if is_space_unit(&self.syls[start]) { return; }
+            if let Some(word) = english_of(&self.syls[start]) {
+                let f = self.fixed.iter().find(|f| f.start == start);
+                let mut list: Vec<(String, usize)> = Self::english_writings(f.map_or(word, |f| f.word.as_str()))
+                    .into_iter().map(|w| (w, 1)).collect();
+                let zh = f.and_then(|f| f.zh.clone())
+                    .and_then(|syl| self.lex.entries(std::slice::from_ref(&syl)).first().map(|(w, _)| (w.to_string(), syl)));
+                let mut c = Cands::new(Vec::new(), self.cand_vertical, self.key_scheme == 1);
+                if let Some((word, syl)) = zh {
+                    list.push((word, 1));
+                    c.zh = Some(syl);
+                }
+                c.list = list;
+                self.cands = Some(c);
+                return;
+            }
             if let Some((d, sym)) = digit_of(&self.syls[start])
                 .and_then(|d| self.digit_zhuyin_symbol(d).map(|sym| (d, sym))) {
                 self.open_digit_candidates(d, start, Some(sym), rows);
@@ -134,13 +149,24 @@ impl Engine {
             }
         }
         let mut alt = HashMap::new();
+        let t3 = self.t3();
         for length in (1..=self.lex.max_len.min(available)).rev() {
-            for (word, reading) in self.lex.tolerant_words(&self.syls[start..start + length], self.fuzzy) {
+            for (word, reading) in self.lex.tolerant_words(&self.syls[start..start + length], self.fuzzy, &t3[start..start + length]) {
                 if seen.insert(word) {
                     alt.insert(list.len(), reading);
                     list.push((word.to_string(), length));
                 }
             }
+        }
+        let short = self.ls_now.take().filter(|(i, _)| *i == start && !list.is_empty());
+        if let Some((_, word)) = &short {
+            list.push((word.to_ascii_lowercase(), 1));
+            list.push((word.to_ascii_uppercase(), 1));
+            let mut c = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
+            c.alt = alt;
+            c.short = short;
+            self.cands = Some(c);
+            return;
         }
         self.cands = self.make_candidates_with(list, alt);
     }
@@ -363,6 +389,37 @@ mod windows_candidates {
         assert_eq!(e.cands.as_ref().unwrap().alt[&idx], vec!["ㄍㄨㄣ"]);
         assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "棍");
         assert_eq!(e.syls, vec!["ㄍㄨㄣ"]);
+    }
+
+    #[test]
+    fn right_anchor_lists_and_picks_tone3_sandhi_candidates() {
+        let lex = Arc::new(Lexicon::parse("ㄓㄚˊ 炸 -1\nㄓㄚˇ 眨 -1\nㄧㄢˇ 眼 -1\nㄓㄚˇ-ㄧㄢˇ 眨眼 -0.5\nㄨㄛˇ 我 -0.5\n").unwrap());
+        let lm = digit_test_lm();
+        let capped = Arc::new(CappedLexicon::new(lex.clone(), "", &lm, None).unwrap());
+        let mut e = Engine::with_lexicon(lex, Layout::Standard);
+        e.set_lm(lm, capped);
+        e.set_candidate_anchor(true);
+        for ch in "586u03".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let idx = e.cands.as_ref().unwrap().list.iter().position(|(w, _)| w == "眨眼").unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().alt[&idx], vec!["ㄓㄚˇ", "ㄧㄢˇ"]);
+        assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "眨眼");
+        assert_eq!(e.syls, vec!["ㄓㄚˇ", "ㄧㄢˇ"]);
+        e.reset(ResetMode::Discard);
+        for ch in "ji6".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        assert_eq!(e.view(true, String::new()).preedit, "我");
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let idx = e.cands.as_ref().unwrap().list.iter().position(|(w, _)| w == "我").unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().alt[&idx], vec!["ㄨㄛˇ"]);
+        assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "我");
+        assert_eq!(e.syls, vec!["ㄨㄛˇ"]);
+        e.reset(ResetMode::Discard);
+        e.set_tone3(false).unwrap();
+        for ch in "586u03".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        assert!(!e.cands.as_ref().unwrap().list.iter().any(|(w, _)| w == "眨眼"));
     }
 
     fn digit_test_lm() -> Arc<Lm> {

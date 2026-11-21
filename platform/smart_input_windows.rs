@@ -300,6 +300,8 @@ mod windows_smart_tests {
 
 impl Engine {
     pub fn insert_literal_space(&mut self) -> Result<Output, EngineError> {
+        self.last_short = None;
+        self.last_auto = None;
         let mut flushed = if self.drun.is_some() { self.digit_flush()?.0 } else { String::new() };
         if !self.run.is_empty() { flushed.push_str(&self.end_run()?); }
         let raw = std::mem::take(&mut self.mixed_raw);
@@ -323,7 +325,8 @@ impl Engine {
     fn has_mixed_han_entry(&self, reading: &str, tone: usize) -> bool {
         let mut syllable = reading.to_string();
         syllable.push_str(TONE_MARKS[tone]);
-        self.lex.entries(&[syllable]).iter().any(|(word, _)| !windows_reading_text(word))
+        let has_han = |s: &str| self.lex.entries(&[s.to_string()]).iter().any(|(word, _)| !windows_reading_text(word));
+        has_han(&syllable) || self.tone3_accepts(&syllable).is_some_and(|third| has_han(&third))
     }
 
     fn shifted_reading(&self, tail: &str, tone: usize, reorder: bool) -> Option<String> {
@@ -689,7 +692,7 @@ impl Engine {
             let run_ascii = std::mem::take(&mut self.run_ascii);
             self.run.clear();
             self.run_shifted.clear();
-            self.run_zh = None;
+            self.run_rev = false;
             self.revert_point = None;
             self.split = true;
             let mut commit = if head.is_empty() {
@@ -733,7 +736,7 @@ impl Engine {
                     let run_ascii = std::mem::take(&mut self.run_ascii);
                     self.run.clear();
                     self.run_shifted.clear();
-                    self.run_zh = None;
+                    self.run_rev = false;
                     self.revert_point = None;
                     self.split = true;
                     let mut commit = if head.is_empty() {
@@ -1107,7 +1110,9 @@ impl Engine {
                 && key.modifiers==0 && key.ch.is_ascii_digit() {
                 if let Some(tone)=self.layout.tone_of(key.ch) {
                     let complete=self.mixed_reading_order(&previous,false).is_some_and(|mut reading| {
-                        reading.push_str(TONE_MARKS[tone]);!self.lex.entries(&[reading]).is_empty()
+                        reading.push_str(TONE_MARKS[tone]);
+                        !self.lex.entries(&[reading.clone()]).is_empty()
+                            || (!previous.bytes().all(|c| c.is_ascii_digit()) && self.tone3_accepts(&reading).is_some())
                     });
                     if !complete {
                         self.clear_pend();self.clear_pred();self.mixed_raw=previous;

@@ -163,6 +163,7 @@ pub fn verified_package(package: &Path) -> Result<Vec<PathBuf>> {
         // Optional to the core (a missing file silently turns its feature off), so the package must
         // carry them, as upstream's check-app requires digits.tsv.
         "data/digits.tsv",
+        "data/english.tsv",
         "data/packs/acg-add.tsv",
         "data/packs/quotes-add.tsv",
         "data/packs/it-add.tsv",
