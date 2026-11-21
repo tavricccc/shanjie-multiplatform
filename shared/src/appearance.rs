@@ -48,9 +48,9 @@ impl Appearance {
         match self.accent { Accent::Default => DEFAULT_ACCENT, Accent::Windows => windows, Accent::Custom(rgb) => rgb }
     }
     /// Text on the selection. The default blue keeps white text, as upstream does
-    /// (4.42:1); chosen colours pick whichever of black or white reads better.
+    /// (4.42:1), however it was chosen; other colours pick whichever of black or white reads better.
     pub fn selected_text(self, accent: u32) -> u32 {
-        if self.accent == Accent::Default { 0xffffff } else { foreground(accent) }
+        if self.accent == Accent::Default || accent == DEFAULT_ACCENT { 0xffffff } else { foreground(accent) }
     }
 }
 pub fn parse_hex(value: &str) -> Option<u32> {
@@ -105,9 +105,12 @@ mod tests {
     fn default_blue_keeps_white_selection_text() {
         let default = Appearance::default();
         assert_eq!(default.selected_text(default.accent(0)), 0xffffff);
-        // The same blue chosen explicitly follows the contrast rule instead.
+        // The same blue chosen as a custom colour looks the same, so it keeps white text too.
         let custom = Appearance { accent: Accent::Custom(DEFAULT_ACCENT), ..Appearance::default() };
-        assert_eq!(custom.selected_text(DEFAULT_ACCENT), 0);
+        assert_eq!(custom.selected_text(DEFAULT_ACCENT), 0xffffff);
+        // A neighbouring blue still follows the contrast rule.
+        let near = Appearance { accent: Accent::Custom(DEFAULT_ACCENT + 1), ..Appearance::default() };
+        assert_eq!(near.selected_text(DEFAULT_ACCENT + 1), 0);
         let yellow = Appearance { accent: Accent::Custom(0xffff00), ..Appearance::default() };
         assert_eq!(yellow.selected_text(0xffff00), 0);
         let windows = Appearance { accent: Accent::Windows, ..Appearance::default() };
