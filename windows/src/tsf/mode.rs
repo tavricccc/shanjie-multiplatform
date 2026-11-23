@@ -47,7 +47,7 @@ pub fn refresh(button: &ITfLangBarItemButton) {
     unsafe {
         let object: &Button = button.as_impl();
         if let Some(sink) = object.sink.borrow().as_ref() {
-            let _ = sink.OnUpdate(TF_LBI_ICON | TF_LBI_TEXT | TF_LBI_STATUS);
+            let _ = sink.OnUpdate(TF_LBI_ICON | TF_LBI_TEXT | TF_LBI_TOOLTIP | TF_LBI_STATUS);
         }
     }
 }
@@ -165,10 +165,11 @@ mod tests {
     // These recorders are deliberately agile and contain only thread-safe state.
     // A call into one records the thread on which the production object ran.
     #[implement(ITfLangBarItemSink)]
-    struct ButtonObserver(Arc<AtomicU32>);
+    struct ButtonObserver(Arc<AtomicU32>, Arc<AtomicU32>);
     impl ITfLangBarItemSink_Impl for ButtonObserver_Impl {
-        fn OnUpdate(&self, _: u32) -> Result<()> {
+        fn OnUpdate(&self, flags: u32) -> Result<()> {
             self.0.store(unsafe { GetCurrentThreadId() }, Ordering::SeqCst);
+            self.1.store(flags, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -191,10 +192,11 @@ mod tests {
             CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap();
             let owner_thread = GetCurrentThreadId();
             let button_thread = Arc::new(AtomicU32::new(0));
+            let button_flags = Arc::new(AtomicU32::new(0));
             let edit_thread = Arc::new(AtomicU32::new(0));
             let button = new(Weak::new());
             let source: ITfSource = button.cast().unwrap();
-            let observer: ITfLangBarItemSink = ButtonObserver(button_thread.clone()).into();
+            let observer: ITfLangBarItemSink = ButtonObserver(button_thread.clone(), button_flags.clone()).into();
             let cookie = source.AdviseSink(&ITfLangBarItemSink::IID, &observer).unwrap();
             let service = super::super::service::new();
             let edits: ITfTextEditSink = service.cast().unwrap();
@@ -237,6 +239,8 @@ mod tests {
             result.unwrap();
             let observed = (button_thread.load(Ordering::SeqCst), edit_thread.load(Ordering::SeqCst));
             eprintln!("COM callback threads: owner={owner_thread}, button={}, service={}", observed.0, observed.1);
+            refresh(&button);
+            assert_ne!(button_flags.load(Ordering::SeqCst) & TF_LBI_TOOLTIP, 0, "learning health changes must invalidate the language-bar tooltip");
             source.UnadviseSink(cookie).unwrap();
             drop(observer);
             drop(source);
