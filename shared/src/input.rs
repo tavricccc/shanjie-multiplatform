@@ -272,6 +272,14 @@ impl Special {
             }
             return self.view();
         }
+        if self.mode == 1 && k.kind == 3 {
+            self.clear();
+            return Snapshot {
+                handled: true,
+                commit: "`".into(),
+                ..Default::default()
+            };
+        }
         if k.kind == 4 {
             if !self.digits.is_empty() {
                 self.digits.pop();
@@ -656,6 +664,24 @@ impl Pinyin {
 #[cfg(test)]
 mod special_tests {
     use super::*;
+    #[test]
+    fn enter_commits_a_bare_backquote_and_leaves_special_input() {
+        for settings in [
+            "[profile]\ninteraction=windows\n[shortcuts]\ncode_input=0\n",
+            "[profile]\ninteraction=shanjie\n[shortcuts]\nbackquote_symbols=0\ncode_input=1\n",
+        ] {
+            let prefs = Document::parse(settings).unwrap();
+            let mut special = Special::default();
+            let backquote = ShanjieKey { kind: 1, ch: 96, modifiers: 0 };
+            assert!(Special::starts(backquote, &prefs));
+            assert_eq!(special.key(backquote, &prefs).preedit, "`");
+            let out = special.key(ShanjieKey { kind: 3, ch: 0, modifiers: 0 }, &prefs);
+            assert!(out.handled);
+            assert_eq!(out.commit, "`");
+            assert!(out.preedit.is_empty() && out.candidates.is_empty());
+            assert_eq!(special.mode, 0);
+        }
+    }
     #[test]
     fn backquote_defaults_follow_interaction_and_explicit_opt_out() {
         for (settings, expected) in [("[profile]\ninteraction=windows\n", true), ("[profile]\ninteraction=shanjie\n", false), ("[profile]\ninteraction=windows\n[shortcuts]\nbackquote_symbols=0\n", false)] {

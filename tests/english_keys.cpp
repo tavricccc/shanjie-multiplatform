@@ -117,6 +117,28 @@ int wmain(int argc,wchar_t** argv) {
         require(target!=UINT_MAX,960);
         while(current<target){press(VK_RIGHT);UINT next=0;list->GetSelection(&next);require(next>current,961);current=next;}
         press(VK_RETURN);require(store->text==committed+L"↑",962);
+        press(VK_RETURN, false, false, false);
+        committed = store->text;
+        auto compositions = [&] {
+            ComPtr<ITfContextComposition> composition;
+            require(SUCCEEDED(context.As(&composition)),978);
+            ComPtr<IEnumITfCompositionView> views;
+            require(SUCCEEDED(composition->EnumCompositions(&views)),979);
+            ComPtr<ITfCompositionView> first;
+            ULONG count = 0;
+            views->Next(1, &first, &count);
+            return count;
+        };
+        require(compositions()==0,980);
+        press(VK_OEM_3);
+        require(store->text==committed+L"`"&&compositions()==1,981);
+        press(VK_RETURN);
+        require(store->text==committed+L"`"&&compositions()==0,982);
+        BOOL enterAgain = TRUE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_RETURN,0,&enterAgain))&&!enterAgain,983);
+        press(VK_OEM_3);
+        press(VK_ESCAPE);
+        require(store->text==committed+L"`"&&compositions()==0,984);
     }else if(scenario==L"numpad"){
         for(int vk=VK_NUMPAD0;vk<=VK_NUMPAD9;vk++)press(vk);
         for(int vk:{VK_ADD,VK_SUBTRACT,VK_MULTIPLY,VK_DIVIDE,VK_DECIMAL})press(vk);
