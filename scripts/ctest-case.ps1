@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','core-recovery','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','core-rowstats','core-recovery','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
@@ -88,6 +88,7 @@ try {
                 & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy -StopOnFailure:$stopOnFailure
             }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
+            'core-rowstats' { & "$PSScriptRoot/verify-rowstats.ps1" -ResultRoot (Join-Path $resultRoot 'fixture') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }

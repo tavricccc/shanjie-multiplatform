@@ -1,4 +1,4 @@
-﻿# Resolve changes once for every architecture; --no-renames keeps both sides of
+# Resolve changes once for every architecture; --no-renames keeps both sides of
 # moves, including source files moved under docs/.
 function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
     $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
@@ -39,6 +39,7 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
+        '^scripts/verify-rowstats\.ps1$' { $labels=@('rowstats');$reason='Real pinned CLI versus shipping overlay rowstats; no unconditional CI expansion.';break }
         '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|runner-diagnostics|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
@@ -112,7 +113,6 @@ function Get-VerificationExceptions {
     @(
         @{id='input-features';script='verify-input-features.ps1';category='conditional';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
         @{id='profile-refresh';script='verify-profile-refresh.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
-        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^platform/(resident_windows|input_windows_ffi)\.rs$|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. For pack rebuild performance and lifetime changes use -Cases pack-switch; CTest rebuild-local/rebuild-pipe check app behavior, not latency, memory or retired pipe sessions.'}
         @{id='dictionary-store';script='verify-dictionary-store.ps1';category='conditional';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
         @{id='profile-coexistence';script='verify-profile-coexistence.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
         @{id='update-probes';script='verify-update.ps1';category='conditional';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
@@ -159,7 +159,9 @@ function Get-AdditionalVerificationPlan([string[]]$Paths,[string[]]$Labels,[swit
     # Upstream only says "related verify-*.ps1" for these modules; it gives no
     # mandatory per-file matrix. Dependencies below identify review candidates,
     # not a claim that all their cases are required or absent from CTest.
-    $rules=@(Get-VerificationExceptions|Where-Object pattern)
+    $rules=@(Get-VerificationExceptions|Where-Object pattern) + @(
+        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^platform/(resident_windows|input_windows_ffi)\.rs$|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. For pack rebuild performance and lifetime changes use -Cases pack-switch; CTest rebuild-local/rebuild-pipe check app behavior, not latency, memory or retired pipe sessions.'}
+    )
     foreach($rule in $rules){
         $affected=@($paths|Where-Object{$_ -match $rule.pattern})
         if($affected.Count){[pscustomobject]@{id=$rule.id;kind='review';status='not-run';command=$null;paths=$affected;reason=$rule.scope}}
