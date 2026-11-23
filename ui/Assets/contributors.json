@@ -27,7 +27,7 @@
       "name": "聖小熊",
       "contributions": 59,
       "type": "User",
-      "summary": "原鍵混打與逆序音節、符號候選、選字學習修正，以及第 8 版會意模型整合與回歸測試。",
+      "summary": "原鍵混打與逆序音節、符號候選、選字學習修正，以及同步上游最新會意模型並進行回歸測試。",
       "avatar": "HolyBearTW.png",
       "avatarSource": "https://avatars.githubusercontent.com/u/50009618?s=128&v=4"
     },
