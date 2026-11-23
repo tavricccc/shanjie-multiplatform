@@ -867,22 +867,32 @@ fn tone3_sandhi_and_auto_english_coexist_with_windows_modes() {
             assert!(e.tone3());
             assert!(e.auto_table_loaded(), "english.tsv must load through Windows resident cache");
 
-            for (keys, want) in [("ji6vu;3", "我想"), ("vul6ru,7", "小姐")] {
+            for (keys, want) in [
+                ("ji6vu;3", "我想"),
+                ("vul6ru,7", "小姐"),
+                ("xu4c97", "厲害"),
+                ("5 2l7", "知道"),
+                ("bk4w/ w/ ", "熱騰騰"),
+            ] {
                 e.reset(ResetMode::Discard);
                 let out = press(&mut e, keys);
                 assert_eq!(out.preedit, want, "right={right} mixed={mixed} keys={keys}");
                 assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, want);
             }
 
-            // 506 stays literal digits in both the upstream digit layer and raw-key mixing.
-            e.reset(ResetMode::Discard);
-            assert_eq!(press(&mut e, "506").preedit, "506", "right={right} mixed={mixed}");
-            assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, "506");
+            // 506 and 107 stay literal digits in both the upstream digit layer and raw-key mixing.
+            for digits in ["506", "107"] {
+                e.reset(ResetMode::Discard);
+                assert_eq!(press(&mut e, digits).preedit, digits, "right={right} mixed={mixed}");
+                assert_eq!(e.key(Key::new(KeyKind::Enter)).unwrap().commit, digits);
+            }
 
-            // Turning tone3 off stops accepting unaccepted second-tone syllables.
+            // Turning tone3 off stops third-tone sandhi, colloquial neutral syllables, and `colloq` rows.
             e.set_tone3(false).unwrap();
-            e.reset(ResetMode::Discard);
-            assert_ne!(press(&mut e, "ji6vu;3").preedit, "我想", "tone3 off right={right} mixed={mixed}");
+            for (keys, blocked) in [("ji6vu;3", "我想"), ("xu4c97", "厲害"), ("bk4w/ w/ ", "熱騰騰")] {
+                e.reset(ResetMode::Discard);
+                assert_ne!(press(&mut e, keys).preedit, blocked, "tone3 off right={right} mixed={mixed} keys={keys}");
+            }
             e.set_tone3(true).unwrap();
             e.reset(ResetMode::Discard);
 

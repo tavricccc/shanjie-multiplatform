@@ -296,6 +296,27 @@ mod windows_smart_tests {
             assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "{keys}");
         }
     }
+
+    #[test]
+    fn english_run_and_ascii_preserve_non_shift_modifiers() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\n").unwrap());
+        let mut engine = Engine::with_lexicon(lex, Layout::Standard);
+        engine.set_upstream_english(true, false, true, true).unwrap();
+        engine.key(Key::ch('a', MOD_SHIFT)).unwrap();
+        let before = engine.key(Key::ch('b', 0)).unwrap();
+        assert_eq!(before.preedit, "Ab");
+        let opt = engine.key(Key::ch('a', MOD_OPTION)).unwrap();
+        assert!(opt.handled && opt.commit.is_empty());
+        assert_eq!(opt.preedit, "Ab");
+        let ctrl = engine.key(Key::ch('a', MOD_CONTROL)).unwrap();
+        assert!(!ctrl.handled && ctrl.commit.is_empty());
+        assert_eq!(ctrl.preedit, "Ab");
+        engine.reset(ResetMode::Discard);
+        engine.set_ascii(true).unwrap();
+        assert_eq!(engine.key(Key::ch('a', 0)).unwrap().preedit, "a");
+        let ascii_opt = engine.key(Key::ch('a', MOD_OPTION)).unwrap();
+        assert!(!ascii_opt.handled && ascii_opt.preedit == "a");
+    }
 }
 
 impl Engine {
@@ -798,6 +819,7 @@ impl Engine {
             // Commit, candidate opening and cursor movement preserve the displayed digit.
             // Its Zhuyin symbol remains selectable in the opened candidate list.
             if matches!(key.kind, KeyKind::Enter | KeyKind::Down | KeyKind::Left | KeyKind::Right | KeyKind::Home | KeyKind::End)
+                && key.modifiers == 0
                 && self.lone_digit().is_some() {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
@@ -880,9 +902,9 @@ impl Engine {
                 && key.modifiers == 0 && self.run_shifted.contains(&true) {
                 return self.windows_run_tone(' ', 0);
             }
-            if key.kind==KeyKind::Char && key.ch.is_ascii_alphabetic() {
+            if key.kind==KeyKind::Char && (key.modifiers == 0 || key.modifiers == MOD_SHIFT) && key.ch.is_ascii_alphabetic() {
                 let was_shifted = key.modifiers == MOD_SHIFT;
-                let accept_letter = !self.run.is_empty() && (key.modifiers == 0 || key.modifiers == MOD_SHIFT);
+                let accept_letter = !self.run.is_empty();
                 let was_max = !self.run.is_empty() && self.run.len() == ENGLISH_RUN_MAX;
                 let actual=self.latin_character(key);
                 let mut key=key;key.modifiers=if actual.is_ascii_uppercase(){MOD_SHIFT}else{0};

@@ -136,7 +136,7 @@ impl Engine {
         let today = if self.learner.has_new_words() { self.today() } else { 0 };
         for length in (1..=self.lex.max_len.max(NEWWORD_MAX).min(available)).rev() {
             let key = &self.syls[start..start + length];
-            let lexicon = self.lex.entries(key);
+            let lexicon = self.lex.entries_with(key, self.colloq_on());
             if (NEWWORD_MIN..=NEWWORD_MAX).contains(&length) {
                 for word in self.learner.new_words_all(key, today) {
                     if !lexicon.iter().any(|(w, _)| *w == word) && seen.insert(word) {
@@ -420,6 +420,53 @@ mod windows_candidates {
         e.key(Key::new(KeyKind::Home)).unwrap();
         e.key(Key::new(KeyKind::Down)).unwrap();
         assert!(!e.cands.as_ref().unwrap().list.iter().any(|(w, _)| w == "眨眼"));
+    }
+
+    #[test]
+    fn right_anchor_lists_and_picks_colloquial_sandhi_candidates() {
+        let lex = Arc::new(
+            Lexicon::parse_with_variants(
+                "ㄖㄜˋ 熱 -1\nㄊㄥ 騰 -1\nㄌㄧˋ 厲 -1\nㄏㄞˋ 害 -1\nㄌㄧˋ-ㄏㄞˋ 厲害 -0.5\n",
+                Some("ㄖㄜˋ-ㄊㄥ-ㄊㄥ\t熱騰騰\t-4.5\tcolloq\n"),
+                None,
+            )
+            .unwrap(),
+        );
+        let lm = digit_test_lm();
+        let capped = Arc::new(CappedLexicon::new(lex.clone(), "", &lm, None).unwrap());
+        let mut e = Engine::with_lexicon(lex, Layout::Standard);
+        e.set_lm(lm, capped);
+        e.set_candidate_anchor(true);
+        // Colloquial neutral reading: ㄌㄧˋ ㄏㄞ˙ -> 厲害, restored to lexicon reading on pick.
+        for ch in "xu4c97".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let idx = e.cands.as_ref().unwrap().list.iter().position(|(w, _)| w == "厲害").unwrap();
+        assert_eq!(e.cands.as_ref().unwrap().alt[&idx], vec!["ㄌㄧˋ", "ㄏㄞˋ"]);
+        assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "厲害");
+        assert_eq!(e.syls, vec!["ㄌㄧˋ", "ㄏㄞˋ"]);
+        e.reset(ResetMode::Discard);
+        // Colloquial reduplicated entry (`colloq` tag): ㄖㄜˋ ㄊㄥ ㄊㄥ -> 熱騰騰.
+        for ch in "bk4".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        for _ in 0..2 {
+            for ch in "w/".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            e.key(Key::new(KeyKind::Space)).unwrap();
+        }
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        let idx = e.cands.as_ref().unwrap().list.iter().position(|(w, _)| w == "熱騰騰").unwrap();
+        assert_eq!(e.pick(idx).unwrap().unwrap().preedit, "熱騰騰");
+        e.reset(ResetMode::Discard);
+        // Turning sandhi off hides `colloq` rows in right-anchored candidates as well.
+        e.set_tone3(false).unwrap();
+        for ch in "bk4".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        for _ in 0..2 {
+            for ch in "w/".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            e.key(Key::new(KeyKind::Space)).unwrap();
+        }
+        e.key(Key::new(KeyKind::Home)).unwrap();
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        assert!(!e.cands.as_ref().unwrap().list.iter().any(|(w, _)| w == "熱騰騰"));
     }
 
     fn digit_test_lm() -> Arc<Lm> {
