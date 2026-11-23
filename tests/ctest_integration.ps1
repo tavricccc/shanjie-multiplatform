@@ -262,6 +262,7 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
         $costProp=$item.properties | Where-Object name -eq 'COST' | Select-Object -First 1
         if($costProp){$costByName[$item.name]=[double]$costProp.value}
     }
+    Check ($costByName['full.core.rowstats'] -gt $costByName['full.core-suite']) 'The new CLI matrix has its measured heavy-suite scheduling seed'
     Check ($costByName['full.core-suite'] -gt $costByName['fast.rust.windows'] -and $costByName['fast.rust.windows'] -gt $costByName['release.ui.verify'] -and $costByName['release.ui.verify'] -gt $costByName['full.submission.async-keys.x64'] -and $costByName['full.submission.async-keys.x64'] -gt $costByName['full.private.tsf-compat.shift-right.x64']) 'Configured CTest inventory preserves descending cold-start COST priorities for heavy suites'
     Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile and historical-gap requirements, FULL 111, x64 inventory 126, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}
