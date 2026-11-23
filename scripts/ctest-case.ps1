@@ -131,7 +131,7 @@ try {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
                 & "$PSScriptRoot/verify-ui.ps1" @uiArguments -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
-            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -ResultRoot (Join-Path $resultRoot 'fixture') }
+            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -RuntimeRoot $runtimeRoot -ResultRoot (Join-Path $resultRoot 'fixture') }
             'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }

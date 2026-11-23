@@ -71,7 +71,7 @@ target_compile_definitions(shanjie_candidate_host PRIVATE UNICODE _UNICODE NOMIN
 target_compile_options(shanjie_candidate_host PRIVATE /EHsc /O2 /W4 /utf-8)
 target_link_libraries(shanjie_candidate_host PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
-  ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp psapi advapi32 bcrypt ntdll ws2_32 userenv)
+  ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp psapi advapi32 bcrypt ntdll ws2_32 userenv wer)
 
 add_executable(shanjie_mode_smoke EXCLUDE_FROM_ALL
   "${SHANJIE_TESTS}/mode_button_smoke.cpp"
@@ -81,7 +81,7 @@ target_compile_definitions(shanjie_mode_smoke PRIVATE UNICODE _UNICODE NOMINMAX)
 target_compile_options(shanjie_mode_smoke PRIVATE /EHsc /O2 /W4 /utf-8)
 target_link_libraries(shanjie_mode_smoke PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
-  ole32 oleaut32 uuid user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv)
+  ole32 oleaut32 uuid user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv wer)
 
 add_executable(shanjie_windows_interaction EXCLUDE_FROM_ALL
   "${SHANJIE_TESTS}/windows_interaction.cpp"
@@ -95,7 +95,7 @@ target_compile_definitions(shanjie_windows_interaction PRIVATE UNICODE _UNICODE 
 target_compile_options(shanjie_windows_interaction PRIVATE /EHsc /O2 /W4 /utf-8)
 target_link_libraries(shanjie_windows_interaction PRIVATE
   "${SHANJIE_NATIVE_DIR}/shanjie_windows.lib"
-  ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv)
+  ole32 user32 gdi32 d2d1 dwrite dwmapi windowsapp advapi32 bcrypt ntdll ws2_32 userenv wer)
 
 function(shanjie_case name case_id)
   add_test(NAME "${name}" COMMAND "${PWSH_EXECUTABLE}" -NoLogo -NoProfile -File "${SHANJIE_CTEST_SCRIPT}" -TestName "${name}" -CaseId "${case_id}" ${ARGN})
@@ -246,6 +246,11 @@ set(arch x86)
   shanjie_assign_model_lock(model_lock)
   set_tests_properties("release.word.add.${arch}" PROPERTIES LABELS "release;tsf;word" RESOURCE_LOCK "${model_lock}" FIXTURES_REQUIRED RuntimePayload)
   shanjie_set_cost("release.word.add.${arch}" 7)
+  foreach(scenario IN ITEMS learning-status privacy)
+    shanjie_case("release.core.${scenario}.${arch}" core-recovery -Architecture "${arch}" -Scenario "${scenario}")
+    set_tests_properties("release.core.${scenario}.${arch}" PROPERTIES LABELS "release;core;learning;tsf" RESOURCE_LOCK "model-runtime-0;model-runtime-1" FIXTURES_REQUIRED RuntimePayload TIMEOUT 300)
+    shanjie_set_cost("release.core.${scenario}.${arch}" 45)
+  endforeach()
   foreach(scenario IN LISTS english_scenarios)
     shanjie_case("release.english.${scenario}.${arch}" english-keys -Architecture "${arch}" -Scenario "${scenario}" -HarnessPath "$<TARGET_FILE:shanjie_english_keys>" -PayloadRoot "${CMAKE_BINARY_DIR}/test-payload")
     shanjie_assign_model_lock(model_lock)
