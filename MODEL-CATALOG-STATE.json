@@ -4,6 +4,12 @@
   "pending": [
     {
       "filename": "tinylm.sjtl",
+      "reason": "Unknown magic or format version",
+      "release": "sj-sr-10-31m",
+      "state": "unsupported"
+    },
+    {
+      "filename": "tinylm.sjtl",
       "reason": "No complete paired dependency set found",
       "release": "tinylm-v3",
       "state": "unsupported"
