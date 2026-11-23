@@ -59,7 +59,7 @@ foreach($arm in 'upstream','overlay'){
     $phases[$arm]=@{source_cache_hit=$sourceHit;source_prepare_seconds=$sourceSeconds;compile_wall_seconds=$buildSeconds;judge_golden_wall_seconds=$goldenWatch.Elapsed.TotalSeconds}
     Save-ContentCache -Root $tree -ManifestPath "$tree/.source-cache.json" -Key $key -Paths $sourcePaths
     $sources[$arm]=Get-ContentFingerprint -Root $tree -Paths @('core','cli','Cargo.toml','Cargo.lock')
-    $executables[$arm]=@{path="$tree/target/release/shanjie-eval.exe";sha256=(Get-FileHash "$tree/target/release/shanjie-eval.exe").Hash.ToLowerInvariant()}
+    $executables[$arm]=@{workspace=$tree;path="$tree/target/release/shanjie-eval.exe";sha256=(Get-FileHash "$tree/target/release/shanjie-eval.exe").Hash.ToLowerInvariant()}
 }
 function Compare-RowBytes([string]$Expected,[string]$Actual,[string]$Difference){
     $a=[IO.File]::ReadAllBytes($Expected);$b=[IO.File]::ReadAllBytes($Actual)
@@ -77,7 +77,7 @@ foreach($packs in 'acg,it','acg,it,beauty,meme'){
         foreach($set in 'dev302','user-typing','user-reported'){
             $label="$configuration-$set-$profile";$outputs=@{}
             foreach($arm in 'upstream','overlay'){
-                $tree=Join-Path $workspace $arm
+                $tree=$executables[$arm].workspace
                 $out=Join-Path $ResultRoot "$label-$arm.rowstats"
                 $arguments=@('--lm','data/lm/bigram.sjlm','--profile',$profile,'--context','--packs',$packs,'--tinylm','data/lm/tinylm.sjtl','--threads','4','--rowstats',$out)
                 if($set -eq 'dev302'){$arguments+=@('--dev','302')}else{$arguments+=@('--rows',"eval/dev/$set.txt")}
