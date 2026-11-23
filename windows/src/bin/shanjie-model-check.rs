@@ -123,7 +123,7 @@ fn run_bench(data:&Path,id:&str,short_path:&str,long_path:&str,ranking:u32){
         "cache_condition":"fresh process after external hash verification; OS file cache uncontrolled",
         "memory_mib":{
             "before_private":before_priv,"before_working_set":before_ws,
-            "after_cold_private":cold_priv,"after_cold_working_set":cold_ws,
+            "after_first_open_private":cold_priv,"after_first_open_working_set":cold_ws,
             "final_private":final_priv,"final_working_set":final_ws,
             "peak_working_set":peak_ws,"peak_pagefile":peak_pagefile
         },

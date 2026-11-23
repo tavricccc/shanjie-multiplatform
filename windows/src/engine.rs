@@ -571,8 +571,10 @@ impl Engine {
     pub fn privacy_allowed(&self) -> bool { self.privacy_allowed }
     /// Local maintenance tools only; no snapshot text or learning records leave the engine.
     pub fn benchmark_settings(&self) -> serde_json::Value {
-        let (sha, colloquial, cells, levels) = unsafe { windows_benchmark_settings(&*self.handle) }.expect("semantic model loaded");
-        serde_json::json!({"tinylm_sha256":sha,"colloquial_enabled":colloquial,"cells":cells,"levels":levels,"strength":"standard"})
+        let s = unsafe { windows_benchmark_settings(&*self.handle) }.expect("semantic model loaded");
+        serde_json::json!({"tinylm_sha256":s.tinylm_sha256,"colloquial_enabled":s.colloquial_enabled,
+            "cells":s.cells,"header_cells":s.header_cells,"levels":s.levels,"strength":s.strength,"profile":s.profile,
+            "finite_fallback":"per-job fallback to header cells remains upstream"})
     }
     pub fn benchmark_idle(&self) -> bool {
         (unsafe { windows_benchmark_idle(&*self.handle) }) && !self.last.rerank && self.last.preedit.is_empty()

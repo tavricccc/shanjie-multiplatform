@@ -99,10 +99,12 @@ foreach($arm in $arms.Values){
     $arm.binary_sha256=(Get-FileHash -LiteralPath $arm.checker).Hash.ToLowerInvariant()
     $arm.commit=(git -C $arm.root rev-parse HEAD).Trim();$arm.upstream=(Get-Content "$($arm.root)/UPSTREAM.json" -Raw|ConvertFrom-Json).commit
     $arm.core_source_fingerprint=Get-ContentFingerprint -Root $arm.root -Paths @('build/core/src','build/core/Cargo.toml')
+    $arm.windows_source_fingerprint=Get-ContentFingerprint -Root $arm.root -Paths @('windows/src','windows/Cargo.toml','windows/Cargo.lock','shared/src','shared/Cargo.toml')
     $arm.uncommitted_paths=@(git -C $arm.root status --porcelain)
     $arm.model_files=@{}
     foreach($file in Get-ChildItem "$($arm.data)/models/builtin" -File){$arm.model_files[$file.Name]=@{sha256=(Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant();bytes=$file.Length}}
-    $arm.profile=$Profile;$arm.strength='standard';$arm.learning=$false;$arm.prediction=$false;$arm.right_anchor=$false
+    $arm.profile=$Profile;$arm.strength='standard';$arm.learning=$false;$arm.prediction=$false;$arm.right_anchor=$Comparison -eq 'DecodeWarmup'
+    $arm.upstream_english=$false;$arm.raw_mixed=$false;$arm.keyboard_path='direct core protocol; no TSF key-policy translation'
 }
 $ranking = if ($Profile -eq 'formal') { '1' } else { '0' }
 
@@ -141,6 +143,7 @@ function Invoke-Arm([string]$Arm, [int]$Round, [string]$DataDir, [string]$Expect
     [IO.File]::WriteAllText("$work/$Arm-$Round.stderr.log",$stderr)
     if ($code -ne 0) { throw "Benchmark failed ($Arm round $Round, exit $code): $stderr" }
     $parsed = $stdout | ConvertFrom-Json
+    if($parsed.fusion.profile -ne $Profile -or $parsed.fusion.strength -ne 'standard'){throw 'Core profile/strength differs from the requested arm configuration'}
     if ($parsed.fusion.tinylm_sha256 -ne $ExpectedSha) {
         throw "Model hash mismatch for $Arm round ${Round}: expected $ExpectedSha, got $($parsed.tinylm_sha256)"
     }

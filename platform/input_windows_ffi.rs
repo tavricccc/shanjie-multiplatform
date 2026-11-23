@@ -23,7 +23,7 @@ pub fn windows_pause_learning(engine: &mut ShanjieEngine) {
 pub fn windows_active_segment(engine: &ShanjieEngine) -> Option<[u32; 2]> {
     engine.0.windows_active_segment()
 }
-pub fn windows_benchmark_settings(engine: &ShanjieEngine) -> Option<(String, bool, [(f64, f64, f64); 3], u32)> {
+pub fn windows_benchmark_settings(engine: &ShanjieEngine) -> Option<crate::engine::WindowsBenchmarkSettings> {
     engine.0.windows_benchmark_settings()
 }
 pub fn windows_benchmark_idle(engine: &ShanjieEngine) -> bool { engine.0.windows_benchmark_idle() }
