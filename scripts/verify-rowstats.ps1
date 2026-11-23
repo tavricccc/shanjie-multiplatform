@@ -35,6 +35,8 @@ foreach($arm in 'upstream','overlay'){
     foreach($name in $models.Keys){Copy-Item -LiteralPath $models[$name].path -Destination "$tree/data/lm/$name" -Force}
     & cargo build --release --manifest-path "$tree/Cargo.toml" -p cli --bin shanjie-eval *>&1 | Tee-Object "$ResultRoot/build-$arm.log" | Write-Host
     if($LASTEXITCODE){throw "CLI build failed: $arm"}
+    & cargo test --release --manifest-path "$tree/Cargo.toml" -p cli --test judge_v2 --test golden -- --test-threads=1 *>&1 | Tee-Object "$ResultRoot/golden-$arm.log" | Write-Host
+    if($LASTEXITCODE){throw "Pinned CLI judge/golden regression failed: $arm"}
     $sources[$arm]=Get-ContentFingerprint -Root $tree -Paths @('core','cli','Cargo.toml','Cargo.lock')
     $executables[$arm]=@{path="$tree/target/release/shanjie-eval.exe";sha256=(Get-FileHash "$tree/target/release/shanjie-eval.exe").Hash.ToLowerInvariant()}
 }
