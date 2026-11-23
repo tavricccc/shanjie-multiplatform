@@ -187,7 +187,9 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
             Request::Status => reply(None, None, true),
             Request::RerankReady => {
                 let mut r = reply(None, None, attached.is_some());
-                r.rerank_ready = attached.as_ref().is_some_and(|(_, state)| state.lock().unwrap().engine.rerank_ready());
+                r.rerank_ready = attached
+                    .as_ref()
+                    .is_some_and(|(_, state)| state.try_lock().is_ok_and(|mut s| s.engine.rerank_ready()));
                 r
             }
             Request::Profile => {

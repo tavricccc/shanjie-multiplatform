@@ -205,7 +205,7 @@ impl Client {
         let Some(pipe) = self.pipe.as_ref() else {
             return false;
         };
-        let deadline = Instant::now() + Duration::from_millis(200);
+        let deadline = Instant::now() + Duration::from_millis(40);
         match pipe.send(&Request::RerankReady, deadline).and_then(|()| pipe.receive::<Reply>(deadline)) {
             Ok(reply) => reply.rerank_ready,
             Err(error) => {

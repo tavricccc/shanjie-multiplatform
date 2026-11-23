@@ -25,7 +25,10 @@ impl Data {
         }
     }
     pub(super) fn poll_rerank(self: &Rc<Self>) {
-        let context = self.state.borrow().context.clone();
+        let (context, window_open) = {
+            let s = self.state.borrow();
+            (s.context.clone(), !s.snapshot.candidates.is_empty() && !s.snapshot.prediction)
+        };
         let Some(((ticket, _), context)) = self
             .rerank_wait
             .get()
@@ -34,15 +37,16 @@ impl Data {
         else {
             return self.watch_rerank(false);
         };
-        if !self.state.borrow_mut().engine.rerank_ready() {
+        if window_open || !self.state.borrow_mut().engine.rerank_ready() {
             return;
         }
-        self.rerank_wait.set(None);
+        let wait = self.rerank_wait.replace(None);
         self.rerank_timer(false);
         let generation = self.generation.get();
         let data = self.clone();
         let target = context.clone();
-        let _ = self.request(&target, TF_ES_READWRITE | TF_ES_ASYNCDONTCARE, move |cookie| {
+        if self
+            .request(&target, TF_ES_READWRITE | TF_ES_ASYNCDONTCARE, move |cookie| {
             // A key or a cancel since the poll has its own output, and perhaps its own job.
             let current = data.state.borrow().context.clone();
             if data.rerank_ticket.get() != ticket || data.generation.get() != generation || current.as_ref() != Some(&context) {
@@ -64,6 +68,12 @@ impl Data {
                 return Ok(());
             }
             data.apply(&context, cookie, snapshot, false)
-        });
+        })
+            .is_err()
+            && self.rerank_ticket.get() == ticket
+        {
+            self.rerank_wait.set(wait);
+            self.rerank_timer(true);
+        }
     }
 }

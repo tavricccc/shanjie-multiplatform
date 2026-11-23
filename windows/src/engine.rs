@@ -5,13 +5,16 @@ use std::{
     path::{Path, PathBuf},
     ptr,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use windows::{
     core::PCWSTR,
     Win32::{
         Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0},
-        System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+        System::Threading::{
+            CreateMutexW, GetCurrentThread, ReleaseMutex, SetThreadPriority, WaitForSingleObject,
+            THREAD_PRIORITY_BELOW_NORMAL,
+        },
     },
 };
 
@@ -71,9 +74,20 @@ impl Reranks {
     fn busy(&self) -> bool {
         self.waiting.is_some() || self.running == Some(self.latest)
     }
+    fn pending(&self) -> bool {
+        self.busy() || self.finished.is_some()
+    }
+    fn discard(&mut self) {
+        self.latest += 1;
+        self.waiting = None;
+        self.finished = None;
+    }
 }
 type Runner = Arc<(Mutex<Reranks>, Condvar)>;
 fn rerank_worker(runner: Runner) {
+    unsafe {
+        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+    }
     let (slot, signal) = &*runner;
     let mut r = slot.lock().unwrap();
     loop {
@@ -99,6 +113,7 @@ pub struct Engine {
     pub handle: *mut ShanjieEngine,
     model: Option<ModelStamp>,
     pub rerank_jobs_run:u64,
+    pub last_rerank_ns: Option<u64>,
     /// Set in the resident core: jobs run there instead of before the reply.
     reranks: Option<Runner>,
     /// The last output, which `Op::Rerank` reranks.
@@ -123,6 +138,7 @@ impl Default for Engine {
             handle: ptr::null_mut(),
             model: None,
             rerank_jobs_run:0,
+            last_rerank_ns: None,
             reranks: None,
             last: Snapshot::default(),
             remote: None,
@@ -291,6 +307,10 @@ impl Engine {
             out.columns = r.candidate_columns;
             out.first = r.candidate_first;
             out.total = r.candidate_total;
+            out.prediction = shanjie_windows_is_prediction_row(self.handle) != 0
+                || shanjie_windows_is_mixed_hint(self.handle) != 0;
+            out.reading_hint = shanjie_windows_is_mixed_hint(self.handle) != 0;
+            out.phonetic_pending = shanjie_windows_phonetic_pending(self.handle) != 0;
             shanjie_output_free(ranked);
         }
     }
@@ -314,6 +334,7 @@ impl Engine {
         // Only the candidates can change; what the last output committed was already sent.
         let mut out = Snapshot { commit: String::new(), rerank: false, ..self.last.clone() };
         if let Some((_, job, 0)) = finished {
+            self.rerank_jobs_run = self.rerank_jobs_run.saturating_add(1);
             unsafe { self.apply_rerank(&job, &mut out) };
         }
         self.last = out.clone();
@@ -427,19 +448,29 @@ impl Engine {
                 rerank: false,
             };
             shanjie_output_free(raw);
+            self.last_rerank_ns = None;
             let mut job=ptr::null_mut();
-            let job=(shanjie_engine_rerank_take(self.handle,&mut job)==0&&!job.is_null()).then(||Job(job));
+            let take_rc=shanjie_engine_rerank_take(self.handle,&mut job);
+            let job=(take_rc==0&&!job.is_null()).then(||Job(job));
             if let Some(runner)=self.reranks.as_ref() {
-                // Every output makes the previous job stale; this one's, if any, waits for the runner.
+                // Only a new decode (new job) or an ended composition/reset invalidates the previous job.
+                // Non-decoding keys (e.g. an unfinished syllable) keep an in-flight or finished job valid.
                 let mut r=runner.0.lock().unwrap();
-                r.latest+=1;
-                r.finished=None;
-                r.waiting=job.map(|job|(r.latest,Arc::new(job)));
-                out.rerank=r.waiting.is_some();
-                runner.1.notify_all();
+                if let Some(job)=job {
+                    r.latest+=1;
+                    r.finished=None;
+                    r.waiting=Some((r.latest,Arc::new(job)));
+                    runner.1.notify_all();
+                } else if take_rc!=0||out.preedit.is_empty() {
+                    r.discard();
+                    runner.1.notify_all();
+                }
+                out.rerank=r.pending();
             } else if let Some(job)=job {
                 // Tools without a runner rerank before returning; commit is preserved once.
+                let started = Instant::now();
                 if shanjie_rerank_run(job.0)==0 {
+                    self.last_rerank_ns = Some(started.elapsed().as_nanos() as u64);
                     self.rerank_jobs_run=self.rerank_jobs_run.saturating_add(1);
                     self.apply_rerank(&job,&mut out);
                 }
@@ -643,5 +674,21 @@ mod tests {
         let output = engine.rerank(Some(Duration::ZERO)).unwrap();
         assert!(!output.rerank);
         assert_eq!(output.preedit, "原組字");
+    }
+
+    #[test]
+    fn reranks_pending_and_discard_track_inflight_and_finished_states() {
+        let mut state = Reranks { latest: 1, running: Some(1), ..Default::default() };
+        assert!(state.busy());
+        assert!(state.pending());
+        state.running = None;
+        assert!(!state.busy());
+        assert!(!state.pending());
+
+        state.running = Some(1);
+        state.discard();
+        assert_eq!(state.latest, 2);
+        assert!(!state.busy());
+        assert!(!state.pending());
     }
 }
