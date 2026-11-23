@@ -653,6 +653,7 @@ impl Engine {
                 (unsafe { shanjie_engine_set_left_context(self.handle, s.as_ptr()) } == 0)
                     .then(Snapshot::default)
             }
+            Op::Privacy(_) if self.handle.is_null() => None,
             Op::Privacy(allowed) => {
                 if !allowed {
                     unsafe { windows_pause_learning(&mut *self.handle); }
@@ -696,6 +697,17 @@ impl Engine {
         ok
     }
 }
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+    #[test]
+    fn closed_engine_has_no_privacy_operation_until_it_has_a_core_owner() {
+        let mut engine=Engine::default();
+        assert!(engine.set_privacy_allowed(false).is_none());
+        assert!(!engine.is_open());
+    }
+}
+
 impl shanjie_shell::input::Core for Engine {
     fn key(&mut self, key: ShanjieKey) -> Option<Snapshot> {
         Engine::key(self, key)

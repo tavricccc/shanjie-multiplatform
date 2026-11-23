@@ -40,6 +40,12 @@ int wmain(int argc,wchar_t**argv) {
     WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"Shanjie.Compat0122.Test";RegisterClassW(&wc);
     store->window=CreateWindowW(wc.lpszClassName,L"Private fixture",WS_OVERLAPPEDWINDOW,-12000,-12000,800,400,nullptr,nullptr,wc.hInstance,nullptr);
     require(store->window!=nullptr,910);ShowWindow(store->window,SW_SHOWNOACTIVATE);
+    HWND passwordOwner=nullptr;
+    if(scenario==L"privacy-native-password"){
+        passwordOwner=store->window;
+        store->window=CreateWindowW(L"EDIT",L"",WS_CHILD|WS_VISIBLE|ES_PASSWORD,0,0,100,24,passwordOwner,nullptr,wc.hInstance,nullptr);
+        require(store->window!=nullptr,1130);SetFocus(store->window);require(GetFocus()==store->window,1131);
+    }
     ComPtr<ITfContext> context;TfEditCookie cookie;
     require(SUCCEEDED(doc->CreateContext(client,0,store.Get(),&context,&cookie))&&SUCCEEDED(doc->Push(context.Get()))&&SUCCEEDED(thread->SetFocus(doc.Get())),911);
     ComPtr<ITfClientId> ids;thread.As(&ids);TfClientId serviceClient;require(SUCCEEDED(ids->GetClientId(ServiceId,&serviceClient)),912);
@@ -54,7 +60,15 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if(scenario.starts_with(L"modifiers-")) {
+    if(scenario==L"privacy-disabled") {
+        ComPtr<ITfCompartmentMgr> cm;ComPtr<ITfCompartment> disabled;require(SUCCEEDED(context.As(&cm))&&SUCCEEDED(cm->GetCompartment(GUID_COMPARTMENT_KEYBOARD_DISABLED,&disabled)),1132);
+        require(SUCCEEDED(disabled->SetValue(client,&v)),1133);
+        keyboard(0);for(int key:{int('S'),VK_RETURN,VK_TAB,VK_DOWN}){
+            BOOL accepted=TRUE;require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,flags(key,false),&accepted))&&!accepted,1134);
+        }
+        require(store->prefixReads==0&&store->text==L"隔離測試前文",1135);
+        std::puts("privacy prefix_reads=0 (keyboard-disabled compartment)");
+    } else if(scenario.starts_with(L"modifiers-")) {
         keyboard(0);
         if(scenario==L"modifiers-english") {
             keyboard(VK_SHIFT);for(int key:{'H','T','T','P'})down(key);keyboard(0);
@@ -65,7 +79,7 @@ int wmain(int argc,wchar_t**argv) {
             require(!store->text.empty() && compositions()==1,1101);
         }
         auto before=store->text;auto caret=store->selection;
-        for(int modifiers:{1,2,3,4,8})for(int key:{int('A'),VK_RETURN,VK_TAB,VK_UP,VK_DOWN,VK_LEFT,VK_NEXT}) {
+        for(int modifiers:{1,2,3,4,5,6,7,8,9,10,11})for(int key:{int('A'),VK_RETURN,VK_TAB,VK_UP,VK_DOWN,VK_LEFT,VK_NEXT}) {
             BYTE state[256]{};
             if(modifiers&1)state[VK_MENU]=state[VK_RMENU]=0x80;
             if(modifiers&2)state[VK_CONTROL]=state[VK_LCONTROL]=0x80;
@@ -79,7 +93,8 @@ int wmain(int argc,wchar_t**argv) {
         }
         keyboard(VK_CONTROL,VK_MENU);BOOL accepted=FALSE;
         require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_OEM_COMMA,flags(VK_OEM_COMMA,false),&accepted))&&accepted,1106);
-        down(VK_OEM_COMMA);keyboard(0);down(VK_ESCAPE);
+        BOOL eaten=FALSE;require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_OEM_COMMA,flags(VK_OEM_COMMA,false),&eaten))&&eaten,1107);
+        keyboard(0);down(VK_ESCAPE);
         std::puts("EVIDENCE synthetic SetKeyboardState + TSF callbacks; no hardware or foreground App acceptance");
     } else if(scenario.starts_with(L"privacy-")) {
         keyboard(0);for(int key:{'S','U','3'})down(key);
@@ -93,9 +108,13 @@ int wmain(int argc,wchar_t**argv) {
         UINT choice=length;
         for(UINT i=0;i<length;++i){BSTR word=nullptr;require(SUCCEEDED(list->GetString(i,&word)),1117);if(word&&std::wstring(word)!=original&&SysStringLen(word)==1)choice=i;SysFreeString(word);if(choice<length)break;}
         require(choice<length,1118);
-        require(SUCCEEDED(list->SetSelection(choice))&&SUCCEEDED(list->Finalize()),1119);pump();down(VK_RETURN);
+        require(SUCCEEDED(list->SetSelection(choice))&&SUCCEEDED(list->Finalize()),1119);pump();
+        if(scenario==L"privacy-transition"){
+            store->scopeChanged(IS_PRIVATE);store->externalCaret(store->selection.acpEnd);pump();
+            require(SUCCEEDED(focus->OnSetFocus(nullptr,doc.Get()))&&SUCCEEDED(thread->SetFocus(nullptr)),1136);Sleep(180);pump();
+        }else{down(VK_RETURN);}
         require(store->text.starts_with(L"隔離測試前文") && compositions()==0,1110);
-        bool paused=store->inputScope!=IS_DEFAULT;
+        bool paused=store->inputScope!=IS_DEFAULT||scenario==L"privacy-native-password";
         wchar_t profile[MAX_PATH]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",profile,MAX_PATH)>0,1112);
         auto file=std::wstring(profile)+L"\\Shanjie\\learning.tsv";
         std::printf("privacy chosen=%u candidates=%u original_units=%zu final_units=%zu prefix_reads=%u file=%d\n",choice,length,original.size(),store->text.size(),store->prefixReads,GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES);
@@ -180,6 +199,6 @@ int wmain(int argc,wchar_t**argv) {
         require(store->text==(scenario==L"word-invalid"?L"ab":L"回家"),964);
         if(password){store->window=savedWindow;DestroyWindow(password);}
     }
-    keyboard(0);require(SUCCEEDED(tip->Deactivate()),970);thread->SetFocus(nullptr);doc->Pop(TF_POPF_ALL);thread->Deactivate();DestroyWindow(store->window);
+    keyboard(0);require(SUCCEEDED(tip->Deactivate()),970);thread->SetFocus(nullptr);doc->Pop(TF_POPF_ALL);thread->Deactivate();DestroyWindow(store->window);if(passwordOwner)DestroyWindow(passwordOwner);
     std::printf("PASS %ls\n",scenario.c_str());return 0;
 }

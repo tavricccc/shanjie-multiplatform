@@ -51,6 +51,7 @@ public:
     LONG privacyBoundary = 0;
     unsigned prefixReads = 0, textWrites = 0, unchangedWrites = 0;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
+    void scopeChanged(InputScope value) { inputScope=value; if(sink_)sink_->OnAttrsChange(0,LONG(text.size()),1,&GUID_PROP_INPUTSCOPE); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
     void externalText(const std::wstring& value) {
         TS_TEXTCHANGE change{0,(LONG)text.size(),(LONG)value.size()};
@@ -94,7 +95,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE InsertEmbeddedAtSelection(DWORD,IDataObject*,LONG*,LONG*,TS_TEXTCHANGE*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE RequestSupportedAttrs(DWORD,ULONG count,const TS_ATTRID* ids) override {
-        scopeRequested=inputScope!=IS_DEFAULT && std::find(ids,ids+count,GUID_PROP_INPUTSCOPE)!=ids+count; return S_OK;
+        scopeRequested=count && std::find(ids,ids+count,GUID_PROP_INPUTSCOPE)!=ids+count; return S_OK;
     }
     HRESULT STDMETHODCALLTYPE RequestAttrsAtPosition(LONG,ULONG count,const TS_ATTRID* ids,DWORD flags) override { return RequestSupportedAttrs(flags,count,ids); }
     HRESULT STDMETHODCALLTYPE RequestAttrsTransitioningAtPosition(LONG,ULONG,const TS_ATTRID*,DWORD) override { return S_OK; }

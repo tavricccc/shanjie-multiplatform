@@ -3,7 +3,7 @@ param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harn
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
  'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
- 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin'))
+ 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
@@ -12,7 +12,7 @@ if(Test-Path -LiteralPath $Output){throw 'Use a fresh fixture output directory.'
 New-Item -ItemType Directory -Path $Output -Force|Out-Null
 $Payload=[IO.Path]::GetFullPath($Payload)
 $results=@()
-$privacyCases=@($Cases|Where-Object{$_ -like 'privacy-*' -and $_ -ne 'privacy-control'})
+$privacyCases=@($Cases|Where-Object{$_ -like 'privacy-*' -and $_ -notin @('privacy-control','privacy-disabled','privacy-transition')})
 if($privacyCases.Count){$Cases=@('privacy-control')+@($Cases|Where-Object{$_ -ne 'privacy-control'})}
 $ownedServers=[Collections.Generic.List[object]]::new()
 try {
