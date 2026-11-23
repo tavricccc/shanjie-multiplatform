@@ -399,7 +399,7 @@ impl Host {
             let candidates: &[String] = if self.state.reading_hint { &[] } else { &self.state.candidates };
             for (i, value) in candidates.iter().enumerate() {
                 let tag = if self.state.selected.is_none() {
-                    String::new()
+                    if i == 0 && self.state.prediction && !self.state.reading_hint && !self.state.associated { "Tab".into() } else { String::new() }
                 } else {
                     let number = if self.state.columns > 0 { (self.state.first as usize + i) % 9 + 1 } else { i + 1 };
                     format!("{}{}", if self.state.associated { "⇧" } else { "" }, number)

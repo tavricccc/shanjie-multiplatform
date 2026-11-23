@@ -13,6 +13,7 @@ struct Snapshot {
     bool prediction = false;
     bool readingHint = false;
     bool phoneticPending = false;
+    bool learningUnavailable = false;
     std::wstring commit, preedit;
     uint32_t cursor = 0, columns = 0, first = 0, total = 0;
     int selected = -1;
