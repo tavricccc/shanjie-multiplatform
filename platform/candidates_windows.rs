@@ -130,45 +130,62 @@ impl Engine {
             self.cands = self.make_candidates(list);
             return;
         }
+        let (mut list, alt, rows) = self.window_list_right(rows);
+        let digits = self.ld_now.take().filter(|_| !list.is_empty());
+        if let Some(keys) = &digits { list.push((keys.clone(), 1)); }
+        let short = self.ls_now.take().filter(|(i, _)| *i == start && !list.is_empty() && digits.is_none());
+        if let Some((_, word)) = &short {
+            list.push((word.to_ascii_lowercase(), 1));
+            list.push((word.to_ascii_uppercase(), 1));
+        }
+        if !rows.is_empty() || digits.is_some() || short.is_some() {
+            if !list.is_empty() {
+                let mut c = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
+                c.alt = alt;
+                c.rows = rows;
+                c.dalt = digits.map(DigitAlt::Digits);
+                c.short = short;
+                self.cands = Some(c);
+            }
+        } else {
+            self.cands = self.make_candidates_with(list, alt);
+        }
+    }
+
+    // Also used after forgetting a prediction: row metadata and the right-hand
+    // lexicon span must be rebuilt together, before any index-bearing tails.
+    fn window_list_right(&self, mut rows: Vec<Pred>) -> (Vec<(String, usize)>, HashMap<usize, Vec<String>>, Vec<Pred>) {
+        let start = self.cursor;
         let available = (start..self.syls.len()).take_while(|&i| !self.is_punct(i)).count();
-        let mut seen = HashSet::new();
-        let mut list = Vec::new();
+        let mut seen: HashSet<String> = rows.iter().map(|p| p.word.clone()).collect();
+        let mut list: Vec<_> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
         let today = if self.learner.has_new_words() { self.today() } else { 0 };
         for length in (1..=self.lex.max_len.max(NEWWORD_MAX).min(available)).rev() {
             let key = &self.syls[start..start + length];
             let lexicon = self.lex.entries_with(key, self.colloq_on());
             if (NEWWORD_MIN..=NEWWORD_MAX).contains(&length) {
                 for word in self.learner.new_words_all(key, today) {
-                    if !lexicon.iter().any(|(w, _)| *w == word) && seen.insert(word) {
+                    if !lexicon.iter().any(|(w, _)| *w == word) && seen.insert(word.to_string()) {
                         list.push((word.to_string(), length));
                     }
                 }
             }
             for (word, _) in lexicon {
-                if seen.insert(word) { list.push((word.to_string(), length)); }
+                if seen.insert(word.to_string()) { list.push((word.to_string(), length)); }
             }
         }
+        self.variant_move(&mut list, &mut rows, true);
         let mut alt = HashMap::new();
         let t3 = self.t3();
         for length in (1..=self.lex.max_len.min(available)).rev() {
             for (word, reading) in self.lex.tolerant_words(&self.syls[start..start + length], self.fuzzy, &t3[start..start + length]) {
-                if seen.insert(word) {
+                if seen.insert(word.to_string()) {
                     alt.insert(list.len(), reading);
                     list.push((word.to_string(), length));
                 }
             }
         }
-        let short = self.ls_now.take().filter(|(i, _)| *i == start && !list.is_empty());
-        if let Some((_, word)) = &short {
-            list.push((word.to_ascii_lowercase(), 1));
-            list.push((word.to_ascii_uppercase(), 1));
-            let mut c = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
-            c.alt = alt;
-            c.short = short;
-            self.cands = Some(c);
-            return;
-        }
-        self.cands = self.make_candidates_with(list, alt);
+        (list, alt, rows)
     }
 
     fn open_digit_candidates(&mut self, mark: char, target: usize, reading: Option<char>, rows: Vec<Pred>) {
@@ -235,6 +252,98 @@ impl Engine {
         let Some(next) = next else { self.cands = None; self.cursor = cursor; return self.handled(); };
         self.choose(next)?; self.cursor = cursor;
         self.handled()
+    }
+}
+
+#[cfg(test)]
+mod windows_history_candidates {
+    use super::*;
+
+    fn engine(right: bool) -> Engine {
+        let lex = Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄋㄧˇ 妳 -1\nㄏㄠˇ 好 -0.1\nㄏㄠˇ 郝 -1\nㄇㄚ˙ 嗎 -0.1\nㄋㄧˇ-ㄏㄠˇ 你好 -0.1\nㄋㄧˇ-ㄏㄠˇ 妳好 -1\nㄏㄠˇ-ㄇㄚ˙ 好嗎 -1\n").unwrap();
+        let mut e = Engine::with_lexicon(Arc::new(lex), Layout::Standard);
+        e.set_candidate_anchor(right);
+        e.set_learning(true);
+        for ch in "su3cl3".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+        e
+    }
+
+    #[test]
+    fn general_han_window_keeps_prediction_metadata_and_span() {
+        for right in [false, true] {
+            for (word, reading, start) in [
+                ("好嗎", vec!["ㄏㄠˇ".into(), "ㄇㄚ˙".into()], 1),
+                ("妳好", vec!["ㄋㄧˇ".into(), "ㄏㄠˇ".into()], 0),
+            ] {
+                let mut e = engine(right);
+                e.pred = vec![Pred { word: word.into(), reading: reading.clone(), start, key: "前文".into(), weight: 2.0 }];
+                let opened = e.key(Key::new(KeyKind::Down)).unwrap();
+                assert_eq!(opened.candidates.first().map(String::as_str), Some(word));
+                let row = &e.cands.as_ref().unwrap().rows[0];
+                assert_eq!((&row.reading, row.start, row.key.as_str(), row.weight), (&reading, start, "前文", 2.0));
+                let chosen = e.pick(0).unwrap().unwrap();
+                assert_eq!(chosen.preedit, if start == 1 { "你好嗎" } else { "妳好" });
+                let fixed = e.fixed.iter().find(|f| f.word == word).unwrap();
+                assert_eq!((fixed.start, fixed.end), (start, start + reading.len()));
+                if start == 1 { assert_eq!(fixed.key.as_deref(), Some("前文")); }
+            }
+        }
+    }
+
+    #[test]
+    fn general_han_digit_alternative_is_available_without_raw_mixing() {
+        for right in [false, true] {
+            for mixed in [false, true] {
+                let mut e = engine(right);
+                e.set_mixed_input(mixed);
+                // The digit layer leaves this marker on the syllable it just closed.
+                // This deliberately opens a Han window, not the digit-token window.
+                e.last_digits = Some("823".into());
+                let opened = e.key(Key::new(KeyKind::Down)).unwrap();
+                let index = opened.candidates.iter().position(|w| w == "823").expect("original digits in Han candidates");
+                assert!(matches!(e.cands.as_ref().unwrap().dalt, Some(DigitAlt::Digits(_))));
+                assert_eq!(e.pick(index).unwrap().unwrap().preedit, "你823");
+                assert!(e.learner.records().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn forgetting_a_general_han_prediction_keeps_digit_tail() {
+        let mut e = engine(true);
+        e.set_learning(true);
+        let reading = vec!["ㄏㄠˇ".into(), "ㄇㄚ˙".into()];
+        e.learner.teach("前文", &reading, "", "好嗎", 20_000);
+        e.pred = vec![Pred { word: "好嗎".into(), reading: reading.clone(), start: 1, key: "前文".into(), weight: 2.0 }];
+        e.last_digits = Some("823".into());
+        e.key(Key::new(KeyKind::Down)).unwrap();
+        e.forget_highlighted().unwrap();
+        let c = e.cands.as_ref().unwrap();
+        assert!(c.list.iter().any(|(w, _)| w == "好"));
+        assert_eq!(c.list.last().map(|x| x.0.as_str()), Some("823"));
+        assert!(!e.learner.records().iter().any(|r| r.reading == reading && r.word == "好嗎"));
+    }
+
+    #[test]
+    fn right_prediction_rows_keep_variant_order_and_tolerant_indices() {
+        let variants = crate::VariantOrder::parse("ㄍㄨㄥ\t公\t功\ttest\n").unwrap();
+        let lex = Arc::new(Lexicon::parse_with_variants("ㄍㄨㄥ 公 -1\nㄍㄨㄥ 功 -2\nㄍㄨㄣ 棍 -3\n", None, Some(&variants)).unwrap());
+        for weight in [0.0, 2.0] {
+            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            e.set_candidate_anchor(true);
+            e.set_fuzzy(1).unwrap();
+            for ch in "ej/".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+            e.key(Key::new(KeyKind::Space)).unwrap();
+            e.pred = vec![Pred { word: "公".into(), reading: vec!["ㄍㄨㄥ".into()], start: 0, key: "前文".into(), weight }];
+            e.key(Key::new(KeyKind::Down)).unwrap();
+            let c = e.cands.as_ref().unwrap();
+            assert_eq!(c.list[0].0, if weight == 0.0 { "功" } else { "公" });
+            assert_eq!(c.rows.len(), usize::from(weight > 0.0));
+            let alt = c.list.iter().position(|(w, _)| w == "棍").unwrap();
+            assert_eq!(c.alt[&alt], vec!["ㄍㄨㄣ"]);
+            assert_eq!(e.pick(alt).unwrap().unwrap().preedit, "棍");
+            assert_eq!(e.syls, vec!["ㄍㄨㄣ"]);
+        }
     }
 }
 
@@ -505,6 +614,22 @@ mod windows_candidates {
         e.set_prediction(with_pred_words).unwrap();
         e.set_upstream_english(true, true, true, true).unwrap();
         e
+    }
+
+    #[test]
+    fn digit_keys_closed_as_han_keep_original_digits_in_the_han_window() {
+        for right in [false, true] {
+            for mixed in [false, true] {
+                let mut e = setup_digit_engine("ㄚˋ 阿 -0.1\n", right, false, false, 0);
+                e.set_mixed_input(mixed);
+                for ch in "84".chars() { e.key(Key::ch(ch, 0)).unwrap(); }
+                assert_eq!(e.syls, vec!["ㄚˋ"], "must exercise Han, not digit tokens");
+                assert_eq!(e.view(true, String::new()).preedit, "阿");
+                let opened = e.key(Key::new(KeyKind::Down)).unwrap();
+                let index = opened.candidates.iter().position(|w| w == "84").unwrap();
+                assert_eq!(e.pick(index).unwrap().unwrap().preedit, "84");
+            }
+        }
     }
 
     #[test]
