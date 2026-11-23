@@ -198,9 +198,12 @@ pub fn privacy_gate(data: &Path, route: &str) {
     let stable = std::fs::read(&file).unwrap();
     let mut off = Engine::open_local(data, &config(false)).unwrap();
     off.set_privacy_allowed(false).unwrap(); off.set_privacy_allowed(true).unwrap();
+    off.perform(Op::Options(crate::profile::load(&crate::profile::path()).unwrap().input_options())).unwrap();
+    off.perform(Op::Context("普通前文".into())).unwrap();
     for ch in "su3".chars() { off.perform(key(ch)).unwrap(); }
     off.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap(); off.perform(Op::Pick(1)).unwrap(); off.reset(false).unwrap();
     assert_eq!(std::fs::read(file).unwrap(), stable, "privacy cannot enable a disabled user preference");
+    assert!(off.benchmark_idle(), "disabled learning cannot create in-memory records either");
     println!("PASS {route} privacy gate drops pending learning and context; resume and explicit off preserved");
 }
 pub fn request_fault(data: &Path) {

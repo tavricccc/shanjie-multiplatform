@@ -1,9 +1,8 @@
 //! Isolated maintenance probe. Never registers the IME or loads an installed profile.
-use shanjie_windows::{engine::Engine,broker::{Config,Op}};
+use shanjie_windows::{engine::Engine,broker::{self,Config,Op}};
 use shanjie_core::{engine::Layout,ffi::ShanjieKey};
-use sha2::{Digest,Sha256};
 use serde_json::json;
-use std::{path::Path,fs,time::Instant};
+use std::{path::Path,fs,time::{Duration,Instant},io::Read,os::windows::io::AsRawHandle};
 use windows::Win32::System::{
     ProcessStatus::{GetProcessMemoryInfo,PROCESS_MEMORY_COUNTERS,PROCESS_MEMORY_COUNTERS_EX},
     Threading::GetCurrentProcess,
@@ -67,8 +66,10 @@ fn type_row(e:&mut Engine,context:&str,reading:&str,mut key_ns:Option<&mut Vec<u
 }
 fn run_bench(data:&Path,id:&str,short_path:&str,long_path:&str,ranking:u32){
     let tinylm_path=data.join("models/builtin/tinylm.sjtl");
-    let bytes=fs::read(&tinylm_path).expect("read tinylm.sjtl");
-    let tinylm_sha=format!("{:x}",Sha256::digest(&bytes));
+    // Only the fixed-size header is read by the probe. Hash verification occurs
+    // in the parent before this process starts; the core reports its loaded hash.
+    let size=fs::metadata(&tinylm_path).unwrap().len();
+    let mut bytes=[0u8;256];fs::File::open(&tinylm_path).unwrap().read_exact(&mut bytes).unwrap();
     let magic=std::str::from_utf8(&bytes[..8]).unwrap_or("?").to_owned();
     let (left_len,flags,boundary_k)=if magic=="SJTL0006" && bytes.len()>=256 {
         (Some(u32::from_le_bytes(bytes[244..248].try_into().unwrap())),
@@ -82,6 +83,7 @@ fn run_bench(data:&Path,id:&str,short_path:&str,long_path:&str,ranking:u32){
     let (before_priv,before_ws,_,_)=mem_stats();
     let t_cold=Instant::now();
     let mut sync_engine=engine(data,id,ranking);
+    let settings=sync_engine.benchmark_settings();
     let cold_open_ms=t_cold.elapsed().as_secs_f64()*1000.0;
     let (cold_priv,cold_ws,_,_)=mem_stats();
     let t_warm=Instant::now();
@@ -115,9 +117,10 @@ fn run_bench(data:&Path,id:&str,short_path:&str,long_path:&str,ranking:u32){
     let long_metrics=measure_set(&long_rows,&mut bg_engine,&mut sync_engine);
     let (final_priv,final_ws,peak_ws,peak_pagefile)=mem_stats();
     println!("{}",json!({
-        "tinylm_size":bytes.len(),"tinylm_sha256":tinylm_sha,"magic":magic,
+        "tinylm_size":size,"tinylm_sha256":settings["tinylm_sha256"],"fusion":settings,"magic":magic,
         "left_len":left_len,"flags":flags,"boundary_k":boundary_k,"ranking":ranking,
-        "cold_open_ms":cold_open_ms,"warm_open_ms":warm_open_ms,
+        "fresh_process_open_ms":cold_open_ms,"same_process_cached_open_ms":warm_open_ms,
+        "cache_condition":"fresh process after external hash verification; OS file cache uncontrolled",
         "memory_mib":{
             "before_private":before_priv,"before_working_set":before_ws,
             "after_cold_private":cold_priv,"after_cold_working_set":cold_ws,
@@ -126,6 +129,45 @@ fn run_bench(data:&Path,id:&str,short_path:&str,long_path:&str,ranking:u32){
         },
         "short":short_metrics,"long":long_metrics
     }));
+}
+fn run_startup(data:&Path,id:&str,ranking:u32,decode_warmup:bool) {
+    struct Host(std::process::Child);
+    impl Drop for Host {fn drop(&mut self){let _=self.0.kill();let _=self.0.wait();}}
+    let started=Instant::now();
+    let mut host=Host(std::process::Command::new(data.parent().unwrap().join("tools/shanjie-core.exe"))
+        .arg(if decode_warmup {"--serve-decode-probe"} else {"--serve"}).spawn().unwrap());
+    loop {
+        if let Ok(reply)=broker::control(data,false) {assert_eq!(reply.pid,host.0.id());break;}
+        assert!(host.0.try_wait().unwrap().is_none(),"probe host exited before ready");
+        assert!(started.elapsed()<Duration::from_secs(30),"resident ready timeout");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let ready_ms=started.elapsed().as_secs_f64()*1000.0;
+    let host_memory=|| {
+        let mut m=PROCESS_MEMORY_COUNTERS_EX::default();m.cb=std::mem::size_of_val(&m) as u32;
+        unsafe {GetProcessMemoryInfo(windows::Win32::Foundation::HANDLE(host.0.as_raw_handle()),&mut m as *mut _ as *mut PROCESS_MEMORY_COUNTERS,m.cb).unwrap();}
+        m
+    };
+    let ready=host_memory();
+    let config=Config{model:id.into(),ranking,right:true,prediction:false,..Config::default()};
+    let mut client=broker::Client::open(data,config,None).unwrap();
+    let send=|client:&mut broker::Client,ch:char| client.perform(Op::Key{kind:1,ch:ch as u32,modifiers:0,latin:None}).unwrap();
+    let first=Instant::now();send(&mut client,'s');let first_key_ms=first.elapsed().as_secs_f64()*1000.0;
+    let mut subsequent=Vec::new();let first_decode=Instant::now();
+    for ch in "u3".chars() {let t=Instant::now();send(&mut client,ch);subsequent.push(t.elapsed().as_nanos() as u64);}
+    let first_syllable_tail_ms=first_decode.elapsed().as_secs_f64()*1000.0;
+    for ch in "cl3su3cl3su3cl3".chars() {let t=Instant::now();send(&mut client,ch);subsequent.push(t.elapsed().as_nanos() as u64);}
+    let reset=client.perform(Op::Reset(true)).unwrap();assert!(reset.preedit.is_empty()&&reset.candidates.is_empty()&&!reset.rerank);
+    let final_memory=host_memory();
+    broker::control(data,true).unwrap();
+    // Metadata inspection happens after host memory collection, in this separate process.
+    let settings=engine(data,id,ranking).benchmark_settings();
+    let mib=|n:usize|n as f64/1048576.0;
+    println!("{}",json!({"decode_warmup":decode_warmup,"warmup_keys":"su3cl3su3cl3su3","warm_state_clean":true,"fusion":settings,
+        "ready_ms":ready_ms,"ready_definition":"spawn to first successful status after resident ready event, including polling/IPC","first_key_ms":first_key_ms,"first_syllable_tail_ms":first_syllable_tail_ms,
+        "timing_scope":"resident IPC keys","memory_scope":"resident host only; metadata/hash verifier excluded",
+        "subsequent_p50_ms":percentile_ms(&mut subsequent,50),"subsequent_p95_ms":percentile_ms(&mut subsequent,95),
+        "ready_private_mib":mib(ready.PrivateUsage),"ready_working_set_mib":mib(ready.WorkingSetSize),"peak_working_set_mib":mib(final_memory.PeakWorkingSetSize),"peak_pagefile_mib":mib(final_memory.PeakPagefileUsage)}));
 }
 fn main(){
     let result=std::panic::catch_unwind(run);
@@ -193,6 +235,8 @@ fn run(){
             if !builtin {result["mapped_equivalent"]=true.into();result["source_and_side_pairs_checked"]=true.into();}
             println!("{}",result);
         }
+    } else if args[1]=="bench-startup" {
+        run_startup(data,id,args[5].parse().unwrap(),args[6]=="decode");
     } else if args[1]=="bench" {
         assert!(args.len()>=7,"bench expects <models_root> <id> <data> <short_rows> <long_rows> [ranking]");
         let ranking=args.get(7).and_then(|s|s.parse::<u32>().ok()).unwrap_or(0);

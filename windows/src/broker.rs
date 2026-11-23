@@ -467,6 +467,14 @@ pub fn control(data: &Path, stop: bool) -> io::Result<Reply> {
     pipe.receive(deadline)
 }
 pub fn serve(data: &Path) -> io::Result<()> {
+    serve_inner(data, false)
+}
+/// Explicit isolated experiment; never a profile setting or production startup default.
+pub fn serve_preload_probe(data: &Path, decode: bool) -> io::Result<()> {
+    assert_eq!(std::env::var("SHANJIE_TEST_PROFILE").as_deref(), Ok("1"));
+    serve_inner(data, decode)
+}
+fn serve_inner(data: &Path, decode: bool) -> io::Result<()> {
     let endpoint = endpoint(data)?;
     use windows::{
         core::PCWSTR,
@@ -558,8 +566,18 @@ pub fn serve(data: &Path) -> io::Result<()> {
     let layout = crate::installation::layout(keyboard, 0, crate::installation::available());
     // The shared resources only: learning stays closed in the warm engine.
     let config = Config { learning: false, ..Config::from_profile(&p, layout) };
-    let warm = Engine::open_local(data, &config)
+    let mut warm = Engine::open_local(data, &config)
         .ok_or_else(|| io::Error::other("Unable to preload core resources"))?;
+    if decode {
+        for ch in "su3cl3su3cl3su3".chars() {
+            warm.key(shanjie_core::ffi::ShanjieKey {kind:1,ch:ch as u32,modifiers:0})
+                .ok_or_else(||io::Error::other("Decode warmup failed"))?;
+        }
+        warm.reset(true).ok_or_else(||io::Error::other("Warmup reset failed"))?;
+    }
+    if std::env::var("SHANJIE_TEST_PROFILE").as_deref() == Ok("1") {
+        assert!(warm.benchmark_idle(), "preload left composition, context, learning or rerank work");
+    }
     let _warm = warm; // Keep resources resident even with no input clients.
     crate::word_helper::start_resident(data);
     unsafe { windows::Win32::System::Threading::SetEvent(warmed) }.map_err(|e| io::Error::other(e.to_string()))?;

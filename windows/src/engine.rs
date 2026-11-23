@@ -569,6 +569,14 @@ impl Engine {
         !self.attempt.is_empty() || self.failure.is_some_and(|f| f != Failure::Failed)
     }
     pub fn privacy_allowed(&self) -> bool { self.privacy_allowed }
+    /// Local maintenance tools only; no snapshot text or learning records leave the engine.
+    pub fn benchmark_settings(&self) -> serde_json::Value {
+        let (sha, colloquial, cells, levels) = unsafe { windows_benchmark_settings(&*self.handle) }.expect("semantic model loaded");
+        serde_json::json!({"tinylm_sha256":sha,"colloquial_enabled":colloquial,"cells":cells,"levels":levels,"strength":"standard"})
+    }
+    pub fn benchmark_idle(&self) -> bool {
+        (unsafe { windows_benchmark_idle(&*self.handle) }) && !self.last.rerank && self.last.preedit.is_empty()
+    }
     pub fn set_privacy_allowed(&mut self, allowed: bool) -> Option<()> {
         if allowed != self.privacy_allowed { self.perform(crate::broker::Op::Privacy(allowed))?; }
         Some(())

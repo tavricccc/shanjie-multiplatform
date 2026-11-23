@@ -4,6 +4,26 @@ use std::sync::{Mutex, OnceLock};
 static WINDOWS_LEX_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+impl Engine {
+    // Read the very same pairing decision and cells used when creating a job.
+    pub fn windows_benchmark_settings(&self) -> Option<(String, bool, [(f64, f64, f64); 3], u32)> {
+        let model = self.tinylm.as_ref()?;
+        let colloquial = self.colloquial.is_some() && colloquial::applies(self.profile, model);
+        let cells = [RerankLevel::Conservative, RerankLevel::Standard, RerankLevel::Aggressive]
+            .map(|level| if colloquial { colloquial::cell(level) } else { model.params(self.profile, level) });
+        Some((model.file_sha256().to_owned(), colloquial, cells, self.rerank_levels()))
+    }
+
+    pub fn windows_benchmark_idle(&self) -> bool {
+        self.syls.is_empty() && self.pend.iter().all(Option::is_none) && self.run.is_empty()
+            && self.mixed_raw.is_empty() && self.pending_literal.is_empty() && self.drun.is_none()
+            && self.cands.is_none() && self.pred.is_empty() && self.fixed.is_empty()
+            && self.left.is_empty() && self.left_full.is_empty() && !self.left_cut && !self.left_fresh && self.recur.len() == 0
+            && self.rerank_job.is_none() && self.learner.records().is_empty()
+            && self.windows_learning_prefix.is_none()
+    }
+}
+
 #[cfg(test)]
 mod windows_pack_cache_tests {
     use super::*;

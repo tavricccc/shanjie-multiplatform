@@ -15,6 +15,7 @@ fn main() {
         }),
         Some("--stop") => broker::control(&data, true).map(|_| ()),
         Some("--serve") => shanjie_windows::wer::protect_host().and_then(|_| broker::serve(&data)),
+        Some("--serve-decode-probe") => shanjie_windows::wer::protect_host().and_then(|_| broker::serve_preload_probe(&data, true)),
         _ => Err(std::io::Error::other("Use --serve, --status or --stop")),
     };
     if let Err(e) = result {
