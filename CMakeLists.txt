@@ -149,7 +149,7 @@ set_tests_properties(full.core-suite PROPERTIES LABELS "full;core" RESOURCE_LOCK
 set_tests_properties(full.core-suite PROPERTIES TIMEOUT 3600)
 shanjie_set_cost(full.core-suite 485)
 shanjie_case(full.core.rowstats core-rowstats)
-set_tests_properties(full.core.rowstats PROPERTIES LABELS "full;core;rowstats" RESOURCE_LOCK "core-build;model-runtime-0;model-runtime-1" FIXTURES_REQUIRED CoreOverlay TIMEOUT 3600 PROCESSORS 4)
+set_tests_properties(full.core.rowstats PROPERTIES LABELS "full;rowstats" RESOURCE_LOCK "core-build;model-runtime-0;model-runtime-1" FIXTURES_REQUIRED CoreOverlay TIMEOUT 3600 PROCESSORS 4)
 shanjie_set_cost(full.core.rowstats 460)
 shanjie_case(full.mixed-regression.x64 mixed-regression -Architecture x64)
 set_tests_properties(full.mixed-regression.x64 PROPERTIES LABELS "full;rust;models" RESOURCE_LOCK "core-build;model-runtime-0;model-runtime-1;cargo-windows-x64" FIXTURES_REQUIRED CoreOverlay)

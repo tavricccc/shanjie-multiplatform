@@ -8,6 +8,8 @@
 
 原始上游與 shipping overlay 的 CLI／rowstats 以相同 judge、模型、profile 及詞包逐 byte 比對；ACG＋IT 與本 fork 四詞包配置分開比較。模型效能工具分開固定核心換模型、前後版各自核心與配套，以及解碼預熱實驗；hash 驗證不在量測程序內執行，報告實際融合與三檔參數，不強制配對。首次開啟指新程序，OS 檔案快取未清除。
 
+G05 依 CLI／prepared core 實際依賴以 `rowstats` label 選測，未加入 FAST／固定 CI；單純 FFI adapter 不選 CLI 矩陣。FULL、beta／正式 RELEASE 與手動 release verify 仍完整執行，`-CiSafe` 不排除。獨立 raw／overlay workspace 可重用內容驗證的來源及 Cargo 編譯產物，不重用 G05 斷言結果；負向控制只改輸出副本。歷史模型比較與解碼預熱不自動綁定每次發版。
+
 Windows 設定程式以未封裝桌面身分執行。從帶有套件身分的宿主啟動時，入口會用 Windows 桌面程序啟動政策重新啟動自身，保留參數與結束碼，避免 WinUI 將宿主的 PRI 當成善解資源；只影響這次程序啟動。一般啟動失敗會將例外堆疊、HRESULT 與資源位置寫入使用者 `Shanjie/Logs`，對話框顯示日誌位置，不記錄詞典、學習或輸入內容。
 
 模型清單與附件優先讀取官方倉庫，讀取失敗才切換鏡像；本機驗證同時接受原上游與鏡像的合法收據，保留以來源資訊計算的配套 ID，不改寫舊收據。原鍵混打直接插入標點時保留畫面上已有的純數字段，包括尚未形成小數的 `1%`。

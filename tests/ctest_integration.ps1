@@ -239,6 +239,24 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $uiPolicy=Select-VerificationPlan @('ui/MainWindow.xaml.cs')
     $uiSelection=Get-SelectedTests $inventory @($uiPolicy.Labels) 'windows-x64'
     Check ('release.ui.learning-health' -in $uiSelection.Selected.name) 'UI selection exercises actual resident failure and recovery in WinUI'
+    foreach($path in 'platform/input_windows.rs','scripts/prepare-lm.ps1','scripts/verify-rowstats.ps1','UPSTREAM.json','MODEL-SOURCES.json','data/packs/example.tsv','profiles/windows.ini','upstream/shanjie'){
+        $policy=Select-VerificationPlan @($path)
+        $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        Check ('full.core.rowstats' -in $selected.Selected.name) "$path selects the independent CLI matrix"
+    }
+    foreach($path in 'platform/input_windows_ffi.rs','windows/src/candidate.rs','windows/src/installer.rs','ui/MainWindow.xaml.cs'){
+        $policy=Select-VerificationPlan @($path)
+        $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        Check ('full.core.rowstats' -notin $selected.Selected.name) "$path avoids unrelated CLI work"
+    }
+    foreach($testLevel in 'CI','FAST'){
+        $selected=Get-SelectedTests $inventory @($(if($testLevel -eq 'CI'){'ci'}else{'fast'})) 'windows-x64'
+        Check ($selected.Selected.Count -eq 5 -and 'full.core.rowstats' -notin $selected.Selected.name) "$testLevel remains a five-case baseline"
+    }
+    $CiSafe=$true
+    $selected=Get-SelectedTests $inventory @('full','release') 'windows-x64'
+    Check ('full.core.rowstats' -in $selected.Selected.name) 'RELEASE CiSafe still executes the CLI matrix'
+    $CiSafe=$false
     $costByName=@{}
     foreach($item in $inventory.tests){
         $costProp=$item.properties | Where-Object name -eq 'COST' | Select-Object -First 1
