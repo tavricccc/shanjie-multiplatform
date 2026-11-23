@@ -86,6 +86,42 @@ class Contract(unittest.TestCase):
         self.assertEqual(semantic["requires_assets"],sorted([main,kn]),"the small model needs its model and the KN it was tuned on")
         self.assertIn("colloquial.sjlm1",complete[0]["required_capabilities"])
         self.assertTrue(all(any(a["role"]=="bigram" for a in m["assets"]) for m in plan["candidates"]),"常談 is never a main model")
+    def test_discovery_and_validation_support_sjtl5_and_sjtl6_with_kn_pairing(self):
+        main="1"*64;kn="3"*64
+        def head(magic,at=(),extra=b"",pad=256):
+            b=bytearray(pad);b[:8]=magic.encode()
+            for offset,sha in at:b[offset:offset+32]=bytes.fromhex(sha)
+            if extra:b[244:244+len(extra)]=extra
+            return bytes(b)
+        for magic,cap,extra in [
+            ("SJTL0005","semantic.sjtl5",(62).to_bytes(4,"little")),
+            ("SJTL0006","semantic.sjtl6",(62).to_bytes(4,"little")+(1).to_bytes(4,"little")+(4).to_bytes(4,"little")),
+        ]:
+            files={"bigram.sjlm":(main,head("SJLM0001")),"kn.sjkn":(kn,head("SJKN0002",[(12,main)])),
+                   "tinylm.sjtl":("6"*64,head(magic,[(68,main),(212,kn)],extra)),"colloquial.sjlm":("7"*64,head("SJLM0001"))}
+            rows=[{"id":i,"tag_name":f"sj-{i}","prerelease":False,"draft":False,"assets":[
+                {"id":100+i,"name":name,"size":len(files[name][1]),"digest":"sha256:"+files[name][0],
+                 "browser_download_url":f"https://github.com/{c.UPSTREAM}/releases/download/sj-{i}/{name}"}]}
+                for i,name in enumerate(["bigram.sjlm","kn.sjkn","tinylm.sjtl","colloquial.sjlm"])]
+            sources={"format":2,"builtin":{"assets":[{"role":r,"sha256":files[f][0]} for r,f in [("bigram","bigram.sjlm"),("smoothing","kn.sjkn"),("semantic","tinylm.sjtl"),("colloquial","colloquial.sjlm")]]}}
+            with fixture() as tmp:
+                out=pathlib.Path(tmp)
+                def download(a,cache):
+                    path=out/a["name"];path.write_bytes(files[a["name"]][1]);return path
+                real_read=c.read
+                with patch.object(c,"releases",return_value=rows),patch.object(c,"previous",return_value=(None,{"format":2,"models":[]},{})),\
+                     patch.object(c,"download",side_effect=download),patch.object(c,"read",side_effect=lambda p:sources if str(p).endswith("MODEL-SOURCES.json") else real_read(p)):
+                    c.discover(out)
+                plan=c.read(out/"plan.json")
+            complete=[m for m in plan["candidates"] if len(m["assets"])==4]
+            self.assertEqual(len(complete),1,f"{magic} should assemble one complete bundle")
+            m=complete[0]
+            semantic=next(a for a in m["assets"] if a["role"]=="semantic")
+            self.assertEqual(semantic["format_magic"],magic)
+            self.assertEqual(semantic["requires_assets"],sorted([main,kn]),f"{magic} must record KN pairing from offset 212..244")
+            self.assertIn(cap,m["required_capabilities"])
+            m["compatibility"]=[{"target":"windows-x64","profile_id":c.PROFILE,"source_commit":"1"*40,"state":"usable","checked_at":"2026-11-23T00:00:00Z","report":"reports/"+"b"*64+".json"}]
+            c.validate(self.catalog(m))
     def test_earlier_entries_the_contract_now_refuses_are_not_carried_over(self):
         good=self.bundle();old=self.bundle()
         # An older generator published 常談 alone as a main model; that entry must not block a new list.
