@@ -159,6 +159,10 @@ impl Engine {
         let available = (start..self.syls.len()).take_while(|&i| !self.is_punct(i)).count();
         let mut seen: HashSet<String> = rows.iter().map(|p| p.word.clone()).collect();
         let mut list: Vec<_> = rows.iter().map(|p| (p.word.clone(), p.reading.len())).collect();
+        if self.pend.iter().any(Option::is_some) {
+            self.variant_move(&mut list, &mut rows, true);
+            return (list, HashMap::new(), rows);
+        }
         let today = if self.learner.has_new_words() { self.today() } else { 0 };
         for length in (1..=self.lex.max_len.max(NEWWORD_MAX).min(available)).rev() {
             let key = &self.syls[start..start + length];
@@ -322,6 +326,18 @@ mod windows_history_candidates {
         assert!(c.list.iter().any(|(w, _)| w == "好"));
         assert_eq!(c.list.last().map(|x| x.0.as_str()), Some("823"));
         assert!(!e.learner.records().iter().any(|r| r.reading == reading && r.word == "好嗎"));
+    }
+
+    #[test]
+    fn unfinished_right_syllable_keeps_only_the_prediction_rows_and_their_span() {
+        let mut e=engine(true);
+        e.key(Key::ch('a',0)).unwrap(); // unfinished ㄇ after 你好
+        e.pred=vec![Pred{word:"好嗎".into(),reading:vec!["ㄏㄠˇ".into(),"ㄇㄚ˙".into()],start:1,key:"前文".into(),weight:2.0}];
+        let opened=e.key(Key::new(KeyKind::Down)).unwrap();
+        assert_eq!(opened.candidates,vec!["好嗎"]);
+        assert_eq!(e.pick(0).unwrap().unwrap().preedit,"你好嗎");
+        let fixed=e.fixed.iter().find(|f|f.word=="好嗎").unwrap();
+        assert_eq!((fixed.start,fixed.end),(1,3));assert_eq!(fixed.key.as_deref(),Some("前文"));
     }
 
     #[test]
