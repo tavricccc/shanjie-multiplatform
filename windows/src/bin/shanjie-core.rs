@@ -14,7 +14,7 @@ fn main() {
             Ok(())
         }),
         Some("--stop") => broker::control(&data, true).map(|_| ()),
-        Some("--serve") => broker::serve(&data),
+        Some("--serve") => shanjie_windows::wer::protect_host().and_then(|_| broker::serve(&data)),
         _ => Err(std::io::Error::other("Use --serve, --status or --stop")),
     };
     if let Err(e) = result {
