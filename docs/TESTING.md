@@ -1,5 +1,13 @@
 # Windows 驗收流程
 
+本機重型 `full.core.rowstats` 比對固定上游與 prepared overlay 的實際 CLI；chat／formal 各跑 dev302、user-typing、user-reported，先對齊 ACG＋IT，再分開驗證本 fork 的 ACG＋IT＋beauty＋meme。保留上游 judge／golden；負向控制改一 byte，留下首次差異。這是 reading-based 解碼差分，英文按鍵及 TSF UI 仍由 Windows harness 驗證；CI 集合不加入此重型案例。
+
+`full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 以 context 關閉的控制 fixture 扣除 TSF 自身的 text-store 讀取，再驗證 private／password／PIN 沒有額外前文讀取或學習寫入。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
+
+`measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。
+
+`-Comparison DecodeWarmup` 在相同配套與隔離 profile 下交替啟動資源預載／解碼預熱的 resident host，記錄啟動到 ready 後首個成功 status（含輪詢／IPC）、首鍵、首音節尾端、後續延遲及 host 自身記憶體。實驗入口只接受測試身分；普通啟動維持資源預載。host 檢查 reset 後沒有組字、候選、前文、學習記錄／前綴及 rerank job；metadata／hash 程序的記憶體不算入 host 峰值。
+
 Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Cargo 編譯和執行。Visual Studio 2026 的 x64、x86 Preset 使用不同 build 目錄與產物，不能共用架構相異的 harness。
 
 ## 常用指令
