@@ -1248,7 +1248,7 @@ impl ITfTextEditSink_Impl for Service_Impl {
                 return Ok(());
             }
             let record=record.ok()?;
-            self.data.update_privacy(context.ok()?, cookie)?;
+            if let Some(context) = context.as_ref() { self.data.update_privacy(context, cookie)?; }
             let selection_changed=record.GetSelectionStatus()?.as_bool();
             self.data.diagnostic("edit.selection_changed",context.as_ref(),None,Some(selection_changed as i32));
             let word_open=self.data.word_popup.borrow().as_ref().is_some_and(|p|p.active())
