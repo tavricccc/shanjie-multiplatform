@@ -112,8 +112,19 @@ pub extern "C" fn sj_clear_learning() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn sj_learning_status(data: *const c_char) -> i32 {
     if data.is_null() { return -1; }
-    crate::broker::control(Path::new(text(data)), false)
+    let Ok(data) = CStr::from_ptr(data).to_str() else { return -1; };
+    crate::broker::control(Path::new(data), false)
         .map_or(-1, |r| i32::from(r.learning_unavailable))
+}
+#[cfg(test)]
+mod learning_status_tests {
+    #[test]
+    fn unavailable_status_arguments_do_not_cross_the_c_boundary_as_panics() {
+        unsafe {
+            assert_eq!(super::sj_learning_status(std::ptr::null()),-1);
+            assert_eq!(super::sj_learning_status(b"\xff\0".as_ptr().cast()),-1);
+        }
+    }
 }
 #[no_mangle]
 pub extern "C" fn sj_installed_keyboards() -> u32 {

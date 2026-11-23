@@ -130,10 +130,22 @@ fn key(ch: char) -> Op {
     }
 }
 
-pub fn learning_storage_status(data: &Path, route: &str) {
+pub fn learning_storage_status(data: &Path, route: &str, verify_ui: bool) {
     use std::os::windows::fs::OpenOptionsExt;
     let cfg = config(true);
     let mut e = if route == "local" { Engine::open_local(data, &cfg) } else { Engine::open(data, &cfg) }.unwrap();
+    let check_ui=|expected:i32| {
+        if !verify_ui {return;}
+        use std::os::windows::process::CommandExt;
+        let output=crate::profile::folder().join(format!("learning-health-ui-{expected}"));
+        std::fs::create_dir_all(&output).unwrap();
+        let status=std::process::Command::new(data.parent().unwrap().join("ui/Shanjie.UI.exe"))
+            .args(["--verify-learning-health",output.to_str().unwrap(),&expected.to_string()])
+            .env("SHANJIE_TEST_ROOT",crate::profile::folder().parent().unwrap()).env("SHANJIE_CORE_LOCAL","1")
+            .creation_flags(0x08000000).status().unwrap();
+        assert!(status.success());
+        assert_eq!(std::fs::read_to_string(output.join("result.txt")).unwrap(),"PASS","WinUI must display the actual resident learning state");
+    };
     e.perform(Op::Options(crate::profile::load(&crate::profile::path()).unwrap().input_options())).unwrap();
     let select = |e: &mut Engine| {
         e.reset(true).unwrap();
@@ -158,9 +170,11 @@ pub fn learning_storage_status(data: &Path, route: &str) {
     let transmitted: Snapshot = serde_json::from_str(&serde_json::to_string(&failed).unwrap()).unwrap();
     assert!(transmitted.learning_unavailable);
     if route == "pipe" { assert!(control(data, false).unwrap().learning_unavailable); }
+    check_ui(1);
     drop(lock);
     assert!(!select(&mut e).learning_unavailable, "successful retry clears core status");
     if route == "pipe" { assert!(!control(data, false).unwrap().learning_unavailable); }
+    check_ui(0);
     crate::profile::clear_learning().unwrap();
     assert!(!select(&mut e).learning_unavailable, "peer epoch remains usable after clear");
     let mut off = Engine::open_local(data, &config(false)).unwrap();

@@ -4,6 +4,19 @@ using Windows.Graphics;
 namespace Shanjie_UI.Verification;
 internal static class ReliabilityVerifier
 {
+    public static async Task LearningHealth(MainWindow settings, string output, int expected)
+    {
+        settings.AppWindow.Move(new PointInt32(-12000,-12000)); settings.AppWindow.Show(false);
+        await Task.Delay(150); settings.ShowDictionary();
+        bool dirty=settings.Vm.HasChanges;
+        int actual=await settings.RefreshLearningHealth();
+        string message=settings.LearningHealthForVerification;
+        if(actual!=expected || string.IsNullOrWhiteSpace(message)) throw new InvalidDataException($"Learning health did not reach WinUI: expected {expected}, got {actual}");
+        if(message.Contains("無法儲存")!=(expected==1)) throw new InvalidDataException("Learning health message disagrees with the resident state");
+        if(settings.Vm.HasChanges!=dirty) throw new InvalidDataException("Reading storage health modified settings");
+        File.WriteAllText(Path.Combine(output,"checks.json"),System.Text.Json.JsonSerializer.Serialize(new {expected,actual,message,settings_unchanged=true}));
+        settings.Close();
+    }
     public static async Task Run(MainWindow settings, string output)
     {
         settings.AppWindow.Move(new PointInt32(-12000, -12000)); settings.AppWindow.Show(false); await Task.Delay(300);

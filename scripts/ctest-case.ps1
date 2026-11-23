@@ -33,7 +33,7 @@ try {
         $snapshot=Get-ReleaseSnapshot $root $env:SHANJIE_RELEASE_SNAPSHOT_ID $env:SHANJIE_RELEASE_SNAPSHOT_SHA256
         $runtimeRoot=$snapshot.runtime_root
         if($PayloadRoot){$PayloadRoot="$PayloadRoot-$($snapshot.id)"}
-        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models'){
+        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models' -or ($CaseId -eq 'core-recovery' -and $Scenario -eq 'learning-status-ui')){
             # WinUI temporarily changes installed.json; only a private fixture may
             # be mutable. Its DLL/tools/UI bytes are checked against the seal.
             $uiRuntimeRoot=Join-Path $resultRoot 'runtime'
@@ -131,7 +131,7 @@ try {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
                 & "$PSScriptRoot/verify-ui.ps1" @uiArguments -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
-            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -RuntimeRoot $runtimeRoot -ResultRoot (Join-Path $resultRoot 'fixture') }
+            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -RuntimeRoot $uiArguments.RuntimeRoot -ResultRoot (Join-Path $resultRoot 'fixture') }
             'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }
