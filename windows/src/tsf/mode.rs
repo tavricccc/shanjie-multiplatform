@@ -82,6 +82,9 @@ impl ITfLangBarItem_Impl for Button_Impl {
         Ok(())
     }
     fn GetTooltipString(&self) -> Result<BSTR> {
+        if self.owner.upgrade().is_some_and(|o| o.state.borrow().snapshot.learning_unavailable) {
+            return Ok("善解：選字學習暫時無法儲存；輸入仍可使用".into());
+        }
         Ok("善解：點一下切換中英；右鍵開啟設定".into())
     }
 }

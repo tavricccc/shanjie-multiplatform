@@ -122,13 +122,13 @@ impl Data {
             SetKeyboardState(&key.keyboard)?;
         }
         let _keyboard = Keyboard(previous);
-        let result = if key.toggle {
+        let result = self.update_privacy(&key.context, cookie).and_then(|_| if key.toggle {
             self.toggle_in_session(&key.context, cookie, !self.chinese()).map(|_| true)
         } else if let Some((index, _)) = key.pick.as_ref() {
             self.pick_at(&key.context, cookie, *index).map(|_| true)
         } else {
             self.key_down(&key.context, cookie, key.vk, key.flags)
-        };
+        });
         let written = self.application_written.get();
         self.state
             .borrow_mut()

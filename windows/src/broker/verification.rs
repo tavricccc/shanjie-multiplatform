@@ -129,6 +129,80 @@ fn key(ch: char) -> Op {
         latin: None,
     }
 }
+
+pub fn learning_storage_status(data: &Path, route: &str) {
+    use std::os::windows::fs::OpenOptionsExt;
+    let cfg = config(true);
+    let mut e = if route == "local" { Engine::open_local(data, &cfg) } else { Engine::open(data, &cfg) }.unwrap();
+    e.perform(Op::Options(crate::profile::load(&crate::profile::path()).unwrap().input_options())).unwrap();
+    let select = |e: &mut Engine| {
+        e.reset(true).unwrap();
+        e.perform(Op::Context("他們".into())).unwrap();
+        let mut shown = Snapshot::default();
+        for ch in "su3".chars() { shown = e.perform(key(ch)).unwrap(); }
+        let list = e.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap();
+        let i = list.candidates.iter().position(|w| w != &shown.preedit && w.chars().all(|c| ('\u{3400}'..='\u{9fff}').contains(&c))).unwrap();
+        e.perform(Op::Pick(i as u32)).unwrap();
+        e.reset(false).unwrap()
+    };
+    assert!(!select(&mut e).learning_unavailable);
+    assert!(!select(&mut e).learning_unavailable); // first rewrite, then append
+    let file = crate::profile::folder().join("learning.tsv");
+    let bytes = std::fs::read(&file).unwrap();
+    // Sharing permits reads, but blocks both append and replacement of the file.
+    let lock = std::fs::OpenOptions::new().read(true).share_mode(1).open(&file).unwrap();
+    let failed = select(&mut e);
+    assert!(!failed.commit.is_empty() && failed.preedit.is_empty(), "saving cannot swallow text");
+    assert!(failed.learning_unavailable, "append and fallback rewrite both failed");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    let transmitted: Snapshot = serde_json::from_str(&serde_json::to_string(&failed).unwrap()).unwrap();
+    assert!(transmitted.learning_unavailable);
+    if route == "pipe" { assert!(control(data, false).unwrap().learning_unavailable); }
+    drop(lock);
+    assert!(!select(&mut e).learning_unavailable, "successful retry clears core status");
+    if route == "pipe" { assert!(!control(data, false).unwrap().learning_unavailable); }
+    crate::profile::clear_learning().unwrap();
+    assert!(!select(&mut e).learning_unavailable, "peer epoch remains usable after clear");
+    let mut off = Engine::open_local(data, &config(false)).unwrap();
+    assert!(!select(&mut off).learning_unavailable);
+    println!("PASS {route} learning failure, visible snapshot, successful retry, off and clear epoch");
+}
+
+pub fn privacy_gate(data: &Path, route: &str) {
+    let cfg = config(true);
+    let mut e = if route == "local" { Engine::open_local(data, &cfg) } else { Engine::open(data, &cfg) }.unwrap();
+    e.perform(Op::Options(crate::profile::load(&crate::profile::path()).unwrap().input_options())).unwrap();
+    e.perform(Op::Context("隔離測試前文".into())).unwrap();
+    for ch in "su3".chars() { e.perform(key(ch)).unwrap(); }
+    let c = e.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap();
+    assert!(!c.candidates.is_empty());
+    e.perform(Op::Pick(1)).unwrap();
+    let file = crate::profile::folder().join("learning.tsv");
+    let before = std::fs::read(&file).ok();
+    e.set_privacy_allowed(false).unwrap();
+    assert!(!e.privacy_allowed());
+    e.perform(Op::Context("此內容不能送入解碼前文".into())).unwrap();
+    let committed = e.reset(false).unwrap();
+    assert!(!committed.commit.is_empty() && !committed.learning_unavailable);
+    assert_eq!(std::fs::read(&file).ok(), before, "pending selection was not learned");
+    if route == "local" { assert!(e.replay(&[Op::Privacy(false), key('s'), key('u'), key('3')])); }
+    e.reset(false).unwrap();
+    assert_eq!(std::fs::read(&file).ok(), before);
+    e.set_privacy_allowed(true).unwrap();
+    e.perform(Op::Context("普通前文".into())).unwrap();
+    for ch in "su3".chars() { e.perform(key(ch)).unwrap(); }
+    e.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap();
+    e.perform(Op::Pick(1)).unwrap();
+    e.reset(false).unwrap();
+    assert_ne!(std::fs::read(&file).ok(), before, "learning resumes after a normal document starts");
+    let stable = std::fs::read(&file).unwrap();
+    let mut off = Engine::open_local(data, &config(false)).unwrap();
+    off.set_privacy_allowed(false).unwrap(); off.set_privacy_allowed(true).unwrap();
+    for ch in "su3".chars() { off.perform(key(ch)).unwrap(); }
+    off.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap(); off.perform(Op::Pick(1)).unwrap(); off.reset(false).unwrap();
+    assert_eq!(std::fs::read(file).unwrap(), stable, "privacy cannot enable a disabled user preference");
+    println!("PASS {route} privacy gate drops pending learning and context; resume and explicit off preserved");
+}
 pub fn request_fault(data: &Path) {
     let mode = std::env::var("SHANJIE_TEST_FAULT").unwrap();
     let mut client = Client::open(data, config(false), None).unwrap();

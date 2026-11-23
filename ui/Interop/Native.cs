@@ -16,6 +16,7 @@ internal static class Native
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_dictionary_save([MarshalAs(UnmanagedType.LPUTF8Str)] string content, [MarshalAs(UnmanagedType.LPUTF8Str)] string folder);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_profile_save_dictionary([MarshalAs(UnmanagedType.LPUTF8Str)] string profile, [MarshalAs(UnmanagedType.LPUTF8Str)] string draft, [MarshalAs(UnmanagedType.LPUTF8Str)] string baseline);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] [return: MarshalAs(UnmanagedType.I1)] internal static extern bool sj_clear_learning();
+    [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern int sj_learning_status([MarshalAs(UnmanagedType.LPUTF8Str)] string data);
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern uint sj_installed_keyboards();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] [return: MarshalAs(UnmanagedType.I1)] internal static extern bool sj_restart();
     [DllImport(Rust, CallingConvention = CallingConvention.Cdecl)] internal static extern nint sj_error();

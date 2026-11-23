@@ -17,6 +17,9 @@ pub unsafe extern "C" fn shanjie_windows_is_prediction_row(engine: *mut ShanjieE
     unsafe { (*engine).0.is_prediction_row() as u32 }
 }
 // Internal Rust query on the thread that owns the composition.
+pub fn windows_pause_learning(engine: &mut ShanjieEngine) {
+    engine.0.windows_pause_learning();
+}
 pub fn windows_active_segment(engine: &ShanjieEngine) -> Option<[u32; 2]> {
     engine.0.windows_active_segment()
 }

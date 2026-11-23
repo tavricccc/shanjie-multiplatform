@@ -184,7 +184,12 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 }
                 break;
             }
-            Request::Status => reply(None, None, true),
+            Request::Status => {
+                let mut r = reply(None, None, true);
+                r.learning_unavailable = sessions.lock().unwrap().values()
+                    .any(|state| state.lock().unwrap().engine.learning_unavailable());
+                r
+            }
             Request::RerankReady => {
                 let mut r = reply(None, None, attached.is_some());
                 r.rerank_ready = attached

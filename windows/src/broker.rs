@@ -220,6 +220,8 @@ pub struct Reply {
     pub word_result: Option<std::result::Result<String, String>>,
     #[serde(default)]
     pub rerank_ready: bool,
+    #[serde(default)]
+    pub learning_unavailable: bool,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -235,6 +237,7 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         profile: None,
         word_result: None,
         rerank_ready: false,
+        learning_unavailable: engine.is_some_and(Engine::learning_unavailable),
     }
 }
 fn warming_name(endpoint: &str) -> Vec<u16> {

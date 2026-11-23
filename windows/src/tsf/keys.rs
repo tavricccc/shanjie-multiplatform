@@ -585,7 +585,7 @@ impl Data {
                 self.state.borrow_mut().spacing_prev = None;
             }
             let spacing = p.flag("input", "cjk_spacing", false);
-            if !composing && (p.flag("input", "context", true) || spacing) {
+            if !composing && self.state.borrow().engine.privacy_allowed() && (p.flag("input", "context", true) || spacing) {
                 let value = (|| -> Result<String> {
                     let left = range(selection(context, cookie)?);
                     left.Collapse(cookie, TF_ANCHOR_START)?;

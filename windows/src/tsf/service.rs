@@ -505,6 +505,7 @@ impl Data {
         selected: bool,
     ) -> Result<()> {
         self.diagnostic("apply.enter",Some(context),None,None);
+        let learning_changed = self.state.borrow().snapshot.learning_unavailable != out.learning_unavailable;
         self.watch_rerank(out.rerank && !out.preedit.is_empty());
         #[cfg(feature="input-diagnostics")]
         if crate::input_diagnostics::enabled() {
@@ -663,6 +664,10 @@ impl Data {
                     super::trace(format_args!("candidate UI: {error}"));
                     candidates.close();
                 }
+            }
+            if learning_changed {
+                let button = self.state.borrow().button.clone();
+                if let Some(button) = button { mode::refresh(&button); }
             }
             Ok(())
         }

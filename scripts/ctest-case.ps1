@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','core-recovery','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
@@ -130,6 +130,7 @@ try {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
                 & "$PSScriptRoot/verify-ui.ps1" @uiArguments -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
+            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -ResultRoot (Join-Path $resultRoot 'fixture') }
             'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }

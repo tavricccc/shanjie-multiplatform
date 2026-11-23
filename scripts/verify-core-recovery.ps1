@@ -20,6 +20,7 @@ try {
   $target=if($arch -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
   $exe="$root/windows/target/$target/release/shanjie-reliability-check.exe"
   $checks=@(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('rerank','drop-reply'),@('rerank','before-apply'),@('rerank','after-apply'),@('rerank-unknown','drop-reply'),@('outstanding','drop-reply'),@('capacity',''))
+  foreach($check in 'learning-status','privacy'){if($check -in $Cases){$checks+=@(@($check,'local'),@($check,'pipe'))}}
   if('pack-switch' -in $Cases){$checks+=@(@('pack-switch','sync-local'),@('pack-switch','background-local'),@('pack-switch','sync-pipe'),@('pack-switch','background-pipe'))}
   foreach($case in $checks) {
    if($Cases -and $case[0] -notin $Cases){continue}
@@ -34,7 +35,7 @@ try {
    $env:SHANJIE_CORE_LOCAL=if($isPackSwitch -and $case[1] -like '*-local'){'1'}else{$null}
    $env:LOCALAPPDATA="$folder/profile";$env:SHANJIE_TEST_FAULT=if($isPackSwitch){$null}else{$case[1]};$env:SHANJIE_TEST_FAULT_OP=if($case[0] -like 'rerank*'){'rerank'}else{$null};$env:SHANJIE_TEST_FAULT_SEQUENCE=if($case[0] -eq 'ambiguous'){'8'}else{'5'}
    try {
-    $arguments=@("$root/dist/data",$case[0]);if($isPackSwitch){$arguments+=($case[1] -split '-')[0]}
+    $arguments=@("$root/dist/data",$case[0]);if($isPackSwitch){$arguments+=($case[1] -split '-')[0]}elseif($case[0] -in @('learning-status','privacy')){$arguments+=$case[1];$env:SHANJIE_TEST_FAULT=$null}
     $log=Invoke-Owned $exe $arguments
     Set-Content "$folder/result.log" $log -Encoding utf8NoBOM
     if($log -notmatch 'PASS '){throw "Missing verification result: $label"}

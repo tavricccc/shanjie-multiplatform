@@ -478,6 +478,10 @@ impl Host {
                 if !text.is_empty() { text.extend("  ".encode_utf16()); }
                 text.extend("空白：英文斷開".encode_utf16());
             }
+            if self.state.learning_unavailable {
+                if !text.is_empty() { text.extend("  ".encode_utf16()); }
+                text.extend("選字學習暫時無法儲存".encode_utf16());
+            }
             self.reading = None;
             self.reading_width = 0.0;
             self.reading_height = 0.0;

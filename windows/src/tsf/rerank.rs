@@ -52,6 +52,7 @@ impl Data {
             if data.rerank_ticket.get() != ticket || data.generation.get() != generation || current.as_ref() != Some(&context) {
                 return Ok(());
             }
+            data.update_privacy(&context, cookie)?;
             let snapshot = output(data.state.borrow_mut().engine.perform(Op::Rerank))?;
             let unchanged = {
                 let s = data.state.borrow();

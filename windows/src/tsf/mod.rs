@@ -7,6 +7,7 @@ mod focus_handoff;
 mod mode;
 mod modifiers;
 mod profile_refresh;
+mod privacy;
 mod recovery;
 mod retirement;
 mod rerank;

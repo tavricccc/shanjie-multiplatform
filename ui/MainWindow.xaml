@@ -234,6 +234,12 @@
                             <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
                             <controls:SettingRow Stacked="True"><Button Content="清除已儲存的選字學習" Click="ClearLearning"/></controls:SettingRow>
+                            <controls:SettingRow Stacked="True">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="LearningHealthText" Text="輸入時若無法儲存學習，候選窗會顯示提示。" TextWrapping="Wrap"/>
+                                    <Button Content="重新檢查儲存狀態" Click="RefreshLearningStatus"/>
+                                </StackPanel>
+                            </controls:SettingRow>
                             <controls:SettingRow Label="個人詞庫" Stacked="True"><TextBox x:Name="PersonalDictionaryEditor" AcceptsReturn="True" MinHeight="160" MaxHeight="300" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="每行填「注音 字詞」，例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後先提交組字再載入。"/>

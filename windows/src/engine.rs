@@ -124,6 +124,8 @@ pub struct Engine {
     epoch: String,
     learning_stamp: Option<(u64, u64)>,
     learning_loaded: bool,
+    privacy_allowed: bool,
+    replaying: bool,
     failure: Option<Failure>,
     attempt: Vec<(crate::broker::Op, Snapshot)>,
     attempt_cursor: Option<usize>,
@@ -147,6 +149,8 @@ impl Default for Engine {
             epoch: String::new(),
             learning_stamp: None,
             learning_loaded: false,
+            privacy_allowed: true,
+            replaying: false,
             failure: None,
             attempt: Vec::new(),
             attempt_cursor: None,
@@ -341,6 +345,7 @@ impl Engine {
         Some(out)
     }
     fn begin(&mut self, timeout: u32) -> bool {
+        if !self.privacy_allowed || self.replaying { return true; }
         unsafe {
             let Some(m) = self.mutex else {
                 return true;
@@ -390,6 +395,7 @@ impl Engine {
             .map(|m| (m.last_write_time(), m.file_size()))
     }
     fn end(&mut self) {
+        if !self.privacy_allowed || self.replaying { return; }
         if let Some(h) = self.mutex {
             // Capture our own writes while holding the same cross-process lock.
             // A peer write or clear is detected before the next operation.
@@ -446,6 +452,7 @@ impl Engine {
                     .collect(),
                 associated: false,
                 rerank: false,
+                learning_unavailable: self.learning_unavailable(),
             };
             shanjie_output_free(raw);
             self.last_rerank_ns = None;
@@ -515,7 +522,15 @@ impl Engine {
             }
         }
         self.failure = None;
-        let result = self.perform_uncached(op.clone());
+        let mut result = self.perform_uncached(op.clone());
+        if result.is_some() {
+            if let crate::broker::Op::Privacy(allowed) = &op { self.privacy_allowed = *allowed; }
+            if self.remote.is_some() {
+                self.last.learning_unavailable = result.as_ref().unwrap().learning_unavailable;
+            } else {
+                result.as_mut().unwrap().learning_unavailable = self.learning_unavailable();
+            }
+        }
         if let Some(remote) = self.remote.as_ref() {
             self.failure = remote.failure;
         }
@@ -531,6 +546,14 @@ impl Engine {
     pub fn failure(&self) -> Option<Failure> {
         self.failure
     }
+    pub fn learning_unavailable(&self) -> bool {
+        if !self.privacy_allowed { return false; }
+        if self.remote.is_some() { return self.last.learning_unavailable; }
+        let mut flags = 0;
+        self.mutex.is_some() && unsafe {
+            shanjie_engine_learning_status(self.handle, &mut flags) == 0 && flags & 1 != 0
+        }
+    }
     pub fn begin_attempt(&mut self) {
         self.attempt_cursor = Some(0);
         self.failure = None;
@@ -544,6 +567,11 @@ impl Engine {
     }
     pub fn recovery_pending(&self) -> bool {
         !self.attempt.is_empty() || self.failure.is_some_and(|f| f != Failure::Failed)
+    }
+    pub fn privacy_allowed(&self) -> bool { self.privacy_allowed }
+    pub fn set_privacy_allowed(&mut self, allowed: bool) -> Option<()> {
+        if allowed != self.privacy_allowed { self.perform(crate::broker::Op::Privacy(allowed))?; }
+        Some(())
     }
     fn perform_uncached(&mut self, op: crate::broker::Op) -> Option<Snapshot> {
         if let Some(remote) = self.remote.as_mut() {
@@ -613,9 +641,20 @@ impl Engine {
             Op::Cycle => self.operation(|h, o| unsafe { shanjie_windows_cycle_candidate(h, o) }),
             Op::Space => self.operation(|h, o| unsafe { shanjie_windows_insert_space(h, o) }),
             Op::Context(s) => {
-                let s = string(s)?;
+                let s = string(if self.privacy_allowed { s } else { String::new() })?;
                 (unsafe { shanjie_engine_set_left_context(self.handle, s.as_ptr()) } == 0)
                     .then(Snapshot::default)
+            }
+            Op::Privacy(allowed) => {
+                if !allowed {
+                    unsafe { windows_pause_learning(&mut *self.handle); }
+                    if let Some(runner) = &self.reranks { runner.0.lock().unwrap().discard(); }
+                } else {
+                    self.learning_loaded = false;
+                    unsafe { shanjie_engine_set_learning(self.handle, (self.mutex.is_some() && !self.replaying) as u32); }
+                }
+                self.privacy_allowed = allowed;
+                Some(Snapshot::default())
             }
             Op::Options(flags) => {
                 (unsafe { shanjie_windows_set_input_options(self.handle, flags) } == 0)
@@ -636,13 +675,14 @@ impl Engine {
     pub fn replay(&mut self, ops: &[crate::broker::Op]) -> bool {
         // Reconstruct only the uncommitted composition after a core restart.
         // Replay must never add the same learning record a second time.
-        let learning = self.mutex.is_some();
+        self.replaying = true;
         unsafe {
             shanjie_engine_set_learning(self.handle, 0);
         }
         let ok = ops.iter().all(|op| self.perform(op.clone()).is_some());
+        self.replaying = false;
         unsafe {
-            shanjie_engine_set_learning(self.handle, learning as u32);
+            shanjie_engine_set_learning(self.handle, (self.mutex.is_some() && self.privacy_allowed) as u32);
         }
         self.learning_loaded = false;
         ok

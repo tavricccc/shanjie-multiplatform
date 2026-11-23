@@ -26,6 +26,9 @@ pub struct Snapshot {
     /// The core is reranking this output in the background; `Op::Rerank` applies the result once it is ready.
     #[serde(default)]
     pub rerank: bool,
+    /// Last learning-file rewrite failed; input itself remains usable.
+    #[serde(default)]
+    pub learning_unavailable: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Failure {
@@ -144,6 +147,8 @@ pub enum Op {
     Cycle,
     Space,
     Context(String),
+    /// Per-document privacy gate. The user's learning preference remains unchanged.
+    Privacy(bool),
     Options(u32),
     Mixed(bool),
     Tolerance(bool),
@@ -156,6 +161,19 @@ pub enum Op {
 #[cfg(test)]
 mod pack_tests {
     use super::*;
+
+    #[test]
+    fn learning_health_is_backwards_compatible_and_crosses_json_without_text_changes() {
+        let state=Snapshot{learning_unavailable:true,commit:"隔離測試".into(),..Snapshot::default()};
+        let mut value=serde_json::to_value(&state).unwrap();
+        assert!(serde_json::from_value::<Snapshot>(value.clone()).unwrap().learning_unavailable);
+        value.as_object_mut().unwrap().remove("learning_unavailable");
+        let old=serde_json::from_value::<Snapshot>(value).unwrap();
+        assert!(!old.learning_unavailable);assert_eq!(old.commit,state.commit);
+        for allowed in [false,true] {
+            assert!(serde_json::from_str::<Op>(&serde_json::to_string(&Op::Privacy(allowed)).unwrap()).unwrap()==Op::Privacy(allowed));
+        }
+    }
 
     #[test]
     fn added_packs_default_on_and_keep_personal_opt_outs() {
