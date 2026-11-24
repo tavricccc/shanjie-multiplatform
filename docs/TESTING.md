@@ -1,11 +1,5 @@
 # Windows 驗收流程
 
-本機重型 `full.core.rowstats` 比對固定上游與 prepared overlay 的實際 CLI；chat／formal 各跑 dev302、user-typing、user-reported，先對齊 ACG＋IT，再分開驗證本 fork 的 ACG＋IT＋beauty＋meme。保留上游 judge／golden；負向控制改一 byte，留下首次差異。這是 reading-based 解碼差分，英文按鍵及 TSF UI 仍由 Windows harness 驗證；CI 集合不加入此重型案例。
-
-G05 使用專用 `rowstats` label；FAST／固定 PR CI 不選入，AFFECTED 依解碼實作、準備腳本、CLI／模型／詞包／profile 或真正未知影響選入，單純 FFI adapter、候選外觀及已界定的安裝程式變更不因此加入矩陣。x86 AFFECTED 的共用 CLI 差分只在 x64 跑一次。FULL／RELEASE 固定包含完整 12 組；release workflow 的 beta、正式版與手動 verify 都呼叫 RELEASE，`-CiSafe` 只排除需互動的 UI，沒有排除 G05。這項發布成本仍保留，不將排程 COST 當作實測時間。
-
-raw／overlay 各自保有獨立內容驗證的短路徑 workspace 及 Cargo 產物；相同輸入可重用來源與編譯快取，Judge2／golden、12 組差分仍每次實跑，沒有 G05 結果快取。fixture 僅移除 Unix-only replay 的 Cargo target，不改 eval／judge／golden 程式。負向控制只改輸出副本，不重跑模型。`result.json` 分列來源／模型準備、編譯、golden、差分、負向控制與總 wall-clock。Actions 目前不保存這組新的 workspace，不能把本機編譯重用收益直接算入 Runner。
-
 `full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 以 context 關閉的控制 fixture 扣除 TSF 自身的 text-store 讀取，再驗證 private／password／PIN 沒有額外前文讀取或學習寫入。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
 
 `measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。
@@ -79,13 +73,13 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 
 | 變更範例 | 上游自動選測 | 本版 CTest 計畫（含 fixture） |
 | --- | --- | --- |
-| `ui/` | Rust＋settings UI／native host | 13 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
+| `ui/` | Rust＋settings UI／native host | 16 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
 | 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 27 項，保留混打，無無關 interaction／UI |
 | submission harness | Rust＋提交 | 32 項 |
-| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 54 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
+| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 56 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
-| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 25 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 91 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 93 項 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 42 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 110 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 112 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
@@ -118,7 +112,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
 | `verify-english-keys.ps1` | 20 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言；加入上游兩種模式的 digit-navigation |
 | `verify-submission.ps1` | `full.submission.*`，含 `async-keys`、`rebuild-local`、`rebuild-pipe`、`segment`、`input-digits` | 保留提交、取消、焦點、忙碌、退休及原有數字組合；新增數字語境、第一聲、學習檔與詞典保留，並驗證延遲編輯鎖的輸入順序及組字詞段範圍 |
-| `verify-private-desktop.ps1` | 18 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
+| `verify-private-desktop.ps1` | 35 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
 | `verify-interaction.ps1`、`verify-mode.ps1` | `release.interaction.x64`、`release.mode.x64`、`release.mode.x86` | 隔離 profile 的引擎互動回歸、兩架構離屏模式列／圖示 smoke；不送出桌面輸入 |
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
@@ -129,6 +123,21 @@ FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查�
 `ctest --preset windows-x64 -R 'submission[.]async-keys' --output-on-failure` 可單跑編輯鎖回歸，x86 使用 `windows-x86` preset。每架構涵蓋標準／倚天搭配 Windows／善解互動。案例記錄外層 HRESULT、`phrSession`、非同步回呼次數、宿主收到的 Tab、候選選取與文件結果，並驗證前文查詢失敗後首個寫入回呼仍開始組字，失焦或停用後舊回呼不寫入。這些案例在私人桌面的 TSF 模擬宿主執行。
 
 ### 專用驗收與實際差集
+
+#### G05：CLI／rowstats 特殊測試
+
+`full.core.rowstats` 保留既有手動入口，分類為 `special;rowstats`；名稱的 `full` 前綴不代表屬於 FULL。用途是固定上游 raw 與 prepared Windows overlay 的 CLI 差分：兩側各 25 個 golden＋7 個 Judge2 斷言，chat／formal × 三資料集 × 兩種詞包配置共 12 組 byte 比對，以及輸出副本的一 byte 負向控制。英文按鍵、TSF、其他 OS／CPU 不由此案例證明。
+
+上游核心、CLI、rowstats、模型／詞包或相關 overlay 改動時，先評估並明確指定才執行。CI、FAST、AFFECTED（含未知影響擴 FULL）、FULL、Beta、正式 RELEASE 與 release workflow 手動 verify 均不自動選入；預設 CTest presets 也排除 `special`。Release 收據依 full／release labels 核對，不要求這個特殊案例，其他必要清冊及快照防護不變。
+
+已有對應核心、模型與資料後，手動執行：
+
+```powershell
+cmake --preset windows-x64
+ctest --test-dir build/cmake/windows-x64 -C Release -R '^full[.]core[.]rowstats$' --output-on-failure
+```
+
+手動命令明確指定案例並使用 `--test-dir`，不套用 preset 的特殊測試排除；加 `--show-only` 只列計畫，不是 PASS。本輪實跑 CTest **828.35 秒**：兩側編譯 15.18／17.25 秒、golden／Judge2 264.22／266.84 秒、差分 258.09 秒、負向控制 0.007 秒。這次來源／編譯未命中快取、未重用測試結果；保留獨立 workspace 及既有編譯快取，不新增結果快取。各段為實測 wall-clock，COST 只作手動排程估值；沒有同條件 workflow 基準，不換算成 Actions 整體增量。原始紀錄在 ignored `build/reports`；後續無直接影響的 TSF 修正不重跑本輪 G05。
 
 核對基準為上游 `4794ab3` 的 AGENTS「驗證：做多少」、ARCHITECTURE「驗證」、PERFORMANCE「重跑」、原 `verify-selection.ps1`／`verify-changed.ps1`，以及各入口實際呼叫的 harness。上游明確規定按鍵路徑／核心請求須額外量測、UI 變更須 UI 驗收；其餘七支工具沒有逐檔必跑表，只有 shared／Windows 邏輯須執行「相關 verify」的通則。以下依實際依賴提示審查範圍，不臆造七支一律必跑的規則。
 

@@ -8,7 +8,7 @@
 
 原始上游與 shipping overlay 的 CLI／rowstats 以相同 judge、模型、profile 及詞包逐 byte 比對；ACG＋IT 與本 fork 四詞包配置分開比較。模型效能工具分開固定核心換模型、前後版各自核心與配套，以及解碼預熱實驗；hash 驗證不在量測程序內執行，報告實際融合與三檔參數，不強制配對。首次開啟指新程序，OS 檔案快取未清除。
 
-G05 依 CLI／prepared core 實際依賴以 `rowstats` label 選測，未加入 FAST／固定 CI；單純 FFI adapter 不選 CLI 矩陣。FULL、beta／正式 RELEASE 與手動 release verify 仍完整執行，`-CiSafe` 不排除。獨立 raw／overlay workspace 可重用內容驗證的來源及 Cargo 編譯產物，不重用 G05 斷言結果；負向控制只改輸出副本。歷史模型比較與解碼預熱不自動綁定每次發版。
+G05 改列特殊測試，只在明確指定 `full.core.rowstats` 時執行；不屬 CI、FAST、AFFECTED、FULL、Beta／正式 RELEASE 或手動 release verify 的預設集合，Release 收據也不要求它。本輪完整案例已實跑 828.35 秒；保留獨立 raw／overlay 與負向控制，無直接影響的 TSF 修正不重跑。歷史模型比較與解碼預熱仍不自動綁定每次發版。
 
 Windows 設定程式以未封裝桌面身分執行。從帶有套件身分的宿主啟動時，入口會用 Windows 桌面程序啟動政策重新啟動自身，保留參數與結束碼，避免 WinUI 將宿主的 PRI 當成善解資源；只影響這次程序啟動。一般啟動失敗會將例外堆疊、HRESULT 與資源位置寫入使用者 `Shanjie/Logs`，對話框顯示日誌位置，不記錄詞典、學習或輸入內容。
 

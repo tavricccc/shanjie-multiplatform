@@ -2,6 +2,8 @@
 
 這份是唯一的工作規則；其他文件只描述目前的程式與待驗收項目。使用 PowerShell 7、繁體中文，遵循使用者的模組化、必要測試與介面 skill 要求。
 
+> 凡涉及編譯、測試、CTest、CI、FULL、RELEASE、測試分類或選測規則的工作，執行前必須先讀取目前工作樹的 `docs/TESTING.md`，確認適用的測試層級、特殊測試及排除條件。不得只憑既有記憶或先前對話決定測試範圍。執行前先列出選測計畫與依據，禁止未經確認便追加重型測試。
+
 ## 開始前
 
 - 先看開啟中的 issue；動到核心或上游前讀 [UPSTREAM-CHANGES.md](UPSTREAM-CHANGES.md) 與 `UPSTREAM.json`。架構與驗證指令見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
