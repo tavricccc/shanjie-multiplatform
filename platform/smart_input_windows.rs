@@ -269,8 +269,9 @@ mod windows_smart_tests {
             engine.set_windows_input_options(0);
             engine.set_mixed_input(!upstream);
             engine.set_upstream_english(upstream, false, true, true).unwrap();
+            let chatgpt = if upstream { "ChatGPT" } else { "Chatgpt" };
             for (prefix, suffix, expected) in [
-                ("C", "hatgpt", "Chatgpt"), ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"),
+                ("C", "hatgpt", chatgpt), ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"),
                 ("CP", "56", "CP值"), ("API", "lc3", "API好"), ("A", "84", "A84"),
             ] {
                 for ch in prefix.chars() {
@@ -279,6 +280,90 @@ mod windows_smart_tests {
                 type_keys(&mut engine, suffix);
                 assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "upstream={upstream} {prefix}+{suffix:?}");
             }
+        }
+    }
+
+    #[test]
+    fn shifted_english_applies_official_writing_under_windows_options() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄔㄣ 稱 -0.1\nㄧㄣ 因 -0.1\n").unwrap());
+        let type_word = |engine: &mut Engine, word: &str| {
+            for ch in word.chars() {
+                let mods = if ch.is_ascii_uppercase() { MOD_SHIFT } else { 0 };
+                engine.key(Key::ch(ch.to_ascii_lowercase(), mods)).unwrap();
+            }
+        };
+
+        // Upstream English under Windows input options applies canonical spellings on Enter,
+        // Space, focus-loss commit, and tone-key split into Chinese, while keeping intentional casing.
+        let mut engine = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        engine.set_windows_input_options(0);
+        engine.set_mixed_input(false);
+        engine.set_upstream_english(true, false, true, true).unwrap();
+
+        for (typed, want) in [("Chatgpt", "ChatGPT"), ("Github", "GitHub"), ("Macos", "macOS")] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, want, "Space {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Space+Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.reset(ResetMode::Commit).commit, want, "ResetCommit {typed}");
+
+            type_word(&mut engine, typed);
+            type_keys(&mut engine, "su3");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("{want}你"), "Split {typed}");
+        }
+
+        // Official short acronyms whose tails look like 1st-tone readings stay English on Space.
+        for (typed, want) in [("Gpt", "GPT"), ("Cpu", "CPU")] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, want, "Space {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Space+Enter {typed}");
+        }
+
+        // Deliberate non-plain casings remain verbatim.
+        for verbatim in ["CHATGPT", "CHatgpt", "ChatGpt", "GithuB", "MacOs", "MacOS", "GITHUB", "MACOS", "Rust"] {
+            type_word(&mut engine, verbatim);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, verbatim, "verbatim {verbatim}");
+        }
+        // Unfinished reading followed by mid-word Shift keeps intentional casing.
+        engine.key(Key::ch('c', 0)).unwrap();
+        engine.key(Key::ch('h', MOD_SHIFT)).unwrap();
+        type_keys(&mut engine, "atgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "cHatgpt");
+
+        // Backspace after table-canonicalized token reopens raw typed letters; user-picked casing sticks.
+        type_word(&mut engine, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, "ChatGPT");
+        assert_eq!(engine.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "Chatgp");
+        assert_eq!(type_keys(&mut engine, "t ").preedit, "ChatGPT");
+        let list = engine.key(Key::new(KeyKind::Down)).unwrap().candidates;
+        assert_eq!(list, vec!["ChatGPT", "chatgpt", "Chatgpt", "CHATGPT"]);
+        assert_eq!(engine.pick(2).unwrap().unwrap().preedit, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "Chatgp");
+        assert_eq!(type_keys(&mut engine, "t ").preedit, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "Chatgpt");
+
+        // ASCII state keeps typed casing verbatim without touching later Chinese-mode runs.
+        engine.set_ascii(true).unwrap();
+        for typed in ["Chatgpt", "Github", "Macos"] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, typed, "ascii {typed}");
+        }
+        engine.set_ascii(false).unwrap();
+        type_word(&mut engine, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "ChatGPT");
+
+        // Raw-key mixing keeps Shift-typed casing verbatim by default.
+        let mut mixed = Engine::with_lexicon(lex, Layout::Standard);
+        mixed.set_windows_input_options(0);
+        mixed.set_mixed_input(true);
+        mixed.set_upstream_english(false, false, true, true).unwrap();
+        for typed in ["Chatgpt", "Github", "Macos"] {
+            type_word(&mut mixed, typed);
+            assert_eq!(mixed.key(Key::new(KeyKind::Enter)).unwrap().commit, typed, "mixed {typed}");
         }
     }
 
@@ -345,7 +430,8 @@ impl Engine {
         let reading = self.shifted_reading(
             &self.run[start..], tone, self.english_reversal_guard || self.mixed_input,
         )?;
-        (!english_word(&self.run.to_ascii_lowercase()))
+        let lower = self.run.to_ascii_lowercase();
+        (!english_word(&lower) && !english_table().contains_key(&lower))
             .then(|| (start, format!("{reading}{}", TONE_MARKS[tone])))
     }
 
@@ -853,9 +939,7 @@ impl Engine {
                 self.clear_pend();
                 commit=self.insert_windows_literal(&text)?.commit;
             }
-            let writing = self.latin_character(key);
-            let mut out=self.start_run(writing)?;
-            self.run_ascii |= self.windows_shifted_boundaries && writing.is_ascii_uppercase();
+            let mut out=self.start_run(self.latin_character(key))?;
             let run_len = self.run.chars().count();
             self.run_shifted.clear();
             if run_len > 0 {
