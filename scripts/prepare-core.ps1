@@ -54,7 +54,7 @@ $source = (Get-Content (Join-Path $upstream 'core/src/learn_store.rs') -Raw).Rep
 $constants = $source.Substring($source.IndexOf('pub const FILE:'), $source.IndexOf('// <fcntl.h>') - $source.IndexOf('pub const FILE:'))
 $shared = $source.Substring($source.IndexOf('/// Latest accepted day'), $source.IndexOf("#[cfg(unix)]`nimpl LearnStore {") - $source.IndexOf('/// Latest accepted day'))
 $imports = @'
-use crate::learn::{context_key, is_han, is_single, single_key_ok, FINE_SEP, Record, GLOBAL, NEWWORD, NEWWORD_MAX, NEWWORD_MIN, NEXT_PREFIX, SENTINEL};
+use crate::learn::{context_key, is_han, is_single, single_key_ok, EN_PREFIX, FINE_SEP, Record, GLOBAL, NEWWORD, NEWWORD_MAX, NEWWORD_MIN, NEXT_PREFIX, SENTINEL};
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};

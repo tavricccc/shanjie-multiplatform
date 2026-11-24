@@ -15,6 +15,7 @@ function Get-MemoryUse {
 function Get-CoreBaselineCosts {
     # Seed cold-start estimates (seconds) from observed full-suite runs; dynamic history overrides them over time.
     @{
+        'engine_mixed' = 170.0
         'engine_cap' = 135.0
         'engine_share' = 100.0
         'engine_lm' = 85.0
@@ -256,9 +257,11 @@ try {
     $base = Join-Path $root 'build/test'
     $tree = Join-Path $base 'core'
     $resources = Join-Path $root "build/test-resources/$upstreamPin"
-    $resourceKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1') -Values @($upstreamPin,'git archive data eval')
+    # engine_mixed verifies the English collision table against the pinned spec.
+    $resourceExports = @('data','eval','docs/spec/english-mixed.md')
+    $resourceKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1') -Values (@($upstreamPin) + $resourceExports)
     $resourceManifest = Join-Path $resources '.source-cache.json'
-    $resourcePaths = @('data','eval')
+    $resourcePaths = @('data','eval','docs')
     $resourceCheck = Start-TestStage -Name 'Validate upstream core fixture cache' -Category 'core.cache'
     try {
         $resourceCacheHit = Test-ContentCache -Root $resources -ManifestPath $resourceManifest -Key $resourceKey -Paths $resourcePaths
@@ -271,7 +274,7 @@ try {
         if (Test-Path -LiteralPath $resources) { Preserve-Output $resources }
         New-Item -ItemType Directory -Path $resources -Force | Out-Null
         Invoke-Timed -Name 'Export upstream core fixtures' -Category 'core.prepare' -Details @{ cache='miss'; upstream_commit=$upstreamPin } -Action {
-            Export-Upstream $resources @('data','eval')
+            Export-Upstream $resources $resourceExports
         }
         Save-ContentCache -Root $resources -ManifestPath $resourceManifest -Key $resourceKey -Paths $resourcePaths
     } else { Write-Host "Core fixture cache hit: upstream $upstreamPin, contents verified." }
