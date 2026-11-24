@@ -2,6 +2,15 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.1-beta.1（Windows pre-release）
+
+詳見 [0.16.1-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.16.1-beta.1.md)。
+
+- 同步善解 v0.9.0 與其後 main `bddb22b0`：會意 SJ-SR-10-31M、變調與口語讀音（預設開啟）、中英混合詞與英文預測、收尾鍵英文／注音自動比較。
+- 私密欄位暫停學習與前文，學習無法儲存時提示；單獨反引號可按 Enter 送出。
+- 新增英文段提示開關（預設開啟）。
+- 修正候選窗動畫最後一格未繪出、設定頁底部被截斷；自訂預設藍維持白色選取文字。
+
 ## 0.16.0（Windows）
 
 詳見 [0.16.0 版本說明](docs/releases/RELEASE-NOTES-0.16.0.md)。
