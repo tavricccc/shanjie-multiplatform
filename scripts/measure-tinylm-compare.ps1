@@ -11,6 +11,7 @@ param(
     [ValidateRange(5, 302)][int]$ShortLimit = 60,
     [ValidateRange(5, 302)][int]$LongLimit = 60,
     [ValidateSet('chat', 'formal')][string]$Profile = 'chat',
+    [ValidateRange(1,3600)][int]$ArmTimeoutSeconds = 300,
     [string]$OutPath
 )
 $ErrorActionPreference = 'Stop'
@@ -134,7 +135,7 @@ function Invoke-Arm([string]$Arm, [int]$Round, [string]$DataDir, [string]$Expect
     $p = [Diagnostics.Process]::Start($start)
     $outTask = $p.StandardOutput.ReadToEndAsync()
     $errTask = $p.StandardError.ReadToEndAsync()
-    if (!$p.WaitForExit(300000)) { $p.Kill(); throw "Benchmark timed out ($Arm round $Round)" }
+    if (!$p.WaitForExit($ArmTimeoutSeconds * 1000)) { $p.Kill(); throw "Benchmark timed out ($Arm round $Round, $ArmTimeoutSeconds s)" }
     $stdout = $outTask.GetAwaiter().GetResult().Trim()
     $stderr = $errTask.GetAwaiter().GetResult().Trim()
     $code = $p.ExitCode
@@ -220,6 +221,7 @@ $report = [ordered]@{
     architecture = 'x64'
     profile = $Profile
     rounds = $Rounds
+    arm_timeout_seconds = $ArmTimeoutSeconds
     schedule = ((1..$Rounds | ForEach-Object { "old(r$_),new(r$_)" }) -join ',')
     machine = [ordered]@{
         cpu = $cpu

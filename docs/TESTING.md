@@ -2,7 +2,7 @@
 
 `full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 用啟用前文的普通欄位做正向控制，確認前文查詢發生於第一次組字寫入前。同一階段在關閉前文、private、password 與 PIN 案例須為零讀取，隱私案例另驗證零學習寫入。組字後 TSF 自身的讀取次數另行記錄。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
 
-`measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。
+`measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。 正式長上下文量測若超過每個子程序預設 300 秒，可用 `-ArmTimeoutSeconds` 明訂較長的期限，保留樣本數與配對順序。
 
 `-Comparison DecodeWarmup` 在相同配套與隔離 profile 下交替啟動資源預載／解碼預熱的 resident host，記錄啟動到 ready 後首個成功 status（含輪詢／IPC）、首鍵、首音節尾端、後續延遲及 host 自身記憶體。實驗入口只接受測試身分；普通啟動維持資源預載。host 檢查 reset 後沒有組字、候選、前文、學習記錄／前綴及 rerank job；metadata／hash 程序的記憶體不算入 host 峰值。
 
