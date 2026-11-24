@@ -296,6 +296,27 @@ mod windows_smart_tests {
             assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "{keys}");
         }
     }
+
+    #[test]
+    fn english_run_and_ascii_preserve_non_shift_modifiers() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\n").unwrap());
+        let mut engine = Engine::with_lexicon(lex, Layout::Standard);
+        engine.set_upstream_english(true, false, true, true).unwrap();
+        engine.key(Key::ch('a', MOD_SHIFT)).unwrap();
+        let before = engine.key(Key::ch('b', 0)).unwrap();
+        assert_eq!(before.preedit, "Ab");
+        let opt = engine.key(Key::ch('a', MOD_OPTION)).unwrap();
+        assert!(opt.handled && opt.commit.is_empty());
+        assert_eq!(opt.preedit, "Ab");
+        let ctrl = engine.key(Key::ch('a', MOD_CONTROL)).unwrap();
+        assert!(!ctrl.handled && ctrl.commit.is_empty());
+        assert_eq!(ctrl.preedit, "Ab");
+        engine.reset(ResetMode::Discard);
+        engine.set_ascii(true).unwrap();
+        assert_eq!(engine.key(Key::ch('a', 0)).unwrap().preedit, "a");
+        let ascii_opt = engine.key(Key::ch('a', MOD_OPTION)).unwrap();
+        assert!(!ascii_opt.handled && ascii_opt.preedit == "a");
+    }
 }
 
 impl Engine {
@@ -657,12 +678,18 @@ impl Engine {
         }
     }
 
+    fn windows_keep_run_writing(&self) -> bool {
+        self.windows_shifted_boundaries && !self.run_rev
+            && self.run.bytes().zip(&self.run_shifted).find(|(_, shifted)| **shifted)
+                .is_some_and(|(letter, _)| letter.is_ascii_uppercase())
+    }
+
     fn windows_run_tone(&mut self, c: char, tone: usize) -> Result<Output, EngineError> {
-        self.sync_run_shifted();
         let chars: Vec<char> = self.run.chars().collect();
         let explicit = self.shifted_run_reading(tone);
         if c == ' ' && explicit.is_none() {
-            return self.key_original(Key::new(KeyKind::Space));
+            let commit = self.end_run()?;
+            return Ok(self.view(true, commit));
         }
         let mut tail: Vec<(usize, char)> = Vec::new();
         let mut above = 3;
@@ -689,7 +716,7 @@ impl Engine {
         if let Some((split_at, syl)) = split {
             let head: String = chars[..split_at].iter().collect();
             let raw_tail: String = chars[split_at..].iter().collect();
-            let run_ascii = std::mem::take(&mut self.run_ascii);
+            let verbatim = std::mem::take(&mut self.run_ascii) || self.windows_keep_run_writing();
             self.run.clear();
             self.run_shifted.clear();
             self.run_rev = false;
@@ -698,7 +725,7 @@ impl Engine {
             let mut commit = if head.is_empty() {
                 String::new()
             } else {
-                let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                let writing = if verbatim || self.mixed_input { head.clone() } else { english_writing(&head) };
                 self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
             };
             self.pred_dirty = true;
@@ -708,8 +735,7 @@ impl Engine {
                     self.typed_literals.insert(index, format!("{raw_tail}{c}"));
                 }
             }
-            self.recompute_pred();
-            return Ok(self.mixed_view(self.view(true, commit)));
+            return Ok(self.view(true, commit));
         }
         if self.mixed_input && chars.len() >= 2 {
             let unshifted_start = self
@@ -733,7 +759,7 @@ impl Engine {
                     .filter(|r| self.has_mixed_han_entry(r, tone))
                 {
                     let full_syl = format!("{reading}{}", TONE_MARKS[tone]);
-                    let run_ascii = std::mem::take(&mut self.run_ascii);
+                    let verbatim = std::mem::take(&mut self.run_ascii) || self.windows_keep_run_writing();
                     self.run.clear();
                     self.run_shifted.clear();
                     self.run_rev = false;
@@ -742,7 +768,7 @@ impl Engine {
                     let mut commit = if head.is_empty() {
                         String::new()
                     } else {
-                        let writing = if run_ascii || self.mixed_input { head.clone() } else { english_writing(&head) };
+                        let writing = if verbatim || self.mixed_input { head.clone() } else { english_writing(&head) };
                         self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
                     };
                     self.pred_dirty = true;
@@ -750,8 +776,7 @@ impl Engine {
                     if let Some(index) = self.cursor.checked_sub(1).filter(|&i| i < self.syls.len()) {
                         self.typed_literals.insert(index, format!("{raw_tail}{c}"));
                     }
-                    self.recompute_pred();
-                    return Ok(self.mixed_view(self.view(true, commit)));
+                    return Ok(self.view(true, commit));
                 }
             }
         }
@@ -761,7 +786,7 @@ impl Engine {
             self.run_shifted.clear();
         }
         self.run_shifted.push(false);
-        Ok(self.mixed_view(self.view(true, commit)))
+        Ok(self.view(true, commit))
     }
 
     pub fn key(&mut self, key: Key) -> Result<Output, EngineError> {
@@ -798,6 +823,7 @@ impl Engine {
             // Commit, candidate opening and cursor movement preserve the displayed digit.
             // Its Zhuyin symbol remains selectable in the opened candidate list.
             if matches!(key.kind, KeyKind::Enter | KeyKind::Down | KeyKind::Left | KeyKind::Right | KeyKind::Home | KeyKind::End)
+                && key.modifiers == 0
                 && self.lone_digit().is_some() {
                 if let Some(run) = self.drun.as_mut() { run.m = 1; }
                 self.clear_pend();
@@ -853,9 +879,7 @@ impl Engine {
                 self.clear_pend();
                 commit=self.insert_windows_literal(&text)?.commit;
             }
-            let writing = self.latin_character(key);
-            let mut out=self.start_run(writing)?;
-            self.run_ascii |= self.windows_shifted_boundaries && writing.is_ascii_uppercase();
+            let mut out=self.key_original(key)?;
             let run_len = self.run.chars().count();
             self.run_shifted.clear();
             if run_len > 0 {
@@ -870,19 +894,9 @@ impl Engine {
         // literal policy runs first and upstream English only sees what it leaves.
         if self.english && self.upstream_english_busy() {
             self.sync_run_shifted();
-            if (self.mixed_input || self.windows_shifted_boundaries)
-                && !self.run.is_empty() && key.kind == KeyKind::Char && key.modifiers == 0 {
-                if let Some(tone) = Layout::Standard.tone_of(key.ch) {
-                    return self.windows_run_tone(key.ch, tone);
-                }
-            }
-            if self.windows_shifted_boundaries && !self.run.is_empty() && key.kind == KeyKind::Space
-                && key.modifiers == 0 && self.run_shifted.contains(&true) {
-                return self.windows_run_tone(' ', 0);
-            }
-            if key.kind==KeyKind::Char && key.ch.is_ascii_alphabetic() {
+            if key.kind==KeyKind::Char && (key.modifiers == 0 || key.modifiers == MOD_SHIFT) && key.ch.is_ascii_alphabetic() {
                 let was_shifted = key.modifiers == MOD_SHIFT;
-                let accept_letter = !self.run.is_empty() && (key.modifiers == 0 || key.modifiers == MOD_SHIFT);
+                let accept_letter = !self.run.is_empty();
                 let was_max = !self.run.is_empty() && self.run.len() == ENGLISH_RUN_MAX;
                 let actual=self.latin_character(key);
                 let mut key=key;key.modifiers=if actual.is_ascii_uppercase(){MOD_SHIFT}else{0};

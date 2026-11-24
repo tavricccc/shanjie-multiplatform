@@ -20,9 +20,12 @@ Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
+Expect 'CLI rowstats remains a manually requested special test' @('scripts/verify-rowstats.ps1') $false @('fast','test-framework')
 Expect 'model manager fixture' @('tests/model_sources_fixture.py') $false @('fast','settings-ui','candidate-host')
 Expect 'installer' @('windows/src/installer/progress.rs') $false @('fast','windows')
 Expect 'platform' @('platform/smart_input_windows.rs') $false @('fast','rust','core','english','submission')
+Expect 'FFI adapter retains core checks without the unrelated CLI matrix' @('platform/input_windows_ffi.rs') $false @('fast','rust','core','english','submission')
+Expect 'unmapped platform input keeps conservative fallback' @('platform/future.rs') $true @('full')
 Expect 'suites merge without duplicates' @('windows/src/word_popup.rs','tests/popup_lifecycle.cpp','tests/english_keys.cpp') $false @('fast','windows','word','popup-lifecycle','rust','english')
 Expect 'unlisted Windows service' @('windows/src/tsf/service.rs') $true @('full','windows','tsf','ui','mode')
 Expect 'shared appearance' @('shared/src/appearance.rs') $true @('full','windows','tsf','ui','mode')
@@ -48,6 +51,9 @@ Check-Rule (Test-BetaCoreResultReuse RELEASE $true $true) 'CI-safe beta RELEASE 
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $false)) 'Stable RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $false $true)) 'Local beta RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse FULL $true $true)) 'FULL executes all core assertions even with a beta channel'
+Check-Rule ('rowstats' -notin (Select-VerificationPlan @('UPSTREAM.json','MODEL-SOURCES.json','platform/input_windows.rs','scripts/verify-rowstats.ps1')).Labels) 'Related changes never automatically select the special CLI matrix'
+Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('MODEL-SOURCES.json') -Labels @('full')|Where-Object id -eq 'tinylm-comparison').Count -eq 1) 'Model comparison is a conditional review on model changes'
+Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('scripts/test-plan.psm1') -Labels @('full')|Where-Object id -eq 'tinylm-comparison').Count -eq 0) 'Scheduling-only changes do not request another model comparison'
 $latency=@(Get-AdditionalVerificationPlan -Paths @('platform/input_windows.rs','windows/src/tsf/keys.rs','windows/src/broker/client.rs') -Labels @('full'))
 Check-Rule (@($latency|Where-Object id -eq 'engine-latency').Count -eq 1) 'Key/core changes require one independent latency measurement'
 Check-Rule (($latency|Where-Object id -eq 'engine-latency').kind -eq 'required-extra') 'Functional FULL does not substitute for key latency'

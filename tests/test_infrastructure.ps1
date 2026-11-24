@@ -55,7 +55,7 @@ foreach($badRows in @(@{rows=@($ciRows[0..3])},@{rows=@($ciRows)+@([pscustomobje
 }
 
 $english=Get-EnglishKeyCases
- Assert-Check ($english.Count -eq 33 -and @($english | Where-Object {$_[1] -eq 'shift'}).Count -eq 2) 'Preserve all 33 English mode/layout combinations, including Shift and digit navigation'
+Assert-Check ($english.Count -eq 35 -and @($english | Where-Object {$_[1] -eq 'shift'}).Count -eq 2) 'Preserve the existing English combinations and both mixed-word interaction cases'
 foreach($keyboard in 1,2) {
     $submissionCases=Get-SubmissionCases $keyboard
     Assert-Check ($submissionCases.Count -eq $(if($keyboard -eq 1){66}else{30})) 'Preserve existing submission combinations and cover both interactions in the async lock regression'

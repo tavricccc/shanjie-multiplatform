@@ -7,13 +7,17 @@ fn main() {
     );
     let args: Vec<_> = std::env::args().collect();
     let data = std::path::Path::new(&args[1]);
-    match args[2].as_str() {
+    let result = std::panic::catch_unwind(|| match args[2].as_str() {
         "pipe" => broker::verification::pipe_deadlines(),
         "fault" => broker::verification::request_fault(data),
         "rerank" => broker::verification::rerank_lost(data),
         "rerank-unknown" => broker::verification::rerank_unknown(data),
+        "privacy-lost" => broker::verification::privacy_lost(data),
         "outstanding" => broker::verification::outstanding_other(data),
         "busy" => broker::verification::busy_learning(data),
+        "learning-status" => broker::verification::learning_storage_status(data, &args[3], false),
+        "learning-status-ui" => broker::verification::learning_storage_status(data, "pipe", true),
+        "privacy" => broker::verification::privacy_gate(data, &args[3]),
         "ambiguous" => broker::verification::ambiguous(data),
         "capacity" => broker::verification::capacity(data),
         "pack-switch" => broker::verification::pack_switch(data, &args[3]),
@@ -22,5 +26,10 @@ fn main() {
         "profile-root" => broker::verification::profile_root(),
         "log-failure" => broker::verification::log_failure(data),
         _ => panic!("Unknown isolated check"),
+    });
+    if let Err(error) = result {
+        eprintln!("{}", error.downcast_ref::<String>().map(String::as_str)
+            .or_else(|| error.downcast_ref::<&str>().copied()).unwrap_or("isolated check panicked"));
+        std::process::exit(1);
     }
 }

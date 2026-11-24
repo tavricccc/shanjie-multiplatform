@@ -1,5 +1,13 @@
 // Appended to the pinned engine.rs in the Windows build; no changes to its scorer.
 impl Engine {
+    pub fn windows_pause_learning(&mut self) {
+        self.set_learning(false);
+        self.clear_left();
+        self.left_fresh = false;
+        self.clear_pred();
+        self.cands = None;
+        self.invalidate();
+    }
     pub fn associated_words(&self, prefix: &str) -> Output {
         let word_at = |position: usize| {
             let ent = self.lex.ents[self.lex.by_word[position] as usize];
@@ -84,15 +92,15 @@ impl Engine {
     pub fn candidate_reading(&self) -> String {
         let Some(cands) = &self.cands else { return String::new() };
         let Some((_,length)) = cands.list.get(cands.sel) else { return String::new() };
-        let (start,end) = self.candidate_span(*length);
+        let (start,end) = self.candidate_span(*length, cands.mixed.is_some());
         if (start..end).any(|index| self.is_punct(index)) { return String::new(); }
         self.syls[start..end].concat()
     }
     pub fn commit_candidate_reading(&mut self) -> Output {
         let reading = self.candidate_reading();
         if reading.is_empty() { return self.view(false,String::new()); }
-        let length = self.cands.as_ref().unwrap().list[self.cands.as_ref().unwrap().sel].1;
-        let (start,end) = self.candidate_span(length);
+        let cands = self.cands.as_ref().unwrap();
+        let (start,end) = self.candidate_span(cands.list[cands.sel].1, cands.mixed.is_some());
         let before = (0..start).map(|i| self.token_width(i)).sum::<usize>();
         let after = (0..end).map(|i| self.token_width(i)).sum::<usize>();
         let commit = self.display.chars().take(before).collect::<String>() + &reading + &self.display.chars().skip(after).collect::<String>();
@@ -121,7 +129,7 @@ impl Engine {
     fn make_candidates_with(&self, list: Vec<(String,usize)>, alt: HashMap<usize,Vec<String>>) -> Option<Cands> {
         let (_,length) = list.first()?.clone();
         let keep: Vec<bool> = list.iter().map(|(word,_)| self.space_inputs_zhuyin || !windows_reading_text(word)).collect();
-        let (start,end) = self.candidate_span(length);
+        let (start,end) = self.candidate_span(length, false);
         let mut cands = Cands::new(list, self.cand_vertical, self.key_scheme == 1);
         cands.alt = alt;
         retain_with_alt(&mut cands, &keep);
@@ -167,6 +175,31 @@ fn insert_with_alt(cands: &mut Cands, index: usize, item: (String,usize)) {
 fn windows_digit_table(data: &Path) -> Option<Arc<DigitTable>> {
     std::fs::read_to_string(data.join("digits.tsv")).ok().and_then(|t| DigitTable::parse(&t)).map(Arc::new)
 }
+#[cfg(test)]
+mod windows_privacy_tests {
+    use super::*;
+    #[test]
+    fn pause_drops_context_pending_learning_and_row_metadata_without_losing_text() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -1\nㄋㄧˇ 妳 -2\n").unwrap());
+        let mut e = Engine::with_lexicon(lex, Layout::Standard);
+        e.set_windows_input_options(0);e.set_learning(true);
+        e.set_left_context("隔離前文隔離前文");
+        for ch in "su3".chars() { e.key(Key::ch(ch,0)).unwrap(); }
+        assert!(!e.left.is_empty() && e.recur.len()>0);
+        e.open_candidates(vec![Pred{word:"妳".into(),reading:vec!["ㄋㄧˇ".into()],start:0,key:"前文".into(),weight:1.0}]);
+        assert!(!e.cands.as_ref().unwrap().rows.is_empty());
+        let shown=e.display.clone();
+        e.windows_pause_learning();
+        assert_eq!(e.display,shown);
+        assert!(e.cands.is_none()&&e.pred.is_empty());
+        assert!(e.left.is_empty()&&e.left_full.is_empty()&&!e.left_cut&&!e.left_fresh&&e.recur.len()==0);
+        assert!(!e.learning && e.fixed.iter().all(|f|f.pre.is_none()&&f.displaced_new.is_empty()));
+        assert!(e.rerank_job.is_none()&&e.windows_learning_prefix.is_none());
+        e.key(Key::new(KeyKind::Enter)).unwrap();
+        assert!(e.learner.records().is_empty());
+    }
+}
+
 #[cfg(test)]
 mod personal_lexicon_tests {
     use super::*;

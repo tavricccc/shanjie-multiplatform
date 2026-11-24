@@ -108,6 +108,24 @@ pub extern "C" fn sj_clear_learning() -> bool {
         }
     }
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn sj_learning_status(data: *const c_char) -> i32 {
+    if data.is_null() { return -1; }
+    let Ok(data) = CStr::from_ptr(data).to_str() else { return -1; };
+    crate::broker::control(Path::new(data), false)
+        .map_or(-1, |r| i32::from(r.learning_unavailable))
+}
+#[cfg(test)]
+mod learning_status_tests {
+    #[test]
+    fn unavailable_status_arguments_do_not_cross_the_c_boundary_as_panics() {
+        unsafe {
+            assert_eq!(super::sj_learning_status(std::ptr::null()),-1);
+            assert_eq!(super::sj_learning_status(b"\xff\0".as_ptr().cast()),-1);
+        }
+    }
+}
 #[no_mangle]
 pub extern "C" fn sj_installed_keyboards() -> u32 {
     crate::installation::available()
@@ -221,7 +239,7 @@ fn frame(s: Snapshot) -> *mut Frame {
     let raw = Frame {
         handled: s.handled as u32,
         associated: s.associated as u32,
-        prediction: s.prediction as u32 | ((s.reading_hint as u32) << 1) | ((s.phonetic_pending as u32) << 2),
+        prediction: s.prediction as u32 | ((s.reading_hint as u32) << 1) | ((s.phonetic_pending as u32) << 2) | ((s.learning_unavailable as u32) << 3),
         commit: strings[0].as_ptr(),
         preedit: strings[1].as_ptr(),
         cursor: s.cursor,
@@ -249,6 +267,7 @@ unsafe fn snapshot(r: *const Frame) -> Snapshot {
         prediction: r.prediction & 1 != 0,
         reading_hint: r.prediction & 2 != 0,
         phonetic_pending: r.prediction & 4 != 0,
+        learning_unavailable: r.prediction & 8 != 0,
         commit: text(r.commit).into(),
         preedit: text(r.preedit).into(),
         cursor: r.cursor,

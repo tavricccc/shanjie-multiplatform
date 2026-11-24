@@ -25,6 +25,12 @@ int wmain(int argc,wchar_t**argv) {
     require(SUCCEEDED(extended->ActivateEx(&client,TF_TMAE_NOACTIVATETIP|TF_TMAE_NOACTIVATEKEYBOARDLAYOUT)),908);
     ComPtr<ITfDocumentMgr> doc;require(SUCCEEDED(thread->CreateDocumentMgr(&doc)),909);
     ComPtr<Store> store;store.Attach(new Store);store->layoutReady=true;
+    if(scenario.starts_with(L"privacy-")) {
+        store->text=L"隔離測試前文";store->selection.acpStart=store->selection.acpEnd=LONG(store->text.size());store->privacyBoundary=LONG(store->text.size());
+        if(scenario==L"privacy-private")store->inputScope=IS_PRIVATE;
+        if(scenario==L"privacy-password")store->inputScope=IS_PASSWORD;
+        if(scenario==L"privacy-pin")store->inputScope=IS_NUMERIC_PIN;
+    }
     store->readOnly=scenario==L"word-readonly"||scenario.starts_with(L"status-readonly");
     if(scenario.ends_with(L"-disjoint")) {
         store->staticFlags=TS_SS_DISJOINTSEL|TS_SS_REGIONS|TS_SS_TKBAUTOCORRECTENABLE|TS_SS_TKBPREDICTIONENABLE;
@@ -34,6 +40,12 @@ int wmain(int argc,wchar_t**argv) {
     WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"Shanjie.Compat0122.Test";RegisterClassW(&wc);
     store->window=CreateWindowW(wc.lpszClassName,L"Private fixture",WS_OVERLAPPEDWINDOW,-12000,-12000,800,400,nullptr,nullptr,wc.hInstance,nullptr);
     require(store->window!=nullptr,910);ShowWindow(store->window,SW_SHOWNOACTIVATE);
+    HWND passwordOwner=nullptr;
+    if(scenario==L"privacy-native-password"){
+        passwordOwner=store->window;
+        store->window=CreateWindowW(L"EDIT",L"",WS_CHILD|WS_VISIBLE|ES_PASSWORD,0,0,100,24,passwordOwner,nullptr,wc.hInstance,nullptr);
+        require(store->window!=nullptr,1130);SetFocus(store->window);require(GetFocus()==store->window,1131);
+    }
     ComPtr<ITfContext> context;TfEditCookie cookie;
     require(SUCCEEDED(doc->CreateContext(client,0,store.Get(),&context,&cookie))&&SUCCEEDED(doc->Push(context.Get()))&&SUCCEEDED(thread->SetFocus(doc.Get())),911);
     ComPtr<ITfClientId> ids;thread.As(&ids);TfClientId serviceClient;require(SUCCEEDED(ids->GetClientId(ServiceId,&serviceClient)),912);
@@ -48,7 +60,79 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if(scenario.starts_with(L"status-")) {
+    if(scenario==L"privacy-disabled") {
+        ComPtr<ITfCompartmentMgr> cm;ComPtr<ITfCompartment> disabled;require(SUCCEEDED(context.As(&cm))&&SUCCEEDED(cm->GetCompartment(GUID_COMPARTMENT_KEYBOARD_DISABLED,&disabled)),1132);
+        require(SUCCEEDED(disabled->SetValue(client,&v)),1133);
+        keyboard(0);for(int key:{int('S'),VK_RETURN,VK_TAB,VK_DOWN}){
+            BOOL accepted=TRUE;require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,flags(key,false),&accepted))&&!accepted,1134);
+        }
+        require(store->prefixReads==0&&store->text==L"隔離測試前文",1135);
+        std::puts("privacy prefix_reads=0 (keyboard-disabled compartment)");
+    } else if(scenario.starts_with(L"modifiers-")) {
+        keyboard(0);
+        if(scenario==L"modifiers-english") {
+            keyboard(VK_SHIFT);for(int key:{'H','T','T','P'})down(key);keyboard(0);
+            require(store->text==L"HTTP" && compositions()==1,1100);
+        } else if(scenario!=L"modifiers-empty") {
+            for(int key:{'S','U','3'})down(key);
+            if(scenario==L"modifiers-candidates")down(VK_DOWN);
+            require(!store->text.empty() && compositions()==1,1101);
+        }
+        auto before=store->text;auto caret=store->selection;
+        for(int modifiers:{1,2,3,4,5,6,7,8,9,10,11})for(int key:{int('A'),VK_RETURN,VK_TAB,VK_UP,VK_DOWN,VK_LEFT,VK_NEXT}) {
+            BYTE state[256]{};
+            if(modifiers&1)state[VK_MENU]=state[VK_RMENU]=0x80;
+            if(modifiers&2)state[VK_CONTROL]=state[VK_LCONTROL]=0x80;
+            if(modifiers&4)state[VK_LWIN]=0x80;
+            if(modifiers&8)state[VK_RWIN]=0x80;
+            require(SetKeyboardState(state),1102);
+            BOOL test=TRUE,eaten=TRUE;auto f=flags(key,false);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test))&&!test,1103);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten))&&!eaten,1104);
+            require(store->text==before && store->selection.acpStart==caret.acpStart && store->selection.acpEnd==caret.acpEnd,1105);
+        }
+        keyboard(VK_CONTROL,VK_MENU);BOOL accepted=FALSE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),VK_OEM_COMMA,flags(VK_OEM_COMMA,false),&accepted))&&accepted,1106);
+        BOOL eaten=FALSE;require(SUCCEEDED(keys->OnKeyDown(context.Get(),VK_OEM_COMMA,flags(VK_OEM_COMMA,false),&eaten))&&eaten,1107);
+        keyboard(0);down(VK_ESCAPE);
+        std::puts("EVIDENCE synthetic SetKeyboardState + TSF callbacks; no hardware or foreground App acceptance");
+    } else if(scenario.starts_with(L"privacy-")) {
+        keyboard(0);for(int key:{'S','U','3'})down(key);
+        auto original=store->text.substr(store->privacyBoundary); down(VK_DOWN);
+        ComPtr<ITfUIElementMgr> ui;ComPtr<IEnumTfUIElements> elements;
+        require(SUCCEEDED(thread.As(&ui))&&SUCCEEDED(ui->EnumUIElements(&elements)),1114);
+        ComPtr<ITfUIElement> element;ULONG count=0;
+        require(elements->Next(1,&element,&count)==S_OK&&count==1,1115);
+        ComPtr<ITfCandidateListUIElementBehavior> list;UINT length=0;
+        require(SUCCEEDED(element.As(&list))&&SUCCEEDED(list->GetCount(&length)),1116);
+        UINT choice=length;
+        for(UINT i=0;i<length;++i){BSTR word=nullptr;require(SUCCEEDED(list->GetString(i,&word)),1117);if(word&&std::wstring(word)!=original&&SysStringLen(word)==1)choice=i;SysFreeString(word);if(choice<length)break;}
+        require(choice<length,1118);
+        require(SUCCEEDED(list->SetSelection(choice))&&SUCCEEDED(list->Finalize()),1119);pump();
+        if(scenario==L"privacy-transition"){
+            store->scopeChanged(IS_PRIVATE);store->externalCaret(store->selection.acpEnd);pump();
+            require(SUCCEEDED(focus->OnSetFocus(nullptr,doc.Get()))&&SUCCEEDED(thread->SetFocus(nullptr)),1136);Sleep(180);pump();
+        }else{down(VK_RETURN);}
+        require(store->text.starts_with(L"隔離測試前文") && compositions()==0,1110);
+        bool paused=store->inputScope!=IS_DEFAULT||scenario==L"privacy-native-password";
+        wchar_t profile[MAX_PATH]{};require(GetEnvironmentVariableW(L"LOCALAPPDATA",profile,MAX_PATH)>0,1112);
+        auto file=std::wstring(profile)+L"\\Shanjie\\learning.tsv";
+        std::printf("privacy chosen=%u candidates=%u original_units=%zu final_units=%zu prefix_reads=%u file=%d\n",choice,length,original.size(),store->text.size(),store->prefixReads,GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES);
+        if(scenario!=L"privacy-control")require((GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES)!=paused,1113);
+        // The context lookup precedes the first composition write. TSF itself
+        // reads the text store while applying edits, and those reads can vary.
+        std::printf("privacy prefix_reads=%u prewrite_prefix_reads=%u (dummy text, isolated profile)\n",
+            store->prefixReads, store->prefixReadsBeforeWrite);
+        if (scenario == L"privacy-normal") require(store->prefixReadsBeforeWrite > 0, 1123);
+        else if (scenario != L"privacy-transition") require(store->prefixReadsBeforeWrite == 0, 1124);
+    } else if(scenario==L"range-refresh") {
+        keyboard(0);for(int key:{'S','U','3'})down(key);auto text=store->text;
+        auto before=store->unchangedWrites;down(VK_DOWN);down(VK_ESCAPE);
+        require(store->text==text && compositions()==1,1120);
+        require(store->unchangedWrites>before,1121); // reproduce writes, without inferring a user-visible fault
+        down(VK_RETURN);require(store->text==text && compositions()==0,1122);
+        std::printf("range writes=%u unchanged=%u; one composition, one final text\n",store->textWrites,store->unchangedWrites);
+    } else if(scenario.starts_with(L"status-")) {
         TF_STATUS status{};require(SUCCEEDED(context->GetStatus(&status)),1000);
         require(status.dwStaticFlags==store->staticFlags,1001);
         require(((status.dwDynamicFlags&TF_SD_READONLY)!=0)==store->readOnly,1002);
@@ -118,6 +202,6 @@ int wmain(int argc,wchar_t**argv) {
         require(store->text==(scenario==L"word-invalid"?L"ab":L"回家"),964);
         if(password){store->window=savedWindow;DestroyWindow(password);}
     }
-    keyboard(0);require(SUCCEEDED(tip->Deactivate()),970);thread->SetFocus(nullptr);doc->Pop(TF_POPF_ALL);thread->Deactivate();DestroyWindow(store->window);
+    keyboard(0);require(SUCCEEDED(tip->Deactivate()),970);thread->SetFocus(nullptr);doc->Pop(TF_POPF_ALL);thread->Deactivate();DestroyWindow(store->window);if(passwordOwner)DestroyWindow(passwordOwner);
     std::printf("PASS %ls\n",scenario.c_str());return 0;
 }

@@ -1,5 +1,13 @@
 # Windows 驗收流程
 
+`full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 用啟用前文的普通欄位做正向控制，確認前文查詢發生於第一次組字寫入前。同一階段在關閉前文、private、password 與 PIN 案例須為零讀取，隱私案例另驗證零學習寫入。組字後 TSF 自身的讀取次數另行記錄。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
+
+`measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。 正式長上下文量測若超過每個子程序預設 300 秒，可用 `-ArmTimeoutSeconds` 明訂較長的期限，保留樣本數與配對順序。
+
+`-Comparison DecodeWarmup` 在相同配套與隔離 profile 下交替啟動資源預載／解碼預熱的 resident host，記錄啟動到 ready 後首個成功 status（含輪詢／IPC）、首鍵、首音節尾端、後續延遲及 host 自身記憶體。實驗入口只接受測試身分；普通啟動維持資源預載。host 檢查 reset 後沒有組字、候選、前文、學習記錄／前綴及 rerank job；metadata／hash 程序的記憶體不算入 host 峰值。
+
+歷史新舊模型比較只在模型／配套／相關算法／比較工具變更或明確要求時安排，選測規則只提示條件式審查，不自動綁到每次 RELEASE。DecodeWarmup 為啟動政策決策實驗，得出結論後不例行重跑；單純排程修改不要求重做模型 benchmark。IPC 量測仍依既有按鍵／核心請求變更規則。
+
 Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Cargo 編譯和執行。Visual Studio 2026 的 x64、x86 Preset 使用不同 build 目錄與產物，不能共用架構相異的 harness。
 
 ## 常用指令
@@ -65,19 +73,21 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 
 | 變更範例 | 上游自動選測 | 本版 CTest 計畫（含 fixture） |
 | --- | --- | --- |
-| `ui/` | Rust＋settings UI／native host | 13 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
-| 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 27 項，保留混打，無無關 interaction／UI |
+| `ui/` | Rust＋settings UI／native host | 16 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
+| 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 29 項，包含雙操作範本的上游混合詞與英文補全 |
 | submission harness | Rust＋提交 | 32 項 |
-| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 54 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
+| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 58 項。IPC 延遲另行量測 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
-| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 25 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 91 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 93 項 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 42 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 112 項。shared input 另含善解 TSF／interaction，共 114 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
 `verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。本版沒有新增跨報告的全自動去重／收據合併系統；既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
 
-每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 32 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+每次 JSON 都列出 CTest 選中／未選項目的理由，以及各架構英文鍵 35 組與提交流程的實際子案例。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+
+`ctest --preset windows-x64 -R 'english[.]mixed-words' --output-on-failure` 用同一個英文鍵 harness 驗證 Windows／善解操作及左右錨點。x86 使用 `windows-x86` preset。案例用私人桌面和獨立學習檔，走 TSF、Named Pipe 與出貨資料，涵蓋空白／聲調切分、數字選字、英文補全與 `^en:` 提交。候選窗的 Tab 標籤與英文提示由 native candidate-host harness 驗證。
 
 計時事件含 stage ID、parent ID、原始包含子階段耗時及 `exclusive_duration_ms`。後者扣除子階段區間聯集，避免巢狀重複加總；平行工作的合計仍可能大於 wall-clock。探測程序使用有期限的等待並只清理自己啟動的程序；CTest 另設每項 timeout。
 
@@ -104,7 +114,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
 | `verify-english-keys.ps1` | 20 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言；加入上游兩種模式的 digit-navigation |
 | `verify-submission.ps1` | `full.submission.*`，含 `async-keys`、`rebuild-local`、`rebuild-pipe`、`segment`、`input-digits` | 保留提交、取消、焦點、忙碌、退休及原有數字組合；新增數字語境、第一聲、學習檔與詞典保留，並驗證延遲編輯鎖的輸入順序及組字詞段範圍 |
-| `verify-private-desktop.ps1` | 18 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
+| `verify-private-desktop.ps1` | 35 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
 | `verify-interaction.ps1`、`verify-mode.ps1` | `release.interaction.x64`、`release.mode.x64`、`release.mode.x86` | 隔離 profile 的引擎互動回歸、兩架構離屏模式列／圖示 smoke；不送出桌面輸入 |
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
@@ -115,6 +125,21 @@ FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查�
 `ctest --preset windows-x64 -R 'submission[.]async-keys' --output-on-failure` 可單跑編輯鎖回歸，x86 使用 `windows-x86` preset。每架構涵蓋標準／倚天搭配 Windows／善解互動。案例記錄外層 HRESULT、`phrSession`、非同步回呼次數、宿主收到的 Tab、候選選取與文件結果，並驗證前文查詢失敗後首個寫入回呼仍開始組字，失焦或停用後舊回呼不寫入。這些案例在私人桌面的 TSF 模擬宿主執行。
 
 ### 專用驗收與實際差集
+
+#### G05：CLI／rowstats 特殊測試
+
+`full.core.rowstats` 保留既有手動入口，分類為 `special;rowstats`；名稱的 `full` 前綴不代表屬於 FULL。用途是固定上游 raw 與 prepared Windows overlay 的 CLI 差分：兩側各 25 個 golden＋7 個 Judge2 斷言，chat／formal × 三資料集 × 兩種詞包配置共 12 組 byte 比對，以及輸出副本的一 byte 負向控制。英文按鍵、TSF、其他 OS／CPU 不由此案例證明。
+
+上游核心、CLI、rowstats、模型／詞包或相關 overlay 改動時，先評估並明確指定才執行。CI、FAST、AFFECTED（含未知影響擴 FULL）、FULL、Beta、正式 RELEASE 與 release workflow 手動 verify 均不自動選入；預設 CTest presets 也排除 `special`。Release 收據依 full／release labels 核對，不要求這個特殊案例，其他必要清冊及快照防護不變。
+
+已有對應核心、模型與資料後，手動執行：
+
+```powershell
+cmake --preset windows-x64
+ctest --test-dir build/cmake/windows-x64 -C Release -R '^full[.]core[.]rowstats$' --output-on-failure
+```
+
+手動命令明確指定案例並使用 `--test-dir`，不套用 preset 的特殊測試排除；加 `--show-only` 只列計畫，不是 PASS。本輪固定點 `006c8f1d` 實跑 CTest **828.35 秒**：兩側編譯 15.18／17.25 秒、golden／Judge2 264.22／266.84 秒、差分 258.09 秒、負向控制 0.007 秒。這次來源／編譯未命中快取、未重用測試結果。各段為實測 wall-clock，COST 只作手動排程估值；沒有同條件 workflow 基準，不換算成 Actions 整體增量。原始紀錄在 ignored `build/reports`，屬於該固定點。更新 #130 後的清冊沿用手動政策。
 
 核對基準為上游 `4794ab3` 的 AGENTS「驗證：做多少」、ARCHITECTURE「驗證」、PERFORMANCE「重跑」、原 `verify-selection.ps1`／`verify-changed.ps1`，以及各入口實際呼叫的 harness。上游明確規定按鍵路徑／核心請求須額外量測、UI 變更須 UI 驗收；其餘七支工具沒有逐檔必跑表，只有 shared／Windows 邏輯須執行「相關 verify」的通則。以下依實際依賴提示審查範圍，不臆造七支一律必跑的規則。
 

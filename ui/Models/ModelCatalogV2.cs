@@ -9,7 +9,7 @@ internal sealed record ModelList(int Format,string Revision,string GeneratedAt,b
 public static partial class ModelCatalog
 {
     public const string V2Endpoint="https://raw.githubusercontent.com/tavricccc/shanjie-multiplatform/model-catalog/MODEL-CATALOG-V2.json";
-    private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","colloquial.sjlm1"];
+    private static readonly HashSet<string> Capabilities=["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2","kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","semantic.sjtl5","semantic.sjtl6","colloquial.sjlm1"];
     public static bool Supported(ModelEntry entry)=>entry.RequiredCapabilities.All(Capabilities.Contains)&&entry.Compatibility.Any(c=>c.Target=="windows-x64"&&c.ProfileId=="windows-bundle-v1"&&c.State=="usable");
     /// Taiwan has no daylight saving, so a fixed UTC+8 offset is its local time.
     public static string ListTime(DateTimeOffset? generated,bool cached)=>generated is not {} at?"清單更新時間：未知／尚未取得"

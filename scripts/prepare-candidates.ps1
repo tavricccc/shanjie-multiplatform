@@ -21,6 +21,11 @@ Replace-Contract 'let columns = if c.expanded { PAGE_SIZE as u32 } else { 0 };' 
 # The viewport and number labels retain nine-item groups, independently of the visual row width.
 Replace-Contract 'let idx = row * cols + d;' 'let idx = sel / PAGE_SIZE * PAGE_SIZE + d;'
 Replace-Contract '    fn open_candidates(&mut self, rows: Vec<Pred>) {' '    fn open_candidates_left(&mut self, rows: Vec<Pred>) {'
+Replace-Contract 'fn variant_move(&self, list: &mut Vec<(String, usize)>, rows: &mut Vec<Pred>) {' 'fn variant_move(&self, list: &mut Vec<(String, usize)>, rows: &mut Vec<Pred>, right: bool) {'
+Replace-Contract 'self.variant_move(&mut list, &mut rows);' 'self.variant_move(&mut list, &mut rows, false);' 2
+Replace-Contract 'e.variant_move(&mut list, &mut rows);' 'e.variant_move(&mut list, &mut rows, false);'
+Replace-Contract 'let k = if a == 0 { self.syls.get(..l) } else { self.syls.get(a.checked_sub(l)?..a) };' 'let k = if right { self.syls.get(a..a + l) } else if a == 0 { self.syls.get(..l) } else { self.syls.get(a.checked_sub(l)?..a) };'
+Replace-Contract 'self.syls[rows[il].start..a]' 'self.syls[rows[il].start..if right { self.syls.len() } else { a }]'
 $leftDigitOld = @'
             if let Some(d) = digit_of(&self.syls[touching]) {
                 // docs/spec/english-mixed.md §7.4 (Down): the row of the digit context first, then the digit and its full-width form, then (docs/spec/english-mixed.md §7.7)
@@ -49,6 +54,13 @@ Replace-Contract $leftDigitOld $leftDigitNew
 Replace-Contract '        if c.sel < c.rows.len() {' "        if c.sel < c.rows.len() {`n            // Prediction rows belong to the end of the composition, before the right anchor moved left.`n            let cursor = self.cursor;`n            if self.candidate_from_right { self.cursor = self.syls.len(); }"
 Replace-Contract '_ if after_digit_token => c.list[c.rows.len()..].to_vec(),' '_ if after_digit_token || c.digit_zhuyin.is_some() => c.list[c.rows.len()..].to_vec(),'
 Replace-Contract '            c.rows = std::mem::take(&mut self.pred);' "            self.cursor = cursor;`n            c.rows = std::mem::take(&mut self.pred);"
+Replace-Contract '            (c.list, c.alt, c.rows, c.mixed) = self.window_list(std::mem::take(&mut c.rows));' @'
+            if self.candidate_from_right && c.digit_zhuyin.is_none() && c.mixed.is_none() {
+                (c.list, c.alt, c.rows) = self.window_list_right(std::mem::take(&mut c.rows));
+            } else {
+                (c.list, c.alt, c.rows, c.mixed) = self.window_list(std::mem::take(&mut c.rows));
+            }
+'@
 $chooseOld = @'
         if let Some(alt) = c.dalt.take().filter(|_| idx + 1 == c.list.len() && idx >= c.rows.len()) {
             let word = c.list[idx].0.clone();
@@ -70,21 +82,33 @@ $chooseNew = @'
         }
         if let Some(alt) = c.dalt.take().filter(|_| idx + 1 == c.list.len() && idx >= c.rows.len()) {
             let word = c.list[idx].0.clone();
+            if self.candidate_from_right && c.mixed.is_none() && matches!(&alt, DigitAlt::Digits(_)) {
+                self.cursor += 1; // upstream restores the syllable before its cursor
+            }
             let commit = self.choose_digit_alt(alt, word)?;
             if !commit.is_empty() {
                 self.commit_out = Some(commit);
             }
             return Ok(());
         }
-        if self.candidate_from_right && idx < c.rows.len() {
+        let row_span = c.rows.get(idx).filter(|_| self.candidate_from_right).map(|p| (p.start, self.syls.len()));
+        if row_span.is_some() {
             self.cursor = self.syls.len();
         }
 '@
 Replace-Contract $chooseOld $chooseNew
 Replace-Contract 'let alts = typed.chars().next().and_then(|c| self.punct.get(&c)).cloned().unwrap_or_default();' 'let alts = self.windows_punctuation_alternatives(&typed);'
 Replace-Contract '        self.punct = map;' "        self.punct = map;`n        self.windows_punctuation_candidates = false;"
-Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = if c.mixed.is_some() { if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) } } else { self.candidate_span(l) };' 2
-Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
+Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l, c.mixed.is_some());' 2
+Replace-Contract @'
+        let (start, end) = self.candidate_span(l, c.mixed.is_some());
+        // New words of the path as shown, under the readings of their records: read before the span is rewritten below (docs/spec/learning.md §8.5, bookkeeping).
+'@ @'
+        let (start, end) = row_span.unwrap_or_else(|| self.candidate_span(l, c.mixed.is_some()));
+        // New words of the path as shown, under the readings of their records: read before the span is rewritten below (docs/spec/learning.md §8.5, bookkeeping).
+'@
+$fixedPick = '        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new, mixed, own: None, whole: None });'
+Replace-Contract $fixedPick "$fixedPick`n        if self.candidate_from_right { self.cursor = end; }"
 Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/input_windows.rs" -Raw)

@@ -46,6 +46,7 @@
       "name": "windows-x64",
       "configurePreset": "windows-x64",
       "configuration": "Release",
+      "filter": { "exclude": { "label": "^special$" } },
       "output": {
         "outputOnFailure": true,
         "maxPassedTestOutputSize": 0,
@@ -59,6 +60,7 @@
       "name": "windows-x86",
       "configurePreset": "windows-x86",
       "configuration": "Release",
+      "filter": { "exclude": { "label": "^special$" } },
       "output": {
         "outputOnFailure": true,
         "maxPassedTestOutputSize": 0,

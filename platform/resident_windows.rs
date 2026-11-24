@@ -4,6 +4,41 @@ use std::sync::{Mutex, OnceLock};
 static WINDOWS_LEX_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static WINDOWS_MODEL_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+pub struct WindowsBenchmarkSettings {
+    pub tinylm_sha256: String,
+    pub colloquial_enabled: bool,
+    pub cells: [(f64, f64, f64); 3],
+    pub header_cells: [(f64, f64, f64); 3],
+    pub levels: u32,
+    pub strength: &'static str,
+    pub profile: &'static str,
+}
+impl Engine {
+    // Read the very same pairing decision and cells used when creating a job.
+    pub fn windows_benchmark_settings(&self) -> Option<WindowsBenchmarkSettings> {
+        let model = self.tinylm.as_ref()?;
+        let colloquial = self.colloquial.is_some() && colloquial::applies(self.profile, model);
+        let levels = [RerankLevel::Conservative, RerankLevel::Standard, RerankLevel::Aggressive];
+        let cells = levels
+            .map(|level| if colloquial { colloquial::cell(level) } else { model.params(self.profile, level) });
+        Some(WindowsBenchmarkSettings {
+            tinylm_sha256: model.file_sha256().to_owned(), colloquial_enabled: colloquial, cells,
+            header_cells: levels.map(|level| model.params(self.profile, level)), levels: self.rerank_levels(),
+            strength: match self.rerank_level { RerankLevel::Conservative=>"conservative",RerankLevel::Standard=>"standard",RerankLevel::Aggressive=>"aggressive" },
+            profile: if self.profile==Profile::Chat {"chat"}else{"formal"},
+        })
+    }
+
+    pub fn windows_benchmark_idle(&self) -> bool {
+        self.syls.is_empty() && self.pend.iter().all(Option::is_none) && self.run.is_empty()
+            && self.mixed_raw.is_empty() && self.pending_literal.is_empty() && self.drun.is_none()
+            && self.cands.is_none() && self.pred.is_empty() && self.fixed.is_empty()
+            && self.left.is_empty() && self.left_full.is_empty() && !self.left_cut && !self.left_fresh && self.recur.len() == 0
+            && self.rerank_job.is_none() && self.learner.records().is_empty()
+            && self.windows_learning_prefix.is_none()
+    }
+}
+
 #[cfg(test)]
 mod windows_pack_cache_tests {
     use super::*;

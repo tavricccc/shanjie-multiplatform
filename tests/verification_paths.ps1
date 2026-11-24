@@ -58,10 +58,10 @@ try {
         $bins=@(for($index=0;$index -lt $buildArguments.Count;$index++){
             if($buildArguments[$index] -eq '--bin'){$buildArguments[$index+1]}
         })
-        $expectedBins=@(if($Architecture -eq 'x64'){
+        $expectedBins=@('shanjie-reliability-check')+@(if($Architecture -eq 'x64'){
             $products | Where-Object { $_.EndsWith('.exe') } | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) }
         })
-        Assert-PathCheck ('--lib' -in $buildArguments -and ($bins -join ';') -ceq ($expectedBins -join ';')) "RELEASE builds only packaged $Architecture targets"
+        Assert-PathCheck ('--lib' -in $buildArguments -and ($bins -join ';') -ceq ($expectedBins -join ';')) "RELEASE builds only packaged $Architecture targets and the reliability probe"
         $PackageTargetsOnly=$false
     }
     Assert-PathCheck (!(Test-Path -LiteralPath $env:CARGO_TARGET_DIR)) 'The ambient target directory was not used'

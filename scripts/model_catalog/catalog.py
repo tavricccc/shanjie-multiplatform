@@ -20,7 +20,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = {"bigram.sjlm":"bigram", "classes.sjc":"classes", "kn.sjkn":"smoothing", "trigram.sjt3":"trigram",
          "trigram-chat.sjt3":"trigram-chat", "tinylm.sjtl":"semantic", "colloquial.sjlm":"colloquial"}
 CAPS = {"SJLM0001":"lm.sjlm1","SJCL0001":"classes.sjcl1","SJKN0002":"kn.sjkn2",
-        "SJT30001":"trigram.sjt30001", **{f"SJTL000{i}":f"semantic.sjtl{i}" for i in range(1,5)}}
+        "SJT30001":"trigram.sjt30001", **{f"SJTL000{i}":f"semantic.sjtl{i}" for i in range(1,7)}}
 # Roles whose header carries the main model's hash.
 PAIRED = ("classes","smoothing","trigram","trigram-chat","semantic")
 def capability(a): return "colloquial.sjlm1" if a["role"]=="colloquial" else CAPS[a["format_magic"]]
@@ -139,7 +139,7 @@ def discover(out):
                 elif item["role"] in ("trigram","trigram-chat"):pair=header[20:52].hex()
                 elif item["role"]=="semantic":
                     pair=header[68:100].hex()
-                    if magic=="SJTL0004" and header[212:244]!=bytes(32):kn=header[212:244].hex()
+                    if magic in ("SJTL0004","SJTL0005","SJTL0006") and header[212:244]!=bytes(32):kn=header[212:244].hex()
                 found.append({"asset":item,"pair":pair,"kn":kn,"prerelease":r["prerelease"]})
                 sources.append({"repository":repository,"release_id":r["id"],"asset_id":a["id"],"release":r["tag_name"],"filename":a["name"],
                                 "size":a["size"],"digest":a["digest"]})
@@ -252,7 +252,7 @@ def validate_model(m):
         if a["role"] in roles or a["repository"] not in SOURCES or not safe(a["release"],96) or not safe(a["filename"]):raise ValueError("Unsafe or duplicate asset")
         if not 0<a["size"]<=1073741824 or not re.fullmatch("[a-f0-9]{64}",a["sha256"]):raise ValueError("Invalid source identity")
         allowed={"bigram":{"SJLM0001"},"classes":{"SJCL0001"},"smoothing":{"SJKN0002"},"trigram":{"SJT30001"},
-                 "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,5)},"colloquial":{"SJLM0001"},
+                 "trigram-chat":{"SJT30001"},"semantic":{f"SJTL000{i}" for i in range(1,7)},"colloquial":{"SJLM0001"},
                  "attribution":{"TEXT0001"},"license":{"TEXT0001"}}
         if a["format_magic"] not in allowed.get(a["role"],set()):raise ValueError("Wrong role/format")
         if a["role"]=="attribution" and a["filename"]!="colloquial-attribution.tsv":raise ValueError("Unknown attribution file")

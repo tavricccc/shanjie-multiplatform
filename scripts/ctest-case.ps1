@@ -1,6 +1,6 @@
 #Requires -Version 7
 param(
-    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
+    [Parameter(Mandatory)][ValidateSet('infrastructure','upstream-data','prepare-core','shared-unit','windows-unit','core-suite','core-rowstats','core-recovery','mixed-regression','dist-data','runtime-payload','tsf-smoke-standard','tsf-smoke-cold','add-word','english-keys','submission','private-tsf','private-popup','candidate-host','mode-smoke','interaction','ui-verify','ui-startup','ui-disabled','ui-models','package')][string]$CaseId,
     [ValidateSet('x64','x86')][string]$Architecture='x64',
     [ValidateSet('windows','shanjie')][string]$Interaction='windows',
     [string]$Scenario,
@@ -33,7 +33,7 @@ try {
         $snapshot=Get-ReleaseSnapshot $root $env:SHANJIE_RELEASE_SNAPSHOT_ID $env:SHANJIE_RELEASE_SNAPSHOT_SHA256
         $runtimeRoot=$snapshot.runtime_root
         if($PayloadRoot){$PayloadRoot="$PayloadRoot-$($snapshot.id)"}
-        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models'){
+        if($CaseId -in 'ui-verify','ui-startup','ui-disabled','ui-models' -or ($CaseId -eq 'core-recovery' -and $Scenario -eq 'learning-status-ui')){
             # WinUI temporarily changes installed.json; only a private fixture may
             # be mutable. Its DLL/tools/UI bytes are checked against the seal.
             $uiRuntimeRoot=Join-Path $resultRoot 'runtime'
@@ -88,6 +88,7 @@ try {
                 & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy -StopOnFailure:$stopOnFailure
             }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
+            'core-rowstats' { & "$PSScriptRoot/verify-rowstats.ps1" -ResultRoot (Join-Path $resultRoot 'fixture') }
             'dist-data' { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist -RuntimeRoot $runtimeRoot }
             'runtime-payload' {
                 if (!$PayloadRoot) { throw 'CTest runtime payload path was not configured.' }
@@ -130,6 +131,7 @@ try {
                 if (!$HarnessPath) { throw 'Candidate-host CTest row requires its CMake-built executable.' }
                 & "$PSScriptRoot/verify-ui.ps1" @uiArguments -Architecture $Architecture -CandidateHostOnly -HarnessPath $HarnessPath
             }
+            'core-recovery' { & "$PSScriptRoot/verify-core-recovery.ps1" -Architectures $Architecture -Cases $Scenario -RuntimeRoot $uiArguments.RuntimeRoot -ResultRoot (Join-Path $resultRoot 'fixture') }
             'ui-verify' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario general -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-startup' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario startup -Phases $Scenario -OutputRoot (Join-Path $resultRoot 'ui') }
             'ui-disabled' { & "$PSScriptRoot/verify-ui.ps1" @uiArguments -SkipCandidateHost -Scenario disabled -Keyboards $Keyboards -OutputRoot (Join-Path $resultRoot 'ui') }

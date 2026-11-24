@@ -4,6 +4,7 @@ mod bridge;
 pub mod input_diagnostics;
 pub mod model_store;
 pub mod broker;
+pub mod wer;
 pub mod candidate;
 mod appearance;
 pub mod font;

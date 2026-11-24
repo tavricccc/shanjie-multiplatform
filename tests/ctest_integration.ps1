@@ -63,6 +63,7 @@ $scenarios=[regex]::Match($cmake,'(?m)^set\(english_scenarios ([^)]+)\)').Groups
 $caseScenarios=@($english|ForEach-Object{$_[1]}|Sort-Object -Unique)
 Check (@(Compare-Object $scenarios $caseScenarios).Count -eq 0) 'Every English scenario has a CTest row'
 Check (@($english|Where-Object{$_[1] -eq 'digit-navigation'}).Count -eq 2) 'Both mixing modes retain digit-navigation coverage'
+Check (@($english|Where-Object{$_[1] -like 'mixed-words*' -and $_[0] -eq 2 -and $_[2] -eq 1}).Count -eq 2) 'Both interaction presets cover the upstream mixed-word and completion path on the standard keyboard'
 $rows=@(
     foreach($phase in 'clean','reopen','different-directory','glass-fallback'){[pscustomobject]@{name="release.ui.startup.$phase";preset='windows-x64';selected=$true;reason='fixture'}}
     foreach($keyboard in 1,3,2){[pscustomobject]@{name="release.ui.disabled.keyboard$keyboard";preset='windows-x64';selected=$true;reason='fixture'}}
@@ -203,11 +204,11 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     }
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
-        @('ui','ui/View.xaml.cs',15),@('add-word','windows/src/word_helper.rs',22),
-        @('candidate','windows/src/candidate.rs',30),@('english','tests/english_keys.cpp',27),
-        @('submission','tests/submission.cpp',32),@('platform','platform/input_windows.rs',54),
-        @('shared','shared/src/lib.rs',96),@('shared-input','shared/src/input.rs',98),
-        @('docs','README.md',0),@('unknown','tools/unknown.txt',96),@('ci-workflow','.github/workflows/ci.yml',5)
+        @('ui','ui/View.xaml.cs',16),@('add-word','windows/src/word_helper.rs',22),
+        @('candidate','windows/src/candidate.rs',42),@('english','tests/english_keys.cpp',29),
+        @('submission','tests/submission.cpp',32),@('platform','platform/input_windows.rs',58),
+        @('shared','shared/src/lib.rs',112),@('shared-input','shared/src/input.rs',114),
+        @('docs','README.md',0),@('unknown','tools/unknown.txt',112),@('ci-workflow','.github/workflows/ci.yml',5)
     )
     foreach($scenario in $scenarios){
         $policy=Select-VerificationPlan @($scenario[1])
@@ -222,19 +223,58 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     foreach($path in 'shared/src/input.rs','windows/src/tsf/keys.rs','shared/src/profile.rs','profiles/windows.ini','profiles/shanjie.ini'){
         $policy=Select-VerificationPlan @($path)
         $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
-        $required=@('fast.rust.shared','fast.rust.windows','full.tsf-smoke.standard.x64','release.tsf-smoke.shanjie.x64','full.english.numpad.x64','full.english.fullwidth.x64','full.english.backquote.x64')
-        if($path -match 'profile'){$required+=@('release.ui.verify','release.ui.models','release.ui.candidate.x64')}
+        $required=@('fast.rust.shared','fast.rust.windows','full.tsf-smoke.standard.x64','release.tsf-smoke.shanjie.x64','full.english.numpad.x64','full.english.fullwidth.x64','full.english.backquote.x64','full.english.mixed-words.x64','full.english.mixed-words-shanjie.x64')
+        if($path -match 'profile'){$required+=@('release.ui.verify','release.ui.models','release.ui.candidate.x64','release.ui.learning-health')}
         foreach($name in $required){Check ($name -in $selected.Selected.name) "$path retains required $name"}
     }
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 96 -and $inventory.tests.Count -eq 110 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    Check ($full.Selected.Count -eq 112 -and $inventory.tests.Count -eq 128 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    foreach($name in 'full.core.learning-status.x64','full.core.privacy.x64'){
+        Check ($name -in $full.Selected.name) "FULL retains historical-gap regression $name"
+    }
+    foreach($scenario in 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'){
+        Check ("full.private.tsf-compat.$scenario.x64" -in $full.Selected.name) "FULL retains native boundary $scenario"
+    }
+    $uiPolicy=Select-VerificationPlan @('ui/MainWindow.xaml.cs')
+    $uiSelection=Get-SelectedTests $inventory @($uiPolicy.Labels) 'windows-x64'
+    Check ('release.ui.learning-health' -in $uiSelection.Selected.name) 'UI selection exercises actual resident failure and recovery in WinUI'
+    foreach($path in 'platform/input_windows.rs','scripts/prepare-lm.ps1','scripts/verify-rowstats.ps1','UPSTREAM.json','MODEL-SOURCES.json','data/packs/example.tsv','profiles/windows.ini','upstream/shanjie'){
+        $policy=Select-VerificationPlan @($path)
+        $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        Check ('full.core.rowstats' -notin $selected.Selected.name) "$path leaves the special CLI matrix manual"
+    }
+    foreach($path in 'platform/input_windows_ffi.rs','windows/src/candidate.rs','windows/src/installer.rs','ui/MainWindow.xaml.cs'){
+        $policy=Select-VerificationPlan @($path)
+        $selected=Get-SelectedTests $inventory @($policy.Labels) 'windows-x64'
+        Check ('full.core.rowstats' -notin $selected.Selected.name) "$path avoids unrelated CLI work"
+    }
+    foreach($testLevel in 'CI','FAST'){
+        $selected=Get-SelectedTests $inventory @($(if($testLevel -eq 'CI'){'ci'}else{'fast'})) 'windows-x64'
+        Check ($selected.Selected.Count -eq 5 -and 'full.core.rowstats' -notin $selected.Selected.name) "$testLevel remains a five-case baseline"
+    }
+    $CiSafe=$true
+    $selected=Get-SelectedTests $inventory @('full','release') 'windows-x64'
+    Check ('full.core.rowstats' -notin $selected.Selected.name) 'RELEASE CiSafe excludes special tests'
+    $CiSafe=$false
+    foreach($labels in @(@('full'),@('full','release'))){
+        $selected=Get-SelectedTests $inventory $labels 'windows-x64'
+        Check ('full.core.rowstats' -notin $selected.Selected.name) 'Local FULL and RELEASE exclude special tests'
+    }
+    $special=$inventory.tests|Where-Object name -eq 'full.core.rowstats'
+    Check ($special -and 'special' -in (Get-TestLabels $special) -and 'full' -notin (Get-TestLabels $special) -and 'release' -notin (Get-TestLabels $special)) 'The unchanged G05 entry is classified special'
+    $manual=(& ctest --test-dir $inventoryDirectory -C Release -R '^full[.]core[.]rowstats$' --show-only=json-v1|Out-String)|ConvertFrom-Json
+    Check ($LASTEXITCODE -eq 0 -and 'full.core.rowstats' -in $manual.tests.name) 'Explicit manual G05 selection remains available (inventory only)'
+    Push-Location $project
+    try {$default=(& ctest --preset windows-x64 --show-only=json-v1|Out-String)|ConvertFrom-Json}finally{Pop-Location}
+    Check ($LASTEXITCODE -eq 0 -and 'full.core.rowstats' -notin $default.tests.name) 'The default CTest preset also excludes G05 (inventory only)'
     $costByName=@{}
     foreach($item in $inventory.tests){
         $costProp=$item.properties | Where-Object name -eq 'COST' | Select-Object -First 1
         if($costProp){$costByName[$item.name]=[double]$costProp.value}
     }
+    Check ($costByName['full.core.rowstats'] -gt $costByName['full.core-suite']) 'The new CLI matrix has its measured heavy-suite scheduling seed'
     Check ($costByName['full.core-suite'] -gt $costByName['fast.rust.windows'] -and $costByName['fast.rust.windows'] -gt $costByName['release.ui.verify'] -and $costByName['release.ui.verify'] -gt $costByName['full.submission.async-keys.x64'] -and $costByName['full.submission.async-keys.x64'] -gt $costByName['full.private.tsf-compat.shift-right.x64']) 'Configured CTest inventory preserves descending cold-start COST priorities for heavy suites'
-    Write-Host 'PASS configured selection inventory: 11 count scenarios plus key/profile behavioral requirements, FULL 96, x64 RELEASE 109, fixed CI 5; no native execution'
+    Write-Host 'PASS configured selection inventory: FULL 112, x64 inventory 128 including manual G05, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}

@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <msctf.h>
 #include <textstor.h>
+#include <initguid.h>
+#include <inputscope.h>
 #include <psapi.h>
 #include <wrl/client.h>
 #include <algorithm>
@@ -13,6 +15,26 @@
 #include <thread>
 #include "identity.h"
 using Microsoft::WRL::ComPtr;
+class Scope final : public ITfInputScope {
+    ULONG refs_ = 1;
+    InputScope scope_;
+public:
+    explicit Scope(InputScope scope) : scope_(scope) {}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** out) override {
+        *out = nullptr; if(iid != IID_IUnknown && iid != IID_ITfInputScope) return E_NOINTERFACE;
+        *out = static_cast<ITfInputScope*>(this); AddRef(); return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs_; }
+    ULONG STDMETHODCALLTYPE Release() override { auto refs=--refs_; if(!refs) delete this; return refs; }
+    HRESULT STDMETHODCALLTYPE GetInputScopes(InputScope** out,UINT* count) override {
+        *out=static_cast<InputScope*>(CoTaskMemAlloc(sizeof(InputScope))); if(!*out)return E_OUTOFMEMORY;
+        **out=scope_; *count=1; return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetPhrase(BSTR**,UINT*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetRegularExpression(BSTR*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetSRGS(BSTR*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetXML(BSTR*) override { return E_NOTIMPL; }
+};
 #include "thread_proxy.h"
 #include "local_notify.h"
 class Store final : public ITextStoreACP {
@@ -24,7 +46,12 @@ public:
     bool layoutReady = false;
     bool readOnly = false;
     DWORD staticFlags = 0;
+    InputScope inputScope = IS_DEFAULT;
+    bool scopeRequested = false;
+    LONG privacyBoundary = 0;
+    unsigned prefixReads = 0, prefixReadsBeforeWrite = 0, textWrites = 0, unchangedWrites = 0;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
+    void scopeChanged(InputScope value) { inputScope=value; if(sink_)sink_->OnAttrsChange(0,LONG(text.size()),1,&GUID_PROP_INPUTSCOPE); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
     void externalText(const std::wstring& value) {
         TS_TEXTCHANGE change{0,(LONG)text.size(),(LONG)value.size()};
@@ -43,12 +70,17 @@ public:
     HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override { *fetched = count ? 1 : 0; if (count) *out = selection; return S_OK; }
     HRESULT STDMETHODCALLTYPE SetSelection(ULONG count, const TS_SELECTION_ACP* value) override { if (count != 1) return E_INVALIDARG; selection = *value; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetText(LONG start, LONG end, WCHAR* plain, ULONG capacity, ULONG* count, TS_RUNINFO* runs, ULONG runCapacity, ULONG* runCount, LONG* next) override {
+        if (capacity && start < privacyBoundary) {
+            ++prefixReads;
+            if (textWrites == 0) ++prefixReadsBeforeWrite;
+        }
         if (end == -1) end = (LONG)text.size(); if (start < 0 || end < start || end > (LONG)text.size()) return TS_E_INVALIDPOS;
         *count = std::min<ULONG>(capacity,end-start); if (*count) std::copy_n(text.data()+start,*count,plain);
         *runCount = runCapacity ? 1 : 0; if (runCapacity) runs[0] = {*count,TS_RT_PLAIN}; *next = start + *count; return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SetText(DWORD, LONG start, LONG end, const WCHAR* value, ULONG count, TS_TEXTCHANGE* change) override {
         if (start < 0 || end < start || end > (LONG)text.size()) return TS_E_INVALIDPOS;
+        ++textWrites; if(text.substr(start,end-start)==std::wstring(value,count)) ++unchangedWrites;
         text.replace(start,end-start,value,count); *change = {start,end,start+(LONG)count};
         if (window) InvalidateRect(window,nullptr,TRUE);
         return S_OK;
@@ -65,11 +97,18 @@ public:
         if (end) *end = change->acpNewEnd; return hr;
     }
     HRESULT STDMETHODCALLTYPE InsertEmbeddedAtSelection(DWORD,IDataObject*,LONG*,LONG*,TS_TEXTCHANGE*) override { return E_NOTIMPL; }
-    HRESULT STDMETHODCALLTYPE RequestSupportedAttrs(DWORD,ULONG,const TS_ATTRID*) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE RequestAttrsAtPosition(LONG,ULONG,const TS_ATTRID*,DWORD) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE RequestSupportedAttrs(DWORD,ULONG count,const TS_ATTRID* ids) override {
+        scopeRequested=count && std::find(ids,ids+count,GUID_PROP_INPUTSCOPE)!=ids+count; return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE RequestAttrsAtPosition(LONG,ULONG count,const TS_ATTRID* ids,DWORD flags) override { return RequestSupportedAttrs(flags,count,ids); }
     HRESULT STDMETHODCALLTYPE RequestAttrsTransitioningAtPosition(LONG,ULONG,const TS_ATTRID*,DWORD) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE FindNextAttrTransition(LONG,LONG halt,ULONG,const TS_ATTRID*,DWORD,LONG* next,BOOL* found,LONG* offset) override { *next = halt; *found = FALSE; *offset = 0; return S_OK; }
-    HRESULT STDMETHODCALLTYPE RetrieveRequestedAttrs(ULONG,TS_ATTRVAL*,ULONG* fetched) override { *fetched = 0; return S_OK; }
+    HRESULT STDMETHODCALLTYPE RetrieveRequestedAttrs(ULONG capacity,TS_ATTRVAL* out,ULONG* fetched) override {
+        *fetched=0; if(capacity && scopeRequested) {
+            out[0]={}; out[0].idAttr=GUID_PROP_INPUTSCOPE; out[0].varValue.vt=VT_UNKNOWN;
+            out[0].varValue.punkVal=new Scope(inputScope); *fetched=1; scopeRequested=false;
+        } return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE GetEndACP(LONG* out) override { *out = (LONG)text.size(); return S_OK; }
     HRESULT STDMETHODCALLTYPE GetActiveView(TsViewCookie* out) override { *out = 1; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetACPFromPoint(TsViewCookie,const POINT*,DWORD,LONG*) override { return TS_E_NOLAYOUT; }

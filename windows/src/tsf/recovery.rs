@@ -101,6 +101,9 @@ impl Data {
         {
             return Ok(true);
         }
+        // Outside the attempt log: a retry skips a transition already made, so recording it
+        // there would make the retried key look like a different operation.
+        self.update_privacy(&key.context, cookie)?;
         if let Some((_, old)) = &key.pick {
             let current = &self.state.borrow().snapshot;
             if current.preedit != old.preedit

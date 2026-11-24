@@ -37,6 +37,14 @@ PowerPoint 等宿主可拒絕同步編輯鎖。TSF 分開處理 `RequestEditSess
 
 ## 候選窗
 
+Windows 的兩份操作範本由 `shared/src/input.rs` 與 TSF caller 實作，不呼叫上游 `set_key_scheme(1)`。Windows 範本的未開窗 ↑ 循環字詞、Tab／→ 展開與 Enter 確認後提交，以及善解範本的 Tab 提交後交給 App、左錨點與繼續組字，均保留各自的設定。收合清單的 ↑↓ 映射為逐項移動，展開後沿三欄的直排移動；PageUp／PageDown 交給 App，換頁使用空白或 `right_action=page`。上游 scheme1 的特定第二／第三候選 ↑ 規則沒有接到 Windows，這是既定操作政策的差異。
+
+Alt 在按鍵翻譯中使用與核心抽象 Option 相同的 bit 4，但 TSF 在一般核心輸入之前分流 Alt、AltGr／Ctrl+Alt 及 Windows 鍵；`Ctrl+Alt+,` 保留符號鍵盤入口。這不表示 macOS Option 與 Windows Alt 的操作契約相同；核心 `engine_option` 只驗證抽象鍵，Windows harness 的 `SetKeyboardState` 也只代表合成鍵盤狀態。
+
+學習與前文的隱私判斷在一般按鍵、候選選取及背景 rerank 的 TSF 邊界執行。`IS_PRIVATE`、密碼／PIN scope、原生密碼 Edit、唯讀或停用的 context 會暫停學習並清除舊前文、預測及舊 rerank；不再讀取新的前文。未知的宿主執行檔身分也暫停。已知宿主沒有提供 scope 時仍可正常輸入與學習；Windows 沒有全域等同 macOS Secure Event Input 的保證。密碼管理器以宿主執行檔名稱排除：1Password、Bitwarden、KeePass、KeePassXC、Enpass、Dashlane；不同程序或未標示的網頁欄位仍取決於宿主提供的 scope。選取範圍暫時無法查詢時，先暫停學習與前文讀取，仍讓非同步組字繼續。隱私暫停不改使用者的 learning 設定，local 與 resident 共用同一協定；恢復時仍尊重明確關閉。
+
+核心的 learning status bit 0 經 Snapshot／Named Pipe 傳到候選窗、語言列 tooltip 與設定頁儲存狀態查詢。僅表示上次完整重寫失敗，輸入和提交仍可完成；核心下一次成功儲存才清除，暫停或關閉 learning 時不顯示。沒有常駐核心時，設定頁明列無法讀取狀態，local 核心仍可透過候選窗提示。
+
 單一 Win32 layered popup，由 Rust 以 Direct2D software DC render target／DirectWrite 繪製，在 TSF 同程序內，不啟動子程序或載入 WinUI。視窗 `WS_EX_NOACTIVATE`，不搶焦點；以 premultiplied alpha 合成接近不透明的底面、細邊線、上緣亮邊與柔和陰影，不使用系統背景模糊。開啟時淡入並微幅縮放，選取高亮滑動，顯示中大小或位置改變時滑到新位置；隱藏立即完成，動畫政策關閉或跨螢幕 DPI 改變時直接定位。高對比改用不透明系統色並移除陰影。外觀來源與細節見 [DESIGN.md](DESIGN.md)。
 
 - **排列**：所有範本一律直式，一列一個候選，收合時每頁最多 9 項；舊設定的 `[candidates] layout` 讀入時丟棄，下次儲存就消失（範本保留這一行是因為 Linux 前端會讀）。右方向鍵選「展開」時顯示三欄多列候選；↑↓ 沿同一直排移動，頂列 ↑ 收回。格狀欄寬依內容取最大值，超過工作區時縮欄並省略。核心與數字標籤仍以九項為一組；1–9 選取反白所在群組的候選。

@@ -35,6 +35,23 @@ public sealed partial class MainWindow : UserControl
     internal void Activate() => Host.Activate();
     internal void Close() => Host.Close();
     private void MinimizeWindow(object sender, RoutedEventArgs args) => Host.Minimize(true);
+    private async void RefreshLearningStatus(object sender, RoutedEventArgs args)
+    {
+        var button = (Button)sender; button.IsEnabled = false;
+        await RefreshLearningHealth();
+        button.IsEnabled = true;
+    }
+    internal string LearningHealthForVerification => LearningHealthText.Text;
+    internal async Task<int> RefreshLearningHealth()
+    {
+        int status = await Task.Run(() => Interop.Native.sj_learning_status(System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "data"))));
+        LearningHealthText.Text = status switch {
+            1 => "選字學習暫時無法儲存；輸入仍可使用。確認資料夾可寫後，下一次儲存成功會解除提示。",
+            0 => "目前常駐核心沒有回報學習儲存失敗。",
+            _ => "目前無法讀取儲存狀態；輸入時也可查看候選窗的提示。"
+        };
+        return status;
+    }
     private void CloseWindow(object sender, RoutedEventArgs args) { if (Host.CanClose()) Host.Close(); }
     readonly AppearanceController appearance;
     private void ApplyTheme() { RequestedTheme = Root.RequestedTheme = (ElementTheme)Vm.Theme; appearance.Apply(); }

@@ -67,6 +67,20 @@ public partial class App : Application
             catch (Exception error) { File.WriteAllText(result, error.ToString()); }
             Environment.Exit(0);
         }
+        else if (arguments.Length == 4 && arguments[1] == "--verify-learning-health")
+        {
+            string output=Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);
+            try {
+                string local=Environment.GetEnvironmentVariable("LOCALAPPDATA") ?? "";
+                string test=Environment.GetEnvironmentVariable("SHANJIE_TEST_ROOT") ?? "";
+                if(Environment.GetEnvironmentVariable("SHANJIE_TEST_PROFILE")!="1" || Environment.GetEnvironmentVariable("SHANJIE_CORE_LOCAL")!="1" || string.IsNullOrEmpty(local)
+                    || !Path.GetFullPath(local).Equals(Path.GetFullPath(test),StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Learning health verifier requires the parent's isolated profile before XAML creation");
+                window=new MainWindow(); await Verification.ReliabilityVerifier.LearningHealth((MainWindow)window,output,int.Parse(arguments[3]));
+                File.WriteAllText(Path.Combine(output,"result.txt"),"PASS");
+            } catch(Exception error) { File.WriteAllText(Path.Combine(output,"result.txt"),error.ToString()); }
+            Exit();
+        }
         else if (arguments.Length == 3 && arguments[1] == "--verify-reliability")
         {
             string output = Path.GetFullPath(arguments[2]); Directory.CreateDirectory(output);

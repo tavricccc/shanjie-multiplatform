@@ -223,17 +223,23 @@
                             <controls:SettingToggle x:Name="MemePackToggle" Label="迷因與直播用語" Description="139 個迷因、網路及直播用語，與上游相同，預設開啟；變更會重新載入核心。" IsOn="{x:Bind Vm.MemePack, Mode=TwoWay}"/>
                         </controls:SettingCard>
                         <TextBlock Text="模糊輸入" Style="{StaticResource SjGroupTitle}"/>
-                        <TextBlock Style="{StaticResource SjNote}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。三聲變調預設開啟，其餘預設關閉；變更會重新載入核心。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="勾選的注音互相通用，例如開啟 ㄣ／ㄥ 後打 ㄅㄣ 也找得到 ㄅㄥ 的詞。變調與口語讀音預設開啟，其餘預設關閉；變更會重新載入核心。"/>
                         <controls:SettingCard>
                             <controls:SettingToggle Label="ㄣ／ㄥ" IsOn="{x:Bind Vm.FuzzyEnEng, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄓ／ㄗ" IsOn="{x:Bind Vm.FuzzyZhZ, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄔ／ㄘ" IsOn="{x:Bind Vm.FuzzyChC, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="ㄕ／ㄙ" IsOn="{x:Bind Vm.FuzzyShS, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="鄰鍵打錯" Description="打出詞庫沒有的讀音時，改用鍵盤上左右相鄰的鍵來猜；只適用標準注音鍵盤。" IsEnabled="{x:Bind Vm.SupportsFuzzyAdjacent, Mode=OneWay}" IsOn="{x:Bind Vm.FuzzyAdjacent, Mode=TwoWay}"/>
-                            <controls:SettingToggle x:Name="Tone3SandhiToggle" Label="三聲變調" Description="照實際讀音打的變調（眨眼打 ㄓㄚˊ ㄧㄢˇ、小姐打 ㄒㄧㄠˊ ˙ㄐㄧㄝ）也解得出來；預設開啟，變更會重新載入核心。" IsOn="{x:Bind Vm.Tone3Sandhi, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="Tone3SandhiToggle" Label="變調與口語讀音" Description="照實際讀音打的變調（眨眼打 ㄓㄚˊ ㄧㄢˇ、小姐打 ㄒㄧㄠˊ ˙ㄐㄧㄝ）與口語讀音（厲害打 ㄌㄧˋ ˙ㄏㄞ、熱騰騰打 ㄖㄜˋ ㄊㄥ ㄊㄥ）也解得出來；預設開啟，變更會重新載入核心。" IsOn="{x:Bind Vm.Tone3Sandhi, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="學習我的選字偏好" IsOn="{x:Bind Vm.Learning, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="Ctrl＋Shift＋Backspace 忘記目前候選的學習" Description="學習開啟且有反白候選時生效；不刪除個人詞庫。" IsEnabled="{x:Bind Vm.Learning, Mode=OneWay}" IsOn="{x:Bind Vm.ForgetCandidate, Mode=TwoWay}"/>
                             <controls:SettingRow Stacked="True"><Button Content="清除已儲存的選字學習" Click="ClearLearning"/></controls:SettingRow>
+                            <controls:SettingRow Stacked="True">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="LearningHealthText" Text="輸入時若無法儲存學習，候選窗會顯示提示。" TextWrapping="Wrap"/>
+                                    <Button Content="重新檢查儲存狀態" Click="RefreshLearningStatus"/>
+                                </StackPanel>
+                            </controls:SettingRow>
                             <controls:SettingRow Label="個人詞庫" Stacked="True"><TextBox x:Name="PersonalDictionaryEditor" AcceptsReturn="True" MinHeight="160" MaxHeight="300" TextWrapping="Wrap" Text="{x:Bind Vm.DictionaryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Style="{StaticResource SjNote}" Text="每行填「注音 字詞」，例如：ㄕㄢˋ-ㄐㄧㄝˇ 善解。可在第三欄指定非正數分數，預設 -0.01。儲存後先提交組字再載入。"/>

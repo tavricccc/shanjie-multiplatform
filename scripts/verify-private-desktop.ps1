@@ -2,7 +2,8 @@
 param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
- 'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty'))
+ 'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
+ 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
@@ -11,6 +12,8 @@ if(Test-Path -LiteralPath $Output){throw 'Use a fresh fixture output directory.'
 New-Item -ItemType Directory -Path $Output -Force|Out-Null
 $Payload=[IO.Path]::GetFullPath($Payload)
 $results=@()
+$privacyCases=@($Cases|Where-Object{$_ -like 'privacy-*' -and $_ -notin @('privacy-control','privacy-disabled','privacy-transition')})
+if($privacyCases.Count){$Cases=@('privacy-control')+@($Cases|Where-Object{$_ -ne 'privacy-control'})}
 $ownedServers=[Collections.Generic.List[object]]::new()
 try {
  foreach($scenario in $Cases) {
@@ -21,6 +24,9 @@ try {
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
   $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
   $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
+  if($scenario -like 'privacy-*'){$profile=$profile -replace '(?m)^learning=0','learning=1'}
+  if($scenario -eq 'privacy-control'){$profile=$profile -replace '(?m)^context=1','context=0'}
+  if($scenario -eq 'modifiers-english'){$profile=$profile -replace '(?m)^upstream_english=0','upstream_english=1'}
   if($scenario -eq 'cancel-theme-dark'){$profile=$profile -replace '(?m)^theme=0','theme=2'}
   if($scenario -eq 'cancel-theme-light'){$profile=$profile -replace '(?m)^theme=0','theme=1'}
   Set-Content -LiteralPath "$fixture/Shanjie/profile.ini" -Value $profile -Encoding utf8NoBOM
@@ -55,7 +61,9 @@ try {
   $log=$stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult();$code=$child.ExitCode;$child.Dispose()
   $child=$null
   Set-Content -LiteralPath "$fixture/result.log" -Value $log -Encoding utf8NoBOM
-  $results+=[pscustomobject]@{scenario=$scenario;exit=$code}
+  $prefixReads=if($log -match 'privacy prefix_reads=(\d+)'){[int]$Matches[1]}else{$null}
+  $readsBeforeWrite=if($log -match 'prewrite_prefix_reads=(\d+)'){[int]$Matches[1]}else{$null}
+  $results+=[pscustomobject]@{scenario=$scenario;exit=$code;prefix_reads=$prefixReads;prewrite_prefix_reads=$readsBeforeWrite}
   Write-Output $log.Trim()
   if($server){if(!$server.HasExited){$server.Kill();if(!$server.WaitForExit(5000)){throw 'Owned fixture core did not exit.'}};$server.Dispose();[void]$ownedServers.Remove($server)}
   if($code){throw "Compatibility fixture failed: $scenario ($code)"}

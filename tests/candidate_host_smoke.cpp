@@ -58,7 +58,30 @@ int wmain(int argc,wchar_t** argv) {
         englishHint.englishRunLen = 0;
         presenter.publish(englishHint,preferences,caret,96,true);
         assert(!presenter.shown());
+        shanjie::Snapshot englishRow;
+        englishRow.total = 1;
+        // Use a word wider than the list's minimum so the Tab tag changes its width.
+        englishRow.candidates = {L"KeyboardPredictionCompletion"};
+        presenter.publish(englishRow,preferences,caret,96,true);
+        RECT plainRow{}; GetClientRect(presenter.window(),&plainRow);
+        presenter.hide();
+        englishRow.prediction = true;
+        englishRow.englishRunLen = 1;
+        presenter.publish(englishRow,preferences,caret,96,true);
+        RECT runRow{}; GetClientRect(presenter.window(),&runRow);
+        assert(presenter.shown() && runRow.bottom == plainRow.bottom && runRow.right > plainRow.right);
         frame.candidates.resize(9); frame.columns = 0; frame.total = 9; frame.selected = 1;
+        {
+            auto width=[&](const shanjie::Snapshot& s) { presenter.hide();presenter.publish(s,preferences,caret,96,true);RECT r{};GetClientRect(presenter.window(),&r);return r.right; };
+            shanjie::Snapshot passive;passive.candidates={L"測試被動預測提示"};passive.total=1;
+            auto bare=width(passive);passive.prediction=true;auto tab=width(passive);
+            assert(tab>bare); // first passive prediction has a visible Tab label
+            passive.associated=true;assert(width(passive)==bare);
+            passive.associated=false;passive.selected=0;assert(width(passive)<tab); // number label replaces Tab
+            shanjie::Snapshot health;health.preedit=L"你";health.cursor=1;
+            auto normal=width(health);health.learningUnavailable=true;assert(width(health)>normal);
+            health.learningUnavailable=false;assert(width(health)==normal); // successful save removes the warning
+        }
         // The reading panel alone fits its text with no minimum width, and glides as the text grows and shrinks.
         {
             auto dpi = GetDpiForWindow(presenter.window());

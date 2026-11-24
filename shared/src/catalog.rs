@@ -6,7 +6,7 @@ use std::collections::{BTreeSet,BTreeMap};
 pub type Result<T> = std::result::Result<T,Box<dyn std::error::Error>>;
 pub const PROFILE:&str="windows-bundle-v1";
 pub const CAPABILITIES:&[&str]=&["lm.sjlm1","lm.classless","classes.sjcl1","map.sjwm2",
-    "kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","colloquial.sjlm1"];
+    "kn.sjkn2","trigram.sjt30001","semantic.sjtl1","semantic.sjtl2","semantic.sjtl3","semantic.sjtl4","semantic.sjtl5","semantic.sjtl6","colloquial.sjlm1"];
 /// Roles bound to the main model's hash (their headers carry it), so they must declare it.
 const PAIRED:&[&str]=&["classes","smoothing","trigram","trigram-chat","semantic"];
 #[derive(Clone,Debug,Serialize,Deserialize)]
@@ -74,6 +74,8 @@ pub fn asset_capability(a:&Asset)->Result<Option<&'static str>> {
         ("semantic","SJTL0002","tinylm.sjtl")=>Some("semantic.sjtl2"),
         ("semantic","SJTL0003","tinylm.sjtl")=>Some("semantic.sjtl3"),
         ("semantic","SJTL0004","tinylm.sjtl")=>Some("semantic.sjtl4"),
+        ("semantic","SJTL0005","tinylm.sjtl")=>Some("semantic.sjtl5"),
+        ("semantic","SJTL0006","tinylm.sjtl")=>Some("semantic.sjtl6"),
         ("attribution","TEXT0001","colloquial-attribution.tsv")=>None,
         ("license","TEXT0001",name) if name.ends_with(".NOTICE.txt")||name=="LICENSE.txt"=>None,
         _=>return fail("模型含未知格式／附件角色，需要更新核心。"),
@@ -187,5 +189,33 @@ mod tests {
         assert!(validate(&rewritten).is_err(),"changing the source does not preserve the bundle identity");
         let list=json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[receipt("untrusted/shanjie")]});
         assert!(parse(&signed(list)).unwrap().models.is_empty());
+    }
+    #[test]
+    fn sjtl5_and_sjtl6_bundles_validate_while_unknown_versions_are_refused(){
+        let main="1".repeat(64);
+        let kn="2".repeat(64);
+        let mut deps=vec![main.clone(),kn.clone()];deps.sort();
+        let make=|magic:&str,cap:&str|{
+            let mut m=Model{
+                id:String::new(),name:format!("semantic-{magic}"),
+                required_capabilities:vec!["colloquial.sjlm1".into(),"kn.sjkn2".into(),"lm.classless".into(),"lm.sjlm1".into(),"map.sjwm2".into(),cap.into()],
+                assets:vec![
+                    Asset{role:"bigram".into(),repository:"Nanako0129/shanjie".into(),release:"sj-lm-7".into(),filename:"bigram.sjlm".into(),format_magic:"SJLM0001".into(),size:10,sha256:main.clone(),requires_assets:vec![]},
+                    Asset{role:"smoothing".into(),repository:"Nanako0129/shanjie".into(),release:"sj-kn-2".into(),filename:"kn.sjkn".into(),format_magic:"SJKN0002".into(),size:10,sha256:kn.clone(),requires_assets:vec![main.clone()]},
+                    Asset{role:"semantic".into(),repository:"Nanako0129/shanjie".into(),release:"sj-sr-10-31m".into(),filename:"tinylm.sjtl".into(),format_magic:magic.into(),size:10,sha256:"3".repeat(64),requires_assets:deps.clone()},
+                    Asset{role:"colloquial".into(),repository:"Nanako0129/shanjie".into(),release:"sj-cl-2".into(),filename:"colloquial.sjlm".into(),format_magic:"SJLM0001".into(),size:10,sha256:"4".repeat(64),requires_assets:vec![]},
+                ],
+                compatibility:vec![],advisory_revision:String::new(),advisories:vec![],
+            };
+            m.id=identity(&m);m.advisory_revision=advisory_revision(&m);m
+        };
+        for (magic,cap) in [("SJTL0001","semantic.sjtl1"),("SJTL0004","semantic.sjtl4"),("SJTL0005","semantic.sjtl5"),("SJTL0006","semantic.sjtl6")] {
+            let m=make(magic,cap);
+            assert!(validate(&m).is_ok(),"{magic} should validate");
+            let list=json!({"format":2,"revision":"","generated_at":"t","example_only":false,"models":[m]});
+            assert_eq!(parse(&signed(list)).unwrap().models.len(),1,"{magic} should parse");
+        }
+        let unknown=make("SJTL0007","semantic.sjtl7");
+        assert!(validate(&unknown).is_err(),"unknown SJTL0007 must fail validation");
     }
 }

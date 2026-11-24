@@ -985,6 +985,10 @@ pub fn uninstall(target: &Path, policy: UserData) -> Result<Option<usize>> {
     // What open programs still hold goes at the next sign-in or restart, with the folders.
     cleanup_task::schedule(&left.paths, &[versions, target.to_owned()])?;
     let mut pending = left.files + purge_parked(target);
+    // A leftover exclusion is harmless; it must not stop the personal-data step.
+    if let Err(error) = crate::wer::uninstall(pending != 0 || target.join("versions").exists()) {
+        crate::runtime_log::io("wer.uninstall", &error);
+    }
     progress::step("Remove", "succeeded", "");
     progress::step("Data", "started", "");
     let personal = crate::profile::folder();

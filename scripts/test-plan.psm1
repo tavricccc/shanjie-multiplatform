@@ -1,4 +1,4 @@
-﻿# Resolve changes once for every architecture; --no-renames keeps both sides of
+# Resolve changes once for every architecture; --no-renames keeps both sides of
 # moves, including source files moved under docs/.
 function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
     $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
@@ -39,10 +39,14 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
+        '^scripts/verify-rowstats\.ps1$' { $labels=@('test-framework');$reason='G05 is a manual special test; automatic acceptance only checks its classification.';break }
         '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|runner-diagnostics|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
-        '^(platform/|scripts/prepare-core\.ps1$)' {
+        '^(platform/(candidates_windows|composition_windows|input_windows|key_options_windows|learning_windows|mapped_array|mapped_lm|map_model|resident_windows|selection_journal_windows|selection_learning_windows|smart_input_windows|word_set_windows)\.rs|scripts/prepare-(core|lm|candidates|keys|smart-input|selection-learning|resident|memory|english)\.ps1)$' {
+            $labels=@('rust','core','english','submission');$reason='Prepared core implementation retains core regressions; G05 remains a separately requested special test.';break
+        }
+        '^platform/(candidates_windows|input_windows|key_options_windows|smart_input_windows)_ffi\.rs$' {
             $labels=@('rust','core','english','submission');$reason='Preserve upstream platform selection: Rust, core, mixed input, English/submission; latency is additional.';break
         }
         '^(windows/src/(word_helper|word_popup|selection_text)\.rs|windows/src/tsf/add_word\.rs|tests/(add_word_popup|popup_lifecycle)\.cpp|scripts/verify-add-word\.ps1)$' {
@@ -112,12 +116,12 @@ function Get-VerificationExceptions {
     @(
         @{id='input-features';script='verify-input-features.ps1';category='conditional';pattern='^(windows/src/(input|mixed_regression)\.rs|windows/src/tsf/keys\.rs|shared/src/input\.rs|tests/submission\.cpp|scripts/verify-input-features\.ps1)$';scope='verify-input-features.ps1: choose -Architectures and zero-based -CaseIndices only for required, unverified configurations. submission.cpp shares input assertions, but input-space-commit and profile values differ from CTest input-digits; matching key text alone cannot authorize reuse.'}
         @{id='profile-refresh';script='verify-profile-refresh.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|windows/src/tsf/profile_refresh\.rs$|tests/profile_refresh\.cpp$|scripts/verify-profile-refresh\.ps1$)';scope='verify-profile-refresh.ps1: review only changed resident-core notification/fault scenarios; select -Architectures/-Scenarios/-Faults. CTest submission refresh uses an in-process core, so its PASS does not establish resident prediction fault coverage.'}
-        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^platform/(resident_windows|input_windows_ffi)\.rs$|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. For pack rebuild performance and lifetime changes use -Cases pack-switch; CTest rebuild-local/rebuild-pipe check app behavior, not latency, memory or retired pipe sessions.'}
         @{id='dictionary-store';script='verify-dictionary-store.ps1';category='conditional';pattern='^(windows/src/dictionary_store\.rs|tests/dictionary_store\.cpp|scripts/verify-dictionary-store\.ps1)$';scope='verify-dictionary-store.ps1: review the sj_dictionary_save ABI, truncated-file repair/hash and simultaneous x64/x86 publication. Ordinary word-add/unit tests do not establish this cross-process fixture. No case filter exists; report overlap/remaining need before running the whole tool.'}
         @{id='profile-coexistence';script='verify-profile-coexistence.ps1';category='conditional';pattern='^(profiles/|shared/src/profile\.rs$|windows/src/(profile|bridge)\.rs$|tests/profile_coexistence\.cpp$|scripts/verify-profile-coexistence\.ps1$)';scope='verify-profile-coexistence.ps1: only when format/migration compatibility needs checking; requires -OldPackage and matching -OldSchema, and supports -Architecture. Current-version UI persistence is not old/new DLL coexistence. Missing old package means not run, never PASS.'}
         @{id='update-probes';script='verify-update.ps1';category='conditional';pattern='^windows/src/(tsf/(keys|focus_handoff|service)\.rs$|broker(\.rs$|/)|bin/shanjie-core-check\.rs$)|^tests/caps_lock\.cpp$|^scripts/verify-update\.ps1$';scope='verify-update.ps1 tests Caps Lock/field/immediate-input and resident-core probes, not an installer update. Compare its configurations with actual CTest evidence first. It has no scenario/architecture filter: identify the remaining need and duplication explicitly; do not automatically rerun it.'}
         @{id='no-admin-wrapper';script='verify-no-admin.ps1';category='wrapper';pattern='^scripts/verify-no-admin\.ps1$';scope='verify-no-admin.ps1 is a composite wrapper, not an extra assertion suite. Matching successful RELEASE cases in the same non-elevated environment need no wrapper rerun; use CTest for any missing required cases. A different privilege/environment claim still needs separate evidence.'}
         @{id='engine-measurement';script='measure-engine.ps1';category='required-extra';pattern=$null;scope='IPC/key latency is required for key/core-request changes; core-suite and TSF correctness are not equivalent.'}
+        @{id='tinylm-comparison';script='measure-tinylm-compare.ps1';category='conditional';pattern='^(MODEL-SOURCES\.json$|UPSTREAM\.json$|data/model-[^/]+\.json$|scripts/prepare-(lm|models)\.ps1$|upstream/shanjie($|/core/|/cli/)|platform/(candidates_windows|composition_windows|input_windows|key_options_windows|learning_windows|mapped_array|mapped_lm|map_model|resident_windows|selection_journal_windows|selection_learning_windows|smart_input_windows|word_set_windows)\.rs$|scripts/measure-tinylm-compare\.ps1$|windows/src/bin/shanjie-model-check\.rs$)';scope='Review actual old/new model or shipping-bundle comparisons when model, sidefiles, decoding algorithm or comparison tool changes, or explicitly requested. This is conditional, not an automatic RELEASE benchmark. DecodeWarmup is an explicit decision experiment, not a recurring release requirement; IPC latency remains separate.'}
         @{id='test-entry';script='test.ps1';category='dispatcher';pattern=$null;scope='Canonical CMake/CTest planner and report entry, not another assertion suite.'}
         @{id='changed-entry';script='verify-changed.ps1';category='dispatcher';pattern=$null;scope='Compatibility entry delegates to test.ps1 and the shared impact policy.'}
         @{id='selection-api';script='verify-selection.ps1';category='dispatcher';pattern=$null;scope='Pure compatibility API imports test-plan.psm1; exercised by fast.infrastructure.'}
@@ -158,7 +162,9 @@ function Get-AdditionalVerificationPlan([string[]]$Paths,[string[]]$Labels,[swit
     # Upstream only says "related verify-*.ps1" for these modules; it gives no
     # mandatory per-file matrix. Dependencies below identify review candidates,
     # not a claim that all their cases are required or absent from CTest.
-    $rules=@(Get-VerificationExceptions|Where-Object pattern)
+    $rules=@(Get-VerificationExceptions|Where-Object pattern) + @(
+        @{id='core-recovery';script='verify-core-recovery.ps1';category='conditional';pattern='^windows/src/(broker(\.rs$|/)|engine\.rs$|tsf/(resident|recovery|rerank)\.rs$|bin/shanjie-reliability-check\.rs$)|^platform/(resident_windows|input_windows_ffi)\.rs$|^scripts/verify-core-recovery\.ps1$';scope='verify-core-recovery.ps1: select only relevant -Architectures/-Cases for resident pipe delivery, restart, rerank faults or capacity. For pack rebuild performance and lifetime changes use -Cases pack-switch; CTest rebuild-local/rebuild-pipe check app behavior, not latency, memory or retired pipe sessions.'}
+    )
     foreach($rule in $rules){
         $affected=@($paths|Where-Object{$_ -match $rule.pattern})
         if($affected.Count){[pscustomobject]@{id=$rule.id;kind='review';status='not-run';command=$null;paths=$affected;reason=$rule.scope}}
@@ -192,6 +198,7 @@ function Get-EnglishKeyCases {
     foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
     foreach($mode in 1,2){$cases+=,@($mode,'shift',1,1)}
     $cases+=,@(2,'shift-caps',1,1)
+    $cases+=,@(2,'mixed-words',1,1);$cases+=,@(2,'mixed-words-shanjie',1,0)
     $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
     foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
     $cases+=,@(0,'backquote-disabled',1,1)

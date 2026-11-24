@@ -62,6 +62,9 @@ foreach($arch in 'x64','x86'){
     [IO.File]::WriteAllText((Join-Path $binary 'CTestTestfile.cmake'),"add_test($name `"$cmake`" `"-E`" `"true`")`nset_tests_properties($name PROPERTIES LABELS `"release`")`n")
     if($arch -eq 'x64'){
         Add-Content (Join-Path $binary 'CTestTestfile.cmake') "add_test(release.package `"$cmake`" `"-E`" `"true`")`nset_tests_properties(release.package PROPERTIES LABELS `"release;package`")"
+        # Deliberately fails if executed. A manual special test is neither run
+        # by the default receipt nor required to manufacture release evidence.
+        Add-Content (Join-Path $binary 'CTestTestfile.cmake') "add_test(full.core.rowstats `"$cmake`" `"-E`" `"false`")`nset_tests_properties(full.core.rowstats PROPERTIES LABELS `"special;rowstats`")"
     }
     $junit=Join-Path $receiptRoot "$preset.xml"
     $log=Join-Path $receiptRoot "$preset.log"

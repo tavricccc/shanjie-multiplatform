@@ -505,6 +505,7 @@ impl Data {
         selected: bool,
     ) -> Result<()> {
         self.diagnostic("apply.enter",Some(context),None,None);
+        let learning_changed = self.state.borrow().snapshot.learning_unavailable != out.learning_unavailable;
         self.watch_rerank(out.rerank && !out.preedit.is_empty());
         #[cfg(feature="input-diagnostics")]
         if crate::input_diagnostics::enabled() {
@@ -664,6 +665,10 @@ impl Data {
                     candidates.close();
                 }
             }
+            if learning_changed {
+                let button = self.state.borrow().button.clone();
+                if let Some(button) = button { mode::refresh(&button); }
+            }
             Ok(())
         }
     }
@@ -684,6 +689,7 @@ impl Data {
         let current = context.clone();
         let data = self.clone();
         self.request_current(&context, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, move |cookie| {
+            data.update_privacy(&current, cookie)?;
             data.toggle_in_session(&current, cookie, chinese)
         })
     }
@@ -1242,6 +1248,9 @@ impl ITfTextEditSink_Impl for Service_Impl {
                 return Ok(());
             }
             let record=record.ok()?;
+            // Best effort: the next key checks again before it reads or learns anything.
+            let ready = self.data.recovery.borrow().is_empty() && self.data.state.borrow().engine.is_open();
+            if let Some(context) = context.as_ref().filter(|_| ready) { let _ = self.data.update_privacy(context, cookie); }
             let selection_changed=record.GetSelectionStatus()?.as_bool();
             self.data.diagnostic("edit.selection_changed",context.as_ref(),None,Some(selection_changed as i32));
             let word_open=self.data.word_popup.borrow().as_ref().is_some_and(|p|p.active())

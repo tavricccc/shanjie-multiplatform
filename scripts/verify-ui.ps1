@@ -26,7 +26,7 @@ if (!$SkipCandidateHost) { foreach ($architecture in $Architecture) {
 $(Get-MsvcSetup $architecture)
 if errorlevel 1 exit /b 1
 cd /d "$root/build/native-$architecture"
-cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/candidate_host_smoke.cpp" "$root/tests/support/candidate_host.cpp" "$root/tests/support/engine.cpp" "$root/windows/target/$(if ($architecture -eq 'x64') {'x86_64'} else {'i686'})-pc-windows-msvc/release/shanjie_windows.lib" /link /OUT:"$root/build/candidate-host-$architecture.exe" ole32.lib user32.lib gdi32.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib psapi.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib
+cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$root/tests/support" /I"$root/upstream/shanjie/core/include" "$root/tests/candidate_host_smoke.cpp" "$root/tests/support/candidate_host.cpp" "$root/tests/support/engine.cpp" "$root/windows/target/$(if ($architecture -eq 'x64') {'x86_64'} else {'i686'})-pc-windows-msvc/release/shanjie_windows.lib" /link /OUT:"$root/build/candidate-host-$architecture.exe" ole32.lib user32.lib gdi32.lib d2d1.lib dwrite.lib dwmapi.lib windowsapp.lib psapi.lib advapi32.lib bcrypt.lib ntdll.lib ws2_32.lib userenv.lib wer.lib
 "@
     Set-Content "$root/build/native-$architecture/ui-smoke.cmd" $command -Encoding utf8NoBOM
     Invoke-Timed -Name "Compile candidate-host harness ($architecture)" -Category 'build.cpp.harness' -Details @{architecture=$architecture;source='tests/candidate_host_smoke.cpp'} -Action {
@@ -34,7 +34,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
         if ($LASTEXITCODE) { throw 'Candidate host harness build failed.' }
     }
     }
-    Invoke-Timed -Name "Candidate-host WinUI IPC ($architecture)" -Category 'ui.candidate-host' -Details @{architecture=$architecture} -Action {
+        Invoke-Timed -Name "Native candidate-host harness ($architecture)" -Category 'ui.candidate-host' -Details @{architecture=$architecture} -Action {
         & $candidateHarness "$RuntimeRoot/$architecture/Shanjie.dll" "$uiRoot/native/$architecture"
         if ($LASTEXITCODE) { throw "$architecture WinUI IPC failed." }
     }
