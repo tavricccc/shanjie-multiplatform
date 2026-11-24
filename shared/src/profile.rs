@@ -874,4 +874,21 @@ mod tests {
         assert!(preset.flag("input", "learning", false));
         assert_eq!(preset.number("appearance", "font_size", 0), 22);
     }
+    #[test]
+    fn mixed_english_writing_defaults_off_and_round_trips_in_presets() {
+        for template in [include_str!("../../profiles/windows.ini"), include_str!("../../profiles/shanjie.ini")] {
+            let doc = Document::parse(template).unwrap();
+            assert!(!doc.flag("input", "mixed_english_writing", true));
+        }
+        let mut doc = Document::parse("[profile]\nschema=9\n[input]\nmixed_input=1\n").unwrap();
+        doc.migrate();
+        assert!(!doc.flag("input", "mixed_english_writing", true));
+        doc.set("input", "mixed_english_writing", 1);
+        doc.migrate();
+        assert!(doc.flag("input", "mixed_english_writing", false));
+        let shared = export_preset(&doc.content(), "原鍵正式拼寫").unwrap();
+        let imported = Document::parse(&import_preset("[profile]\nschema=9\n", &shared).unwrap()).unwrap();
+        assert!(imported.flag("input", "mixed_english_writing", false));
+        assert!(import_preset(&doc.content(), "[input]\nmixed_english_writing=2\n").is_err());
+    }
 }

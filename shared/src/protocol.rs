@@ -147,6 +147,7 @@ pub enum Op {
     Options(u32),
     Mixed(bool),
     Tolerance(bool),
+    MixedEnglishWriting(bool),
     English(u32),
     /// Applies the rerank of the last output, waiting for it if it is still running. The shell sends it only once the
     /// core says the job is done, so replaying it after a restart gives what was shown.

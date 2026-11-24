@@ -595,6 +595,8 @@ impl Engine {
                 .then(Snapshot::default),
             Op::Tolerance(on) => (unsafe { shanjie_windows_set_mixed_tolerance(self.handle, on as u32) }
                 == 0).then(Snapshot::default),
+            Op::MixedEnglishWriting(on) => (unsafe { shanjie_windows_set_mixed_english_writing(self.handle, on as u32) }
+                == 0).then(Snapshot::default),
             Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
                 == 0)
                 .then(Snapshot::default),

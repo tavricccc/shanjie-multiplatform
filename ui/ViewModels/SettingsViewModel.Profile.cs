@@ -69,7 +69,7 @@ public partial class SettingsViewModel
             AnimationMode = Math.Max(0,Array.IndexOf(new[] { "system", "on", "off" },profile.Read("appearance","animation","system")));
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
+            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); MixedEnglishWriting = profile.Flag("input", "mixed_english_writing", false); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
             AddWord = profile.Flag("shortcuts", "add_word", true);
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
@@ -158,7 +158,7 @@ public partial class SettingsViewModel
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
-            ("input","mixed_tolerance",MixedTolerance), ("candidates","reading_panel",ReadingPanel),
+            ("input","mixed_tolerance",MixedTolerance), ("input","mixed_english_writing",MixedEnglishWriting), ("candidates","reading_panel",ReadingPanel),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
             ("input","mixed_input",MixedMode == 1), ("input","upstream_english",MixedMode == 2), ("input","english_overwrite",EnglishOverwrite), ("input","english_key_order",EnglishKeyOrder), ("input","english_reversal_guard",EnglishReversalGuard), ("input","cjk_spacing",CjkSpacing),
