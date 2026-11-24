@@ -217,8 +217,53 @@ pub fn privacy_gate(data: &Path, route: &str) {
     for ch in "su3".chars() { off.perform(key(ch)).unwrap(); }
     off.perform(Op::Key { kind: 10, ch: 0, modifiers: 0, latin: None }).unwrap(); off.perform(Op::Pick(1)).unwrap(); off.reset(false).unwrap();
     assert_eq!(std::fs::read(file).unwrap(), stable, "privacy cannot enable a disabled user preference");
+    // A key that failed keeps its privacy state until its retry is resolved.
+    let folder = crate::profile::folder();
+    let name = crate::wide(&format!("Local\\ShanjieLearning-{}", folder.to_str().unwrap().to_uppercase().replace('\\', "_")));
+    unsafe {
+        use windows::{core::PCWSTR, Win32::{Foundation::*, System::Threading::*}};
+        let mutex = CreateMutexW(None, false, PCWSTR(name.as_ptr())).unwrap();
+        assert_eq!(WaitForSingleObject(mutex, 1000), WAIT_OBJECT_0);
+        e.begin_attempt();
+        assert!(e.perform(Op::Context("重試前文".into())).is_some());
+        // A local engine shares this thread, which already owns the mutex.
+        if route == "pipe" { assert!(e.perform(key('s')).is_none()); }
+        e.finish_attempt(false);
+        e.set_privacy_allowed(false).unwrap();
+        assert!(e.privacy_allowed(), "transition waits for the unresolved key");
+        ReleaseMutex(mutex).unwrap();
+        CloseHandle(mutex).unwrap();
+    }
+    e.begin_attempt();
+    assert!(e.perform(Op::Context("重試前文".into())).is_some());
+    assert!(e.perform(key('s')).is_some(), "retry is not ambiguous");
+    e.finish_attempt(true);
+    e.set_privacy_allowed(false).unwrap();
+    assert!(!e.privacy_allowed());
+    e.reset(true).unwrap();
     assert!(off.benchmark_idle(), "disabled learning cannot create in-memory records either");
     println!("PASS {route} privacy gate drops pending learning and context; resume and explicit off preserved");
+}
+/// An unanswered privacy change is idempotent: it must never strand the next key, even across a restart.
+pub fn privacy_lost(data: &Path) {
+    let mut client = Client::open(data, config(false), None).unwrap();
+    client.perform(Op::Tolerance(false)).unwrap();
+    for ch in "su3".chars() { client.perform(key(ch)).unwrap(); }
+    assert!(client.perform(Op::Privacy(false)).is_none(), "the fault must lose this reply");
+    if std::env::var("SHANJIE_TEST_FAULT").as_deref() == Ok("before-apply") {
+        let _ = control(data, true);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let mut typed = false;
+    for _ in 0..20 {
+        if client.perform(key('c')).is_some() { typed = true; break; }
+        assert_ne!(client.failure, Some(Failure::Ambiguous));
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert!(typed);
+    for ch in "l3".chars() { client.perform(key(ch)).unwrap(); }
+    assert_eq!(client.perform(Op::Reset(false)).unwrap().commit, "你好");
+    println!("PASS unanswered privacy change completes before the next key");
 }
 pub fn request_fault(data: &Path) {
     let mode = std::env::var("SHANJIE_TEST_FAULT").unwrap();

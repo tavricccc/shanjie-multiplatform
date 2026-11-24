@@ -12,6 +12,7 @@ fn main() {
         "fault" => broker::verification::request_fault(data),
         "rerank" => broker::verification::rerank_lost(data),
         "rerank-unknown" => broker::verification::rerank_unknown(data),
+        "privacy-lost" => broker::verification::privacy_lost(data),
         "outstanding" => broker::verification::outstanding_other(data),
         "busy" => broker::verification::busy_learning(data),
         "learning-status" => broker::verification::learning_storage_status(data, &args[3], false),

@@ -20,7 +20,7 @@ try {
  foreach($arch in $Architectures) {
   $target=if($arch -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
   $exe="$root/windows/target/$target/release/shanjie-reliability-check.exe"
-  $checks=@(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('rerank','drop-reply'),@('rerank','before-apply'),@('rerank','after-apply'),@('rerank-unknown','drop-reply'),@('outstanding','drop-reply'),@('capacity',''))
+  $checks=@(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('rerank','drop-reply'),@('rerank','before-apply'),@('rerank','after-apply'),@('rerank-unknown','drop-reply'),@('outstanding','drop-reply'),@('privacy-lost','drop-reply'),@('privacy-lost','before-apply'),@('capacity',''))
   foreach($check in 'learning-status','privacy'){if($check -in $Cases){$checks+=@(@($check,'local'),@($check,'pipe'))}}
   if('learning-status-ui' -in $Cases){$checks+=,@('learning-status-ui','')}
   if('pack-switch' -in $Cases){$checks+=@(@('pack-switch','sync-local'),@('pack-switch','background-local'),@('pack-switch','sync-pipe'),@('pack-switch','background-pipe'))}
