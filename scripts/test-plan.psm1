@@ -21,9 +21,9 @@ function Get-VerificationPresetLabels([string]$Level,[string]$Architecture,[stri
     if($Level -eq 'RELEASE' -and $Preset -eq 'windows-x86'){return @('release')}
     if($Level -ne 'AFFECTED' -or $Architecture -ne 'x86'){return @($Labels)}
     if($Preset -eq 'windows-x64'){
-        return @('fast')+@($Labels|Where-Object{$_ -in 'core','rowstats','shared','data','interaction','settings-ui'})
+        return @('fast')+@($Labels|Where-Object{$_ -in 'core','shared','data','interaction','settings-ui'})
     }
-    return @($Labels|Where-Object{$_ -notin 'fast','full','release','core','rowstats','shared','data','interaction','settings-ui'})
+    return @($Labels|Where-Object{$_ -notin 'fast','full','release','core','shared','data','interaction','settings-ui'})
 }
 
 function Test-BetaCoreResultReuse([string]$Level,[bool]$CiSafe,[bool]$Prerelease) {
@@ -39,12 +39,12 @@ function Get-VerificationImpact([string]$Path) {
     $full = $false
     $labels = @()
     switch -Regex ($Path) {
-        '^scripts/verify-rowstats\.ps1$' { $labels=@('rowstats');$reason='Real pinned CLI versus shipping overlay rowstats; no unconditional CI expansion.';break }
+        '^scripts/verify-rowstats\.ps1$' { $labels=@('test-framework');$reason='G05 is a manual special test; automatic acceptance only checks its classification.';break }
         '^(scripts/(release|test_release)\.py|\.github/workflows/(release|ci)\.yml|scripts/(cargo-cache-key|runner-diagnostics|verify-(changed|selection))\.ps1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
         '^(platform/(candidates_windows|composition_windows|input_windows|key_options_windows|learning_windows|mapped_array|mapped_lm|map_model|resident_windows|selection_journal_windows|selection_learning_windows|smart_input_windows|word_set_windows)\.rs|scripts/prepare-(core|lm|candidates|keys|smart-input|selection-learning|resident|memory|english)\.ps1)$' {
-            $labels=@('rust','core','rowstats','english','submission');$reason='Prepared core implementation affects CLI decoding: retain core regressions and the independent rowstats matrix.';break
+            $labels=@('rust','core','english','submission');$reason='Prepared core implementation retains core regressions; G05 remains a separately requested special test.';break
         }
         '^platform/(candidates_windows|input_windows|key_options_windows|smart_input_windows)_ffi\.rs$' {
             $labels=@('rust','core','english','submission');$reason='Preserve upstream platform selection: Rust, core, mixed input, English/submission; latency is additional.';break

@@ -157,8 +157,7 @@ jobs:
           } | ConvertTo-Json -Depth 4 -Compress
           pwsh -NoProfile -File scripts/runner-diagnostics.ps1 -Phase pre -RunnerLabel windows-2025-vs2026 -TestLevel RELEASE -Jobs 4 -CacheSpecJson $cacheSpec
       - name: Run CTest RELEASE (interactive UI rows are reported as not run)
-        # Beta, stable and manual verify all include full.core.rowstats. CiSafe
-        # excludes interactive UI, not the CLI matrix; G05 results are not cached.
+        # G05 is a manual special test, outside beta/stable/manual RELEASE sets.
         run: pwsh -File scripts/test.ps1 -Level RELEASE -BaseRef HEAD -CiSafe
       - name: Record runner performance diagnostics
         if: always()

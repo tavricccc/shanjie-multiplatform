@@ -20,10 +20,10 @@ Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
-Expect 'CLI rowstats selects its heavy local test without changing CI' @('scripts/verify-rowstats.ps1') $false @('fast','rowstats')
+Expect 'CLI rowstats remains a manually requested special test' @('scripts/verify-rowstats.ps1') $false @('fast','test-framework')
 Expect 'model manager fixture' @('tests/model_sources_fixture.py') $false @('fast','settings-ui','candidate-host')
 Expect 'installer' @('windows/src/installer/progress.rs') $false @('fast','windows')
-Expect 'platform' @('platform/smart_input_windows.rs') $false @('fast','rust','core','rowstats','english','submission')
+Expect 'platform' @('platform/smart_input_windows.rs') $false @('fast','rust','core','english','submission')
 Expect 'FFI adapter retains core checks without the unrelated CLI matrix' @('platform/input_windows_ffi.rs') $false @('fast','rust','core','english','submission')
 Expect 'unmapped platform input keeps conservative fallback' @('platform/future.rs') $true @('full')
 Expect 'suites merge without duplicates' @('windows/src/word_popup.rs','tests/popup_lifecycle.cpp','tests/english_keys.cpp') $false @('fast','windows','word','popup-lifecycle','rust','english')
@@ -34,14 +34,14 @@ Expect 'upstream pin' @('UPSTREAM.json') $true @('full')
 Expect 'build script' @('scripts/build.ps1') $true @('full')
 Expect 'verify script' @('scripts/verify.ps1') $true @('full')
 Expect 'unknown new file' @('tools/something-new.txt') $true @('full')
-Expect 'full expansion retains mapped UI and TSF' @('shared/src/lib.rs','ui/App.xaml.cs','platform/composition_windows.rs','windows/src/word_helper.rs') $true @('full','candidate-host','settings-ui','rust','core','rowstats','english','submission','windows','word','popup-lifecycle')
+Expect 'full expansion retains mapped UI and TSF' @('shared/src/lib.rs','ui/App.xaml.cs','platform/composition_windows.rs','windows/src/word_helper.rs') $true @('full','candidate-host','settings-ui','rust','core','english','submission','windows','word','popup-lifecycle')
 Expect 'renamed file counts both names' @('docs/old.md','windows/src/tsf/service.rs') $true @('full','windows','tsf','ui','mode')
 Expect 'CI workflow is a lightweight framework change' @('.github/workflows/ci.yml') $false @('fast','test-framework')
 Expect 'Runner diagnostics script is a lightweight framework change' @('scripts/runner-diagnostics.ps1') $false @('fast','test-framework')
 Expect 'English preserves mixed regressions' @('tests/english_keys.cpp') $false @('fast','rust','english')
 Expect 'submission stays bounded' @('tests/submission.cpp') $false @('fast','submission')
 Expect 'shared input retains upstream fallback' @('shared/src/input.rs') $true @('full','shared','windows','tsf','interaction')
-Expect 'prepare-core preserves platform precision' @('scripts/prepare-core.ps1') $false @('fast','rust','core','rowstats','english','submission')
+Expect 'prepare-core preserves platform precision' @('scripts/prepare-core.ps1') $false @('fast','rust','core','english','submission')
 if($failures){throw "$failures selection case(s) failed."}
 Write-Host "PASS verification selection: $selectionCases cases, one CTest policy"
 
@@ -51,7 +51,7 @@ Check-Rule (Test-BetaCoreResultReuse RELEASE $true $true) 'CI-safe beta RELEASE 
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $false)) 'Stable RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $false $true)) 'Local beta RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse FULL $true $true)) 'FULL executes all core assertions even with a beta channel'
-Check-Rule ('rowstats' -in (Get-VerificationPresetLabels AFFECTED x86 windows-x64 @('fast','rowstats')) -and 'rowstats' -notin (Get-VerificationPresetLabels AFFECTED x86 windows-x86 @('fast','rowstats'))) 'Shared CLI matrix runs once on x64, never again in x86 acceptance'
+Check-Rule ('rowstats' -notin (Select-VerificationPlan @('UPSTREAM.json','MODEL-SOURCES.json','platform/input_windows.rs','scripts/verify-rowstats.ps1')).Labels) 'Related changes never automatically select the special CLI matrix'
 Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('MODEL-SOURCES.json') -Labels @('full')|Where-Object id -eq 'tinylm-comparison').Count -eq 1) 'Model comparison is a conditional review on model changes'
 Check-Rule (@(Get-AdditionalVerificationPlan -Paths @('scripts/test-plan.psm1') -Labels @('full')|Where-Object id -eq 'tinylm-comparison').Count -eq 0) 'Scheduling-only changes do not request another model comparison'
 $latency=@(Get-AdditionalVerificationPlan -Paths @('platform/input_windows.rs','windows/src/tsf/keys.rs','windows/src/broker/client.rs') -Labels @('full'))
