@@ -49,7 +49,7 @@ public:
     InputScope inputScope = IS_DEFAULT;
     bool scopeRequested = false;
     LONG privacyBoundary = 0;
-    unsigned prefixReads = 0, textWrites = 0, unchangedWrites = 0;
+    unsigned prefixReads = 0, prefixReadsBeforeWrite = 0, textWrites = 0, unchangedWrites = 0;
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
     void scopeChanged(InputScope value) { inputScope=value; if(sink_)sink_->OnAttrsChange(0,LONG(text.size()),1,&GUID_PROP_INPUTSCOPE); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }
@@ -70,7 +70,10 @@ public:
     HRESULT STDMETHODCALLTYPE GetSelection(ULONG, ULONG count, TS_SELECTION_ACP* out, ULONG* fetched) override { *fetched = count ? 1 : 0; if (count) *out = selection; return S_OK; }
     HRESULT STDMETHODCALLTYPE SetSelection(ULONG count, const TS_SELECTION_ACP* value) override { if (count != 1) return E_INVALIDARG; selection = *value; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetText(LONG start, LONG end, WCHAR* plain, ULONG capacity, ULONG* count, TS_RUNINFO* runs, ULONG runCapacity, ULONG* runCount, LONG* next) override {
-        if(capacity && start < privacyBoundary) ++prefixReads;
+        if (capacity && start < privacyBoundary) {
+            ++prefixReads;
+            if (textWrites == 0) ++prefixReadsBeforeWrite;
+        }
         if (end == -1) end = (LONG)text.size(); if (start < 0 || end < start || end > (LONG)text.size()) return TS_E_INVALIDPOS;
         *count = std::min<ULONG>(capacity,end-start); if (*count) std::copy_n(text.data()+start,*count,plain);
         *runCount = runCapacity ? 1 : 0; if (runCapacity) runs[0] = {*count,TS_RT_PLAIN}; *next = start + *count; return S_OK;

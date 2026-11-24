@@ -119,9 +119,12 @@ int wmain(int argc,wchar_t**argv) {
         auto file=std::wstring(profile)+L"\\Shanjie\\learning.tsv";
         std::printf("privacy chosen=%u candidates=%u original_units=%zu final_units=%zu prefix_reads=%u file=%d\n",choice,length,original.size(),store->text.size(),store->prefixReads,GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES);
         if(scenario!=L"privacy-control")require((GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES)!=paused,1113);
-        // TSF itself reads the text store while applying edits. The caller
-        // compares this count with context=0 in an otherwise identical fixture.
-        std::printf("privacy prefix_reads=%u (dummy text, isolated profile)\n",store->prefixReads);
+        // The context lookup precedes the first composition write. TSF itself
+        // reads the text store while applying edits, and those reads can vary.
+        std::printf("privacy prefix_reads=%u prewrite_prefix_reads=%u (dummy text, isolated profile)\n",
+            store->prefixReads, store->prefixReadsBeforeWrite);
+        if (scenario == L"privacy-normal") require(store->prefixReadsBeforeWrite > 0, 1123);
+        else if (scenario != L"privacy-transition") require(store->prefixReadsBeforeWrite == 0, 1124);
     } else if(scenario==L"range-refresh") {
         keyboard(0);for(int key:{'S','U','3'})down(key);auto text=store->text;
         auto before=store->unchangedWrites;down(VK_DOWN);down(VK_ESCAPE);

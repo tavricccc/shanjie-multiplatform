@@ -1,6 +1,6 @@
 # Windows 驗收流程
 
-`full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 以 context 關閉的控制 fixture 扣除 TSF 自身的 text-store 讀取，再驗證 private／password／PIN 沒有額外前文讀取或學習寫入。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
+`full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 用啟用前文的普通欄位做正向控制，確認前文查詢發生於第一次組字寫入前。同一階段在關閉前文、private、password 與 PIN 案例須為零讀取，隱私案例另驗證零學習寫入。組字後 TSF 自身的讀取次數另行記錄。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
 
 `measure-tinylm-compare.ps1 -Comparison FixedCoreModelSwap` 只替換模型；`ShippingConfigurations` 另需 `-OldRoot`、`-OldChecker`、`-OldData`，使用舊版各自核心與完整配套。報告保留原始輪次、來源／執行檔與配套雜湊、實際融合及三檔參數。父程序先驗證 hash，再啟動量測程序；首次開啟不是 OS 冷快取，同程序再次開啟才代表資源快取。核心按鍵／rerank 與 `measure-engine.ps1` 的 IPC 按鍵分開解讀。
 
