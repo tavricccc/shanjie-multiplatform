@@ -74,8 +74,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /I"$r
     if($case[0] -like 'busy*'){$testContent=$testContent -replace '(?m)^learning=.*','learning=1'}
     $interaction=if($case.Count -gt 4){$case[4]}else{'windows'}
     if($case[0] -eq 'async-keys'){
-     $testContent=$testContent -replace '(?m)^interaction=.*',"interaction=$interaction" -replace '(?m)^right_action=.*','right_action=none'
-     if($interaction -eq 'shanjie'){$testContent=$testContent -replace '(?m)^prediction=.*','prediction=0'}
+     $testContent=$testContent -replace '(?m)^interaction=.*',"interaction=$interaction" -replace '(?m)^right_action=.*','right_action=none' -replace '(?m)^prediction=.*','prediction=0'
     }
     if($case[0] -eq 'segment'){
      $testContent=$testContent -replace '(?m)^mixed_input=.*','mixed_input=0' -replace '(?m)^prediction=.*','prediction=0'

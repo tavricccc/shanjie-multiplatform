@@ -510,6 +510,16 @@ int wmain(int argc,wchar_t** argv) {
      require(first->deferredWrites==writes,274);
      grant();
      require(first->text==composing && first->ends==ends && press(VK_RETURN),275);
+
+     require(WritePrivateProfileStringW(L"engine",L"prediction",L"1",profile.c_str()),296);
+     localNotify(L"Shanjie.ProfileChanged.v2");pump();
+     type();require(press(VK_DOWN),297);
+     ComPtr<ITfUIElementMgr> manager;ComPtr<IEnumTfUIElements> elements;ComPtr<ITfUIElement> element;ComPtr<ITfCandidateListUIElement> list;ULONG count=0;BSTR top=nullptr;
+     require(SUCCEEDED(thread.As(&manager))&&SUCCEEDED(manager->EnumUIElements(&elements))&&elements->Next(1,&element,&count)==S_OK&&count==1&&SUCCEEDED(element.As(&list))&&SUCCEEDED(list->GetString(0,&top)),298);
+     const std::wstring topWord=top?top:L"";SysFreeString(top);
+     require(topWord.size()>expected.size()&&press(VK_ESCAPE)&&press(VK_ESCAPE)&&!first->composing,299);
+     require(WritePrivateProfileStringW(L"engine",L"prediction",L"0",profile.c_str()),300);
+     localNotify(L"Shanjie.ProfileChanged.v2");pump();
    } else {
      const auto refused=first->refusedSync;
      // The Shanjie interaction may finish the composition and give Tab to
