@@ -193,6 +193,7 @@ function Get-EnglishKeyCases {
     foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
     foreach($mode in 1,2){$cases+=,@($mode,'shift',1,1)}
     $cases+=,@(2,'shift-caps',1,1)
+    $cases+=,@(2,'mixed-words',1,1);$cases+=,@(2,'mixed-words-shanjie',1,0)
     $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
     foreach($keyboard in 1,3,4){$cases+=,@(0,'backquote',$keyboard,1)}
     $cases+=,@(0,'backquote-disabled',1,1)
