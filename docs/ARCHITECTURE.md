@@ -41,7 +41,7 @@ Windows 的兩份操作範本由 `shared/src/input.rs` 與 TSF caller 實作，�
 
 Alt 在按鍵翻譯中使用與核心抽象 Option 相同的 bit 4，但 TSF 在一般核心輸入之前分流 Alt、AltGr／Ctrl+Alt 及 Windows 鍵；`Ctrl+Alt+,` 保留符號鍵盤入口。這不表示 macOS Option 與 Windows Alt 的操作契約相同；核心 `engine_option` 只驗證抽象鍵，Windows harness 的 `SetKeyboardState` 也只代表合成鍵盤狀態。
 
-學習與前文的隱私判斷在一般按鍵、候選選取及背景 rerank 的 TSF 邊界執行。`IS_PRIVATE`、密碼／PIN scope、原生密碼 Edit、唯讀或停用的 context 會暫停學習並清除舊前文、預測及舊 rerank；不再讀取新的前文。未知的宿主執行檔身分也暫停。已知宿主沒有提供 scope 時仍可正常輸入與學習；Windows 沒有全域等同 macOS Secure Event Input 的保證。密碼管理器以宿主執行檔名稱排除：1Password、Bitwarden、KeePass、KeePassXC、Enpass、Dashlane；不同程序或未標示的網頁欄位仍取決於宿主提供的 scope。隱私暫停不改使用者的 learning 設定，local 與 resident 共用同一協定；恢復時仍尊重明確關閉。
+學習與前文的隱私判斷在一般按鍵、候選選取及背景 rerank 的 TSF 邊界執行。`IS_PRIVATE`、密碼／PIN scope、原生密碼 Edit、唯讀或停用的 context 會暫停學習並清除舊前文、預測及舊 rerank；不再讀取新的前文。未知的宿主執行檔身分也暫停。已知宿主沒有提供 scope 時仍可正常輸入與學習；Windows 沒有全域等同 macOS Secure Event Input 的保證。密碼管理器以宿主執行檔名稱排除：1Password、Bitwarden、KeePass、KeePassXC、Enpass、Dashlane；不同程序或未標示的網頁欄位仍取決於宿主提供的 scope。選取範圍暫時無法查詢時，先暫停學習與前文讀取，仍讓非同步組字繼續。隱私暫停不改使用者的 learning 設定，local 與 resident 共用同一協定；恢復時仍尊重明確關閉。
 
 核心的 learning status bit 0 經 Snapshot／Named Pipe 傳到候選窗、語言列 tooltip 與設定頁儲存狀態查詢。僅表示上次完整重寫失敗，輸入和提交仍可完成；核心下一次成功儲存才清除，暫停或關閉 learning 時不顯示。沒有常駐核心時，設定頁明列無法讀取狀態，local 核心仍可透過候選窗提示。
 
