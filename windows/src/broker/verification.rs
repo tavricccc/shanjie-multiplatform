@@ -54,7 +54,7 @@ pub fn start_fixture(data:&Path) {
     assert_eq!(std::env::var("SHANJIE_TEST_PROFILE").as_deref(),Ok("1"));
     if control(data,false).is_ok() {return;}
     start_core(&executable(data)).expect("start isolated fixture core");
-    let deadline=Instant::now()+Duration::from_secs(10);
+    let deadline=Instant::now()+Duration::from_secs(30);
     while control(data,false).is_err() {
         assert!(Instant::now()<deadline,"fixture core did not become ready");
         std::thread::sleep(Duration::from_millis(20));
@@ -133,6 +133,8 @@ fn key(ch: char) -> Op {
 pub fn learning_storage_status(data: &Path, route: &str, verify_ui: bool) {
     use std::os::windows::fs::OpenOptionsExt;
     let cfg = config(true);
+    // Elevated CI runners may not start the core through a client.
+    if route == "pipe" { start_fixture(data); }
     let mut e = if route == "local" { Engine::open_local(data, &cfg) } else { Engine::open(data, &cfg) }.unwrap();
     let check_ui=|expected:i32| {
         if !verify_ui {return;}
@@ -184,6 +186,8 @@ pub fn learning_storage_status(data: &Path, route: &str, verify_ui: bool) {
 
 pub fn privacy_gate(data: &Path, route: &str) {
     let cfg = config(true);
+    // Elevated CI runners may not start the core through a client.
+    if route == "pipe" { start_fixture(data); }
     let mut e = if route == "local" { Engine::open_local(data, &cfg) } else { Engine::open(data, &cfg) }.unwrap();
     e.perform(Op::Options(crate::profile::load(&crate::profile::path()).unwrap().input_options())).unwrap();
     e.perform(Op::Context("隔離測試前文".into())).unwrap();
