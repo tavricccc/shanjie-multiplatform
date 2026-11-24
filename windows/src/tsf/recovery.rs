@@ -101,6 +101,9 @@ impl Data {
         {
             return Ok(true);
         }
+        // Outside the attempt log: a retry skips a transition already made, so recording it
+        // there would make the retried key look like a different operation.
+        self.update_privacy(&key.context, cookie)?;
         if let Some((_, old)) = &key.pick {
             let current = &self.state.borrow().snapshot;
             if current.preedit != old.preedit
@@ -122,13 +125,13 @@ impl Data {
             SetKeyboardState(&key.keyboard)?;
         }
         let _keyboard = Keyboard(previous);
-        let result = self.update_privacy(&key.context, cookie).and_then(|_| if key.toggle {
+        let result = if key.toggle {
             self.toggle_in_session(&key.context, cookie, !self.chinese()).map(|_| true)
         } else if let Some((index, _)) = key.pick.as_ref() {
             self.pick_at(&key.context, cookie, *index).map(|_| true)
         } else {
             self.key_down(&key.context, cookie, key.vk, key.flags)
-        });
+        };
         let written = self.application_written.get();
         self.state
             .borrow_mut()

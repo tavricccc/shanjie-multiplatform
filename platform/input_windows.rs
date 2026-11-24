@@ -5,7 +5,7 @@ impl Engine {
         self.clear_left();
         self.left_fresh = false;
         self.clear_pred();
-        self.close_row_window();
+        self.cands = None;
         self.invalidate();
     }
     pub fn associated_words(&self, prefix: &str) -> Output {

@@ -109,6 +109,10 @@ impl Client {
         if self.failure == Some(Failure::Ambiguous) {
             return None;
         }
+        // Privacy is idempotent, so an unanswered one is completed before a different operation.
+        if let Some(old @ Op::Privacy(_)) = self.outstanding.clone().filter(|old| old != &op) {
+            self.perform(old)?;
+        }
         // A rerank left unanswered goes first: the core may have applied it, and its sequence comes before this one.
         if self.outstanding == Some(Op::Rerank) && op != Op::Rerank {
             self.perform(Op::Rerank)?;
@@ -118,7 +122,7 @@ impl Client {
             return None;
         }
         self.failure = None;
-        let uncertain = self.outstanding.is_some();
+        let uncertain = self.key_outstanding();
         if self.pipe.is_none() {
             if let Err(error) = self.reconnect(uncertain, Instant::now() + RECOVERY) {
                 crate::runtime_log::io("client.reconnect", &error);
@@ -196,6 +200,10 @@ impl Client {
     }
 }
 impl Client {
+    /// An operation whose result is unknown and which cannot simply be sent again.
+    pub fn key_outstanding(&self) -> bool {
+        self.outstanding.as_ref().is_some_and(|op| !matches!(op, Op::Privacy(_)))
+    }
     /// Whether the core finished reranking the last output. Unsequenced, so it changes nothing there; an unanswered
     /// `Op::Rerank` counts as ready, to be sent again.
     pub fn rerank_ready(&mut self) -> bool {
@@ -205,7 +213,7 @@ impl Client {
         let Some(pipe) = self.pipe.as_ref() else {
             return false;
         };
-        let deadline = Instant::now() + Duration::from_millis(40);
+        let deadline = Instant::now() + Duration::from_millis(200);
         match pipe.send(&Request::RerankReady, deadline).and_then(|()| pipe.receive::<Reply>(deadline)) {
             Ok(reply) => reply.rerank_ready,
             Err(error) => {

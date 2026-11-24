@@ -580,6 +580,8 @@ impl Engine {
         (unsafe { windows_benchmark_idle(&*self.handle) }) && !self.last.rerank && self.last.preedit.is_empty()
     }
     pub fn set_privacy_allowed(&mut self, allowed: bool) -> Option<()> {
+        // An unresolved key belongs to the privacy state it started under; its retry must come first.
+        if !self.attempt.is_empty() || self.remote.as_ref().is_some_and(|c| c.key_outstanding()) { return Some(()); }
         if allowed != self.privacy_allowed { self.perform(crate::broker::Op::Privacy(allowed))?; }
         Some(())
     }

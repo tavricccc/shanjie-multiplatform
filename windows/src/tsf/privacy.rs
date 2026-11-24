@@ -13,17 +13,31 @@ impl Data {
     pub(super) fn update_privacy(&self, context: &ITfContext, cookie: u32) -> Result<()> {
         let app = std::env::current_exe().ok();
         let known_app = app.as_ref().and_then(|p| p.file_name()).and_then(|n| n.to_str());
+        let (composing, previous) = {
+            let s = self.state.borrow();
+            (s.composition.is_some(), s.engine.privacy_allowed())
+        };
         let allowed = app_allows_learning(known_app) && unsafe {
             !compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED)
                 && !compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT)
-                && context.GetStatus()?.dwDynamicFlags & TF_SD_READONLY == 0
+                && context.GetStatus().is_ok_and(|s| s.dwDynamicFlags & TF_SD_READONLY == 0)
                 // A temporarily unavailable selection must not block composition.
-                // Pause learning/context until the document can be identified.
-                && !private_scope(context, cookie).unwrap_or(true)
+                // Pause learning/context until the document can be identified; a composition
+                // keeps the state that was established when it started.
+                && private_scope(context, cookie).map_or(composing && previous, |private| !private)
         };
         let mut s = self.state.borrow_mut();
         s.engine.set_privacy_allowed(allowed).ok_or(E_FAIL)?;
         if !allowed { s.spacing_prev = None; }
+        // The core closed its candidates with the pause; do not leave the old list on screen.
+        if previous && !s.engine.privacy_allowed() && !s.snapshot.candidates.is_empty() {
+            s.snapshot.candidates.clear();
+            s.snapshot.selected = None;
+            s.snapshot.prediction = false;
+            s.snapshot.total = 0;
+            s.snapshot.first = 0;
+            if let Some(c) = &s.candidates { c.data.close(); }
+        }
         Ok(())
     }
 }
