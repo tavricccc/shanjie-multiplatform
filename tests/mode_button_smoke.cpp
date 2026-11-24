@@ -34,7 +34,12 @@ int wmain(int argc,wchar_t** argv) {
     {
         ModeIndicator indicator; RECT caret{100,100,101,120}; auto foreground = GetForegroundWindow();
         indicator.show(caret,96,true);
-        auto window = FindWindowW(L"ShanjieRustModeIndicator",nullptr); assert(window && IsWindowVisible(window));
+        // An installed IME can own windows of this class in other processes.
+        HWND window = nullptr; DWORD owner = 0;
+        while ((window = FindWindowExW(nullptr,window,L"ShanjieRustModeIndicator",nullptr)) != nullptr) {
+            GetWindowThreadProcessId(window,&owner); if (owner == GetCurrentProcessId()) break;
+        }
+        assert(window && IsWindowVisible(window));
         RECT bounds{}; GetWindowRect(window,&bounds); assert(bounds.right < -10000 && bounds.bottom < -10000);
         assert(GetForegroundWindow() == foreground && SendMessageW(window,WM_MOUSEACTIVATE,0,0) == MA_NOACTIVATE);
         assert(GetWindowLongPtrW(window,GWL_EXSTYLE) & WS_EX_LAYERED);
