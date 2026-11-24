@@ -43,8 +43,8 @@ impl Engine {
         self.clear_pred();
     }
 
-    fn candidate_span(&self, length: usize) -> (usize, usize) {
-        if self.candidate_from_right && !self.cands.as_ref().is_some_and(|c| c.mixed.is_some()) {
+    fn candidate_span(&self, length: usize, mixed: bool) -> (usize, usize) {
+        if self.candidate_from_right && !mixed && self.whole_item().is_none() {
             (self.cursor, self.cursor + length)
         } else if self.cursor == 0 {
             (0, length)
@@ -75,9 +75,9 @@ impl Engine {
             if let Some(literal) = candidates.literals.get(&candidates.sel) {
                 (start, end) = (literal.start, literal.end);
             } else if let Some((_, length)) = candidates.list.get(candidates.sel).filter(|_| candidates.sel >= candidates.rows.len() && candidates.dalt.is_none()) {
-                let right = self.candidate_from_right && candidates.mixed.is_none();
+                let right = self.candidate_from_right && candidates.mixed.is_none() && self.whole_item().is_none();
                 let available = if right { self.syls.len() - self.cursor } else if self.cursor == 0 { self.syls.len() } else { self.cursor };
-                if *length <= available { (start, end) = self.candidate_span(*length); }
+                if *length <= available { (start, end) = self.candidate_span(*length, candidates.mixed.is_some()); }
             }
         }
         if start == 0 && end == self.syls.len() { return None; }
@@ -89,9 +89,8 @@ impl Engine {
     }
 
     fn open_candidates(&mut self, rows: Vec<Pred>) {
-        // A mixed word spans its English token and the Chinese suffix at the end;
-        // keep that upstream span even when ordinary candidates are anchored right.
-        if !self.candidate_from_right || self.mixed_item().is_some() {
+        // Mixed words and restored English spellings span the token and suffix.
+        if !self.candidate_from_right || self.mixed_item().is_some() || self.whole_item().is_some() {
             self.open_candidates_left(rows);
             self.decorate_windows_candidates();
             return;
@@ -246,7 +245,7 @@ impl Engine {
         let Some(cands) = &self.cands else { self.cursor = cursor; return self.handled(); };
         let shown: Vec<char> = self.display.chars().collect();
         let current = cands.list.iter().position(|(word,length)| {
-            let (start,end) = self.candidate_span(*length);
+            let (start,end) = self.candidate_span(*length, cands.mixed.is_some());
             let before = (0..start).map(|i| self.token_width(i)).sum::<usize>();
             let after = (0..end).map(|i| self.token_width(i)).sum::<usize>();
             shown[before..after].iter().collect::<String>() == *word

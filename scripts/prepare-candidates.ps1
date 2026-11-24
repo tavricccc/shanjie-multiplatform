@@ -99,15 +99,16 @@ $chooseNew = @'
 Replace-Contract $chooseOld $chooseNew
 Replace-Contract 'let alts = typed.chars().next().and_then(|c| self.punct.get(&c)).cloned().unwrap_or_default();' 'let alts = self.windows_punctuation_alternatives(&typed);'
 Replace-Contract '        self.punct = map;' "        self.punct = map;`n        self.windows_punctuation_candidates = false;"
-Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = if c.mixed.is_some() { if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) } } else { self.candidate_span(l) };' 2
+Replace-Contract 'let (start, end) = if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) };' 'let (start, end) = self.candidate_span(l, c.mixed.is_some());' 2
 Replace-Contract @'
-        let (start, end) = if c.mixed.is_some() { if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) } } else { self.candidate_span(l) };
+        let (start, end) = self.candidate_span(l, c.mixed.is_some());
         // New words of the path as shown, under the readings of their records: read before the span is rewritten below (docs/spec/learning.md §8.5, bookkeeping).
 '@ @'
-        let (start, end) = row_span.unwrap_or_else(|| if c.mixed.is_some() { if self.cursor == 0 { (0, l) } else { (self.cursor - l, self.cursor) } } else { self.candidate_span(l) });
+        let (start, end) = row_span.unwrap_or_else(|| self.candidate_span(l, c.mixed.is_some()));
         // New words of the path as shown, under the readings of their records: read before the span is rewritten below (docs/spec/learning.md §8.5, bookkeeping).
 '@
-Replace-Contract '        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });' "        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new });`n        if self.candidate_from_right { self.cursor = end; }"
+$fixedPick = '        self.fixed.push(Fixed { start, end, word, pre, key, pick_keys, zh, frozen: false, split_off: false, displaced_new, mixed, own: None, whole: None });'
+Replace-Contract $fixedPick "$fixedPick`n        if self.candidate_from_right { self.cursor = end; }"
 Replace-Contract '        capped.predict_index(&lm);' '        if self.predict_on { capped.predict_index(&lm); }'
 $content += "`n" + (Get-Content "$root/platform/candidates_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/input_windows.rs" -Raw)

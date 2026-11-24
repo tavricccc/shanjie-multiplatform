@@ -97,7 +97,7 @@ pub fn panel_view(mut s: Snapshot, reading_panel: bool, english_hint: bool) -> S
         s.cursor = 0;
     }
     // Without the hint an English run alone gives the panel nothing to show; with a composition row the run stays for its underline.
-    if !english_hint && s.preedit.is_empty() {
+    if !english_hint && s.preedit.is_empty() && s.candidates.is_empty() {
         s.english_run_utf16_len = 0;
     }
     s

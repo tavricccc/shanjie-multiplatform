@@ -125,4 +125,31 @@ mod windows_store_tests {
         assert!(restored == records);
         std::fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn english_prediction_keys_round_trip_with_existing_records() {
+        let dir = std::env::temp_dir().join(format!("shanjie-en-store-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let (store, _, _) = LearnStore::open(&dir).unwrap();
+        let existing = Record {
+            context: "^>ㄏㄠˇ".into(), reading: vec!["ㄋㄧˇ".into()], word: "妳".into(),
+            weight: 1.0, day: 20_000,
+        };
+        let en = Record {
+            context: "^en:k".into(), reading: vec!["ㄕㄨ".into()], word: "K書".into(),
+            weight: 1.0, day: 20_000,
+        };
+        store.save(std::slice::from_ref(&existing)).unwrap();
+        store.append(std::slice::from_ref(&en)).unwrap();
+        OpenOptions::new().append(true).open(dir.join(FILE)).unwrap()
+            .write_all("^en:K\tㄕㄨ\tK書\t1\t20000\n".as_bytes()).unwrap();
+        let (store, restored, opened) = LearnStore::open(&dir).unwrap();
+        assert!(matches!(opened, Opened::Loaded { skipped: 1 }));
+        assert!(restored == [existing, en]);
+        store.save(&restored).unwrap();
+        let (_, rewritten, opened) = LearnStore::open(&dir).unwrap();
+        assert!(matches!(opened, Opened::Loaded { skipped: 0 }));
+        assert!(restored == rewritten);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

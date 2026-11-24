@@ -18,6 +18,34 @@ Replace-SmartContract 'return self.revert_keys(Revert::Overwrite, k.ch);' 'retur
 # lowercase column replacement is set to preserve Zhuyin.
 Replace-SmartContract 'if occupied && self.english_overwrite {' 'if occupied && (self.english_overwrite || (self.windows_shifted_boundaries && self.mixed_display_char.is_some_and(|ch| ch.is_ascii_uppercase()) && self.shadow_key.iter().flatten().all(|(ch, _)| ch.is_ascii_uppercase()))) {'
 Replace-SmartContract 'return self.revert_keys(Revert::Order, k.ch);' 'return self.revert_keys(Revert::Order, self.mixed_display_char.unwrap_or(k.ch));'
+Replace-SmartContract 'return self.start_run(k.ch.to_ascii_uppercase());' 'return self.start_run(self.latin_character(k));'
+Replace-SmartContract '        let word = std::mem::take(&mut self.run);' "        let keep = std::mem::take(&mut self.run_ascii) || self.windows_keep_run_writing();`n        let word = std::mem::take(&mut self.run);"
+Replace-SmartContract 'let writing = if std::mem::take(&mut self.run_ascii) { word.clone() } else { english_writing(&word) };' 'let writing = if keep { word.clone() } else { english_writing(&word) };'
+Replace-SmartContract 'if mode == ResetMode::Commit && !self.run.is_empty() && !self.run_ascii {' 'if mode == ResetMode::Commit && !self.run.is_empty() && !self.run_ascii && !self.windows_keep_run_writing() {'
+$splitCheck = '        if !(1..=16).contains(&n) || keys.is_empty() || !keys.chars().all(|c| Layout::Standard.symbol_of(c).is_some()) {'
+Replace-SmartContract $splitCheck (@'
+        // Preserve the physical Shift boundary when it is known. A run reopened
+        // from a token has no Shift history and uses the upstream text rule.
+        if self.windows_shifted_boundaries && self.run_shifted.contains(&true)
+            && self.run_shifted.iter().enumerate().any(|(i, &shifted)| shifted != (i < n))
+        {
+            return None;
+        }
+'@.Replace("`r`n","`n").TrimEnd() + "`n" + $splitCheck)
+$upstreamRunSplit = @'
+        if let Some((t, (u, syl))) = closing.and_then(|t| Some((t, self.mixed_split(t)?))) {
+            return self.run_split(u, syl, t);
+        }
+'@.Replace("`r`n","`n").TrimEnd()
+Replace-SmartContract $upstreamRunSplit ($upstreamRunSplit + "`n" + @'
+        if let Some(tone) = closing {
+            if (tone != 0 && (self.mixed_input || self.windows_shifted_boundaries))
+                || (tone == 0 && self.windows_shifted_boundaries && self.run_shifted.contains(&true))
+            {
+                return self.windows_run_tone(if tone == 0 { ' ' } else { k.ch }, tone);
+            }
+        }
+'@.Replace("`r`n","`n").TrimEnd())
 Replace-SmartContract "        self.invalidate();`n        self.clear_left();" "        self.invalidate();`n        self.mixed_raw.clear();`n        self.mixed_explicit_english = false;`n        self.mixed_shifted_end = 0;`n        self.run_shifted.clear();`n        self.mixed_latin = false;`n        self.clear_left();"
 Replace-SmartContract "        } else {`n            self.pending()`n        };" "        } else if self.mixed_input && !self.mixed_raw.is_empty() {`n            self.mixed_raw.clone()`n        } else {`n            self.pending()`n        };"
 Replace-SmartContract '        text.push_str(&unfinished);' '        text.push_str(&unfinished); text.push_str(&self.pending_literal);'
@@ -29,7 +57,7 @@ $content += "`n" + (Get-Content "$root/platform/smart_input_windows.rs" -Raw)
 $content += "`n" + (Get-Content "$root/platform/composition_windows.rs" -Raw)
 Replace-SmartContract '    mixed_input: bool,' "    mixed_input: bool,`n    mixed_tolerance: bool,`n    enter_to_cursor: bool,`n    punctuation_keeps_reading: bool,`n    lone_digit_literal: bool,`n    tones_over_digits: bool,`n    space_inputs_zhuyin: bool,`n    zhuyin_only: bool,`n    windows_raw: String,`n    pending_literal: String,`n    typed_literals: HashMap<usize,String>,"
 Replace-SmartContract '            mixed_input: false,' "            mixed_input: false,`n            mixed_tolerance: false,`n            enter_to_cursor: false,`n            punctuation_keeps_reading: false,`n            lone_digit_literal: false,`n            tones_over_digits: false,`n            space_inputs_zhuyin: true,`n            zhuyin_only: false,`n            windows_raw: String::new(),`n            pending_literal: String::new(),`n            typed_literals: HashMap::new(),"
-Replace-SmartContract 'self.predict_on && self.cursor == n && self.cands.is_none() && self.run.is_empty()' '!self.zhuyin_only && self.predict_on && self.cursor == n && self.cands.is_none() && self.run.is_empty()'
+Replace-SmartContract 'self.predict_on && self.cursor == n && self.cands.is_none()' '!self.zhuyin_only && self.predict_on && self.cursor == n && self.cands.is_none()'
 Replace-SmartContract "        self.mixed_latin = false;`n        self.clear_left();" "        self.mixed_latin = false;`n        self.windows_raw.clear();`n        self.pending_literal.clear();`n        self.typed_literals.clear();`n        self.clear_left();"
 Replace-SmartContract '        self.syls.insert(c, reading);' "        self.typed_literals = std::mem::take(&mut self.typed_literals).into_iter().map(|(i,text)| (if i >= c { i+1 } else { i },text)).collect();`n        self.syls.insert(c, reading);"
 Replace-SmartContract '        self.syls.remove(i);' "        self.typed_literals = std::mem::take(&mut self.typed_literals).into_iter().filter(|(index,_)| *index != i).map(|(index,text)| (if index > i { index-1 } else { index },text)).collect();`n        self.syls.remove(i);"

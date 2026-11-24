@@ -2,6 +2,10 @@
 #define wmain old_smoke_main
 #include "tsf_smoke.cpp"
 #undef wmain
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <vector>
 int wmain(int argc,wchar_t** argv) {
     require(argc==3,901);std::wstring scenario=argv[2];
     auto desktopName=L"Shanjie.English."+std::to_wstring(GetCurrentProcessId());
@@ -40,12 +44,68 @@ int wmain(int argc,wchar_t** argv) {
             std::fflush(stdout);
         }
         if(required)require(test&&eaten,917);
+        return test&&eaten;
     };
     auto expect=[&](const std::wstring& expected,int check){
         if(store->text!=expected){std::printf("Text (UTF-16):");for(auto unit:store->text)std::printf(" %04x",(unsigned)unit);std::puts("");}
         require(store->text==expected,check);
     };
-    if(scenario==L"digit-navigation"){
+    if(scenario==L"mixed-words"||scenario==L"mixed-words-shanjie"){
+        auto candidates=[&]{
+            ComPtr<ITfUIElementMgr> ui;require(SUCCEEDED(thread.As(&ui)),981);
+            ComPtr<IEnumTfUIElements> items;require(SUCCEEDED(ui->EnumUIElements(&items)),982);
+            ComPtr<ITfUIElement> item;ULONG found=0;
+            if(items->Next(1,&item,&found)!=S_OK||!found)return std::vector<std::wstring>{};
+            ComPtr<ITfCandidateListUIElement> list;require(SUCCEEDED(item.As(&list)),983);
+            std::vector<std::wstring> row;UINT count=0;require(SUCCEEDED(list->GetCount(&count)),984);
+            for(UINT i=0;i<count;++i){
+                BSTR text=nullptr;require(SUCCEEDED(list->GetString(i,&text))&&text,985);
+                row.emplace_back(text,SysStringLen(text));SysFreeString(text);
+            }
+            return row;
+        };
+        wchar_t profile[MAX_PATH]{};
+        require(GetEnvironmentVariableW(L"LOCALAPPDATA",profile,MAX_PATH)>0,986);
+        const auto learning=std::filesystem::path(profile)/L"Shanjie"/L"learning.tsv";
+
+        press('A',true);const auto a=candidates();
+        require(!a.empty()&&std::find(a.begin(),a.end(),L"A片")==a.end(),987);
+        press(VK_ESCAPE);expect(L"",988);
+
+        press('K',true);expect(L"K",989);
+        const auto mixed=candidates();
+        require(mixed.size()>=3&&mixed[2]==L"K書",990);
+        press(VK_TAB);expect(L"K",991);
+        press('3');expect(L"K書",992);
+        require(!std::filesystem::exists(learning),993);
+        press(VK_RETURN);expect(L"K書",994);
+        std::ifstream saved(learning,std::ios::binary);
+        const std::string records{std::istreambuf_iterator<char>{saved},{}};
+        saved.close();
+        require(records.find("\n^en:k\tㄕㄨ\tK書\t1\t")!=std::string::npos,995);
+
+        press('K',true);press('G');press('J');press(VK_SPACE);expect(L"K書K書",996);
+        press(VK_RETURN);expect(L"K書K書",997);
+        press('T',true);press('Y');press('4');expect(L"K書K書T字",998);
+        press(VK_RETURN);
+
+        press('K',true);for(int key:{'A','R','A','O'})press(key);
+        const auto words=candidates();
+        auto match=std::find(words.begin(),words.end(),L"Karaoke");
+        require(match!=words.end(),999);
+        press(VK_TAB);
+        for(auto i=words.begin();i!=match;++i)press(VK_TAB);
+        press(VK_RETURN);expect(L"K書K書T字Karaoke",1000);
+        // Windows' Enter commits the picked word; Shanjie's first Enter only picks.
+        require(press(VK_RETURN,false,false,false)==(scenario==L"mixed-words-shanjie"),1001);
+        expect(L"K書K書T字Karaoke",1005);
+
+        press('C',true);press('M');press('3');press(VK_DOWN);
+        const auto restored=candidates();
+        require(!restored.empty()&&restored[0]==L"Cm3",1002);
+        press('1');expect(L"K書K書T字KaraokeCm3",1003);
+        press(VK_RETURN);expect(L"K書K書T字KaraokeCm3",1004);
+    }else if(scenario==L"digit-navigation"){
         std::wstring committed;
         for(auto digit:std::wstring(L"125890")){
             for(int navigation:{VK_LEFT,VK_HOME,VK_RIGHT,VK_END}){

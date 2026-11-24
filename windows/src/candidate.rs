@@ -399,7 +399,11 @@ impl Host {
             let candidates: &[String] = if self.state.reading_hint { &[] } else { &self.state.candidates };
             for (i, value) in candidates.iter().enumerate() {
                 let tag = if self.state.selected.is_none() {
-                    if i == 0 && self.state.prediction && !self.state.reading_hint && !self.state.associated { "Tab".into() } else { String::new() }
+                    if i == 0 && self.state.prediction && !self.state.reading_hint && !self.state.associated {
+                        "Tab".to_owned()
+                    } else {
+                        String::new()
+                    }
                 } else {
                     let number = if self.state.columns > 0 { (self.state.first as usize + i) % 9 + 1 } else { i + 1 };
                     format!("{}{}", if self.state.associated { "⇧" } else { "" }, number)
@@ -474,7 +478,7 @@ impl Host {
                 mark = Some((start, len.min(units.len() - start)));
             }
             let english_end = self.state.english_run_utf16_start + self.state.english_run_utf16_len;
-            if self.english_hint && self.state.english_run_utf16_len != 0 {
+            if self.english_hint && self.state.english_run_utf16_len != 0 && candidates.is_empty() {
                 if !text.is_empty() { text.extend("  ".encode_utf16()); }
                 text.extend("空白：英文斷開".encode_utf16());
             }
