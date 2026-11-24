@@ -65,7 +65,8 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup
         $cargoArguments=@('build') + @(Get-WindowsCargoReleaseArgs $Architecture) +
             @('--manifest-path','windows/Cargo.toml','--target',$target,'--target-dir',"$root/windows/target")
         if($PackageTargetsOnly){
-            $cargoArguments+='--lib'
+            # RELEASE core-recovery cases run this probe; it is never packaged.
+            $cargoArguments+=@('--lib','--bin','shanjie-reliability-check')
             if($Architecture -eq 'x64'){
                 foreach($tool in 'shanjie-manager','shanjie-core','shanjie-word-helper','shanjie-setup','shanjie-pack'){
                     $cargoArguments+=@('--bin',$tool)
