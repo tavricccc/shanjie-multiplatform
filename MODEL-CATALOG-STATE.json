@@ -4,12 +4,6 @@
   "pending": [
     {
       "filename": "tinylm.sjtl",
-      "reason": "Unknown magic or format version",
-      "release": "sj-sr-10-31m",
-      "state": "unsupported"
-    },
-    {
-      "filename": "tinylm.sjtl",
       "reason": "No complete paired dependency set found",
       "release": "tinylm-v3",
       "state": "unsupported"
@@ -24,6 +18,12 @@
       "filename": "tinylm.sjtl",
       "reason": "No complete paired dependency set found",
       "release": "tinylm-v1",
+      "state": "unsupported"
+    },
+    {
+      "filename": "tinylm.sjtl",
+      "reason": "No complete paired dependency set found",
+      "release": "sj-sr-8-15m",
       "state": "unsupported"
     },
     {
@@ -51,8 +51,17 @@
       "state": "unsupported"
     }
   ],
-  "source_snapshot": "81f1c7cbbb84d9dc6af91c497383d0f440130101cd721a52007db34d3bea3109",
+  "source_snapshot": "39c138318edf67e6f606af4268e337e8723981b4944a6ba20604b49e848c3451",
   "sources": [
+    {
+      "asset_id": 779559245,
+      "digest": "sha256:ee109fb284cbd5fea8db825752fec5b8a08deb6541d772dc682091e2c99c70d4",
+      "filename": "tinylm.sjtl",
+      "release": "sj-sr-10-31m",
+      "release_id": 454556999,
+      "repository": "Nanako0129/shanjie",
+      "size": 30927424
+    },
     {
       "asset_id": 726631519,
       "digest": "sha256:d07de71dbbe6f45ceab0dd67aa8b607802f40ff5fbfe60a1fa87ed69c379070f",
