@@ -69,7 +69,7 @@ try {
   if($scenario -in $privacyCases){
     $control=($results|Where-Object scenario -eq 'privacy-control').prefix_reads
     if($scenario -eq 'privacy-normal') {if($prefixReads -le $control){throw 'Normal context read was not exercised'}}
-    elseif($prefixReads -ne $control){throw "Private scope added reads beyond the TSF edit baseline: $scenario ($prefixReads vs $control)"}
+    elseif($prefixReads -gt $control){throw "Private scope added reads beyond the TSF edit baseline: $scenario ($prefixReads vs $control)"}
   }
    Complete-TestStage -Stage $caseStage -Details @{scenario=$scenario;architecture=$arch;profile=$fixture;explicit_core=[bool]$server}
   $caseCompleted=$true

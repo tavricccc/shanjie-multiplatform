@@ -17,7 +17,9 @@ impl Data {
             !compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED)
                 && !compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT)
                 && context.GetStatus()?.dwDynamicFlags & TF_SD_READONLY == 0
-                && !private_scope(context, cookie)?
+                // A temporarily unavailable selection must not block composition.
+                // Pause learning/context until the document can be identified.
+                && !private_scope(context, cookie).unwrap_or(true)
         };
         let mut s = self.state.borrow_mut();
         s.engine.set_privacy_allowed(allowed).ok_or(E_FAIL)?;
