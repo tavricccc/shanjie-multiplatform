@@ -65,19 +65,21 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 
 | 變更範例 | 上游自動選測 | 本版 CTest 計畫（含 fixture） |
 | --- | --- | --- |
-| `ui/` | Rust＋settings UI／native host | 13 項，settings-ui＋candidate-host，不額外跑 mode／TSF 全套 |
-| 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 27 項，保留混打，無無關 interaction／UI |
+| `ui/` | Rust＋settings UI／native host | 15 項，settings-ui＋candidate-host |
+| 英文鍵 harness／mixed_regression | Rust＋混打＋英文 | 29 項，包含雙操作範本的上游混合詞與英文補全 |
 | submission harness | Rust＋提交 | 32 項 |
-| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 54 項；延遲仍是必要額外量測提示，不計入 CTest 成功數 |
+| platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 56 項。IPC 延遲另行量測 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
-| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 25 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 91 項；shared input 另保留已映射的 Shanjie TSF／interaction，共 93 項 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 30 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 98 項。shared input 另含善解 TSF／interaction，共 100 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
 `verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。本版沒有新增跨報告的全自動去重／收據合併系統；既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
 
-每次 JSON 都列出 CTest 選中／未選項目的理由，以及英文鍵 32 組、提交 77 組（每架構）的模式、鍵盤、按鍵、預期結果與實際結果。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+每次 JSON 都列出 CTest 選中／未選項目的理由，以及各架構英文鍵 35 組與提交流程的實際子案例。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+
+`ctest --preset windows-x64 -R 'english[.]mixed-words' --output-on-failure` 用同一個英文鍵 harness 驗證 Windows／善解操作及左右錨點。x86 使用 `windows-x86` preset。案例用私人桌面和獨立學習檔，走 TSF、Named Pipe 與出貨資料，涵蓋空白／聲調切分、數字選字、英文補全與 `^en:` 提交。候選窗的 Tab 標籤與英文提示由 native candidate-host harness 驗證。
 
 計時事件含 stage ID、parent ID、原始包含子階段耗時及 `exclusive_duration_ms`。後者扣除子階段區間聯集，避免巢狀重複加總；平行工作的合計仍可能大於 wall-clock。探測程序使用有期限的等待並只清理自己啟動的程序；CTest 另設每項 timeout。
 

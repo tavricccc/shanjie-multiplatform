@@ -14,7 +14,11 @@ Windows 外觀新增 `[appearance] accent=default|windows|custom`、`accent_colo
 
 加詞常駐輔助程式定期核對已放開的非 Ctrl 按鍵，避免漏收放開事件後永久將雙 Ctrl 判為組合鍵；Ctrl 的按放序列仍由手勢處理。有限日誌記錄手勢阻擋、狀態核對、取詞開始／逾時與設定 Shell 啟動失敗等階段，不記錄按鍵值、反白字詞或文件內容。此回復路徑已隔離回歸，尚不代表已確認使用者遇到的所有浮層失效都出於同一原因。
 
-使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129）主線提交 `006c8f1d`（v0.9.0 之後 67 個提交，距上一基準 `1752033f` 共 106 個提交）的核心、完整詞庫（含口語變調與疊字陰平 `colloq` 讀音、教育部兩部辭典使用說明）與 v0.9.0 完整模型配套（會意升級為 `SJ-SR-10-31M`，格式 `SJTL0006`、`L=62`、`K=4` 與 `[SEP]` 邊界標記，並沿用既有 `bigram`、`classes`、`kn`、`trigram` 與 `colloquial`）。固定提交以 `UPSTREAM.json` 為準。模型清單與 Windows UI 同步支援 `SJTL0001`–`SJTL0006` 及 KN 配對雜湊解析。子模組初始化、模型清單與附件均優先官方，無法讀取才改用 [鏡像](https://github.com/tavricccc/shanjie-upstream-backup)；附件大小與 SHA-256 照常核對，既有收據的來源與 ID 不重寫。同名模型以實際讀取的模型名稱識別，跨來源／配套 ID 仍顯示已下載；附件或 release 有新版時保留舊版並提供更新，不因同名略過更新。各版變更見 [Changelog](Changelog.md)。
+使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129）主線提交 `bddb22b0`（v0.9.0 之後 91 個提交，距上一基準 `1752033f` 共 130 個提交）的核心、完整詞庫（含口語變調與疊字陰平 `colloq` 讀音、教育部兩部辭典使用說明）與 v0.9.0 完整模型配套（會意升級為 `SJ-SR-10-31M`，格式 `SJTL0006`、`L=62`、`K=4` 與 `[SEP]` 邊界標記，並沿用既有 `bigram`、`classes`、`kn`、`trigram` 與 `colloquial`）。固定提交以 `UPSTREAM.json` 為準。模型清單與 Windows UI 同步支援 `SJTL0001`–`SJTL0006` 及 KN 配對雜湊解析。子模組初始化、模型清單與附件均優先官方，無法讀取才改用 [鏡像](https://github.com/tavricccc/shanjie-upstream-backup)；附件大小與 SHA-256 照常核對，既有收據的來源與 ID 不重寫。同名模型以實際讀取的模型名稱識別，跨來源／配套 ID 仍顯示已下載；附件或 release 有新版時保留舊版並提供更新，不因同名略過更新。各版變更見 [Changelog](Changelog.md)。
+
+[上游 PR #102](https://github.com/Nanako0129/shanjie/pull/102) 的混合詞解碼、英文補全、`nopredict` 詞表欄位及 `^en:` 學習鍵隨固定核心與詞庫取得。Windows 上游判斷路徑保留實際 Shift 邊界與英文大小寫，已進入英文預測列時數字鍵用於選字。原鍵混打及倚天沿用既有路徑。兩套操作範本保留原預測預設。英文預測列出現時顯示 Tab，沒有候選時回到英文提示。右錨點的混合詞及還原英文字候選沿用完整 token 與後接音節的範圍。
+
+`^en:` 共用既有學習 TSV、Windows 原子替換與跨行程協調。舊版略過此鍵，完整改寫時會移除新鍵紀錄，其他紀錄沿用原格式。原上游 [#103](https://github.com/Nanako0129/shanjie/pull/103)、[#104](https://github.com/Nanako0129/shanjie/pull/104)、[#105](https://github.com/Nanako0129/shanjie/pull/105) 的 Swift timing、macOS 重排優先度及 Orca 前文只保留在子模組。
 
 `upstream/shanjie` 的追蹤檔案保持原樣。`scripts/prepare-core.ps1` 每次把上游 core 複製到 `build/core`，再套用下表的變更。**子模組沒改，不代表建出來的核心等於上游**：右側候選範圍、Enter 只提交游標前、原鍵混打等都是核心行為變更，不是改設定就能做到。
 
