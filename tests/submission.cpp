@@ -216,7 +216,8 @@ int wmain(int argc,wchar_t** argv) {
  if(mode.starts_with(L"rebuild-")) logStage("initial-core-ready");
  ComPtr<ITfKeyEventSink> keys;require(SUCCEEDED(service.As(&keys)),16);
  auto context=firstContext;auto store=first;
- auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(5);}};
+ // Work done inside a message (x86 reranks synchronously on slow runners) is not waiting time.
+ auto pump=[] {auto start=std::chrono::steady_clock::now();while(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(350)){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);auto begun=std::chrono::steady_clock::now();DispatchMessageW(&message);start+=std::chrono::steady_clock::now()-begun;}Sleep(5);}};
  auto press=[&](WPARAM requested, bool shifted=false){WPARAM vk=requested;
    if(mode.starts_with(L"input-")) {
      if(requested==L'\\')vk=VK_OEM_5;
