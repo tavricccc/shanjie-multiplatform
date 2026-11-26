@@ -60,9 +60,9 @@ if ($Dist) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }
         if ($file.Name -eq 'overlay-add.tsv') {
-            # Exact overlay-add.tsv blob from Nanako0129/shanjie@9c4ddf560ab6.
-            if ((git hash-object --no-filters $built) -cne '8c5f395a9e5f60c99f928e6f30083db12cdba2bd') {
-                Fail 'dist/data/overlay-add.tsv differs from upstream PR #123.'
+            # Exact overlay-add.tsv blob from Nanako0129/shanjie@5ab7307ad11c, including PR #123.
+            if ((git hash-object --no-filters $built) -cne '8dcdfba89eed4a3a91aaf812ed6704202a2247c1') {
+                Fail 'dist/data/overlay-add.tsv differs from upstream PR #125.'
             }
         } elseif (!(Same-AsUpstream $built "lexicon/$($file.Name)")) { Fail "dist/data/$($file.Name) differs from upstream." }
     }

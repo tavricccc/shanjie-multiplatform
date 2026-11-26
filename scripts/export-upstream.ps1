@@ -14,7 +14,9 @@ function Export-Upstream([string]$Destination, [string[]]$Paths, [switch]$WithLe
     if ($WithLexiconBackport) {
         $relative = [IO.Path]::GetRelativePath($project, $destinationPath).Replace('\','/')
         $exclude = @(if ('eval' -notin $Paths) { "--exclude=$relative/eval/golden/*" })
-        & git -C $project apply --whitespace=error "--directory=$relative" @exclude -- "$project/data/overlay-twin-keep.patch"
-        if ($LASTEXITCODE) { throw 'The upstream PR #123 lexicon backport did not apply.' }
+        foreach ($patch in 'overlay-twin-keep.patch','overlay-rare-prune.patch') {
+            & git -C $project apply --whitespace=error "--directory=$relative" @exclude -- "$project/data/$patch"
+            if ($LASTEXITCODE) { throw "The upstream lexicon backport $patch did not apply." }
+        }
     }
 }

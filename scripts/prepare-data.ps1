@@ -20,7 +20,7 @@ $existingRootNames=if(Test-Path -LiteralPath $data){@(Get-ChildItem -LiteralPath
 $outputPaths = @("$Output/packs",$Licenses) + @($expectedRootNames | ForEach-Object { "$Output/$_" }) + @($existingRootNames | ForEach-Object { "$Output/$_" })
 $inputPaths = @(
     'UPSTREAM.json','MODEL-SOURCES.json','scripts/prepare-data.ps1','scripts/export-upstream.ps1',
-    'data/pinyin-map.tsv','data/overlay-twin-keep.patch','data/README.md','LICENSES',
+    'data/pinyin-map.tsv','data/overlay-twin-keep.patch','data/overlay-rare-prune.patch','data/README.md','LICENSES',
     'upstream/shanjie/scripts/build-app.sh','upstream/shanjie/tools/build_english_words.py'
 )
 $attributionHash = (Get-FileHash -LiteralPath $attribution -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -35,7 +35,7 @@ try {
     }
 
     $exportRoot = Join-Path $root "build/upstream-data/$pin"
-    $exportKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1','data/overlay-twin-keep.patch') -Values @($pin,'data/lexicon','data/packs')
+    $exportKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1','data/overlay-twin-keep.patch','data/overlay-rare-prune.patch') -Values @($pin,'data/lexicon','data/packs')
     $exportManifest = Join-Path $exportRoot '.source-cache.json'
     $exportPaths = @('data/lexicon','data/packs')
     if (!(Test-ContentCache -Root $exportRoot -ManifestPath $exportManifest -Key $exportKey -Paths $exportPaths)) {

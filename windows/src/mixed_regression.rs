@@ -25,6 +25,24 @@ fn restored_taiwanese_phrases_are_loaded_at_their_readings() {
 }
 
 #[test]
+#[ignore = "Reads the built lexicon in dist/data"]
+fn pruned_overlay_readings_are_absent_from_the_runtime_lexicon() {
+    let lexicon = shanjie_core::engine::windows_base_lexicon(&test_data_root()).unwrap();
+    for (reading, word) in [
+        (&["ㄈㄨˊ", "ㄓㄡ", "ㄓㄢˋ"][..], "福州站"),
+        (&["ㄎㄚ", "ㄌㄚ"][..], "哈喇"),
+        (&["ㄎㄚ", "ㄌㄚ˙"][..], "哈喇"),
+    ] {
+        let reading: Vec<_> = reading.iter().map(|syllable| (*syllable).to_owned()).collect();
+        assert!(
+            !lexicon.entries(&reading).iter().any(|(entry, _)| *entry == word),
+            "{word} must not have an overlay entry at {}",
+            reading.join(" "),
+        );
+    }
+}
+
+#[test]
 fn raw_digit_navigation_preserves_editable_literal_and_cursor() {
     for digit in "125890".chars() {
         for (key, cursor) in [(KeyKind::Left, 0), (KeyKind::Home, 0), (KeyKind::Right, 1), (KeyKind::End, 1)] {

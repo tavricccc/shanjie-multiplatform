@@ -259,7 +259,7 @@ try {
     $resources = Join-Path $root "build/test-resources/$upstreamPin"
     # engine_mixed verifies the English collision table against the pinned spec.
     $resourceExports = @('data','eval','docs/spec/english-mixed.md')
-    $resourceKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1','data/overlay-twin-keep.patch') -Values (@($upstreamPin) + $resourceExports)
+    $resourceKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1','data/overlay-twin-keep.patch','data/overlay-rare-prune.patch') -Values (@($upstreamPin) + $resourceExports)
     $resourceManifest = Join-Path $resources '.source-cache.json'
     $resourcePaths = @('data','eval','docs')
     $resourceCheck = Start-TestStage -Name 'Validate upstream core fixture cache' -Category 'core.cache'
