@@ -78,8 +78,8 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | submission harness | Rust＋提交 | 32 項 |
 | platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 58 項。IPC 延遲另行量測 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
-| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 42 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 112 項。shared input 另含善解 TSF／interaction，共 114 項 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 44 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 114 項。shared input 另含善解 TSF／interaction，共 116 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
@@ -114,7 +114,7 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 | `verify-add-word.ps1` | `full.word.add.x64` | 加詞浮層、主題與模型選擇；獨立 LOCALAPPDATA 和核心端點 |
 | `verify-english-keys.ps1` | 20 個 `full.english.<scenario>.x64` 項目 | 每個 scenario 保留原本混打模式、鍵盤配置、組字／提交斷言；加入上游兩種模式的 digit-navigation |
 | `verify-submission.ps1` | `full.submission.*`，含 `async-keys`、`rebuild-local`、`rebuild-pipe`、`segment`、`input-digits` | 保留提交、取消、焦點、忙碌、退休及原有數字組合；新增數字語境、第一聲、學習檔與詞典保留，並驗證延遲編輯鎖的輸入順序及組字詞段範圍 |
-| `verify-private-desktop.ps1` | 35 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
+| `verify-private-desktop.ps1` | 37 個 TSF 相容及 15 個浮層生命週期項目 | 每案不同 profile、TEMP 與 Private Desktop；不切到該桌面、不操作使用者桌面 |
 | `verify-interaction.ps1`、`verify-mode.ps1` | `release.interaction.x64`、`release.mode.x64`、`release.mode.x86` | 隔離 profile 的引擎互動回歸、兩架構離屏模式列／圖示 smoke；不送出桌面輸入 |
 | Release profiles／x86 | `release.tsf-smoke.shanjie.x64`, `release.*.x86` | 額外 Shanjie profile TSF smoke，以及 x86 Rust／混打與上述 TSF、提交、私人桌面矩陣 |
 | `verify-ui.ps1`、WinUI compile、`package.ps1` | `release.ui.*`, `release.package` | WinUI 工作流程、候選 host x64／x86 與安裝包校驗；不安裝到實機 |
