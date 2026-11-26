@@ -1,4 +1,4 @@
-use super::service::{compartment, output, pick_associated, range, selection, Data, Service_Impl, State};
+use super::service::{compartment, output, pick_associated, range, selection, Data, ModeSwitch, Service_Impl, State};
 use crate::{
     engine::Snapshot,
     input::{self, Special},
@@ -39,6 +39,7 @@ pub(super) enum KeyAction {
     Pass,
     Ime,
     English(char),
+    ComposedAscii(ShanjieKey),
 }
 
 impl KeyAction {
@@ -224,6 +225,19 @@ impl Data {
                 .thread
                 .as_ref()
                 .is_some_and(|t| compartment(t, &GUID_COMPARTMENT_KEYBOARD_OPENCLOSE));
+            if !chinese && s.shift_ascii && s.context.as_ref() == Some(context) {
+                if key.modifiers & 14 != 0 {
+                    return Ok(KeyAction::Pass);
+                }
+                if key.kind == 1 {
+                    let Some(ch) = ascii_key(vk, flags)? else { return Ok(KeyAction::Pass); };
+                    key.ch = ch as u32;
+                } else if key.kind > 12 || key.modifiers & 1 != 0 {
+                    return Ok(KeyAction::Pass);
+                }
+                key.modifiers = 0;
+                return Ok(KeyAction::ComposedAscii(key));
+            }
             if s.full_width && !chinese && !held(VK_CONTROL) && !held(VK_MENU) {
                 return Ok(KeyAction::ime([1, 2].contains(&key.kind)));
             }
@@ -347,15 +361,22 @@ impl Data {
     ) -> Result<bool> {
         self.mode_revision.set(self.mode_revision.get() + 1);
         unsafe { self.indicator.borrow_mut().hide(); }
-        if !matches!(self.key_action(context, vk, flags)?, KeyAction::Ime) {
-            return Ok(false);
+        match self.key_action(context, vk, flags)? {
+            KeyAction::Ime => {}
+            KeyAction::ComposedAscii(key) => {
+                let out = output(self.state.borrow_mut().engine.key(key))?;
+                let handled = out.handled;
+                self.apply(context, cookie, out, false)?;
+                return Ok(handled);
+            }
+            _ => return Ok(false),
         }
         let p = self.state.borrow().prefs.clone();
         if p.flag("shortcuts", "ctrl_space_toggle", false)
             && plain_shortcut(vk, VK_CONTROL, VK_SHIFT)
         {
             if flags.0 & (1 << 30) == 0 {
-                self.toggle_in_session(context, cookie, !self.chinese())?;
+                self.toggle_in_session(context, cookie, !self.chinese(), ModeSwitch::Command)?;
             }
             return Ok(true);
         }
@@ -378,6 +399,16 @@ impl Data {
                 }
             }
             return Ok(true);
+        }
+        // The host can also change the open/close compartment directly.
+        if self.state.borrow().shift_ascii && self.chinese() {
+            let out = {
+                let mut s = self.state.borrow_mut();
+                let out = output(s.engine.perform(crate::broker::Op::ShiftMode { to_english: false }))?;
+                s.shift_ascii = false;
+                out
+            };
+            self.apply(context, cookie, out, false)?;
         }
         let mut key = translate(vk, flags).ok_or(E_FAIL)?;
         if !p.flag("input", "caps_lock_english", false) {
@@ -852,7 +883,7 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             };
             if toggle {
                 self.data.diagnostic("shift.toggle",context.as_ref(),Some(key),Some(1));
-                self.data.toggle(context.as_ref().cloned())?;
+                self.data.toggle(context.as_ref().cloned(), ModeSwitch::Shift)?;
             } else {
                 self.data.diagnostic("shift.cancelled",context.as_ref(),Some(key),Some(0));
             }

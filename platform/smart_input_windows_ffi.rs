@@ -13,6 +13,13 @@ pub unsafe extern "C" fn shanjie_windows_set_mixed_english_writing(engine: *mut 
     SHANJIE_OK
 }
 
+pub fn windows_shift_mode(engine: &mut ShanjieEngine, to_english: bool, out: &mut *mut ShanjieOutput) -> i32 {
+    guard(|| match engine.0.windows_shift_mode(to_english) {
+        Ok(value) => unsafe { emit(value, out) },
+        Err(_) => SHANJIE_ERR_INTERNAL,
+    })
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_key_with_latin(engine: *mut ShanjieEngine, key: ShanjieKey, display: u32, out: *mut *mut ShanjieOutput) -> i32 {
     guard(|| {

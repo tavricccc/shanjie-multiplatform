@@ -284,6 +284,28 @@ mod windows_smart_tests {
     }
 
     #[test]
+    fn windows_shift_ascii_ends_on_enter_or_reset() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\n").unwrap());
+        for leaving in [None, Some(ResetMode::Commit), Some(ResetMode::Discard)] {
+            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            e.set_upstream_english(false, false, true, true).unwrap();
+            type_keys(&mut e, "su3");
+            assert!(e.windows_shift_mode(true).unwrap().commit.is_empty());
+            for ch in "Chatgpt".chars() {
+                e.key(Key::ch(ch, 0)).unwrap();
+            }
+            let out = if let Some(mode) = leaving {
+                e.reset(mode)
+            } else {
+                e.key(Key::new(KeyKind::Enter)).unwrap()
+            };
+            assert!(out.preedit.is_empty());
+            assert_eq!(out.commit, if leaving == Some(ResetMode::Discard) { "" } else { "你Chatgpt" });
+            assert_eq!(type_keys(&mut e, "su3").preedit, "你");
+        }
+    }
+
+    #[test]
     fn shifted_english_applies_official_writing_under_windows_options() {
         let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄔㄣ 稱 -0.1\nㄧㄣ 因 -0.1\n").unwrap());
         let type_word = |engine: &mut Engine, word: &str| {
@@ -894,6 +916,30 @@ impl Engine {
         Ok(out)
     }
 
+    fn ascii_on(&self) -> bool {
+        !self.abbr && self.layout == Layout::Standard
+    }
+
+    pub fn windows_shift_mode(&mut self, to_english: bool) -> Result<Output, EngineError> {
+        if !to_english && self.windows_shift_ascii {
+            self.windows_shift_ascii = false;
+            return self.set_ascii(false);
+        }
+        if to_english && !self.english && !self.mixed_input && !self.zhuyin_only {
+            self.windows_raw.clear();
+            if self.ascii_on() {
+                let out = self.set_ascii(true)?;
+                // No active text means the host can type English directly.
+                self.windows_shift_ascii = !out.preedit.is_empty();
+                self.ascii = self.windows_shift_ascii;
+                return Ok(out);
+            }
+            // CommitFinished from upstream #122, using the Windows reset path.
+            self.clear_pend();
+        }
+        Ok(self.reset(ResetMode::Commit))
+    }
+
     /// The digit of a run that is one buffered key still shown as an unfinished reading (Windows option, upstream shows the reading).
     fn lone_digit(&self) -> Option<char> {
         let run = self.drun.as_ref()?;
@@ -1029,6 +1075,14 @@ impl Engine {
         if !std::mem::take(&mut self.left_fresh) && self.composition_empty()
             && self.mixed_raw.is_empty() && self.pending_literal.is_empty() {
             self.clear_left();
+        }
+        if self.windows_shift_ascii {
+            let out = self.key_original(key)?;
+            if out.preedit.is_empty() {
+                self.windows_shift_ascii = false;
+                self.ascii = false;
+            }
+            return Ok(out);
         }
         // The explicit upstream Microsoft scheme owns its key rules. A window
         // keeps the scheme it opened with even if the setting changes meanwhile.

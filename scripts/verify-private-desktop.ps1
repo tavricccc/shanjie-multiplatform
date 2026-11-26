@@ -1,5 +1,5 @@
 #Requires -Version 7
-param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
+param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter','shift-retain-windows','shift-retain-shanjie','shift-finish-eten',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
  'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
@@ -22,8 +22,15 @@ try {
   try {
   $fixture=[IO.Path]::GetFullPath((Join-Path $Output $scenario))
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
-  $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
-  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
+  $shiftCase=$scenario -in 'shift-retain-windows','shift-retain-shanjie','shift-finish-eten'
+  $preset=if($scenario -eq 'shift-retain-shanjie'){'shanjie'}else{'windows'}
+  $profile=Get-Content -LiteralPath "$root/profiles/$preset.ini" -Raw -Encoding utf8
+  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=.*',"mixed_input=$([int](!$shiftCase))" -replace '(?m)^upstream_english=.*','upstream_english=0'
+  if($shiftCase){
+   $keyboard=if($scenario -eq 'shift-finish-eten'){2}else{1}
+   $profile=$profile -replace '(?m)^keyboard=.*',"keyboard=$keyboard"
+  }
+  if($scenario -eq 'shift-retain-shanjie'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1'}
   if($scenario -like 'privacy-*'){$profile=$profile -replace '(?m)^learning=0','learning=1'}
   if($scenario -eq 'privacy-control'){$profile=$profile -replace '(?m)^context=1','context=0'}
   if($scenario -eq 'spacing-english'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1' -replace '(?m)^context=1','context=0'}
@@ -37,13 +44,15 @@ try {
   $start.Environment['LOCALAPPDATA']=$fixture
   New-Item -ItemType Directory -Path "$fixture/temp" -Force|Out-Null
   $start.Environment['TEMP']="$fixture/temp";$start.Environment['TMP']="$fixture/temp"
-  foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL')){$start.Environment[$key]='1'}
+  foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS')){$start.Environment[$key]='1'}
+  $residentShift=$scenario -eq 'shift-retain-shanjie'
+  if($residentShift){[void]$start.Environment.Remove('SHANJIE_CORE_LOCAL')}else{$start.Environment['SHANJIE_CORE_LOCAL']='1'}
   $start.Environment['SHANJIE_TEST_ROOT']=$fixture
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}
   $start.ArgumentList.Add("$Payload/$arch/Shanjie.dll");$start.ArgumentList.Add($scenario)
   $server=$null;$child=$null
-   # Only scenarios that open the word popup use its broker-backed inspection.
-   if($scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
+   # The Shanjie interaction also verifies the retained state over Named Pipe.
+   if($residentShift -or $scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
    $serverStart=[Diagnostics.ProcessStartInfo]::new("$Payload/tools/shanjie-core.exe")
    $serverStart.UseShellExecute=$false;$serverStart.CreateNoWindow=$true
    foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT','SHANJIE_HEADLESS')){$serverStart.Environment[$key]=$start.Environment[$key]}

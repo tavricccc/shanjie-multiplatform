@@ -616,18 +616,24 @@ impl Engine {
                 )
                 })
             }
-            Op::Reset(discard) => {
-                if discard {
-                    self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) })
-                } else if self.begin(0) {
-                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+            Op::Reset(true) => self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) }),
+            Op::Reset(false) | Op::ShiftMode { .. } => {
+                let finish = |h: *mut ShanjieEngine, o: *mut *mut ShanjieOutput| unsafe {
+                    if let Op::ShiftMode { to_english } = op {
+                        windows_shift_mode(&mut *h, to_english, &mut *o)
+                    } else {
+                        shanjie_engine_reset(h, 0, o)
+                    }
+                };
+                if self.begin(0) {
+                    let out = self.invoke(finish);
                     self.end();
                     out
                 } else if self.failure == Some(Failure::Busy) {
-                    // Focus loss must send its text without waiting for another learning writer.
+                    // Focus loss and mode switches keep working while another process writes learning data.
                     self.failure = None;
                     unsafe { shanjie_engine_set_learning(self.handle, 0); }
-                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+                    let out = self.invoke(finish);
                     unsafe { shanjie_engine_set_learning(self.handle, 1); }
                     out
                 } else {

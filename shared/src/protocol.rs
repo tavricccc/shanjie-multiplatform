@@ -138,6 +138,8 @@ pub enum Op {
         latin: Option<char>,
     },
     Reset(bool),
+    /// A mode switch caused by tapping Shift, ordered with the composition's input.
+    ShiftMode { to_english: bool },
     Pick(u32),
     Associate(String),
     Reading,

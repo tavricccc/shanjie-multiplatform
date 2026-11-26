@@ -45,6 +45,12 @@ pub fn range(s: TF_SELECTION) -> ITfRange {
     std::mem::ManuallyDrop::into_inner(s.range).unwrap()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ModeSwitch {
+    Command,
+    Shift,
+}
+
 pub struct State {
     pub thread: Option<ITfThreadMgr>,
     pub client: u32,
@@ -74,6 +80,8 @@ pub struct State {
     pub shift_used: bool,
     pub shift_physical: u32,
     pub shift_epoch: u64,
+    /// The current composition is still being edited after a Shift tap to English.
+    pub(super) shift_ascii: bool,
     observer: Option<super::modifiers::Observer>,
     pub raw_reading: String,
     /// The character before the cursor for 中英文之間自動加空格 (upstream cjk-spacing section 1); `None` when unknown.
@@ -110,6 +118,7 @@ impl Default for State {
             shift_used: false,
             shift_physical: 0,
             shift_epoch: 0,
+            shift_ascii: false,
             observer: None,
             raw_reading: String::new(),
             spacing_prev: None,
@@ -117,6 +126,12 @@ impl Default for State {
     }
 }
 impl State {
+    fn phonetic_shift(&self) -> bool {
+        self.prefs.number("input", "keyboard", 0) < 3
+            && !self.prefs.zhuyin_only()
+            && self.special.mode == 0
+            && self.engine.privacy_allowed()
+    }
     pub(super) fn core_config(&self) -> resident::Config {
         resident::Config::new(&self.data, &self.prefs, self.profile_layout)
     }
@@ -405,6 +420,7 @@ impl Data {
         s.context = None;
         s.shift_tap = false;
         s.shift_used = false;
+        s.shift_ascii = false;
         s.special.clear();
         s.pinyin.clear();
         s.associated.clear();
@@ -605,7 +621,13 @@ impl Data {
             }
             // If a later caret update fails, do not repeat text already sent.
             self.application_written.set(true);
-            self.state.borrow_mut().snapshot = out.clone();
+            {
+                let mut s = self.state.borrow_mut();
+                if out.preedit.is_empty() {
+                    s.shift_ascii = false;
+                }
+                s.snapshot = out.clone();
+            }
             if let (Some(atom), Some(segment)) = (self.active_word_atom.get(), out.active_segment) {
                 let _ = super::composition_style::mark(context, cookie, &range, atom, segment);
             }
@@ -680,25 +702,33 @@ impl Data {
             Ok(())
         }
     }
-    pub fn toggle(self: &Rc<Self>, input: Option<ITfContext>) -> Result<()> {
+    pub(super) fn toggle(self: &Rc<Self>, input: Option<ITfContext>, source: ModeSwitch) -> Result<()> {
         let chinese = !self.chinese();
-        let context = {
+        let (context, retained_shift) = {
             let s = self.state.borrow();
-            s.context.clone().filter(|_| s.composition.is_some() || !self.recovery.borrow().is_empty())
+            let context = s.context.clone().filter(|_| s.composition.is_some() || !self.recovery.borrow().is_empty());
+            let keyboard = s.prefs.number("input", "keyboard", 0);
+            let retained_shift = source == ModeSwitch::Shift && (s.shift_ascii
+                || (!chinese && s.phonetic_shift()
+                    && (keyboard == 1 || keyboard == 0 && s.profile_layout == 0)
+                    && !s.prefs.raw_key_mixing()
+                    && !s.prefs.flag("input", "upstream_english", false)));
+            (context, retained_shift)
         };
         let Some(context) = context else {
             self.clear_mode_candidates();
             self.set_mode(chinese)?;
             return self.notify_mode(input, chinese);
         };
-        if !self.recovery.borrow().is_empty() {
-            return self.dispatch_toggle(&context);
+        if retained_shift || !self.recovery.borrow().is_empty() {
+            // Retained composition keys must follow the pending mode change.
+            return self.dispatch_toggle(&context, source);
         }
         let current = context.clone();
         let data = self.clone();
         self.request_current(&context, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, move |cookie| {
             data.update_privacy(&current, cookie)?;
-            data.toggle_in_session(&current, cookie, chinese)
+            data.toggle_in_session(&current, cookie, chinese, source)
         })
     }
     fn clear_mode_candidates(&self) {
@@ -708,15 +738,27 @@ impl Data {
             c.data.close();
         }
     }
-    pub(super) fn toggle_in_session(self: &Rc<Self>, context: &ITfContext, cookie: u32, chinese: bool) -> Result<()> {
+    pub(super) fn toggle_in_session(
+        self: &Rc<Self>,
+        context: &ITfContext,
+        cookie: u32,
+        chinese: bool,
+        source: ModeSwitch,
+    ) -> Result<()> {
         self.clear_mode_candidates();
         if self.state.borrow().composition.is_some() {
             let out = {
                 let mut s = self.state.borrow_mut();
-                let mut out = output(s.engine.reset(false))?;
+                let phonetic_shift = source == ModeSwitch::Shift && s.phonetic_shift();
+                let mut out = if phonetic_shift {
+                    output(s.engine.perform(crate::broker::Op::ShiftMode { to_english: !chinese }))?
+                } else {
+                    output(s.engine.reset(false))?
+                };
                 if !s.pinyin.pending.is_empty() || [1, 2, 3].contains(&s.special.mode) {
                     out.commit = s.snapshot.preedit.clone();
                 }
+                s.shift_ascii = phonetic_shift && !chinese && !out.preedit.is_empty();
                 s.special.clear();
                 s.pinyin.clear();
                 s.raw_reading.clear();

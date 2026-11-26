@@ -60,7 +60,55 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if (scenario.starts_with(L"spacing-english")) {
+    if(scenario.starts_with(L"shift-retain-") || scenario==L"shift-finish-eten") {
+        auto tapShift=[&]{
+            keyboard(VK_RSHIFT);down(VK_RSHIFT);
+            keyboard(0);up(VK_RSHIFT);pump();
+        };
+        keyboard(0);
+        if(scenario==L"shift-finish-eten") {
+            for(int key:{'N','E','3','N'})down(key);
+            require(store->text.starts_with(L"你")&&store->text!=L"你"&&compositions()==1,1160);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==0,1161);
+            tapShift();
+            down('N');require(compositions()==1,1162);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==0,1163);
+        } else {
+            for(int key:{'S','U','3','2','8'})down(key);
+            require(store->text.starts_with(L"你")&&store->text!=L"你"&&compositions()==1,1164);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==1,1165);
+            keyboard(VK_SHIFT);down('G');keyboard(0);
+            for(int key:{'I','T','H','U','B','2'})down(key);
+            keyboard(VK_SHIFT);down('1');keyboard(0);
+            require(store->text==L"你Github2!"&&compositions()==1,1166);
+            keyboard(VK_LCONTROL);
+            BOOL offered=TRUE;
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'A',flags('A',false),&offered))&&!offered,1167);
+            keyboard(0);tapShift();
+            require(chinese()&&store->text==L"你Github2!"&&compositions()==1,1168);
+            for(int key:{'C','L','3'})down(key);
+            require(store->text==L"你Github2!好"&&compositions()==1,1169);
+            down(VK_RETURN);
+            auto expected=scenario==L"shift-retain-shanjie"?L"你 Github2!好":L"你Github2!好";
+            require(store->text==expected&&compositions()==0,1170);
+
+            store->externalText(L"");
+            down('2');down('8');require(compositions()==1,1171);
+            tapShift();
+            require(!chinese()&&store->text.empty()&&compositions()==0,1172);
+            tapShift();
+            for(int key:{'S','U','3'})down(key);
+            tapShift();down('B');down(VK_RETURN);
+            expected=scenario==L"shift-retain-shanjie"?L"你 b":L"你b";
+            require(!chinese()&&store->text==expected&&compositions()==0,1173);
+            BOOL eaten=FALSE;
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(),'A',flags('A',false),&eaten))
+                &&!eaten&&store->text==expected&&compositions()==0,1174);
+        }
+    } else if (scenario.starts_with(L"spacing-english")) {
         v.lVal = 0;
         require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1140);
         store->externalText(L"漢");

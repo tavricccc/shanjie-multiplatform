@@ -1,7 +1,7 @@
 //! Keep failed keys in memory, tied to the original field and input generation.
 use super::{
     keys::shift,
-    service::{range, selection, Data, State},
+    service::{range, selection, Data, ModeSwitch, State},
 };
 use crate::{
     engine::{Engine, Failure, Snapshot},
@@ -28,7 +28,7 @@ struct Key {
     flags: LPARAM,
     keyboard: [u8; 256],
     pick: Option<(u32, Snapshot)>,
-    toggle: bool,
+    toggle: Option<ModeSwitch>,
 }
 impl Key {
     fn is_forward_tab(&self) -> bool {
@@ -65,6 +65,7 @@ struct Checkpoint {
     caret: Option<ITfRange>,
     raw: String,
     snapshot: Snapshot,
+    shift_ascii: bool,
 }
 impl Checkpoint {
     fn capture(s: &State) -> Self {
@@ -75,6 +76,7 @@ impl Checkpoint {
             caret: s.association_caret.clone(),
             raw: s.raw_reading.clone(),
             snapshot: s.snapshot.clone(),
+            shift_ascii: s.shift_ascii,
         }
     }
     fn restore(self, s: &mut State) {
@@ -84,6 +86,7 @@ impl Checkpoint {
         s.association_caret = self.caret;
         s.raw_reading = self.raw;
         s.snapshot = self.snapshot;
+        s.shift_ascii = self.shift_ascii;
     }
 }
 struct Keyboard([u8; 256]);
@@ -125,8 +128,8 @@ impl Data {
             SetKeyboardState(&key.keyboard)?;
         }
         let _keyboard = Keyboard(previous);
-        let result = if key.toggle {
-            self.toggle_in_session(&key.context, cookie, !self.chinese()).map(|_| true)
+        let result = if let Some(source) = key.toggle {
+            self.toggle_in_session(&key.context, cookie, !self.chinese(), source).map(|_| true)
         } else if let Some((index, _)) = key.pick.as_ref() {
             self.pick_at(&key.context, cookie, *index).map(|_| true)
         } else {
@@ -187,10 +190,15 @@ impl Data {
             })
         };
         let respond = |flags| request(flags).and_then(|status| { status.ok()?; Ok(status) });
-        let status = match respond(TF_ES_SYNC) {
-            Err(_) if result.get().is_none() && !allow_async => return Ok(Some(false)),
-            Err(error) if result.get().is_none() && [TF_E_SYNCHRONOUS, TF_E_LOCKED].contains(&error.code()) => respond(TF_ES_ASYNC)?,
-            other => other?,
+        let status = if key.toggle == Some(ModeSwitch::Shift) {
+            // The host decides when to grant the Shift switch, as before.
+            respond(TF_ES_ASYNCDONTCARE)?
+        } else {
+            match respond(TF_ES_SYNC) {
+                Err(_) if result.get().is_none() && !allow_async => return Ok(Some(false)),
+                Err(error) if result.get().is_none() && [TF_E_SYNCHRONOUS, TF_E_LOCKED].contains(&error.code()) => respond(TF_ES_ASYNC)?,
+                other => other?,
+            }
         };
         if status == TF_S_ASYNC {
             deferred.set(true);
@@ -275,7 +283,7 @@ impl Data {
         match self.key_action(context, vk, flags)? {
             super::keys::KeyAction::Pass => return Ok(false),
             super::keys::KeyAction::English(ch) => return Ok(self.insert_english_spacing(context, ch)),
-            super::keys::KeyAction::Ime => {}
+            super::keys::KeyAction::Ime | super::keys::KeyAction::ComposedAscii(_) => {}
         }
         if shift(vk) {
             self.shift_down(vk, flags);
@@ -330,7 +338,7 @@ impl Data {
             flags,
             keyboard,
             pick: None,
-            toggle: false,
+            toggle: None,
         };
         let allow_async = if vk.0 == VK_TAB.0 as usize {
             self.can_defer_tab(vk, flags)
@@ -339,7 +347,7 @@ impl Data {
         };
         self.dispatch_edit(key, allow_async)
     }
-    pub(super) fn dispatch_toggle(self: &Rc<Self>, context: &ITfContext) -> Result<()> {
+    pub(super) fn dispatch_toggle(self: &Rc<Self>, context: &ITfContext, source: ModeSwitch) -> Result<()> {
         self.dispatch_edit(Key {
             context: context.clone(),
             generation: self.generation.get(),
@@ -347,7 +355,7 @@ impl Data {
             flags: LPARAM(0),
             keyboard: [0; 256],
             pick: None,
-            toggle: true,
+            toggle: Some(source),
         }, true).map(|_| ())
     }
     fn dispatch_edit(self: &Rc<Self>, key: Key, allow_async: bool) -> Result<bool> {
@@ -392,7 +400,7 @@ impl Data {
             flags: LPARAM(0),
             keyboard: [0; 256],
             pick: Some((index, self.state.borrow().snapshot.clone())),
-            toggle: false,
+            toggle: None,
         };
         self.wake_profile_update();
         if self.profile_update.borrow().is_none() && self.recovery.borrow().is_empty() {
