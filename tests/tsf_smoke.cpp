@@ -50,6 +50,10 @@ public:
     bool scopeRequested = false;
     LONG privacyBoundary = 0;
     unsigned prefixReads = 0, prefixReadsBeforeWrite = 0, textWrites = 0, unchangedWrites = 0;
+    void setReadOnly(bool value) {
+        readOnly = value;
+        if (sink_) sink_->OnStatusChange(TS_SD_READONLY);
+    }
     void layoutChanged() { if (sink_) sink_->OnLayoutChange(TS_LC_CHANGE,1); }
     void scopeChanged(InputScope value) { inputScope=value; if(sink_)sink_->OnAttrsChange(0,LONG(text.size()),1,&GUID_PROP_INPUTSCOPE); }
     void externalCaret(LONG at) { selection.acpStart = selection.acpEnd = at; if (sink_) sink_->OnSelectionChange(); }

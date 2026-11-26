@@ -148,6 +148,14 @@ int wmain(int argc,wchar_t**argv) {
             require(store->text==L"你"&&compositions()==0,1007);
             keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(!chinese(),1008);
             keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(chinese(),1009);
+            if (scenario == L"status-writable-disjoint") {
+                store->setReadOnly(true);
+                require(SUCCEEDED(context->GetStatus(&status)) && (status.dwDynamicFlags & TF_SD_READONLY), 1137);
+                // A host may deliver OnKeyDown without first probing the key.
+                BOOL eaten = TRUE;
+                require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'S', flags('S', false), &eaten)) && !eaten, 1138);
+                require(store->text == L"你" && compositions() == 0, 1139);
+            }
         }
     } else if(scenario.starts_with(L"shift-")) {
         int side=scenario==L"shift-left"?VK_LSHIFT:VK_RSHIFT;
