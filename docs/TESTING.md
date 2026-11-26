@@ -80,8 +80,8 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | submission harness | Rust＋提交 | 32 項 |
 | platform／prepare-core | Rust＋core＋混打＋英文／提交＋measure | 58 項。IPC 延遲另行量測 |
 | 加詞／浮層 | Rust＋add-word＋popup lifecycle | 22 項，不把全部 TSF／WinUI 加進來 |
-| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 47 項 |
-| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 117 項。shared input 另含善解 TSF／interaction，共 119 項 |
+| 原生候選 | Rust＋native candidate-host＋TSF compatibility | 48 項 |
+| `shared/src/lib.rs`／未知路徑 | 未知影響，完整 verify | FULL 118 項。shared input 另含善解 TSF／interaction，共 120 項 |
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
@@ -125,6 +125,8 @@ FULL 保留舊 `verify.ps1` 的 x64 驗收內容，並包含原 CI 的 shared／
 FULL 的 x64 清冊可用 `ctest --preset windows-x64 -L full --show-only` 查看；RELEASE 另選兩個 preset 的 release 案例。實際執行與通過的數量以該輪 JSON／JUnit 及參數子案例為準。WinUI publish 屬於產品建置，另有計時，不重複註冊成測試。混打的快取身分斷言在獨立 Cargo 程序執行，其餘輸入回歸仍可平行，保留全部斷言。私人桌面每案明確啟動自己的核心，使用相同隔離 profile 探測就緒並在 finally 回收該 Process，不掃描或停止使用者的核心。發布驗收另含 x86、WinUI、離屏互動與單檔安裝包校驗；離屏或私人桌面不等於實際安裝、前景 App、高對比、多螢幕或讀屏驗收。
 
 私人桌面案例 `shift-retain-windows`、`shift-retain-shanjie`、`shift-finish-eten` 分別驗證行程內核心、Named Pipe 與倚天送出行為。案例涵蓋切換時丟棄未完成讀音、英數保留原大小寫、切回中文續打、英數 Enter 一次送出及送出後交回宿主。用 `ctest --preset windows-x64 -R 'shift-(retain|finish)' --output-on-failure` 選測，x86 改用 `windows-x86`。
+
+`punctuation-mcbopomofo` 以標準注音和 Named Pipe 驗證麥注音排列的十個映射、Apple 表的其餘按鍵與一次提交。核心測試涵蓋兩種鍵規則、逐鍵開關及倚天注音鍵。`release.ui.verify` 檢查選項、按鍵標籤和操作預設匯出／匯入。
 
 `ctest --preset windows-x64 -R 'submission[.]async-keys' --output-on-failure` 可單跑編輯鎖回歸，x86 使用 `windows-x86` preset。每架構涵蓋標準／倚天搭配 Windows／善解互動。案例記錄外層 HRESULT、`phrSession`、非同步回呼次數、宿主收到的 Tab、候選選取與文件結果，並驗證前文查詢失敗後首個寫入回呼仍開始組字，失焦或停用後舊回呼不寫入。這些案例在私人桌面的 TSF 模擬宿主執行。
 
