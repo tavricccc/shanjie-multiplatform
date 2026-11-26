@@ -173,7 +173,48 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 if let Some((_, state)) = attached.as_ref() {
                     let mut state=state.lock().unwrap();
                     if injection.as_deref()==Some("hold-state") {std::thread::sleep(Duration::from_millis(6500));}
-                    state.apply(sequence, op)
+                    #[cfg(feature = "rerank-timing")]
+                    {
+                        let key_info = match &op {
+                            Op::Key { kind, .. } => Some(*kind == 3),
+                            _ => None,
+                        };
+                        let core_seq = if let Some(is_enter) = key_info {
+                            let seq = crate::rerank_timing::next_core_key_seq();
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_KEY_START,
+                                seq,
+                                state.engine.current_rerank_job_id().unwrap_or(0),
+                                sequence,
+                                0,
+                                is_enter as u8,
+                                0,
+                            );
+                            Some((seq, is_enter))
+                        } else {
+                            None
+                        };
+                        let res = state.apply(sequence, op);
+                        if let Some((seq, is_enter)) = core_seq {
+                            let pending = res.snapshot.as_ref().is_some_and(|s| s.rerank);
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_KEY_END,
+                                seq,
+                                res.rerank_job_id.unwrap_or(0),
+                                sequence,
+                                0,
+                                (is_enter as u8) | ((pending as u8) << 1),
+                                res.ok as u16,
+                            );
+                        }
+                        res
+                    }
+                    #[cfg(not(feature = "rerank-timing"))]
+                    {
+                        state.apply(sequence, op)
+                    }
                 } else {
                     reply(None, None, false)
                 }
@@ -215,6 +256,8 @@ pub fn run(mut pipe: File, data: PathBuf, sessions: Sessions) {
                 let mut r=reply(None,None,result.is_ok());r.word_result=Some(result.map_err(|e|e.to_string()));r
             }
             Request::Stop => {
+                #[cfg(feature = "rerank-timing")]
+                crate::rerank_timing::flush("core");
                 let _ = write(&mut pipe, &reply(None, None, true));
                 std::process::exit(0);
             }

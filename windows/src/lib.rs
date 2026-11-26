@@ -2,6 +2,8 @@ mod bridge;
 #[cfg(test)]mod mixed_regression;
 #[cfg(feature = "input-diagnostics")]
 pub mod input_diagnostics;
+#[cfg(feature = "rerank-timing")]
+pub mod rerank_timing;
 pub mod model_store;
 pub mod broker;
 pub mod wer;

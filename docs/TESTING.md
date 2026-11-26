@@ -6,6 +6,8 @@
 
 `-Comparison DecodeWarmup` 在相同配套與隔離 profile 下交替啟動資源預載／解碼預熱的 resident host，記錄啟動到 ready 後首個成功 status（含輪詢／IPC）、首鍵、首音節尾端、後續延遲及 host 自身記憶體。實驗入口只接受測試身分；普通啟動維持資源預載。host 檢查 reset 後沒有組字、候選、前文、學習記錄／前綴及 rerank job；metadata／hash 程序的記憶體不算入 host 峰值。
 
+Windows 語意校正排程實驗使用預設關閉的 `rerank-timing` Cargo feature；僅在 `SHANJIE_TEST_PROFILE=1` 下允許安全白名單切換專用 `Shanjie rerank` 執行緒優先序並輸出純數值 QPC 時間線，不新增一般使用者設定，也不改動既定 CI／FAST／AFFECTED／FULL／RELEASE 選測規則。
+
 歷史新舊模型比較只在模型／配套／相關算法／比較工具變更或明確要求時安排，選測規則只提示條件式審查，不自動綁到每次 RELEASE。DecodeWarmup 為啟動政策決策實驗，得出結論後不例行重跑；單純排程修改不要求重做模型 benchmark。IPC 量測仍依既有按鍵／核心請求變更規則。
 
 Windows 測試由 CMake／CTest 統一列出、選擇與排程；Rust 仍由 Cargo 編譯和執行。Visual Studio 2026 的 x64、x86 Preset 使用不同 build 目錄與產物，不能共用架構相異的 harness。
