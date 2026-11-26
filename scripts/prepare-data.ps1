@@ -20,7 +20,8 @@ $existingRootNames=if(Test-Path -LiteralPath $data){@(Get-ChildItem -LiteralPath
 $outputPaths = @("$Output/packs",$Licenses) + @($expectedRootNames | ForEach-Object { "$Output/$_" }) + @($existingRootNames | ForEach-Object { "$Output/$_" })
 $inputPaths = @(
     'UPSTREAM.json','MODEL-SOURCES.json','scripts/prepare-data.ps1','scripts/export-upstream.ps1',
-    'data/pinyin-map.tsv','data/README.md','LICENSES','upstream/shanjie/scripts/build-app.sh','upstream/shanjie/tools/build_english_words.py'
+    'data/pinyin-map.tsv','data/overlay-twin-keep.patch','data/README.md','LICENSES',
+    'upstream/shanjie/scripts/build-app.sh','upstream/shanjie/tools/build_english_words.py'
 )
 $attributionHash = (Get-FileHash -LiteralPath $attribution -Algorithm SHA256).Hash.ToLowerInvariant()
 $inputKey = Get-ContentFingerprint -Root $root -Paths $inputPaths -Values @($pin,$Output,$Licenses,$attributionHash)
@@ -34,14 +35,14 @@ try {
     }
 
     $exportRoot = Join-Path $root "build/upstream-data/$pin"
-    $exportKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1') -Values @($pin,'data/lexicon','data/packs')
+    $exportKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1','data/overlay-twin-keep.patch') -Values @($pin,'data/lexicon','data/packs')
     $exportManifest = Join-Path $exportRoot '.source-cache.json'
     $exportPaths = @('data/lexicon','data/packs')
     if (!(Test-ContentCache -Root $exportRoot -ManifestPath $exportManifest -Key $exportKey -Paths $exportPaths)) {
         if (Test-Path -LiteralPath $exportRoot) { Preserve-Output $exportRoot }
         New-Item -ItemType Directory -Path $exportRoot -Force | Out-Null
         Invoke-Timed -Name 'Export runtime data from pinned upstream' -Category 'data.export' -Details @{ cache='miss'; upstream_commit=$pin } -Action {
-            Export-Upstream $exportRoot @('data/lexicon','data/packs')
+            Export-Upstream $exportRoot @('data/lexicon','data/packs') -WithLexiconBackport
         }
         Save-ContentCache -Root $exportRoot -ManifestPath $exportManifest -Key $exportKey -Paths $exportPaths
     } else { Write-Host "Upstream runtime-data export cache hit: $pin, contents verified." }

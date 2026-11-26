@@ -51,7 +51,7 @@ foreach ($id in $upstreamPacks | Where-Object { $packs.ContainsKey($_) }) {
 # --- Lexicon: prepare-data.ps1 copies the whole upstream lexicon folder, not a picked list. ---
 if ($prepareData -notmatch 'data/lexicon/\*') { Fail 'prepare-data.ps1 must copy every file of upstream data/lexicon (the folder, not a list).' }
 
-# --- Built output (after a build): every upstream file is there and identical. ---
+# --- Built output (after a build): compare every upstream file with its source. ---
 if ($Dist) {
     # Compare with the pinned Git blobs: the shipped data comes from them, and the checkout may have other line endings.
     function Same-AsUpstream([string]$built, [string]$path) { (git -C (Join-Path $root 'upstream/shanjie') rev-parse "HEAD:data/$path") -eq (git hash-object --no-filters $built) }
@@ -59,7 +59,12 @@ if ($Dist) {
     foreach ($file in Get-ChildItem (Join-Path $upstream 'lexicon') -File) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }
-        if (!(Same-AsUpstream $built "lexicon/$($file.Name)")) { Fail "dist/data/$($file.Name) differs from upstream." }
+        if ($file.Name -eq 'overlay-add.tsv') {
+            # Exact overlay-add.tsv blob from Nanako0129/shanjie@9c4ddf560ab6.
+            if ((git hash-object --no-filters $built) -cne '8c5f395a9e5f60c99f928e6f30083db12cdba2bd') {
+                Fail 'dist/data/overlay-add.tsv differs from upstream PR #123.'
+            }
+        } elseif (!(Same-AsUpstream $built "lexicon/$($file.Name)")) { Fail "dist/data/$($file.Name) differs from upstream." }
     }
     foreach ($id in $upstreamPacks) {
         foreach ($name in "$id-add.tsv", "$id.json") {

@@ -11,6 +11,20 @@ use shanjie_core::{engine::{Engine,Layout,Key,KeyKind,ResetMode,MOD_SHIFT},lm::P
 use std::sync::Arc;
 
 #[test]
+#[ignore = "Reads the built lexicon in dist/data"]
+fn restored_taiwanese_phrases_are_loaded_at_their_readings() {
+    let lexicon = shanjie_core::engine::windows_base_lexicon(&test_data_root()).unwrap();
+    for (reading, word) in [(["ㄒㄧˋ", "ㄕㄤˋ"], "系上"), (["ㄞ", "ㄉㄠˋ"], "挨到")] {
+        let reading = reading.map(str::to_owned);
+        assert!(
+            lexicon.entries(&reading).iter().any(|(entry, _)| *entry == word),
+            "{word} must be available at {}",
+            reading.join(" "),
+        );
+    }
+}
+
+#[test]
 fn raw_digit_navigation_preserves_editable_literal_and_cursor() {
     for digit in "125890".chars() {
         for (key, cursor) in [(KeyKind::Left, 0), (KeyKind::Home, 0), (KeyKind::Right, 1), (KeyKind::End, 1)] {
