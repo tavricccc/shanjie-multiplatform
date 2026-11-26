@@ -434,12 +434,15 @@ internal static class VisualVerifier
         }
         File.WriteAllText(Models.ProfileStore.Path, beforeRight); settings.Vm.Load();
         // 0.6.0: per-key punctuation and a shared preset round-trip that keeps personal data.
+        settings.Vm.PunctuationLayout = 1;
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.PunctuationLayout != 1 || !settings.Vm.PlainKeys.Single(key => key.Key == "plain_backslash").Label.StartsWith("＼"))
+            throw new InvalidDataException("McBopomofo punctuation setting or key label did not survive reload");
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn) throw new InvalidDataException("Per-key punctuation persistence failed");
         string shared = settings.Vm.ExportPreset("驗證預設");
         if (shared.Contains("font_size") || shared.Contains("dictionary")) throw new InvalidDataException("Exported preset carries personal data");
         settings.LoadProfile(true); settings.Vm.ImportPreset(shared, "fallback"); settings.RefreshPresets();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
+        if (settings.Vm.PunctuationLayout != 1 || !settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
             throw new InvalidDataException("Shared preset import failed");
         bool rejected = false;
         try { settings.Vm.ImportPreset("[candidates]\nanchor=middle\n", "bad"); } catch (InvalidDataException) { rejected = true; }

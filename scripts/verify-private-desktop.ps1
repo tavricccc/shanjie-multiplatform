@@ -3,7 +3,7 @@ param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harn
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
  'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
- 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','spacing-english','spacing-english-off','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
+ 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','spacing-english','spacing-english-off','punctuation-mcbopomofo','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
@@ -31,6 +31,9 @@ try {
    $profile=$profile -replace '(?m)^keyboard=.*',"keyboard=$keyboard"
   }
   if($scenario -eq 'shift-retain-shanjie'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1'}
+  if($scenario -eq 'punctuation-mcbopomofo'){
+   $profile=$profile -replace '(?m)^style=apple','style=mcbopomofo' -replace '(?m)^keyboard=.*','keyboard=1' -replace '(?m)^(shift_1|shift_quote|plain_quote|plain_backslash)=0','${1}=1'
+  }
   if($scenario -like 'privacy-*'){$profile=$profile -replace '(?m)^learning=0','learning=1'}
   if($scenario -eq 'privacy-control'){$profile=$profile -replace '(?m)^context=1','context=0'}
   if($scenario -eq 'spacing-english'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1' -replace '(?m)^context=1','context=0'}
@@ -45,14 +48,13 @@ try {
   New-Item -ItemType Directory -Path "$fixture/temp" -Force|Out-Null
   $start.Environment['TEMP']="$fixture/temp";$start.Environment['TMP']="$fixture/temp"
   foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS')){$start.Environment[$key]='1'}
-  $residentShift=$scenario -eq 'shift-retain-shanjie'
-  if($residentShift){[void]$start.Environment.Remove('SHANJIE_CORE_LOCAL')}else{$start.Environment['SHANJIE_CORE_LOCAL']='1'}
+  $residentCase=$scenario -in 'shift-retain-shanjie','punctuation-mcbopomofo'
+  if($residentCase){[void]$start.Environment.Remove('SHANJIE_CORE_LOCAL')}else{$start.Environment['SHANJIE_CORE_LOCAL']='1'}
   $start.Environment['SHANJIE_TEST_ROOT']=$fixture
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}
   $start.ArgumentList.Add("$Payload/$arch/Shanjie.dll");$start.ArgumentList.Add($scenario)
   $server=$null;$child=$null
-   # The Shanjie interaction also verifies the retained state over Named Pipe.
-   if($residentShift -or $scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
+   if($residentCase -or $scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
    $serverStart=[Diagnostics.ProcessStartInfo]::new("$Payload/tools/shanjie-core.exe")
    $serverStart.UseShellExecute=$false;$serverStart.CreateNoWindow=$true
    foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT','SHANJIE_HEADLESS')){$serverStart.Environment[$key]=$start.Environment[$key]}

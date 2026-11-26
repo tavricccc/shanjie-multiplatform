@@ -108,6 +108,18 @@ int wmain(int argc,wchar_t**argv) {
             require(SUCCEEDED(keys->OnKeyDown(context.Get(),'A',flags('A',false),&eaten))
                 &&!eaten&&store->text==expected&&compositions()==0,1174);
         }
+    } else if (scenario==L"punctuation-mcbopomofo") {
+        keyboard(VK_SHIFT);
+        for (int key='2';key<='8';++key) down(key);
+        down(VK_OEM_7);
+        down('1');
+        keyboard(0);
+        down(VK_OEM_7);
+        down(VK_OEM_5);
+        constexpr auto expected=L"＠＃＄％︿＆＊；！、＼";
+        require(store->text==expected&&compositions()==1,1180);
+        down(VK_RETURN);
+        require(store->text==expected&&compositions()==0,1181);
     } else if (scenario.starts_with(L"spacing-english")) {
         v.lVal = 0;
         require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1140);

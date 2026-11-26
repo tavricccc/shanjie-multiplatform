@@ -28,6 +28,36 @@ mod windows_composition_tests {
         out
     }
     #[test]
+    fn mcbopomofo_punctuation_maps_new_keys_and_keeps_individual_switches() {
+        const MCBOPOMOFO: u32 = 1 << 26;
+        const ALL_PUNCTUATION: u32 = (1 << 20) - 2;
+        let mut e = engine(false, true);
+        for scheme in [0, 1] {
+            e.key_scheme = scheme;
+            e.set_windows_input_options(ALL_PUNCTUATION);
+            assert_eq!(e.key(Key::ch('\'', MOD_SHIFT)).unwrap().preedit, "“");
+            e.reset(ResetMode::Discard);
+            e.set_windows_input_options(MCBOPOMOFO | ALL_PUNCTUATION);
+            for (key, modifiers, expected) in [
+                ('2', MOD_SHIFT, "＠"), ('3', MOD_SHIFT, "＃"), ('4', MOD_SHIFT, "＄"),
+                ('5', MOD_SHIFT, "％"), ('6', MOD_SHIFT, "︿"), ('7', MOD_SHIFT, "＆"),
+                ('8', MOD_SHIFT, "＊"), ('\'', MOD_SHIFT, "；"), ('\'', 0, "、"),
+                ('\\', 0, "＼"), ('1', MOD_SHIFT, "！"),
+            ] {
+                assert_eq!(e.key(Key::ch(key, modifiers)).unwrap().preedit, expected, "scheme={scheme}, key={key}");
+                e.reset(ResetMode::Discard);
+            }
+            e.set_windows_input_options(MCBOPOMOFO);
+            assert_eq!(e.windows_shift_punct('\''), None);
+            assert_eq!(e.windows_plain_punct('\''), None);
+        }
+        e.layout = Layout::Eten;
+        e.key_scheme = 0;
+        e.set_windows_input_options(MCBOPOMOFO | ALL_PUNCTUATION);
+        assert_ne!(e.key(Key::ch('\'', 0)).unwrap().preedit, "、");
+        assert!(e.windows_phonetic_pending());
+    }
+    #[test]
     fn shifted_english_stays_before_later_literals_and_spaces() {
         for layout in [Layout::Standard, Layout::Eten] {
             for (mixed, english) in [(false, true), (true, false)] {
@@ -303,11 +333,7 @@ impl Engine {
             self.pending_literal.clear();
         }
         if key.kind == KeyKind::Char && (plain || key.modifiers == MOD_SHIFT) {
-            let mapped = if plain && self.windows_plain_punct(key.ch) {
-                PLAIN_PUNCT.iter().find(|(ch,_)| *ch == key.ch).map(|(_,mark)| *mark)
-            } else if key.modifiers == MOD_SHIFT && self.windows_shift_punct(key.ch) {
-                SHIFT_PUNCT.iter().find(|(ch,_)| *ch == key.ch).map(|(_,mark)| *mark)
-            } else { None };
+            let mapped = if plain { self.windows_plain_punct(key.ch) } else { self.windows_shift_punct(key.ch) };
             // Some ETEN symbol keys also have a punctuation mapping: phonetics win.
             if let Some(mark) = mapped.filter(|_| !plain || self.layout.symbol_of(key.ch).is_none()) {
                 return self.insert_windows_literal(&mark.to_string());

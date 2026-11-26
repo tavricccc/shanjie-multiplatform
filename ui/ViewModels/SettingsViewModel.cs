@@ -57,6 +57,11 @@ public partial class SettingsViewModel : ObservableObject
     public bool SupportsFuzzyAdjacent => Keyboard is 0 or 1;
     [ObservableProperty] public partial bool EnglishKeyOrder { get; set; }
     [ObservableProperty] public partial bool PunctuationKeepsReading { get; set; }
+    [ObservableProperty] public partial int PunctuationLayout { get; set; }
+    partial void OnPunctuationLayoutChanged(int value)
+    {
+        foreach (var key in ShiftKeys.Concat(PlainKeys)) key.SetLayout(value == 1);
+    }
     [ObservableProperty] public partial bool CjkSpacing { get; set; }
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }

@@ -310,7 +310,11 @@ pub const PLAIN_KEYS: [(char, &str); 6] = [
 ];
 impl Document {
     pub fn shift_punctuation(&self, ch: char) -> bool {
-        SHIFT_KEYS.iter().any(|(c, n)| *c == ch && self.flag("punctuation", &format!("shift_{n}"), false))
+        (('2'..='8').contains(&ch) && self.mcbopomofo_punctuation())
+            || SHIFT_KEYS.iter().any(|(c, n)| *c == ch && self.flag("punctuation", &format!("shift_{n}"), false))
+    }
+    fn mcbopomofo_punctuation(&self) -> bool {
+        self.get("punctuation", "style", "apple") == "mcbopomofo"
     }
     /// Core option bits: standalone tones, then each Shift and plain punctuation switch.
     pub fn input_options(&self) -> u32 {
@@ -326,6 +330,7 @@ impl Document {
         flags |= (self.flag("candidates", "enter_to_cursor", windows) as u32) << 21;
         flags |= (self.flag("input", "punctuation_keeps_reading", false) as u32) << 22;
         flags |= (self.zhuyin_only() as u32) << 25;
+        flags |= (self.mcbopomofo_punctuation() as u32) << 26;
         flags
     }
 }
@@ -367,11 +372,12 @@ const PERSONAL: [(&str, &[&str]); 3] = [
     ),
     ("appearance", &["theme", "font_size", "mode_indicator", "glass_tint", "accent", "accent_color", "pure_black", "animation"]),
 ];
-const CHOICES: [(&str, &str, &[&str]); 8] = [
+const CHOICES: [(&str, &str, &[&str]); 9] = [
     ("profile", "interaction", &["windows", "shanjie"]),
     ("engine", "ranking", &["auto", "chat", "formal"]),
     ("engine", "rerank_level", &RERANK_LEVELS),
     ("input", "escape", &["staged", "clear", "ignore"]),
+    ("punctuation", "style", &["apple", "mcbopomofo"]),
     ("candidates", "layout", &["horizontal", "vertical"]),
     ("candidates", "anchor", &["right", "left"]),
     ("candidates", "open", &["down", "space", "both"]),
@@ -735,7 +741,7 @@ mod tests {
     #[test]
     fn shared_presets_keep_personal_choices_and_reject_bad_values() {
         let mine = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=mine.tsv\nkeyboard=2\n[appearance]\nfont_size=24\n";
-        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nplain_lbracket=1\n[candidates]\nanchor=left\n";
+        let source = "[profile]\nschema=6\ninteraction=windows\n[input]\ndictionary=../evil.tsv\nkeyboard=1\n[punctuation]\nstyle=mcbopomofo\nplain_lbracket=1\n[candidates]\nanchor=left\n";
         let shared = export_preset(source, "朋友\n").unwrap();
         assert!(!shared.contains("dictionary") && !shared.contains("\nkeyboard=") && !shared.contains("[appearance]"));
         let merged = Document::parse(&import_preset(mine, &shared).unwrap()).unwrap();
@@ -743,11 +749,15 @@ mod tests {
         assert_eq!(merged.number("input", "keyboard", 0), 2);
         assert_eq!(merged.number("appearance", "font_size", 0), 24);
         assert!(merged.flag("punctuation", "plain_lbracket", false));
+        assert_ne!(merged.input_options() & (1 << 26), 0);
+        assert!(('2'..='8').all(|key| merged.shift_punctuation(key)));
+        assert!(!merged.shift_punctuation('\''));
         assert_eq!(merged.get("candidates", "anchor", ""), "left");
         assert_eq!(merged.get("preset", "name", ""), "朋友");
         for bad in [
             // Legacy values (e.g. layout=grid) are migrated first; unknown ones are refused.
             "[candidates]\nanchor=middle\n",
+            "[punctuation]\nstyle=unknown\n",
             "[input]\nescape_x=1\nmixed_input=2\n",
             "[shortcuts]\nshift_side=x\n",
         ] {

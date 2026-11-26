@@ -115,17 +115,20 @@
                         <TextBlock Style="{StaticResource SjNote}" Text="Windows 標誌鍵與一般 App 的 Ctrl／Alt 快捷鍵交由系統及 App 處理。"/>
                     </StackPanel>
                     <StackPanel x:Name="Punctuation" Visibility="Collapsed">
+                        <controls:SettingCard>
+                            <controls:SettingRow Label="標點排列"><controls:Segmented Options="善解／Apple|麥注音" SelectedIndex="{x:Bind Vm.PunctuationLayout, Mode=TwoWay}" MinWidth="200"/></controls:SettingRow>
+                        </controls:SettingCard>
                         <TextBlock x:Name="AdvancedKeys" Text="Shift＋符號直接輸入中文標點" Style="{StaticResource SjGroupTitle}"/>
-                        <TextBlock Style="{StaticResource SjNote}" Text="善解／Apple 式操作，每個符號可分別開關。關閉的按鍵輸出原本的英文符號。Windows 預設全部關閉。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="以下各鍵可分別開關。麥注音排列另外讓 Shift＋2 到 Shift＋8 輸入 ＠＃＄％︿＆＊。"/>
                         <controls:SettingCard>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="全部開啟" Click="ShiftAllOn"/><Button Content="全部關閉" Click="ShiftAllOff"/></StackPanel></controls:SettingRow>
-                            <controls:SettingRow Stacked="True"><ItemsControl ItemsSource="{x:Bind Vm.ShiftKeys, Mode=OneTime}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label, Mode=OneTime}" IsChecked="{x:Bind IsOn, Mode=TwoWay}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></controls:SettingRow>
+                            <controls:SettingRow Stacked="True"><ItemsControl ItemsSource="{x:Bind Vm.ShiftKeys, Mode=OneTime}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label, Mode=OneWay}" IsChecked="{x:Bind IsOn, Mode=TwoWay}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></controls:SettingRow>
                         </controls:SettingCard>
                         <TextBlock Text="直接按鍵輸入中文標點" Style="{StaticResource SjGroupTitle}"/>
-                        <TextBlock Style="{StaticResource SjNote}" Text="不按 Ctrl，直接按鍵輸入標點；每個按鍵分別設定，例如只開「」而不讓 \ 變成頓號。注音鍵（如倚天的 ' 與 =）不受影響。"/>
+                        <TextBlock Style="{StaticResource SjNote}" Text="直接按鍵輸入標點，每個按鍵分別設定。倚天的 ' 與 = 仍是注音鍵。"/>
                         <controls:SettingCard>
                             <controls:SettingRow Stacked="True"><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="全部開啟" Click="PlainAllOn"/><Button Content="全部關閉" Click="PlainAllOff"/></StackPanel></controls:SettingRow>
-                            <controls:SettingRow Stacked="True"><ItemsControl ItemsSource="{x:Bind Vm.PlainKeys, Mode=OneTime}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label, Mode=OneTime}" IsChecked="{x:Bind IsOn, Mode=TwoWay}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></controls:SettingRow>
+                            <controls:SettingRow Stacked="True"><ItemsControl ItemsSource="{x:Bind Vm.PlainKeys, Mode=OneTime}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="150"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="models:PunctuationKey"><CheckBox Content="{x:Bind Label, Mode=OneWay}" IsChecked="{x:Bind IsOn, Mode=TwoWay}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></controls:SettingRow>
                         </controls:SettingCard>
                     </StackPanel>
                     <StackPanel x:Name="Composition" Visibility="Collapsed">

@@ -13,7 +13,8 @@ public partial class SettingsViewModel
     private string dictionaryBaseline = "";
     public SettingsViewModel()
     {
-        foreach (var key in ShiftKeys.Concat(PlainKeys)) key.PropertyChanged += (_, _) => { if (!loading) HasChanges = true; };
+        foreach (var key in ShiftKeys.Concat(PlainKeys))
+            key.PropertyChanged += (_, e) => { if (!loading && e.PropertyName == nameof(PunctuationKey.IsOn)) HasChanges = true; };
         Load(); PropertyChanged += (_, e) =>
         {
             if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp) or nameof(ModelAdvisories))) HasChanges = true;
@@ -78,6 +79,7 @@ public partial class SettingsViewModel
             MixedMode = profile.Flag("input", "mixed_input", false) ? 1 : profile.Flag("input", "upstream_english", false) ? 2 : 0; EnglishOverwrite = profile.Flag("input", "english_overwrite", false); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
+            PunctuationLayout = profile.Read("punctuation", "style", "apple") == "mcbopomofo" ? 1 : 0;
             UseContext = profile.Flag("input", "context", true);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -174,6 +176,7 @@ public partial class SettingsViewModel
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
             ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator), ("appearance","glass_tint",(int)GlassTint)
         }) profile.Set(section, key, value);
+        profile.Set("punctuation", "style", PunctuationLayout == 1 ? "mcbopomofo" : "apple");
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
         profile.Set("engine", "rerank_level", RerankLevels[RerankLevel]);
