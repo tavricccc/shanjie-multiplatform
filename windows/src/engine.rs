@@ -1090,17 +1090,15 @@ mod tests {
     fn rerank_worker_uses_normal_priority_without_altering_process_or_other_threads() {
         use std::sync::mpsc;
         use windows::Win32::System::Threading::{
-            GetCurrentProcess, GetPriorityClass, GetThreadPriority, NORMAL_PRIORITY_CLASS,
-            THREAD_PRIORITY_BELOW_NORMAL,
+            GetCurrentProcess, GetPriorityClass, GetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
         };
 
         assert_eq!(DEFAULT_RERANK_WORKER_PRIORITY, THREAD_PRIORITY_NORMAL);
         assert_eq!(DEFAULT_RERANK_WORKER_PRIORITY.0, 0);
 
+        // The test runner can choose its own process and thread priorities.
         let process_class_before = unsafe { GetPriorityClass(GetCurrentProcess()) };
         let caller_prio_before = unsafe { GetThreadPriority(GetCurrentThread()) };
-        assert_eq!(process_class_before, NORMAL_PRIORITY_CLASS.0);
-        assert_eq!(caller_prio_before, THREAD_PRIORITY_NORMAL.0);
 
         let (peer_ready_tx, peer_ready_rx) = mpsc::channel();
         let (peer_go_tx, peer_go_rx) = mpsc::channel();
@@ -1113,7 +1111,7 @@ mod tests {
                 unsafe { GetThreadPriority(GetCurrentThread()) }
             })
             .unwrap();
-        assert_eq!(peer_ready_rx.recv().unwrap(), THREAD_PRIORITY_NORMAL.0);
+        let peer_prio_before = peer_ready_rx.recv().unwrap();
 
         let runner: Runner = Arc::new((
             Mutex::new(Reranks { stop: true, ..Default::default() }),
@@ -1139,7 +1137,7 @@ mod tests {
         assert_eq!(worker_prio_after, THREAD_PRIORITY_NORMAL.0);
 
         peer_go_tx.send(()).unwrap();
-        assert_eq!(peer.join().unwrap(), THREAD_PRIORITY_NORMAL.0);
+        assert_eq!(peer.join().unwrap(), peer_prio_before);
         assert_eq!(unsafe { GetPriorityClass(GetCurrentProcess()) }, process_class_before);
         assert_eq!(unsafe { GetThreadPriority(GetCurrentThread()) }, caller_prio_before);
     }
