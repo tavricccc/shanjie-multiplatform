@@ -44,7 +44,7 @@ Windows 兩套範本、缺少設定鍵的舊 profile 及 WinUI 都以 `[input] e
 
 評測的 `eval/accept/*.doubt.tsv` 只記錄盲判無法確認正解的回報，包含錯字回報清單；不改動正解或分數，也不加入產品詞庫。
 
-語意模型沿用上游的可攜矩陣運算：x64 依 CPU 能力選 AVX-512F、AVX2 或純量核心，x86 使用純量核心。三條路徑採固定運算順序，結果逐位元一致。模型升級為 `SJ-SR-10-31M`（`SJTL0006`），聊天與書面三檔融合參數及 `PAIRED_TINYLM_SHA256` 均沿用上游。Windows 背景語意校正沿用每工作階段獨立引擎與既有 Named Pipe／TSF 架構，未移植上游單一引擎的 `Poll`/`Polled`/`Owner` 協定與 MSI 安裝程式；長前文的校正耗時可超過 Enter 的 100 ms 等待，此時直接提交校正前的文字；僅補齊不重新解碼按鍵保留既有重排工作、背景執行緒降為 `THREAD_PRIORITY_BELOW_NORMAL`、候選窗開啟時不提前消費結果、非同步 Edit Session 遭拒時維持計時器重試，以及 `RerankReady` 非阻塞查詢與 200 ms 期限。macOS 的 Option 全形標點（rule 1o）於核心隨上游保留測試，Windows 前端依現有修飾鍵規則不改寫 Alt 行為。
+語意模型沿用上游的可攜矩陣運算：x64 依 CPU 能力選 AVX-512F、AVX2 或純量核心，x86 使用純量核心。三條路徑採固定運算順序，結果逐位元一致。模型升級為 `SJ-SR-10-31M`（`SJTL0006`），聊天與書面三檔融合參數及 `PAIRED_TINYLM_SHA256` 均沿用上游。Windows 背景語意校正沿用每工作階段獨立引擎與既有 Named Pipe／TSF 架構，未移植上游單一引擎的 `Poll`/`Polled`/`Owner` 協定與 MSI 安裝程式；長前文的校正耗時可超過 Enter 的 100 ms 等待，此時直接提交校正前的文字；僅補齊不重新解碼按鍵保留既有重排工作、專用 `Shanjie rerank` 背景執行緒維持 `THREAD_PRIORITY_NORMAL`（對應上游 macOS #104 的 `userInitiated` QoS 調整，但 Windows 僅調整該專用執行緒並維持 `NORMAL_PRIORITY_CLASS`、其餘執行緒與 Enter 100 ms 上限不變，避免高於前景輸入執行緒搶佔打字）、候選窗開啟時不提前消費結果、非同步 Edit Session 遭拒時維持計時器重試，以及 `RerankReady` 非阻塞查詢與 200 ms 期限。macOS 的 Option 全形標點（rule 1o）於核心隨上游保留測試，Windows 前端依現有修飾鍵規則不改寫 Alt 行為。
 
 ## 核心覆蓋
 
@@ -124,7 +124,7 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 - Windows 的「→ 右方向鍵」為 `[candidates] right_action=none|page|expand`：預設「無」保留原方向鍵，「下一頁」沿用舊開關，「展開」開啟三欄多列候選。舊 `right_pages=0/1` 分別遷移為 `none/page`；已有新選項時優先保留。兩種互動模式收合時 ↑↓ 逐項移動；展開時沿同一直排 ±3 移動，最上列 ↑ 收回，末列向下停在原位。核心未套用 Windows 選項時保留上游九欄；輸出視窗與數字仍依反白所在的九項群組選字。預測與聯想不展開。
 - 數字鍵盤的 0–9 與 `+ - * / .` 走字面插入，不當注音；組字仍可編輯，候選開啟時 1–9 保留選字。有未完成讀音時先提交讀音再輸入字面字元；內碼輸入中的九宮格數字視為內碼。全形模式下字面字元一併轉為全形。
 - 「標點保留未完成讀音」是 Windows 選項（`[input] punctuation_keeps_reading`），新設定檔預設關、與上游相同；從舊版升級的設定檔設為開，維持原本打字結果。
-- 語意校正：上游在背景佇列跑完後回主執行緒套用；Windows 由常駐核心在每個會話的背景執行緒（`THREAD_PRIORITY_BELOW_NORMAL`）跑，不重新解碼的按鍵保留既有工作，TSF 每 15 ms 以不帶序號的非阻塞請求（200 ms 期限）查詢是否完成（最多 2 秒，候選窗開著時不提前消費），完成後才送出有序號的 `Op::Rerank` 套用。這個請求記在重建組字的紀錄裡，核心重啟後照樣重放，候選順序與重啟前相同。
+- 語意校正：上游在背景佇列跑完後回主執行緒套用；Windows 由常駐核心在每個會話的專用背景執行緒（`Shanjie rerank`，`THREAD_PRIORITY_NORMAL`）跑，與上游 macOS #104 採 `userInitiated` QoS 目標一致但維持與前景／Pipe 執行緒同級且不改程序優先序類別；不重新解碼的按鍵保留既有工作，TSF 每 15 ms 以不帶序號的非阻塞請求（200 ms 期限）查詢是否完成（最多 2 秒，候選窗開著時不提前消費），完成後才送出有序號的 `Op::Rerank` 套用。這個請求記在重建組字的紀錄裡，核心重啟後照樣重放，候選順序與重啟前相同。另保留預設關閉的 `rerank-timing` Cargo feature 供離線純數值時間線量測與隔離優先序實驗。
 - 依 App 自動：上游用 macOS bundle ID 與選單裡的「這個 App 用聊天設定」；Windows 用執行檔名稱，清單在設定頁直接編輯（`[engine] chat_apps`），沒有輸入法選單項目。
 - 中英文自動加空格：上游只在可讀游標前文且學習未暫停時取開頭字元；Windows 在未組字時讀游標前文（「使用游標前文」關閉時，只有這個開關開著才讀）。
 - App 內學習暫停已以 Windows scope 與宿主執行檔身分接通；macOS 的備份排除選項不直接移植。
