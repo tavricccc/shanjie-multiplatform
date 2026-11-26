@@ -1024,7 +1024,7 @@ fn configure_options(s: &mut State) -> Result<()> {
     for op in option_operations(&s.prefs) {output(s.engine.perform(op))?;}
     Ok(())
 }
-pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;4] {
+pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;5] {
     let keyboard=p.number("input","keyboard",0);
     let zhuyin=keyboard<3;
     let upstream=zhuyin && keyboard!=2 && p.flag("input","upstream_english",false);
@@ -1032,10 +1032,12 @@ pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;4] {
     let english=upstream as u32 | (p.flag("input","english_overwrite",false) as u32)<<1
         | (p.flag("input","english_key_order",true) as u32)<<2 | (p.flag("input","english_reversal_guard",true) as u32)<<3;
     let windows=p.get("profile","interaction","windows")=="windows";
+    let mixed=p.raw_key_mixing();
     [crate::broker::Op::Options(p.input_options() | 1 << 23 | (windows as u32) << 24),
      crate::broker::Op::English(english),
-     crate::broker::Op::Mixed(p.raw_key_mixing()),
-     crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false))]
+     crate::broker::Op::Mixed(mixed),
+     crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false)),
+     crate::broker::Op::MixedEnglishWriting(mixed && p.flag("input","mixed_english_writing",false))]
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
     let weak = &*(context as *const std::rc::Weak<Data>);

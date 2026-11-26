@@ -254,6 +254,8 @@ int wmain(int argc,wchar_t** argv) {
         expect(L"RustHELLO WORLDAI開AI是API好",1014);
         press('A',true);press('I',true);press(VK_SPACE,true);press('0');press(VK_RETURN);
         expect(L"RustHELLO WORLDAI開AI是API好AI 0",1015);
+        bool mixed=GetPrivateProfileIntW(L"input",L"mixed_input",0,profile.c_str())!=0;
+        bool mixedWriting=GetPrivateProfileIntW(L"input",L"mixed_english_writing",0,profile.c_str())!=0;
         std::wstring expected=L"RustHELLO WORLDAI開AI是API好AI 0";
         auto typeWord=[&](const std::wstring& word){
             for(auto ch:word){
@@ -266,14 +268,17 @@ int wmain(int argc,wchar_t** argv) {
             {L"CHATGPT",L"CHATGPT"},{L"MacOs",L"MacOs"},
         }){
             typeWord(typed);press(VK_RETURN);
-            expected+=upstream?canon:typed;
+            expected+=(upstream||(mixed&&mixedWriting))?canon:typed;
             expect(expected,1017);
         }
     }else if(scenario==L"shift-caps-zh"){
         wchar_t local[32768];require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768),965);
         auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
-        // Upstream English applies the official spelling; raw-key mixing keeps typed casing.
-        auto expected=GetPrivateProfileIntW(L"input",L"upstream_english",0,profile.c_str())?L"Gemini好用嗎":L"gemini好用嗎";
+        // Upstream English applies official spelling; raw-key mixing applies it only when mixed_english_writing=1.
+        bool upstream=GetPrivateProfileIntW(L"input",L"upstream_english",0,profile.c_str())!=0;
+        bool mixed=GetPrivateProfileIntW(L"input",L"mixed_input",0,profile.c_str())!=0;
+        bool mixedWriting=GetPrivateProfileIntW(L"input",L"mixed_english_writing",0,profile.c_str())!=0;
+        auto expected=(upstream||(mixed&&mixedWriting))?L"Gemini好用嗎":L"gemini好用嗎";
         for(auto ch:std::wstring(L"GEMINI"))press(ch,true,true);
         for(auto ch:std::wstring(L"CL3M/4A87"))press(ch==L'/'?VK_OEM_2:ch,false,true);
         require(store->text==expected,963);

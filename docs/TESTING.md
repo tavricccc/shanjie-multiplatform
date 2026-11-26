@@ -85,7 +85,7 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 
 `verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。本版沒有新增跨報告的全自動去重／收據合併系統；既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
 
-每次 JSON 都列出 CTest 選中／未選項目的理由，以及各架構英文鍵 35 組與提交流程的實際子案例。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
+每次 JSON 都列出 CTest 選中／未選項目的理由，以及各架構英文鍵 37 組與提交流程的實際子案例。原鍵混打的 Shift 英文與 Caps Lock 後接注音各驗證正式拼寫關閉與開啟。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
 
 `ctest --preset windows-x64 -R 'english[.]mixed-words' --output-on-failure` 用同一個英文鍵 harness 驗證 Windows／善解操作及左右錨點。x86 使用 `windows-x86` preset。案例用私人桌面和獨立學習檔，走 TSF、Named Pipe 與出貨資料，涵蓋空白／聲調切分、數字選字、英文補全與 `^en:` 提交。候選窗的 Tab 標籤與英文提示由 native candidate-host harness 驗證。
 

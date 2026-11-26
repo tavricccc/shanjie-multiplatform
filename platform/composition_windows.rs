@@ -279,6 +279,7 @@ impl Engine {
             self.windows_raw.clear();
         }
         let raw = std::mem::take(&mut self.mixed_raw);
+        let raw = if self.mixed_input { self.mixed_english_writing(&raw) } else { raw };
         self.mixed_latin = false;
         self.mixed_explicit_english = false;
         for ch in raw.chars().chain(text.chars()) {
@@ -327,6 +328,7 @@ impl Engine {
             self.clear_pend();
             self.mixed_raw.clear();
             let suffix = std::mem::take(&mut self.pending_literal);
+            let original = if self.mixed_input { self.mixed_english_writing(&original) } else { original };
             return self.insert_windows_literal(&(original + &suffix + " "));
         }
         if !self.mixed_input && self.cands.is_none() && self.pred_sel.is_none() && plain {

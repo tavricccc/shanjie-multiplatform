@@ -7,6 +7,13 @@ pub unsafe extern "C" fn shanjie_windows_set_mixed_tolerance(engine: *mut Shanji
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_set_mixed_english_writing(engine: *mut ShanjieEngine, enabled: u32) -> i32 {
+    if engine.is_null() || enabled > 1 { return SHANJIE_ERR_INVALID; }
+    unsafe { (*engine).0.set_mixed_english_writing(enabled != 0); }
+    SHANJIE_OK
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_key_with_latin(engine: *mut ShanjieEngine, key: ShanjieKey, display: u32, out: *mut *mut ShanjieOutput) -> i32 {
     guard(|| {
         if !unsafe { clear_out(out) } || engine.is_null() { return SHANJIE_ERR_NULL; }

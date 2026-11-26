@@ -90,6 +90,7 @@
                             <controls:SettingToggle Label="依按鍵順序判斷英文" Description="只對上游判斷有效：打了聲調鍵才發現音節不存在時，整段變成英文（馬上按 Esc 變回注音）；「快打時鍵序顛倒不當英文」關著時，注音鍵沒照順序也會變成英文。" IsEnabled="{x:Bind Vm.UsesUpstreamEnglish, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishKeyOrder, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="快打時鍵序顛倒不當英文" Description="只對上游判斷有效：同一個字的注音鍵先後顛倒（例如 ㄍㄜˋ 打成 ㄜㄍˋ）照注音處理。關掉而且「依按鍵順序判斷英文」開著時，ls、mv 這類字不用按 Shift，但快打容易誤觸。" IsEnabled="{x:Bind Vm.UsesUpstreamEnglish, Mode=OneWay}" IsOn="{x:Bind Vm.EnglishReversalGuard, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="混打相鄰重複鍵容錯" Description="{x:Bind Vm.MixedToleranceHelp, Mode=OneTime}" IsEnabled="{x:Bind Vm.IsZhuyin, Mode=OneWay}" IsOn="{x:Bind Vm.MixedTolerance, Mode=TwoWay}"/>
+                            <controls:SettingToggle x:Name="MixedEnglishWritingToggle" Label="原鍵混打套用英文正式拼寫" Description="{x:Bind Vm.MixedEnglishWritingHelp, Mode=OneTime}" IsEnabled="{x:Bind Vm.UsesRawKeyMixing, Mode=OneWay}" IsOn="{x:Bind Vm.MixedEnglishWriting, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="中英文之間自動加空格" Description="在漢字和半形英文、數字之間自動加一個空格（俗稱「盤古之白」）。只改善解送出的文字，不受中英混打方式影響；開頭會參考游標前一個字。" IsOn="{x:Bind Vm.CjkSpacing, Mode=TwoWay}"/>
                             <controls:SettingToggle Label="無法轉換的注音／拼音序列輸出英數" IsOn="{x:Bind Vm.Alphanumeric, Mode=TwoWay}"/>
                         </controls:SettingCard>
