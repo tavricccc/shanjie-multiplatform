@@ -420,6 +420,8 @@ impl Data {
     }
     pub fn deactivate(self: &Rc<Self>) -> Result<()> {
         self.diagnostic("deactivate",None,None,None);
+        #[cfg(feature = "rerank-timing")]
+        crate::rerank_timing::flush("tip");
         self.rebuild.borrow_mut().reset();
         let cancelled=self.cancel();
         self.retire_before_deactivate();
@@ -515,6 +517,20 @@ impl Data {
         self.diagnostic("apply.enter",Some(context),None,None);
         let learning_changed = self.state.borrow().snapshot.learning_unavailable != out.learning_unavailable;
         self.watch_rerank(out.rerank && !out.preedit.is_empty());
+        #[cfg(feature = "rerank-timing")]
+        if out.rerank && !out.preedit.is_empty() {
+            let job_id = self.state.try_borrow().ok().and_then(|s| s.engine.current_rerank_job_id()).unwrap_or(0);
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_TIP,
+                crate::rerank_timing::EV_KEY_PENDING,
+                0,
+                job_id,
+                1,
+                1,
+                0,
+                0,
+            );
+        }
         #[cfg(feature="input-diagnostics")]
         if crate::input_diagnostics::enabled() {
             crate::input_diagnostics::emit("apply.output",serde_json::json!({

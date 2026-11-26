@@ -818,7 +818,40 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             self.data.ascii_spacing_continuation.set(false);
             return Ok(false.into());
         }
+        #[cfg(feature = "rerank-timing")]
+        let (tip_seq, tip_is_enter) = {
+            let seq = crate::rerank_timing::next_tip_key_seq();
+            let is_enter = (key.0 == VK_RETURN.0 as usize) as u8;
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_TIP,
+                crate::rerank_timing::EV_KEY_START,
+                seq,
+                0,
+                0,
+                0,
+                is_enter,
+                0,
+            );
+            (seq, is_enter)
+        };
         let result=self.data.dispatch_key(context.ok()?, key, flags);
+        #[cfg(feature = "rerank-timing")]
+        {
+            let (pending, job_id) = self.data.state.try_borrow().map_or((false, 0), |s| {
+                (s.snapshot.rerank, s.engine.current_rerank_job_id().unwrap_or(0))
+            });
+            let handled_flag = result.as_ref().map_or(0u16, |v| *v as u16);
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_TIP,
+                crate::rerank_timing::EV_KEY_END,
+                tip_seq,
+                job_id,
+                0,
+                0,
+                tip_is_enter | ((pending as u8) << 1),
+                handled_flag,
+            );
+        }
         self.data.diagnostic("down.exit",context.as_ref(),Some(key),Some(match &result{Ok(v)=>*v as i32,Err(e)=>e.code().0}));
         match result {
             Ok(handled) => Ok(handled.into()),
