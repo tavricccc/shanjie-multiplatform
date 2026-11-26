@@ -26,6 +26,8 @@ Windows 外觀新增 `[appearance] accent=default|windows|custom`、`accent_colo
 
 使用 [善解](https://github.com/Nanako0129/shanjie)（原作者 Nanako0129）主線提交 `de7d69c5`（v0.9.1 之後 38 個提交）的核心與完整詞庫。詞庫新增「為啥」（ㄨㄟˋ ㄕㄚˊ）、「不足為外人道」（ㄅㄨˋ ㄗㄨˊ ㄨㄟˋ ㄨㄞˋ ㄖㄣˊ ㄉㄠˋ）及「部署」（ㄅㄨˋ ㄕㄨˇ）的讀音，並含口語變調與疊字陰平 `colloq` 讀音及教育部兩部辭典使用說明。沿用 v0.9.0 的完整模型配套，包括會意 `SJ-SR-10-31M`（格式 `SJTL0006`、`L=62`、`K=4` 與 `[SEP]` 邊界標記）及 `bigram`、`classes`、`kn`、`trigram` 和 `colloquial`。固定提交以 `UPSTREAM.json` 為準。模型清單與 Windows UI 同步支援 `SJTL0001`–`SJTL0006` 及 KN 配對雜湊解析。子模組初始化、模型清單與附件均優先官方，無法讀取才改用 [鏡像](https://github.com/tavricccc/shanjie-upstream-backup)；附件大小與 SHA-256 照常核對，既有收據的來源與 ID 不重寫。同名模型以實際讀取的模型名稱識別，跨來源／配套 ID 仍顯示已下載；附件或 release 有新版時保留舊版並提供更新，不因同名略過更新。各版變更見 [Changelog](Changelog.md)。
 
+Windows 建置套用原作者的詞庫補丁，恢復「系上」（ㄒㄧˋ ㄕㄤˋ）與「挨到」（ㄞ ㄉㄠˋ）。出貨的 `overlay-add.tsv` 與原作者提交 `9c4ddf56` 逐位元相同，核心回歸採用同一份疊加詞庫與三份數字輸入基準。上游的 `phrase_twin` 例外清單供重建詞庫使用。 [上游 PR #123](https://github.com/Nanako0129/shanjie/pull/123)
+
 [上游 PR #102](https://github.com/Nanako0129/shanjie/pull/102) 的混合詞解碼、英文補全、`nopredict` 詞表欄位及 `^en:` 學習鍵隨固定核心與詞庫取得。Windows 上游判斷路徑保留實際 Shift 邊界與英文大小寫，已進入英文預測列時數字鍵用於選字。原鍵混打及倚天沿用既有路徑。兩套操作範本保留原預測預設。英文預測列出現時顯示 Tab，沒有候選時回到英文提示。右錨點的混合詞及還原英文字候選沿用完整 token 與後接音節的範圍。
 
 `^en:` 共用既有學習 TSV、Windows 原子替換與跨行程協調。舊版略過此鍵，完整改寫時會移除新鍵紀錄，其他紀錄沿用原格式。原上游 [#103](https://github.com/Nanako0129/shanjie/pull/103)、[#104](https://github.com/Nanako0129/shanjie/pull/104)、[#105](https://github.com/Nanako0129/shanjie/pull/105) 的 Swift timing、macOS 重排優先度及 Orca 前文只保留在子模組。
