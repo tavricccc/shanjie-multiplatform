@@ -35,6 +35,59 @@ fn translate(vk: WPARAM, flags: LPARAM) -> Option<ShanjieKey> {
         None
     }
 }
+pub(super) enum KeyAction {
+    Pass,
+    Ime,
+    English(char),
+}
+
+impl KeyAction {
+    fn ime(handled: bool) -> Self {
+        if handled { Self::Ime } else { Self::Pass }
+    }
+}
+
+fn ascii_key(vk: WPARAM, flags: LPARAM) -> Result<Option<char>> {
+    let mut keyboard = [0u8; 256];
+    let mut text = [0u16; 4];
+    let length = unsafe {
+        GetKeyboardState(&mut keyboard)?;
+        ToUnicodeEx(
+            vk.0 as u32,
+            ((flags.0 >> 16) & 255) as u32,
+            &keyboard,
+            &mut text,
+            4,
+            Some(GetKeyboardLayout(0)),
+        )
+    };
+    Ok((length == 1 && (32..=126).contains(&text[0])).then(|| text[0] as u8 as char))
+}
+
+fn left_context(context: &ITfContext, cookie: u32) -> Result<String> {
+    unsafe {
+        let left = range(selection(context, cookie)?);
+        left.Collapse(cookie, TF_ANCHOR_START)?;
+        let mut moved = 0;
+        // Read the upstream shell's 256 UTF-16 units, then pass only
+        // the current line and the core's last 64 Unicode scalars.
+        left.ShiftStart(cookie, -256, &mut moved, std::ptr::null())?;
+        let mut text = [0u16; 256];
+        let mut count = 0;
+        left.GetText(cookie, 0, &mut text, &mut count)?;
+        let mut units = &text[..count as usize];
+        if units.first().is_some_and(|u| (0xdc00..=0xdfff).contains(u)) {
+            units = &units[1..];
+        }
+        if units.last().is_some_and(|u| (0xd800..=0xdbff).contains(u)) {
+            units = &units[..units.len() - 1];
+        }
+        let text = String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?;
+        let line = text.rsplit(['\r', '\n', '\u{000b}', '\u{000c}', '\u{0085}', '\u{2028}', '\u{2029}', '\0']).next().unwrap();
+        Ok(line.chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect())
+    }
+}
+
 /// Only Tab actions that are known to belong to the IME may wait for a write lock.
 fn tab_can_defer(s: &State, key: ShanjieKey) -> bool {
     let out = &s.snapshot;
@@ -110,32 +163,32 @@ impl Data {
         }
         if !down && !shift(key) { self.state.borrow_mut().shift_used = true; }
     }
-    pub(super) fn wants(
+    pub(super) fn key_action(
         self: &Rc<Self>,
         context: &ITfContext,
         vk: WPARAM,
         flags: LPARAM,
-    ) -> Result<bool> {
+    ) -> Result<KeyAction> {
         if system_shortcut(vk) {
             self.diagnostic("wants.system_shortcut",Some(context),Some(vk),Some(0));
-            return Ok(false);
+            return Ok(KeyAction::Pass);
         }
         unsafe {
             let status = context.GetStatus()?;
             if status.dwDynamicFlags & TF_SD_READONLY != 0 {
                 self.diagnostic("wants.readonly",Some(context),Some(vk),Some(0));
-                return Ok(false);
+                return Ok(KeyAction::Pass);
             }
             if compartment(context, &GUID_COMPARTMENT_KEYBOARD_DISABLED) {
                 self.diagnostic("wants.disabled",Some(context),Some(vk),Some(0));
-                return Ok(false);
+                return Ok(KeyAction::Pass);
             }
             if compartment(context, &GUID_COMPARTMENT_EMPTYCONTEXT) {
                 self.diagnostic("wants.empty_context",Some(context),Some(vk),Some(0));
-                return Ok(false);
+                return Ok(KeyAction::Pass);
             }
-            if vk.0 == VK_ESCAPE.0 as usize && (self.is_retiring(context) || !self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) { return Ok(true); }
-            if self.add_word_shortcut(vk) || self.popup_accepts(vk) { return Ok(true); }
+            if vk.0 == VK_ESCAPE.0 as usize && (self.is_retiring(context) || !self.recovery.borrow().is_empty() || self.profile_update.borrow().is_some()) { return Ok(KeyAction::Ime); }
+            if self.add_word_shortcut(vk) || self.popup_accepts(vk) { return Ok(KeyAction::Ime); }
             let s = self.state.borrow();
             let p = &s.prefs;
             let physical = if vk.0 == 16 {
@@ -154,45 +207,57 @@ impl Data {
                 && !held(VK_CONTROL)
                 && !held(VK_MENU)
             {
-                return Ok(true);
+                return Ok(KeyAction::Ime);
             }
             if (p.flag("shortcuts", "ctrl_space_toggle", false)
                 && plain_shortcut(vk, VK_CONTROL, VK_SHIFT))
                 || ((s.snapshot.english_run_utf16_len != 0 || p.flag("shortcuts", "shift_space_toggle", true))
                     && plain_shortcut(vk, VK_SHIFT, VK_CONTROL))
             {
-                return Ok(true);
+                return Ok(KeyAction::Ime);
             }
             let Some(mut key) = translate(vk, flags) else {
-                return Ok(false);
+                self.ascii_spacing_continuation.set(false);
+                return Ok(KeyAction::Pass);
             };
             let chinese = s
                 .thread
                 .as_ref()
                 .is_some_and(|t| compartment(t, &GUID_COMPARTMENT_KEYBOARD_OPENCLOSE));
             if s.full_width && !chinese && !held(VK_CONTROL) && !held(VK_MENU) {
-                return Ok([1, 2].contains(&key.kind));
+                return Ok(KeyAction::ime([1, 2].contains(&key.kind)));
             }
             if !chinese {
-                return Ok(false);
+                if s.full_width || key.kind != 1 || key.modifiers & !1 != 0 {
+                    self.ascii_spacing_continuation.set(false);
+                    return Ok(KeyAction::Pass);
+                }
+                if !self.ascii_spacing_host || !p.flag("input", "cjk_spacing", false)
+                    || !s.snapshot.preedit.is_empty() || s.composition.is_some()
+                    || (s.context.as_ref() == Some(context) && self.ascii_spacing_continuation.get())
+                {
+                    return Ok(KeyAction::Pass);
+                }
+                return Ok(ascii_key(vk, flags).ok().flatten().filter(char::is_ascii_alphanumeric)
+                    .map_or(KeyAction::Pass, KeyAction::English));
             }
             if !p.flag("input", "caps_lock_english", false) {
                 key.modifiers &= !16;
             }
             if s.special.mode == 0 && numpad_literal(vk, key, &s.snapshot) {
-                return Ok(true);
+                return Ok(KeyAction::Ime);
             }
             if Special::starts(key, p) {
-                return Ok(true);
+                return Ok(KeyAction::Ime);
             }
             if key.modifiers & 12 != 0 {
-                return Ok(false);
+                return Ok(KeyAction::Pass);
             }
             if key.modifiers & 2 != 0 {
                 if s.special.mode != 0 {
-                    return Ok(false);
+                    return Ok(KeyAction::Pass);
                 }
-                return Ok((p.flag("shortcuts", "ctrl_punctuation", true)
+                return Ok(KeyAction::ime((p.flag("shortcuts", "ctrl_punctuation", true)
                     && input::is_punctuation(key))
                     || (p.flag("shortcuts", "ctrl_backslash", false)
                         && key.kind == 1
@@ -202,11 +267,11 @@ impl Data {
                         && p.flag("input", "learning", true)
                         && key.kind == 4
                         && key.modifiers == 3
-                        && s.snapshot.selected.is_some()));
+                        && s.snapshot.selected.is_some())));
             }
             if key.kind == 13 {
-                return Ok(s.context.as_ref() == Some(context)
-                    && (!s.snapshot.preedit.is_empty() || tab_can_defer(&s, key)));
+                return Ok(KeyAction::ime(s.context.as_ref() == Some(context)
+                    && (!s.snapshot.preedit.is_empty() || tab_can_defer(&s, key))));
             }
             if s.associated.handles(key)
                 || s.pinyin.handles(key)
@@ -214,15 +279,15 @@ impl Data {
                 || !s.snapshot.preedit.is_empty()
                 || ((2..=13).contains(&key.kind) && !self.recovery.borrow().is_empty())
             {
-                return Ok(true);
+                return Ok(KeyAction::Ime);
             }
-            Ok(key.kind == 1
+            Ok(KeyAction::ime(key.kind == 1
                 && (key.modifiers & 30 == 0
                     || (p.flag("input", "caps_lock_english", false)
                         && key.modifiers & 16 != 0
                         && key.modifiers & 14 == 0)
                     || (p.flag("shortcuts", "ctrl_punctuation", true)
-                        && input::is_punctuation(key))))
+                        && input::is_punctuation(key)))))
         }
     }
     pub(super) fn can_defer_tab(&self, vk: WPARAM, flags: LPARAM) -> bool {
@@ -246,6 +311,33 @@ impl Data {
             s.shift_epoch = super::modifiers::epoch();
         }
     }
+    pub(super) fn insert_english_spacing(self: &Rc<Self>, context: &ITfContext, ch: char) -> bool {
+        if self.watch(context).is_err() {
+            return false;
+        }
+        let inserted = Rc::new(std::cell::Cell::new(false));
+        let result = inserted.clone();
+        let target = context.clone();
+        let data = self.clone();
+        // Optional formatting must either complete synchronously or leave the original key to the host.
+        let _ = self.request(context, TF_ES_SYNC | TF_ES_READWRITE, move |cookie| {
+            if unsafe { super::privacy::private_scope(&target, cookie)? } {
+                return Ok(());
+            }
+            let previous = left_context(&target, cookie)?;
+            if shanjie_shell::spacing::last(&previous).is_some_and(shanjie_shell::spacing::is_han) {
+                unsafe {
+                    target.cast::<ITfInsertAtSelection>()?
+                        .InsertTextAtSelection(cookie, INSERT_TEXT_AT_SELECTION_FLAGS(0), &[b' ' as u16, ch as u16])?;
+                }
+                result.set(true);
+            }
+            data.ascii_spacing_continuation.set(true);
+            Ok(())
+        });
+        inserted.get()
+    }
+
     pub(super) fn key_down(
         self: &Rc<Self>,
         context: &ITfContext,
@@ -255,7 +347,7 @@ impl Data {
     ) -> Result<bool> {
         self.mode_revision.set(self.mode_revision.get() + 1);
         unsafe { self.indicator.borrow_mut().hide(); }
-        if !self.wants(context, vk, flags)? {
+        if !matches!(self.key_action(context, vk, flags)?, KeyAction::Ime) {
             return Ok(false);
         }
         let p = self.state.borrow().prefs.clone();
@@ -520,23 +612,9 @@ impl Data {
             && key.modifiers == 1
             && !p.shift_punctuation(key.ch as u8 as char);
         if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
-            let mut keyboard = [0u8; 256];
-            let mut text = [0u16; 4];
-            let length = unsafe {
-                GetKeyboardState(&mut keyboard)?;
-                ToUnicodeEx(
-                    vk.0 as u32,
-                    ((flags.0 >> 16) & 255) as u32,
-                    &keyboard,
-                    &mut text,
-                    4,
-                    Some(GetKeyboardLayout(0)),
-                )
-            };
-            if length != 1 || !(32..=126).contains(&text[0]) {
+            let Some(ch) = ascii_key(vk, flags)? else {
                 return Ok(false);
-            }
-            let ch = char::from_u32(text[0] as u32).unwrap();
+            };
             let mut out = if ascii && !english && self.chinese() {
                 output(self.state.borrow_mut().engine.perform(crate::broker::Op::Punctuation(ch.to_string())))?
             } else {
@@ -578,7 +656,7 @@ impl Data {
             && !state.preedit.is_empty()
             && !input::pending(&state);
         let cycle = cycle && !mixed_pending;
-        unsafe {
+        {
             let composing = !self.state.borrow().snapshot.preedit.is_empty();
             if !composing {
                 // A composition starts here: what was before the cursor last time is no longer known.
@@ -586,27 +664,7 @@ impl Data {
             }
             let spacing = p.flag("input", "cjk_spacing", false);
             if !composing && self.state.borrow().engine.privacy_allowed() && (p.flag("input", "context", true) || spacing) {
-                let value = (|| -> Result<String> {
-                    let left = range(selection(context, cookie)?);
-                    left.Collapse(cookie, TF_ANCHOR_START)?;
-                    let mut moved = 0;
-                    // Read the upstream shell's 256 UTF-16 units, then pass only
-                    // the current line and the core's last 64 Unicode scalars.
-                    left.ShiftStart(cookie, -256, &mut moved, std::ptr::null())?;
-                    let mut text = [0u16; 256];
-                    let mut count = 0;
-                    left.GetText(cookie, 0, &mut text, &mut count)?;
-                    let mut units = &text[..count as usize];
-                    if units.first().is_some_and(|u| (0xdc00..=0xdfff).contains(u)) {
-                        units = &units[1..];
-                    }
-                    if units.last().is_some_and(|u| (0xd800..=0xdbff).contains(u)) {
-                        units = &units[..units.len() - 1];
-                    }
-                    let text = String::from_utf16(units).map_err(|_| Error::from_hresult(E_INVALIDARG))?;
-                    let line = text.rsplit(['\r', '\n', '\u{000b}', '\u{000c}', '\u{0085}', '\u{2028}', '\u{2029}', '\0']).next().unwrap();
-                    Ok(line.chars().rev().take(64).collect::<Vec<_>>().into_iter().rev().collect())
-                })().unwrap_or_default();
+                let value = left_context(context, cookie).unwrap_or_default();
                 if spacing {
                     self.state.borrow_mut().spacing_prev = shanjie_shell::spacing::last(&value);
                 }
@@ -724,10 +782,11 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             self.data.close_word();
         }
         if system_shortcut(key) {
+            self.data.ascii_spacing_continuation.set(false);
             return Ok(false.into());
         }
         self.data.poll_rebuild_before_key();
-        let result=self.data.wants(context.ok()?, key, flags);
+        let result=self.data.key_action(context.ok()?, key, flags).map(|action| !matches!(action, KeyAction::Pass));
         self.data.diagnostic("test_down.exit",context.as_ref(),Some(key),Some(match &result{Ok(v)=>*v as i32,Err(e)=>e.code().0}));
         Ok(result?.into())
     }
@@ -756,6 +815,7 @@ impl ITfKeyEventSink_Impl for Service_Impl {
             return Ok(true.into());
         }
         if system_shortcut(key) {
+            self.data.ascii_spacing_continuation.set(false);
             return Ok(false.into());
         }
         let result=self.data.dispatch_key(context.ok()?, key, flags);

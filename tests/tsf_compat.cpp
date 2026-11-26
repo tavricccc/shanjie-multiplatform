@@ -60,7 +60,47 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if(scenario==L"privacy-disabled") {
+    if (scenario.starts_with(L"spacing-english")) {
+        v.lVal = 0;
+        require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1140);
+        store->externalText(L"漢");
+        store->privacyBoundary = 1;
+        keyboard(0);
+        BOOL offered = FALSE, eaten = FALSE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'A', flags('A', false), &offered)), 1141);
+        require(bool(offered) == (scenario == L"spacing-english"), 1142);
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'A', flags('A', false), &eaten)), 1143);
+        if (scenario == L"spacing-english") {
+            require(eaten && store->text == L"漢 a" && store->prefixReadsBeforeWrite > 0, 1144);
+            require(compositions() == 0 && store->selection.acpStart == 3, 1145);
+            auto reads = store->prefixReads;
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'B', flags('B', false), &offered)) && !offered, 1146);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'B', flags('B', false), &eaten)) && !eaten, 1147);
+            require(store->prefixReads == reads && store->text == L"漢 a", 1148);
+
+            // Simulate host insertion followed by movement back behind the Han character.
+            store->externalText(L"漢 ab");
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), VK_LEFT, flags(VK_LEFT, false), &offered)) && !offered, 1149);
+            store->externalCaret(1);
+            keyboard(VK_SHIFT);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'C', flags('C', false), &eaten)) && eaten, 1150);
+            require(store->text == L"漢 C ab" && compositions() == 0, 1151);
+
+            // Modified keys still reach the host, including Ctrl+Alt and the next key in a private field.
+            keyboard(VK_CONTROL, VK_MENU);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'D', flags('D', false), &offered)) && !offered, 1152);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'D', flags('D', false), &eaten)) && !eaten, 1153);
+            store->scopeChanged(IS_PASSWORD);
+            store->externalCaret(1);
+            pump();
+            reads = store->prefixReads;
+            keyboard(0);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'E', flags('E', false), &eaten)) && !eaten, 1154);
+            require(store->text == L"漢 C ab" && store->prefixReads == reads, 1155);
+        } else {
+            require(!eaten && store->text == L"漢" && store->prefixReads == 0, 1156);
+        }
+    } else if(scenario==L"privacy-disabled") {
         ComPtr<ITfCompartmentMgr> cm;ComPtr<ITfCompartment> disabled;require(SUCCEEDED(context.As(&cm))&&SUCCEEDED(cm->GetCompartment(GUID_COMPARTMENT_KEYBOARD_DISABLED,&disabled)),1132);
         require(SUCCEEDED(disabled->SetValue(client,&v)),1133);
         keyboard(0);for(int key:{int('S'),VK_RETURN,VK_TAB,VK_DOWN}){

@@ -1,10 +1,10 @@
 //! 中英文之間自動加空格 (upstream docs/contracts/cjk-spacing.md section 1): a space between a Han character and an ASCII
-//! letter or digit, applied only to the text the shell commits.
+//! letter or digit, applied by the shell at the insertion boundary.
 #[derive(Clone, Copy, PartialEq)]
 enum Kind { Han, Ascii, Other }
 
 /// Upstream LeftContext.isHan.
-fn is_han(c: char) -> bool {
+pub fn is_han(c: char) -> bool {
     matches!(c as u32, 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0x20000..=0x2A6DF | 0x2A700..=0x2EBEF
         | 0x30000..=0x3134F | 0x2F800..=0x2FA1F | 0x3007)
 }

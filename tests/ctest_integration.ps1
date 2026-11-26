@@ -205,10 +205,10 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $Level='AFFECTED';$CiSafe=$false;$skipTests=$false;$pathReasons=[ordered]@{}
     $scenarios=@(
         @('ui','ui/View.xaml.cs',16),@('add-word','windows/src/word_helper.rs',22),
-        @('candidate','windows/src/candidate.rs',42),@('english','tests/english_keys.cpp',29),
+        @('candidate','windows/src/candidate.rs',44),@('english','tests/english_keys.cpp',29),
         @('submission','tests/submission.cpp',32),@('platform','platform/input_windows.rs',58),
-        @('shared','shared/src/lib.rs',112),@('shared-input','shared/src/input.rs',114),
-        @('docs','README.md',0),@('unknown','tools/unknown.txt',112),@('ci-workflow','.github/workflows/ci.yml',5)
+        @('shared','shared/src/lib.rs',114),@('shared-input','shared/src/input.rs',116),
+        @('docs','README.md',0),@('unknown','tools/unknown.txt',114),@('ci-workflow','.github/workflows/ci.yml',5)
     )
     foreach($scenario in $scenarios){
         $policy=Select-VerificationPlan @($scenario[1])
@@ -230,11 +230,11 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     $fixed=Get-SelectedTests $inventory @('ci') 'windows-x64'
     Assert-FixedCiSelection $fixed.Selected
     $full=Get-SelectedTests $inventory @('full') 'windows-x64'
-    Check ($full.Selected.Count -eq 112 -and $inventory.tests.Count -eq 128 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
+    Check ($full.Selected.Count -eq 114 -and $inventory.tests.Count -eq 130 -and 'full.submission.async-keys.x64' -in $full.Selected.name -and 'full.submission.rebuild-local.x64' -in $full.Selected.name -and 'full.submission.rebuild-pipe.x64' -in $full.Selected.name -and 'full.submission.segment.x64' -in $full.Selected.name) 'Keep the FULL inventory and cover deferred edit locks, both rebuild modes and composition styling'
     foreach($name in 'full.core.learning-status.x64','full.core.privacy.x64'){
         Check ($name -in $full.Selected.name) "FULL retains historical-gap regression $name"
     }
-    foreach($scenario in 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'){
+    foreach($scenario in 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','spacing-english','spacing-english-off','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'){
         Check ("full.private.tsf-compat.$scenario.x64" -in $full.Selected.name) "FULL retains native boundary $scenario"
     }
     $uiPolicy=Select-VerificationPlan @('ui/MainWindow.xaml.cs')
@@ -276,5 +276,5 @@ if((Test-Path "$inventoryDirectory/CTestTestfile.cmake") -and (Get-Command ctest
     }
     Check ($costByName['full.core.rowstats'] -gt $costByName['full.core-suite']) 'The new CLI matrix has its measured heavy-suite scheduling seed'
     Check ($costByName['full.core-suite'] -gt $costByName['fast.rust.windows'] -and $costByName['fast.rust.windows'] -gt $costByName['release.ui.verify'] -and $costByName['release.ui.verify'] -gt $costByName['full.submission.async-keys.x64'] -and $costByName['full.submission.async-keys.x64'] -gt $costByName['full.private.tsf-compat.shift-right.x64']) 'Configured CTest inventory preserves descending cold-start COST priorities for heavy suites'
-    Write-Host 'PASS configured selection inventory: FULL 112, x64 inventory 128 including manual G05, fixed CI 5; no native execution'
+    Write-Host 'PASS configured selection inventory: FULL 114, x64 inventory 130 including manual G05, fixed CI 5; no native execution'
 }else{Write-Host 'Not run: configured CTest selection inventory (no configured x64 preset); pure policy checks remain available.'}

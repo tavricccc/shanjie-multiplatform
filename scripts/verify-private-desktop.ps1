@@ -3,7 +3,7 @@ param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harn
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
  'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
- 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
+ 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','spacing-english','spacing-english-off','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
@@ -26,6 +26,7 @@ try {
   $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
   if($scenario -like 'privacy-*'){$profile=$profile -replace '(?m)^learning=0','learning=1'}
   if($scenario -eq 'privacy-control'){$profile=$profile -replace '(?m)^context=1','context=0'}
+  if($scenario -eq 'spacing-english'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1' -replace '(?m)^context=1','context=0'}
   if($scenario -eq 'modifiers-english'){$profile=$profile -replace '(?m)^upstream_english=0','upstream_english=1'}
   if($scenario -eq 'cancel-theme-dark'){$profile=$profile -replace '(?m)^theme=0','theme=2'}
   if($scenario -eq 'cancel-theme-light'){$profile=$profile -replace '(?m)^theme=0','theme=1'}

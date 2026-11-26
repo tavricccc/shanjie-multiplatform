@@ -272,8 +272,10 @@ impl Data {
         vk: WPARAM,
         flags: LPARAM,
     ) -> Result<bool> {
-        if !self.wants(context, vk, flags)? {
-            return Ok(false);
+        match self.key_action(context, vk, flags)? {
+            super::keys::KeyAction::Pass => return Ok(false),
+            super::keys::KeyAction::English(ch) => return Ok(self.insert_english_spacing(context, ch)),
+            super::keys::KeyAction::Ime => {}
         }
         if shift(vk) {
             self.shift_down(vk, flags);

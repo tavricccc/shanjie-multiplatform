@@ -143,6 +143,8 @@ pub struct Data {
     pub ending: Cell<bool>,
     pub editing: Cell<bool>,
     pub mode_revision: Cell<u64>,
+    pub(super) ascii_spacing_host: bool,
+    pub(super) ascii_spacing_continuation: Cell<bool>,
     pub(super) profile_update: RefCell<Option<super::profile_refresh::Pending>>,
     pub(super) generation: Cell<u64>,
     pub(super) recovery: RefCell<super::recovery::Recovery>,
@@ -186,6 +188,10 @@ pub fn new() -> ITfTextInputProcessorEx {
         ending: Cell::new(false),
         editing: Cell::new(false),
         mode_revision: Cell::new(0),
+        ascii_spacing_host: std::env::current_exe().ok().is_some_and(|app| {
+            super::privacy::app_allows_ascii_spacing(app.file_name().and_then(|name| name.to_str()))
+        }),
+        ascii_spacing_continuation: Cell::new(false),
         profile_update: RefCell::new(None),
         generation: Cell::new(0),
         recovery: RefCell::new(Default::default()),
@@ -308,6 +314,7 @@ impl Data {
         }
     }
     pub fn set_mode(&self, chinese: bool) -> Result<()> {
+        self.ascii_spacing_continuation.set(false);
         self.diagnostic("mode.set.request",None,None,Some(chinese as i32));
         let (thread, client, width, button) = {
             let s = self.state.borrow();
@@ -404,6 +411,7 @@ impl Data {
         s.association_caret = None;
         s.raw_reading.clear();
         s.spacing_prev = None;
+        self.ascii_spacing_continuation.set(false);
         s.snapshot = Snapshot::default();
         if let Some(c) = s.candidates.as_ref() {
             c.data.close();
@@ -1255,10 +1263,15 @@ impl ITfTextEditSink_Impl for Service_Impl {
             self.data.diagnostic("edit.selection_changed",context.as_ref(),None,Some(selection_changed as i32));
             let word_open=self.data.word_popup.borrow().as_ref().is_some_and(|p|p.active())
                 || self.data.word_selection.borrow().is_some() || self.data.word_lookup.borrow().is_some();
-            let text_changed=word_open && record.GetTextAndPropertyUpdates(TF_GTP_INCL_TEXT,&[]).is_ok_and(|updated| {
+            let spacing_caret = selection_changed && self.data.ascii_spacing_continuation.get();
+            let text_changed=(word_open || spacing_caret) && record.GetTextAndPropertyUpdates(TF_GTP_INCL_TEXT,&[]).is_ok_and(|updated| {
                 let mut ranges=[None]; let mut count=0;
                 updated.Next(&mut ranges,&mut count).is_ok() && count!=0
             });
+            // Host typing also moves the caret, but a caret-only move ends the English run.
+            if spacing_caret && !text_changed {
+                self.data.ascii_spacing_continuation.set(false);
+            }
             if selection_changed || text_changed { self.data.close_word(); }
             if !selection_changed { return Ok(()); }
             let context = context.ok()?;
