@@ -238,6 +238,9 @@ int wmain(int argc,wchar_t** argv) {
         press('S',false,true);press('U',false,true);press('3',false,true);press(VK_RETURN);
         require(store->text==L"你",919);
     }else if(scenario==L"shift"){
+        wchar_t local[32768];require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768),1016);
+        auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
+        bool upstream=GetPrivateProfileIntW(L"input",L"upstream_english",0,profile.c_str())!=0;
         press('R',true);press('U');press('S');press('T');press(VK_RETURN);require(store->text==L"Rust",920);
         for(auto ch:std::wstring(L"HELLO"))press(ch,true);
         press(VK_SPACE,true);
@@ -251,6 +254,21 @@ int wmain(int argc,wchar_t** argv) {
         expect(L"RustHELLO WORLDAI開AI是API好",1014);
         press('A',true);press('I',true);press(VK_SPACE,true);press('0');press(VK_RETURN);
         expect(L"RustHELLO WORLDAI開AI是API好AI 0",1015);
+        std::wstring expected=L"RustHELLO WORLDAI開AI是API好AI 0";
+        auto typeWord=[&](const std::wstring& word){
+            for(auto ch:word){
+                bool upper=ch>=L'A'&&ch<=L'Z';
+                press(upper?ch:(ch-L'a'+L'A'),upper);
+            }
+        };
+        for(auto [typed,canon]:std::initializer_list<std::pair<std::wstring,std::wstring>>{
+            {L"Chatgpt",L"ChatGPT"},{L"Github",L"GitHub"},{L"Macos",L"macOS"},
+            {L"CHATGPT",L"CHATGPT"},{L"MacOs",L"MacOs"},
+        }){
+            typeWord(typed);press(VK_RETURN);
+            expected+=upstream?canon:typed;
+            expect(expected,1017);
+        }
     }else if(scenario==L"shift-caps-zh"){
         wchar_t local[32768];require(GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768),965);
         auto profile=std::wstring(local)+L"/Shanjie/profile.ini";
