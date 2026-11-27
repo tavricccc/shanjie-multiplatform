@@ -559,6 +559,7 @@ impl Data {
                 self.state.borrow_mut().spacing_prev = None;
                 return Ok(());
             }
+            self.ascii_spacing_continuation.set(false);
             let mut composition = self.state.borrow().composition.clone();
             let range = if let Some(c) = &composition {
                 c.GetRange()?

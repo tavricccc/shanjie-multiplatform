@@ -242,7 +242,7 @@ impl Data {
                 return Ok(KeyAction::ime([1, 2].contains(&key.kind)));
             }
             if !chinese {
-                if s.full_width || key.kind != 1 || key.modifiers & !1 != 0 {
+                if s.full_width || key.kind != 1 || key.modifiers & 14 != 0 {
                     self.ascii_spacing_continuation.set(false);
                     return Ok(KeyAction::Pass);
                 }

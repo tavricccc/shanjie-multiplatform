@@ -164,6 +164,27 @@ int wmain(int argc,wchar_t**argv) {
             require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'C', flags('C', false), &eaten)) && eaten, 1150);
             require(store->text == L"漢 C ab" && compositions() == 0, 1151);
 
+            // Caps Lock toggled on in English mode still inserts the CJK space after a Han character.
+            store->externalCaret(1);
+            BYTE caps[256]{};
+            caps[VK_CAPITAL] = 0x01;
+            require(SetKeyboardState(caps), 1157);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'F', flags('F', false), &offered)) && offered, 1158);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'F', flags('F', false), &eaten)) && eaten, 1159);
+            require(store->text == L"漢 F C ab" && compositions() == 0, 1182);
+
+            // Direct host compartment switch to Chinese and back clears English continuation after Chinese commit.
+            keyboard(0);
+            v.lVal = 1;
+            require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && chinese(), 1183);
+            for (int key : {int('S'), int('U'), int('3'), VK_RETURN}) down(key);
+            require(store->text == L"漢 F 你 C ab" && compositions() == 0, 1184);
+            v.lVal = 0;
+            require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1185);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'G', flags('G', false), &offered)) && offered, 1186);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'G', flags('G', false), &eaten)) && eaten, 1187);
+            require(store->text == L"漢 F 你 g C ab" && compositions() == 0, 1188);
+
             // Modified keys still reach the host, including Ctrl+Alt and the next key in a private field.
             keyboard(VK_CONTROL, VK_MENU);
             require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'D', flags('D', false), &offered)) && !offered, 1152);
@@ -174,7 +195,7 @@ int wmain(int argc,wchar_t**argv) {
             reads = store->prefixReads;
             keyboard(0);
             require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'E', flags('E', false), &eaten)) && !eaten, 1154);
-            require(store->text == L"漢 C ab" && store->prefixReads == reads, 1155);
+            require(store->text == L"漢 F 你 g C ab" && store->prefixReads == reads, 1155);
         } else {
             require(!eaten && store->text == L"漢" && store->prefixReads == 0, 1156);
         }
