@@ -55,14 +55,24 @@ if ($prepareData -notmatch 'data/lexicon/\*') { Fail 'prepare-data.ps1 must copy
 if ($Dist) {
     # Compare with the pinned Git blobs: the shipped data comes from them, and the checkout may have other line endings.
     function Same-AsUpstream([string]$built, [string]$path) { (git -C (Join-Path $root 'upstream/shanjie') rev-parse "HEAD:data/$path") -eq (git hash-object --no-filters $built) }
+    # Exact Windows backports from Nanako0129/shanjie PR #125 and PR #131 (dfbeb954bb63).
+    $backportedLexicon = @{
+        'overlay-add.tsv' = '8dcdfba89eed4a3a91aaf812ed6704202a2247c1'
+        'names-add.tsv' = 'af6ee419071045995d3a820c2138ecb682bd5351'
+        'names-sources.tsv' = '1abe1cadb6adc3e6b570f340ad859d9dbaede3ad'
+        'names.json' = 'beb558aa1eb9809869180c546831c80eea7ebe6e'
+        'names-collisions.tsv' = '5d0e86440d89fefe9e7cee318251a2c1081e5c50'
+        'names-manual.tsv' = '9d122d48e733490dc2909cadea854b3a584dcbbe'
+        'names-readings.tsv' = '3908d3782355975c4849fb315ca8959a98d0fa30'
+        'names-stores.tsv' = '36b4d398bf4ad7d0b0e99035681f5f2086f8f090'
+    }
     $data = Join-Path $RuntimeRoot 'data'
     foreach ($file in Get-ChildItem (Join-Path $upstream 'lexicon') -File) {
         $built = Join-Path $data $file.Name
         if (!(Test-Path $built)) { Fail "dist/data is missing lexicon file $($file.Name)."; continue }
-        if ($file.Name -eq 'overlay-add.tsv') {
-            # Exact overlay-add.tsv blob from Nanako0129/shanjie@5ab7307ad11c, including PR #123.
-            if ((git hash-object --no-filters $built) -cne '8dcdfba89eed4a3a91aaf812ed6704202a2247c1') {
-                Fail 'dist/data/overlay-add.tsv differs from upstream PR #125.'
+        if ($backportedLexicon.ContainsKey($file.Name)) {
+            if ((git hash-object --no-filters $built) -cne $backportedLexicon[$file.Name]) {
+                Fail "dist/data/$($file.Name) differs from its upstream backport."
             }
         } elseif (!(Same-AsUpstream $built "lexicon/$($file.Name)")) { Fail "dist/data/$($file.Name) differs from upstream." }
     }

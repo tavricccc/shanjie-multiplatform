@@ -43,6 +43,20 @@ fn pruned_overlay_readings_are_absent_from_the_runtime_lexicon() {
 }
 
 #[test]
+#[ignore = "Reads the built lexicon in dist/data"]
+fn expanded_names_are_available_at_their_readings() {
+    let lexicon = shanjie_core::engine::windows_base_lexicon(&test_data_root()).unwrap();
+    for (reading, word) in [
+        (&["ㄈㄨˊ", "ㄓㄡ", "ㄓㄢˋ"][..], "浮洲站"),
+        (&["ㄕㄢˋ", "ㄐㄧㄝˇ", "ㄕㄨ", "ㄖㄨˋ", "ㄈㄚˇ"][..], "善解輸入法"),
+        (&["ㄒㄧㄠˇ", "ㄎㄨㄞˋ", "ㄒㄧ"][..], "小檜溪"),
+    ] {
+        let reading: Vec<_> = reading.iter().map(|syllable| (*syllable).to_owned()).collect();
+        assert!(lexicon.entries(&reading).iter().any(|(entry, _)| *entry == word), "{word}");
+    }
+}
+
+#[test]
 fn raw_digit_navigation_preserves_editable_literal_and_cursor() {
     for digit in "125890".chars() {
         for (key, cursor) in [(KeyKind::Left, 0), (KeyKind::Home, 0), (KeyKind::Right, 1), (KeyKind::End, 1)] {
