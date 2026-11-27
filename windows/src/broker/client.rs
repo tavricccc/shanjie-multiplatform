@@ -183,7 +183,7 @@ impl Client {
             self.last_rerank_job_id = result.rerank_job_id;
         }
         match &op {
-            Op::Options(_) | Op::Mixed(_) | Op::English(_) | Op::Tolerance(_)
+            Op::Options(_) | Op::HalfPunct(_) | Op::Mixed(_) | Op::English(_) | Op::Tolerance(_)
             | Op::MixedEnglishWriting(_) | Op::Prediction(_) | Op::Demote(_) | Op::Privacy(_) => {
                 self.settings
                     .retain(|old| std::mem::discriminant(old) != std::mem::discriminant(&op));

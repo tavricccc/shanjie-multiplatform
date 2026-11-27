@@ -308,7 +308,15 @@ pub const PLAIN_KEYS: [(char, &str); 6] = [
     ('=', "equal"),
     ('`', "backquote"),
 ];
+pub const HALF_PUNCT_DEFAULT_MASK: u32 = 0x0060_99FF;
 impl Document {
+    pub fn half_punct_mask(&self) -> u32 {
+        if self.number("input", "keyboard", 0) >= 3 || !self.flag("punctuation", "half_punct", false) {
+            return 0;
+        }
+        let mask = self.number("punctuation", "half_punct_mask", HALF_PUNCT_DEFAULT_MASK);
+        if mask <= crate::half_punctuation::ALL_MASK { mask } else { HALF_PUNCT_DEFAULT_MASK }
+    }
     pub fn shift_punctuation(&self, ch: char) -> bool {
         (('2'..='8').contains(&ch) && self.mcbopomofo_punctuation())
             || SHIFT_KEYS.iter().any(|(c, n)| *c == ch && self.flag("punctuation", &format!("shift_{n}"), false))
@@ -427,6 +435,9 @@ fn shared_preset(text: &str) -> Result<Document> {
                 Some((_, _, allowed)) => allowed.contains(&value.as_str()),
                 None if section == "shortcuts" && key == "add_word_interval" => value.parse::<u32>().is_ok_and(|v| (200..=1000).contains(&v)),
                 None if section == "shortcuts" && (key == "shift_side" || key == "add_word_side") => value.parse::<u32>().is_ok_and(|v| v <= 2),
+                None if section == "punctuation" && key == "half_punct_mask" => {
+                    value.parse::<u32>().is_ok_and(|v| v <= crate::half_punctuation::ALL_MASK)
+                }
                 None if default == "0" || default == "1" => value == "0" || value == "1",
                 None => default.parse::<u32>().is_ok() && value.parse::<u8>().is_ok(),
             };
@@ -764,6 +775,22 @@ mod tests {
             assert!(import_preset(mine, bad).is_err(), "{bad}");
         }
     }
+    #[test]
+    fn half_punctuation_is_opt_in_and_presets_keep_the_mask() {
+        let mut p = Document::parse("[profile]\nschema=9\n").unwrap();
+        assert_eq!(p.half_punct_mask(), 0);
+        p.set("punctuation", "half_punct", 1);
+        assert_eq!(p.half_punct_mask(), HALF_PUNCT_DEFAULT_MASK);
+        let custom_mask = (1 << 2) | (1 << 24);
+        p.set("punctuation", "half_punct_mask", custom_mask);
+        let preset = export_preset(&p.content(), "半形符號").unwrap();
+        let mut shared = Document::parse(&import_preset("", &preset).unwrap()).unwrap();
+        assert_eq!(shared.half_punct_mask(), custom_mask);
+        shared.set("input", "keyboard", 3);
+        assert_eq!(shared.half_punct_mask(), 0);
+        assert!(import_preset("", "[punctuation]\nhalf_punct_mask=134217728\n").is_err());
+    }
+
     #[test]
     fn schema5_punctuation_rows_split_into_per_key_switches() {
         let mut doc = Document::parse("[profile]\nschema=5\ninteraction=windows\n[input]\nshift_punctuation=1\nplain_punctuation=0\nstandalone_tones=1\n").unwrap();

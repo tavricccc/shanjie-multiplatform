@@ -152,6 +152,7 @@ pub enum Op {
     /// Per-document privacy gate. The user's learning preference remains unchanged.
     Privacy(bool),
     Options(u32),
+    HalfPunct(u32),
     Mixed(bool),
     Tolerance(bool),
     MixedEnglishWriting(bool),

@@ -1082,7 +1082,7 @@ fn configure_options(s: &mut State) -> Result<()> {
     for op in option_operations(&s.prefs) {output(s.engine.perform(op))?;}
     Ok(())
 }
-pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;5] {
+pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;6] {
     let keyboard=p.number("input","keyboard",0);
     let zhuyin=keyboard<3;
     let upstream=zhuyin && keyboard!=2 && p.flag("input","upstream_english",false);
@@ -1092,6 +1092,7 @@ pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;5] {
     let windows=p.get("profile","interaction","windows")=="windows";
     let mixed=p.raw_key_mixing();
     [crate::broker::Op::Options(p.input_options() | 1 << 23 | (windows as u32) << 24),
+     crate::broker::Op::HalfPunct(p.half_punct_mask()),
      crate::broker::Op::English(english),
      crate::broker::Op::Mixed(mixed),
      crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false)),

@@ -58,6 +58,33 @@ mod windows_composition_tests {
         assert!(e.windows_phonetic_pending());
     }
     #[test]
+    fn partial_half_punctuation_keeps_width_alternatives_and_eten_readings() {
+        let mut e = engine(false, true);
+        e.set_windows_input_options((1 << 26) | (1 << 22));
+        e.set_windows_half_punct(1 << 2);
+        assert_eq!(type_keys(&mut e, "s").preedit, "ㄋ");
+        assert_eq!(e.key(Key::ch('2', MOD_SHIFT)).unwrap().preedit, "ㄋ@");
+        assert_eq!(type_keys(&mut e, "u3").preedit, "你@");
+
+        let row = e.key(Key::new(KeyKind::Down)).unwrap();
+        let index = row.candidates.iter().position(|word| word == "＠").unwrap();
+        assert_eq!(e.pick(index).unwrap().unwrap().preedit, "你＠");
+
+        e.reset(ResetMode::Discard);
+        e.key_scheme = 1;
+        assert_eq!(e.key(Key::ch('2', MOD_SHIFT)).unwrap().preedit, "@");
+
+        e.reset(ResetMode::Discard);
+        e.key_scheme = 0;
+        e.layout = Layout::Eten;
+        e.set_windows_half_punct(half_punctuation::ALL_MASK);
+        for (key, expected) in [('\'', "ㄘ"), ('=', "ㄦ")] {
+            assert_eq!(e.key(Key::ch(key, 0)).unwrap().preedit, expected);
+            e.reset(ResetMode::Discard);
+        }
+    }
+
+    #[test]
     fn shifted_english_stays_before_later_literals_and_spaces() {
         for layout in [Layout::Standard, Layout::Eten] {
             for (mixed, english) in [(false, true), (true, false)] {
@@ -333,9 +360,15 @@ impl Engine {
             self.pending_literal.clear();
         }
         if key.kind == KeyKind::Char && (plain || key.modifiers == MOD_SHIFT) {
-            let mapped = if plain { self.windows_plain_punct(key.ch) } else { self.windows_shift_punct(key.ch) };
-            // Some ETEN symbol keys also have a punctuation mapping: phonetics win.
-            if let Some(mark) = mapped.filter(|_| !plain || self.layout.symbol_of(key.ch).is_none()) {
+            let mapped = self.windows_half_punct(key).or_else(|| {
+                if plain {
+                    // Some ETEN symbol keys also have a punctuation mapping: phonetics win.
+                    self.windows_plain_punct(key.ch).filter(|_| self.layout.symbol_of(key.ch).is_none())
+                } else {
+                    self.windows_shift_punct(key.ch)
+                }
+            });
+            if let Some(mark) = mapped {
                 return self.insert_windows_literal(&mark.to_string());
             }
             if plain && self.layout.symbol_of(key.ch).is_none()

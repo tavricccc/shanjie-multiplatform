@@ -7,6 +7,15 @@ pub unsafe extern "C" fn shanjie_windows_set_input_options(engine: *mut ShanjieE
     })
 }
 #[no_mangle]
+pub unsafe extern "C" fn shanjie_windows_set_half_punct(engine: *mut ShanjieEngine, mask: u32) -> i32 {
+    guard(|| {
+        if engine.is_null() { return SHANJIE_ERR_NULL; }
+        if mask > crate::engine::half_punctuation::ALL_MASK { return SHANJIE_ERR_INVALID; }
+        unsafe { (*engine).0.set_windows_half_punct(mask); }
+        SHANJIE_OK
+    })
+}
+#[no_mangle]
 pub unsafe extern "C" fn shanjie_windows_punctuation(engine: *mut ShanjieEngine, text: *const c_char, out: *mut *mut ShanjieOutput) -> i32 {
     guard(|| {
         if !unsafe { clear_out(out) } || engine.is_null() || text.is_null() { return SHANJIE_ERR_NULL; }
@@ -28,5 +37,7 @@ mod key_options_ffi_tests {
             assert_eq!(unsafe { shanjie_windows_set_input_options(&mut engine, 1 << bit) }, SHANJIE_OK, "bit {bit}");
         }
         assert_eq!(unsafe { shanjie_windows_set_input_options(&mut engine, 1 << 27) }, SHANJIE_ERR_INVALID);
+        assert_eq!(unsafe { shanjie_windows_set_half_punct(&mut engine, 0x07ff_ffff) }, SHANJIE_OK);
+        assert_eq!(unsafe { shanjie_windows_set_half_punct(&mut engine, 1 << 27) }, SHANJIE_ERR_INVALID);
     }
 }

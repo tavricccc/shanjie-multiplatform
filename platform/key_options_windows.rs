@@ -21,6 +21,23 @@ impl Engine {
         self.zhuyin_only = flags & (1 << 25) != 0;
         self.mcbopomofo_punctuation = flags & (1 << 26) != 0;
     }
+    pub(crate) fn set_windows_half_punct(&mut self, mask: u32) {
+        self.half_punct_mask = mask;
+    }
+
+    fn windows_half_punct(&self, key: Key) -> Option<char> {
+        if self.half_punct_mask == 0 || self.ascii || key.kind != KeyKind::Char {
+            return None;
+        }
+        match key.modifiers {
+            MOD_SHIFT => half_punctuation::selected(self.half_punct_mask, key.ch, true),
+            0 if self.layout.symbol_of(key.ch).is_none() && self.layout.tone_of(key.ch).is_none() => {
+                half_punctuation::selected(self.half_punct_mask, key.ch, false)
+            }
+            _ => None,
+        }
+    }
+
     fn windows_shift_punct(&self, ch: char) -> Option<char> {
         if self.mcbopomofo_punctuation && ('2'..='8').contains(&ch) {
             return "＠＃＄％︿＆＊".chars().nth(ch as usize - '2' as usize);

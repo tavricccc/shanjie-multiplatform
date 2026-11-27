@@ -1001,6 +1001,10 @@ impl Engine {
                 (unsafe { shanjie_windows_set_input_options(self.handle, flags) } == 0)
                     .then(Snapshot::default)
             }
+            Op::HalfPunct(mask) => {
+                (unsafe { shanjie_windows_set_half_punct(self.handle, mask) } == 0)
+                    .then(Snapshot::default)
+            }
             Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) }
                 == 0)
                 .then(Snapshot::default),

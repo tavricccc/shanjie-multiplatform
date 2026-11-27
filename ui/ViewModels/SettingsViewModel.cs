@@ -96,8 +96,12 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(ReadingPanelShown)); OnPropertyChanged(nameof(ReadingPanelHelp));
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadingPanelShown))] public partial bool ReadingPanel { get; set; }
-    partial void OnKeyboardChanged(int value) => NotifyReadingPanel();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
+    partial void OnKeyboardChanged(int value)
+    {
+        NotifyReadingPanel();
+        RefreshHalfPunctKeys();
+    }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(CanCustomizeHalfPunct)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
@@ -105,6 +109,16 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
     public Models.PunctuationKey[] ShiftKeys { get; } = Models.PunctuationKey.ShiftRow();
     public Models.PunctuationKey[] PlainKeys { get; } = Models.PunctuationKey.PlainRow();
+    internal const int HalfPunctDefaultMask = 0x006099FF;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanCustomizeHalfPunct))] public partial bool HalfPunct { get; set; }
+    public bool CanCustomizeHalfPunct => IsZhuyin && HalfPunct;
+    public Models.PunctuationKey[] HalfPunctKeys { get; } = Models.PunctuationKey.HalfWidthRow();
+    private void RefreshHalfPunctKeys()
+    {
+        var eten = Keyboard == 2 || (Keyboard == 0 && !StandardInstalled && EtenInstalled);
+        HalfPunctKeys[22].Available = !eten; // unshifted =
+        HalfPunctKeys[26].Available = !eten; // unshifted apostrophe
+    }
     public bool ShiftPunctuation => ShiftKeys.Any(k => k.IsOn);
     [ObservableProperty] public partial bool StandaloneTones { get; set; }
     [ObservableProperty] public partial bool CtrlBackslash { get; set; }

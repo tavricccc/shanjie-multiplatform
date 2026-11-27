@@ -13,7 +13,7 @@ public partial class SettingsViewModel
     private string dictionaryBaseline = "";
     public SettingsViewModel()
     {
-        foreach (var key in ShiftKeys.Concat(PlainKeys))
+        foreach (var key in ShiftKeys.Concat(PlainKeys).Concat(HalfPunctKeys))
             key.PropertyChanged += (_, e) => { if (!loading && e.PropertyName == nameof(PunctuationKey.IsOn)) HasChanges = true; };
         Load(); PropertyChanged += (_, e) =>
         {
@@ -27,6 +27,7 @@ public partial class SettingsViewModel
         try {
             int previousKeyboard = Keyboard;
             StandardInstalled = (mask & 1) != 0; EtenInstalled = (mask & 2) != 0;
+            RefreshHalfPunctKeys();
             InstalledKeyboardHelp = mask switch { 1 => "本機只安裝標準注音。要改用倚天，請重新執行善解安裝程式並選擇倚天注音。", 2 => "本機只安裝倚天注音。要改用標準注音，請重新執行善解安裝程式並選擇標準注音。", 0 => "鍵盤註冊狀態不一致，請重新執行安裝以修復。", _ => "本機提供標準注音與倚天注音。" };
             if (previousKeyboard == 1 && !StandardInstalled || previousKeyboard == 2 && !EtenInstalled) { Keyboard = 0; HasChanges = true; Status = "先前的鍵盤配置尚未安裝，已改為跟隨已安裝配置；按儲存後更新偏好。"; }
         }
@@ -80,6 +81,9 @@ public partial class SettingsViewModel
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
             PunctuationLayout = profile.Read("punctuation", "style", "apple") == "mcbopomofo" ? 1 : 0;
+            HalfPunct = profile.Flag("punctuation", "half_punct", false);
+            var halfPunctMask = profile.Number("punctuation", "half_punct_mask", HalfPunctDefaultMask);
+            SetHalfPunctMask(halfPunctMask is >= 0 and <= 0x07FFFFFF ? halfPunctMask : HalfPunctDefaultMask);
             UseContext = profile.Flag("input", "context", true);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -177,12 +181,23 @@ public partial class SettingsViewModel
             ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator), ("appearance","glass_tint",(int)GlassTint)
         }) profile.Set(section, key, value);
         profile.Set("punctuation", "style", PunctuationLayout == 1 ? "mcbopomofo" : "apple");
+        profile.Set("punctuation", "half_punct", HalfPunct);
+        var halfPunctMask = 0;
+        for (int i = 0; i < HalfPunctKeys.Length; i++)
+            if (HalfPunctKeys[i].IsOn) halfPunctMask |= 1 << i;
+        profile.Set("punctuation", "half_punct_mask", halfPunctMask);
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
         profile.Set("engine", "rerank_level", RerankLevels[RerankLevel]);
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }
+    private void SetHalfPunctMask(int mask)
+    {
+        for (int i = 0; i < HalfPunctKeys.Length; i++)
+            HalfPunctKeys[i].IsOn = (mask & (1 << i)) != 0;
+    }
+    public void ResetHalfPunctuation() => SetHalfPunctMask(HalfPunctDefaultMask);
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {

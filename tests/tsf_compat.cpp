@@ -120,6 +120,24 @@ int wmain(int argc,wchar_t**argv) {
         require(store->text==expected&&compositions()==1,1180);
         down(VK_RETURN);
         require(store->text==expected&&compositions()==0,1181);
+    } else if (scenario.starts_with(L"half-punctuation-")) {
+        keyboard(0);
+        if (scenario==L"half-punctuation-eten") {
+            down(VK_OEM_7); require(store->text==L"ㄘ"&&compositions()==1,1182);
+            down(VK_ESCAPE);
+            down(VK_OEM_PLUS); require(store->text==L"ㄦ"&&compositions()==1,1183);
+        } else {
+            for (int key:{'S','U','3'}) down(key);
+            keyboard(VK_SHIFT);
+            down(scenario==L"half-punctuation-pipe"?'2':'1');
+            down('9');
+            keyboard(0);
+            down(VK_OEM_PLUS);
+            const auto expected=scenario==L"half-punctuation-pipe"?L"你@（=":L"你!（=";
+            require(store->text==expected&&compositions()==1,1184);
+            down(VK_RETURN);
+            require(store->text==expected&&compositions()==0,1185);
+        }
     } else if (scenario.starts_with(L"spacing-english")) {
         v.lVal = 0;
         require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1140);

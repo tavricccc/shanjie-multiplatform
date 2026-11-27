@@ -641,7 +641,8 @@ impl Data {
         let ascii = !mixed_letter
             && key.kind == 1
             && key.modifiers == 1
-            && !p.shift_punctuation(key.ch as u8 as char);
+            && !p.shift_punctuation(key.ch as u8 as char)
+            && shanjie_shell::half_punctuation::selected(p.half_punct_mask(), key.ch as u8 as char, true).is_none();
         if (self.state.borrow().full_width && !self.chinese()) || english || ascii {
             let Some(ch) = ascii_key(vk, flags)? else {
                 return Ok(false);
