@@ -3,7 +3,7 @@
 [善解注音](https://github.com/Nanako0129/shanjie)的 Windows 移植。輸入核心、詞庫與模型都來自上游，本專案負責平台整合，另外加了微軟注音鍵位、中英混打、雙 Ctrl 加詞與線上模型管理。
 
 - **Windows**：原生 Rust TSF 輸入法，設定程式為 WinUI 3，支援 x64 Windows（含 32 位元 App），尚不支援 ARM。此分支的原始碼版本見 [RELEASE-CHANNEL.json](RELEASE-CHANNEL.json)；下載已發布的正式版或測試版請到 [Releases](https://github.com/tavricccc/shanjie-multiplatform/releases)。
-- **上游**：使用善解 v0.8.0 發布標籤的核心與完整詞庫（`5409c526`），沿用該版指定的完整模型配套。
+- **上游核心**使用善解 `v0.9.1` 之後的主線提交 `de7d69c5`，出貨完整詞庫、詞包與上游指定的模型配套。固定提交見 [UPSTREAM.json](UPSTREAM.json)。
 - **Linux**：IBus 版停在 0.12.1，已停止維護；`linux/` 的原始碼沒有再編譯或測試。
 
 版本歷程見 [Changelog](Changelog.md)，各版說明在 [docs/releases/](docs/releases/)。

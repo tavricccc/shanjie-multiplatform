@@ -13,7 +13,8 @@ public partial class SettingsViewModel
     private string dictionaryBaseline = "";
     public SettingsViewModel()
     {
-        foreach (var key in ShiftKeys.Concat(PlainKeys)) key.PropertyChanged += (_, _) => { if (!loading) HasChanges = true; };
+        foreach (var key in ShiftKeys.Concat(PlainKeys).Concat(HalfPunctKeys))
+            key.PropertyChanged += (_, e) => { if (!loading && e.PropertyName == nameof(PunctuationKey.IsOn)) HasChanges = true; };
         Load(); PropertyChanged += (_, e) =>
         {
             if (!loading && e.PropertyName is not (nameof(Status) or nameof(HasChanges) or nameof(DraftHelp) or nameof(CandidateHelp) or nameof(ModelHelp) or nameof(ModelAdvisories))) HasChanges = true;
@@ -26,6 +27,7 @@ public partial class SettingsViewModel
         try {
             int previousKeyboard = Keyboard;
             StandardInstalled = (mask & 1) != 0; EtenInstalled = (mask & 2) != 0;
+            RefreshHalfPunctKeys();
             InstalledKeyboardHelp = mask switch { 1 => "本機只安裝標準注音。要改用倚天，請重新執行善解安裝程式並選擇倚天注音。", 2 => "本機只安裝倚天注音。要改用標準注音，請重新執行善解安裝程式並選擇標準注音。", 0 => "鍵盤註冊狀態不一致，請重新執行安裝以修復。", _ => "本機提供標準注音與倚天注音。" };
             if (previousKeyboard == 1 && !StandardInstalled || previousKeyboard == 2 && !EtenInstalled) { Keyboard = 0; HasChanges = true; Status = "先前的鍵盤配置尚未安裝，已改為跟隨已安裝配置；按儲存後更新偏好。"; }
         }
@@ -69,7 +71,7 @@ public partial class SettingsViewModel
             AnimationMode = Math.Max(0,Array.IndexOf(new[] { "system", "on", "off" },profile.Read("appearance","animation","system")));
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
+            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); MixedEnglishWriting = profile.Flag("input", "mixed_english_writing", true); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
             AddWord = profile.Flag("shortcuts", "add_word", true);
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);
@@ -78,6 +80,10 @@ public partial class SettingsViewModel
             MixedMode = profile.Flag("input", "mixed_input", false) ? 1 : profile.Flag("input", "upstream_english", false) ? 2 : 0; EnglishOverwrite = profile.Flag("input", "english_overwrite", false); EnglishReversalGuard = profile.Flag("input", "english_reversal_guard", true);
             EnglishKeyOrder = profile.Flag("input", "english_key_order", true); CjkSpacing = profile.Flag("input", "cjk_spacing", false);
             PunctuationKeepsReading = profile.Flag("input", "punctuation_keeps_reading", false);
+            PunctuationLayout = profile.Read("punctuation", "style", "apple") == "mcbopomofo" ? 1 : 0;
+            HalfPunct = profile.Flag("punctuation", "half_punct", false);
+            var halfPunctMask = profile.Number("punctuation", "half_punct_mask", HalfPunctDefaultMask);
+            SetHalfPunctMask(halfPunctMask is >= 0 and <= 0x07FFFFFF ? halfPunctMask : HalfPunctDefaultMask);
             UseContext = profile.Flag("input", "context", true);
             foreach (var key in ShiftKeys.Concat(PlainKeys)) key.IsOn = profile.Flag("punctuation", key.Key, Interaction == 1);
             StandaloneTones = profile.Flag("input", "standalone_tones", Interaction == 1);
@@ -158,7 +164,7 @@ public partial class SettingsViewModel
             ("input","chinese",InitialChinese), ("input","full_width",InitialFullWidth), ("input","caps_lock_english",CapsLockEnglish),
             ("input","space_after_commit",SpaceAfterCommit), ("input","pinyin_space_converts",PinyinSpaceConverts),
             ("input","space_commits",SpaceCommits), ("candidates","space_operates",SpaceOperates),
-            ("input","mixed_tolerance",MixedTolerance), ("candidates","reading_panel",ReadingPanel),
+            ("input","mixed_tolerance",MixedTolerance), ("input","mixed_english_writing",MixedEnglishWriting), ("candidates","reading_panel",ReadingPanel),
             ("shortcuts","add_word",AddWord), ("shortcuts","add_word_side",AddWordSide),
             ("shortcuts","add_word_shortcut",AddWordShortcut), ("shortcuts","add_word_interval",(int)AddWordInterval),
             ("input","mixed_input",MixedMode == 1), ("input","upstream_english",MixedMode == 2), ("input","english_overwrite",EnglishOverwrite), ("input","english_key_order",EnglishKeyOrder), ("input","english_reversal_guard",EnglishReversalGuard), ("input","cjk_spacing",CjkSpacing),
@@ -174,12 +180,24 @@ public partial class SettingsViewModel
             ("shortcuts","symbol_keyboard",SymbolKeyboard), ("shortcuts","ctrl_backslash",CtrlBackslash), ("shortcuts","forget_candidate",ForgetCandidate),
             ("appearance","theme",Theme), ("appearance","font_size",(int)FontSize), ("appearance","mode_indicator",ModeIndicator), ("appearance","glass_tint",(int)GlassTint)
         }) profile.Set(section, key, value);
+        profile.Set("punctuation", "style", PunctuationLayout == 1 ? "mcbopomofo" : "apple");
+        profile.Set("punctuation", "half_punct", HalfPunct);
+        var halfPunctMask = 0;
+        for (int i = 0; i < HalfPunctKeys.Length; i++)
+            if (HalfPunctKeys[i].IsOn) halfPunctMask |= 1 << i;
+        profile.Set("punctuation", "half_punct_mask", halfPunctMask);
         foreach (var key in ShiftKeys.Concat(PlainKeys)) profile.Set("punctuation", key.Key, key.IsOn);
         profile.Set("input", "escape", new[] { "staged", "clear", "ignore" }[Escape]);
         profile.Set("engine", "rerank_level", RerankLevels[RerankLevel]);
         profile.Set("candidates", "anchor", Anchor == 0 ? "right" : "left");
         profile.Set("candidates", "open", new[] { "down", "space", "both" }[Trigger]);
     }
+    private void SetHalfPunctMask(int mask)
+    {
+        for (int i = 0; i < HalfPunctKeys.Length; i++)
+            HalfPunctKeys[i].IsOn = (mask & (1 << i)) != 0;
+    }
+    public void ResetHalfPunctuation() => SetHalfPunctMask(HalfPunctDefaultMask);
     public void SetAllPunctuation(bool shift, bool on) { foreach (var key in shift ? ShiftKeys : PlainKeys) key.IsOn = on; }
     public void Save()
     {

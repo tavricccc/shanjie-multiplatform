@@ -269,8 +269,9 @@ mod windows_smart_tests {
             engine.set_windows_input_options(0);
             engine.set_mixed_input(!upstream);
             engine.set_upstream_english(upstream, false, true, true).unwrap();
+            let chatgpt = if upstream { "ChatGPT" } else { "Chatgpt" };
             for (prefix, suffix, expected) in [
-                ("C", "hatgpt", "Chatgpt"), ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"),
+                ("C", "hatgpt", chatgpt), ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"),
                 ("CP", "56", "CP值"), ("API", "lc3", "API好"), ("A", "84", "A84"),
             ] {
                 for ch in prefix.chars() {
@@ -280,6 +281,254 @@ mod windows_smart_tests {
                 assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "upstream={upstream} {prefix}+{suffix:?}");
             }
         }
+    }
+
+    #[test]
+    fn windows_shift_ascii_ends_on_enter_or_reset() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\n").unwrap());
+        for leaving in [None, Some(ResetMode::Commit), Some(ResetMode::Discard)] {
+            let mut e = Engine::with_lexicon(lex.clone(), Layout::Standard);
+            e.set_upstream_english(false, false, true, true).unwrap();
+            type_keys(&mut e, "su3");
+            assert!(e.windows_shift_mode(true).unwrap().commit.is_empty());
+            for ch in "Chatgpt".chars() {
+                e.key(Key::ch(ch, 0)).unwrap();
+            }
+            let out = if let Some(mode) = leaving {
+                e.reset(mode)
+            } else {
+                e.key(Key::new(KeyKind::Enter)).unwrap()
+            };
+            assert!(out.preedit.is_empty());
+            assert_eq!(out.commit, if leaving == Some(ResetMode::Discard) { "" } else { "你Chatgpt" });
+            assert_eq!(type_keys(&mut e, "su3").preedit, "你");
+        }
+    }
+
+    #[test]
+    fn shifted_english_applies_official_writing_under_windows_options() {
+        let lex = Arc::new(Lexicon::parse("ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄔㄣ 稱 -0.1\nㄧㄣ 因 -0.1\n").unwrap());
+        let type_word = |engine: &mut Engine, word: &str| {
+            for ch in word.chars() {
+                let mods = if ch.is_ascii_uppercase() { MOD_SHIFT } else { 0 };
+                engine.key(Key::ch(ch.to_ascii_lowercase(), mods)).unwrap();
+            }
+        };
+
+        // Upstream English under Windows input options applies canonical spellings on Enter,
+        // Space, focus-loss commit, and tone-key split into Chinese, while keeping intentional casing.
+        let mut engine = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        engine.set_windows_input_options(0);
+        engine.set_mixed_input(false);
+        engine.set_upstream_english(true, false, true, true).unwrap();
+
+        for (typed, want) in [("Chatgpt", "ChatGPT"), ("Github", "GitHub"), ("Macos", "macOS")] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, want, "Space {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Space+Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.reset(ResetMode::Commit).commit, want, "ResetCommit {typed}");
+
+            type_word(&mut engine, typed);
+            type_keys(&mut engine, "su3");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("{want}你"), "Split {typed}");
+        }
+
+        // Official short acronyms whose tails look like 1st-tone readings stay English on Space.
+        for (typed, want) in [("Gpt", "GPT"), ("Cpu", "CPU")] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, want, "Space {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Space+Enter {typed}");
+        }
+
+        // Deliberate non-plain casings remain verbatim.
+        for verbatim in ["CHATGPT", "CHatgpt", "ChatGpt", "GithuB", "MacOs", "MacOS", "GITHUB", "MACOS", "Rust"] {
+            type_word(&mut engine, verbatim);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, verbatim, "verbatim {verbatim}");
+        }
+        // Unfinished reading followed by mid-word Shift keeps intentional casing.
+        engine.key(Key::ch('c', 0)).unwrap();
+        engine.key(Key::ch('h', MOD_SHIFT)).unwrap();
+        type_keys(&mut engine, "atgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "cHatgpt");
+
+        // Backspace after table-canonicalized token reopens raw typed letters; user-picked casing sticks.
+        type_word(&mut engine, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, "ChatGPT");
+        assert_eq!(engine.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "Chatgp");
+        assert_eq!(type_keys(&mut engine, "t ").preedit, "ChatGPT");
+        let list = engine.key(Key::new(KeyKind::Down)).unwrap().candidates;
+        assert_eq!(list, vec!["ChatGPT", "chatgpt", "Chatgpt", "CHATGPT"]);
+        assert_eq!(engine.pick(2).unwrap().unwrap().preedit, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Backspace)).unwrap().preedit, "Chatgp");
+        assert_eq!(type_keys(&mut engine, "t ").preedit, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "Chatgpt");
+
+        // ASCII state keeps typed casing verbatim without touching later Chinese-mode runs.
+        engine.set_ascii(true).unwrap();
+        for typed in ["Chatgpt", "Github", "Macos"] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, typed, "ascii {typed}");
+        }
+        engine.set_ascii(false).unwrap();
+        type_word(&mut engine, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "ChatGPT");
+
+        // Raw-key mixing keeps Shift-typed casing verbatim by default.
+        let mut mixed = Engine::with_lexicon(lex, Layout::Standard);
+        mixed.set_windows_input_options(0);
+        mixed.set_mixed_input(true);
+        mixed.set_upstream_english(false, false, true, true).unwrap();
+        for typed in ["Chatgpt", "Github", "Macos"] {
+            type_word(&mut mixed, typed);
+            assert_eq!(mixed.key(Key::new(KeyKind::Enter)).unwrap().commit, typed, "mixed {typed}");
+        }
+    }
+
+    #[test]
+    fn raw_key_mixing_official_writing_switch_respects_default_and_preserves_behavior() {
+        let lex = Arc::new(
+            Lexicon::parse(
+                "ㄋㄧˇ 你 -0.1\nㄏㄠˇ 好 -0.1\nㄎㄞ 開 -0.1\nㄕˋ 是 -0.1\nㄓˊ 值 -0.1\n\
+                 ㄔㄣ 稱 -0.1\nㄧㄣ 因 -0.1\nㄇㄛ 摸 -0.1\nㄧㄛ 唷 -0.1\nㄕㄨㄛ 說 -0.1\n\
+                 ㄨㄛˇ 我 -0.1\n",
+            )
+            .unwrap(),
+        );
+        let type_word = |engine: &mut Engine, word: &str| {
+            for ch in word.chars() {
+                let mods = if ch.is_ascii_uppercase() { MOD_SHIFT } else { 0 };
+                engine.key(Key::ch(ch.to_ascii_lowercase(), mods)).unwrap();
+            }
+        };
+
+        // Default off: existing raw-key mixing casing stays unchanged.
+        let mut off = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        off.set_windows_input_options(0);
+        off.set_mixed_input(true);
+        for typed in ["Chatgpt", "chatgpt", "Github", "Macos"] {
+            type_word(&mut off, typed);
+            assert_eq!(off.key(Key::new(KeyKind::Enter)).unwrap().commit, typed, "off Enter {typed}");
+            type_word(&mut off, typed);
+            assert_eq!(off.reset(ResetMode::Commit).commit, typed, "off ResetCommit {typed}");
+        }
+
+        // Enabled on: applies upstream official spelling table while preserving raw-key mixing rules.
+        let mut engine = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        engine.set_windows_input_options(1 << 20);
+        engine.set_mixed_input(true);
+        engine.set_mixed_english_writing(true);
+
+        for (typed, want) in [
+            ("Chatgpt", "ChatGPT"), ("chatgpt", "ChatGPT"),
+            ("Github", "GitHub"), ("github", "GitHub"),
+            ("Macos", "macOS"), ("macos", "macOS"),
+        ] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, format!("{want} "), "Space {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("{want} "), "Space+Enter {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.reset(ResetMode::Commit).commit, want, "ResetCommit {typed}");
+
+            type_word(&mut engine, typed);
+            assert_eq!(engine.insert_windows_literal("，").unwrap().preedit, format!("{want}，"), "Punct {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("{want}，"), "Punct+Enter {typed}");
+
+            type_word(&mut engine, typed);
+            type_keys(&mut engine, "su3");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, format!("{want}你"), "OrderedZh {typed}");
+        }
+
+        // Lowercase official word followed by reordered Chinese reading still splits and canonicalizes.
+        type_keys(&mut engine, "chatgptus3");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "ChatGPT你");
+
+        // Official table words whose tails match 1st-tone readings stay English on Space.
+        for (typed, want) in [
+            ("Openai", "OpenAI "), ("openai", "OpenAI "),
+            ("Comfyui", "ComfyUI "), ("Gpt", "GPT "), ("Cpu", "CPU "), ("gui", "GUI "),
+        ] {
+            type_word(&mut engine, typed);
+            assert_eq!(engine.key(Key::new(KeyKind::Space)).unwrap().preedit, want, "TableSpace {typed}");
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "TableSpace+Enter {typed}");
+        }
+
+        // Deliberate non-plain casings and non-table words remain verbatim.
+        for verbatim in ["CHATGPT", "CHatgpt", "ChatGpt", "cHatgpt", "GithuB", "MacOs", "MacOS", "GITHUB", "MACOS", "Rust", "rust"] {
+            type_word(&mut engine, verbatim);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, verbatim, "verbatim {verbatim}");
+        }
+
+        // Duplicate-key tolerance, Shift-prefix Chinese resume, early tone, and reordered first tone stay intact.
+        engine.set_mixed_tolerance(true);
+        assert_eq!(type_keys(&mut engine, "ccl3").preedit, "好");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "好");
+        assert_eq!(type_keys(&mut engine, "ssu3").preedit, "你");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "你");
+        assert_eq!(type_keys(&mut engine, "css ").preedit, "CSS ");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "CSS ");
+        assert_eq!(type_keys(&mut engine, "jig ").preedit, "說");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "說");
+        assert_eq!(type_keys(&mut engine, "s3u").preedit, "s3u");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "你");
+        for (prefix, suffix, expected) in [
+            ("AI", "d9 ", "AI開"), ("AI", "g4", "AI是"), ("CP", "56", "CP值"),
+            ("API", "lc3", "API好"), ("A", "84", "A84"),
+        ] {
+            for ch in prefix.chars() {
+                engine.key(Key::ch(ch.to_ascii_lowercase(), MOD_SHIFT)).unwrap();
+            }
+            type_keys(&mut engine, suffix);
+            assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, expected, "{prefix}+{suffix}");
+        }
+
+        // Caps Lock (caps_lock_english=0): all-caps stays verbatim, Shift-lowercase canonicalizes.
+        for ch in "CHATGPT".chars() {
+            engine.key_with_latin(Key::ch(ch.to_ascii_lowercase(), 0), Some(ch)).unwrap();
+        }
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "CHATGPT");
+        for ch in "gemini".chars() {
+            engine.key_with_latin(Key::ch(ch, MOD_SHIFT), Some(ch)).unwrap();
+        }
+        for ch in "CL3".chars() {
+            let lower = ch.to_ascii_lowercase();
+            engine.key_with_latin(Key::ch(lower, 0), ch.is_ascii_alphabetic().then_some(ch)).unwrap();
+        }
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "Gemini好");
+
+        // ASCII state never rewrites.
+        engine.set_ascii(true).unwrap();
+        type_word(&mut engine, "Chatgpt");
+        assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "Chatgpt");
+        engine.set_ascii(false).unwrap();
+
+        // Setting mixed_english_writing while raw-key mixing is off does not leak into non-mixed mode.
+        let mut plain = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        plain.set_windows_input_options(0);
+        plain.set_mixed_input(false);
+        plain.set_mixed_english_writing(true);
+        assert_eq!(plain.mixed_english_writing("chatgpt"), "chatgpt");
+        assert!(!plain.windows_english_word("chatgpt"));
+
+        // Eten raw-key mixing works with the switch too.
+        let mut eten = Engine::with_lexicon(lex, Layout::Eten);
+        eten.set_windows_input_options(0);
+        eten.set_mixed_input(true);
+        eten.set_mixed_english_writing(true);
+        for (typed, want) in [("Chatgpt", "ChatGPT"), ("Github", "GitHub"), ("Macos", "macOS"), ("CHATGPT", "CHATGPT")] {
+            type_word(&mut eten, typed);
+            assert_eq!(eten.key(Key::new(KeyKind::Enter)).unwrap().commit, want, "eten {typed}");
+        }
+        assert_eq!(type_keys(&mut eten, "ox3").preedit, "我");
+        assert_eq!(eten.key(Key::new(KeyKind::Enter)).unwrap().commit, "我");
     }
 
     #[test]
@@ -342,6 +591,20 @@ impl Engine {
         self.mixed_input = mixed;
     }
     pub fn set_mixed_tolerance(&mut self, enabled: bool) { self.mixed_tolerance = enabled; }
+    pub fn set_mixed_english_writing(&mut self, enabled: bool) { self.mixed_english_writing = enabled; }
+
+    fn mixed_english_writing(&self, raw: &str) -> String {
+        if self.mixed_input && self.mixed_english_writing && !self.ascii {
+            english_writing(raw)
+        } else {
+            raw.to_string()
+        }
+    }
+
+    fn windows_english_word(&self, lower: &str) -> bool {
+        english_word(lower)
+            || ((self.english || (self.mixed_input && self.mixed_english_writing)) && english_table().contains_key(lower))
+    }
 
     fn has_mixed_han_entry(&self, reading: &str, tone: usize) -> bool {
         let mut syllable = reading.to_string();
@@ -366,7 +629,7 @@ impl Engine {
         let reading = self.shifted_reading(
             &self.run[start..], tone, self.english_reversal_guard || self.mixed_input,
         )?;
-        (!english_word(&self.run.to_ascii_lowercase()))
+        (!self.windows_english_word(&self.run.to_ascii_lowercase()))
             .then(|| (start, format!("{reading}{}", TONE_MARKS[tone])))
     }
 
@@ -407,7 +670,7 @@ impl Engine {
     fn corrected_mixed_keys(&self, raw: &str, tone: usize) -> Option<String> {
         if !self.mixed_tolerance || !(2..=4).contains(&raw.len())
             || !raw.is_ascii() || raw.chars().any(|c| c.is_ascii_uppercase())
-            || english_word(raw) { return None; }
+            || self.windows_english_word(raw) { return None; }
         let mut choices = std::collections::BTreeSet::new();
         for index in 1..raw.len() {
             if raw.as_bytes()[index] != raw.as_bytes()[index-1] { continue; }
@@ -465,12 +728,13 @@ impl Engine {
     }
 
     fn mixed_text(&mut self, text: &str) -> Result<Output, EngineError> {
+        let written = self.mixed_english_writing(text);
         self.clear_pend();
         self.clear_pred();
         self.cands = None;
         let mut out = self.handled()?;
         let mut committed = String::new();
-        for ch in text.chars() {
+        for ch in written.chars() {
             out = self.insert_token(format!("{PUNCT_PREFIX}{ch}"), Some(ch.to_string()), None)?;
             committed.push_str(&out.commit);
         }
@@ -513,7 +777,7 @@ impl Engine {
         } else {
             None
         };
-        if let Some(tone) = tone.filter(|_| shifted_end > 0 && !english_word(&raw.to_ascii_lowercase())) {
+        if let Some(tone) = tone.filter(|_| shifted_end > 0 && !self.windows_english_word(&raw.to_ascii_lowercase())) {
             let (head, tail) = raw.split_at(shifted_end);
             if let Some(reading) = self.shifted_reading(tail, tone, true) {
                 let prefix = self.mixed_text(head)?.commit;
@@ -550,7 +814,7 @@ impl Engine {
                     return Ok(out);
                 }
             }
-            if (key.kind != KeyKind::Space || !english_word(&raw.to_ascii_lowercase()))
+            if (key.kind != KeyKind::Space || !self.windows_english_word(&raw.to_ascii_lowercase()))
                 && !raw.bytes().all(|c| c.is_ascii_digit() || c == b'.')
             {
                 // Hard boundary: after an incomplete literal+tone fragment (e.g. w4 + u0r3) or an
@@ -592,7 +856,7 @@ impl Engine {
                     }
                     if key.kind == KeyKind::Space
                         && (explicit_english
-                            || (!english_word(&word.to_ascii_lowercase())
+                            || (!self.windows_english_word(&word.to_ascii_lowercase())
                                 && tail.chars().all(|ch| ch.is_ascii_alphabetic())))
                     {
                         continue;
@@ -614,7 +878,7 @@ impl Engine {
                 if key.kind != KeyKind::Space {
                     for split in (start_split..raw.len()).rev() {
                         let (word, tail) = raw.split_at(split);
-                        if tail.chars().count() < 2 || !english_word(&word.to_ascii_lowercase()) {
+                        if tail.chars().count() < 2 || !self.windows_english_word(&word.to_ascii_lowercase()) {
                             continue;
                         }
                         if let Some(reading) = self
@@ -660,6 +924,30 @@ impl Engine {
         Ok(out)
     }
 
+    fn ascii_on(&self) -> bool {
+        !self.abbr && self.layout == Layout::Standard
+    }
+
+    pub fn windows_shift_mode(&mut self, to_english: bool) -> Result<Output, EngineError> {
+        if !to_english && self.windows_shift_ascii {
+            self.windows_shift_ascii = false;
+            return self.set_ascii(false);
+        }
+        if to_english && !self.english && !self.mixed_input && !self.zhuyin_only {
+            self.windows_raw.clear();
+            if self.ascii_on() {
+                let out = self.set_ascii(true)?;
+                // No active text means the host can type English directly.
+                self.windows_shift_ascii = !out.preedit.is_empty();
+                self.ascii = self.windows_shift_ascii;
+                return Ok(out);
+            }
+            // CommitFinished from upstream #122, using the Windows reset path.
+            self.clear_pend();
+        }
+        Ok(self.reset(ResetMode::Commit))
+    }
+
     /// The digit of a run that is one buffered key still shown as an unfinished reading (Windows option, upstream shows the reading).
     fn lone_digit(&self) -> Option<char> {
         let run = self.drun.as_ref()?;
@@ -679,7 +967,7 @@ impl Engine {
     }
 
     fn windows_keep_run_writing(&self) -> bool {
-        self.windows_shifted_boundaries && !self.run_rev
+        !self.english && !(self.mixed_input && self.mixed_english_writing) && self.windows_shifted_boundaries && !self.run_rev
             && self.run.bytes().zip(&self.run_shifted).find(|(_, shifted)| **shifted)
                 .is_some_and(|(letter, _)| letter.is_ascii_uppercase())
     }
@@ -725,7 +1013,7 @@ impl Engine {
             let mut commit = if head.is_empty() {
                 String::new()
             } else {
-                let writing = if verbatim || self.mixed_input { head.clone() } else { english_writing(&head) };
+                let writing = if verbatim || (self.mixed_input && !self.mixed_english_writing) { head.clone() } else { english_writing(&head) };
                 self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
             };
             self.pred_dirty = true;
@@ -749,7 +1037,7 @@ impl Engine {
                 let head: String = chars[..split_at].iter().collect();
                 if split_at > 0
                     && split_at != unshifted_start
-                    && !english_word(&head.to_ascii_lowercase())
+                    && !self.windows_english_word(&head.to_ascii_lowercase())
                 {
                     continue;
                 }
@@ -768,7 +1056,7 @@ impl Engine {
                     let mut commit = if head.is_empty() {
                         String::new()
                     } else {
-                        let writing = if verbatim || self.mixed_input { head.clone() } else { english_writing(&head) };
+                        let writing = if verbatim || (self.mixed_input && !self.mixed_english_writing) { head.clone() } else { english_writing(&head) };
                         self.put_english(format!("{PUNCT_PREFIX}{head}"), writing, None)?
                     };
                     self.pred_dirty = true;
@@ -795,6 +1083,14 @@ impl Engine {
         if !std::mem::take(&mut self.left_fresh) && self.composition_empty()
             && self.mixed_raw.is_empty() && self.pending_literal.is_empty() {
             self.clear_left();
+        }
+        if self.windows_shift_ascii {
+            let out = self.key_original(key)?;
+            if out.preedit.is_empty() {
+                self.windows_shift_ascii = false;
+                self.ascii = false;
+            }
+            return Ok(out);
         }
         // The explicit upstream Microsoft scheme owns its key rules. A window
         // keeps the scheme it opened with even if the setting changes meanwhile.

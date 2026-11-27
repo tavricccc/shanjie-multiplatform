@@ -60,7 +60,146 @@ int wmain(int argc,wchar_t**argv) {
     auto down=[&](int key){BOOL test=FALSE,eaten=FALSE;auto f=flags(key,false);require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),key,f,&test)),917);if(test)require(SUCCEEDED(keys->OnKeyDown(context.Get(),key,f,&eaten)),918);};
     auto up=[&](int key){BOOL e=FALSE;auto f=flags(key,true);require(SUCCEEDED(keys->OnTestKeyUp(context.Get(),key,f,&e)),919);require(SUCCEEDED(keys->OnKeyUp(context.Get(),key,f,&e)),920);};
     auto compositions=[&]{ComPtr<ITfContextComposition> c;context.As(&c);ComPtr<IEnumITfCompositionView> e;c->EnumCompositions(&e);ComPtr<ITfCompositionView> first;ULONG count=0;e->Next(1,&first,&count);return count;};
-    if(scenario==L"privacy-disabled") {
+    if(scenario.starts_with(L"shift-retain-") || scenario==L"shift-finish-eten") {
+        auto tapShift=[&]{
+            keyboard(VK_RSHIFT);down(VK_RSHIFT);
+            keyboard(0);up(VK_RSHIFT);pump();
+        };
+        keyboard(0);
+        if(scenario==L"shift-finish-eten") {
+            for(int key:{'N','E','3','N'})down(key);
+            require(store->text.starts_with(L"你")&&store->text!=L"你"&&compositions()==1,1160);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==0,1161);
+            tapShift();
+            down('N');require(compositions()==1,1162);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==0,1163);
+        } else {
+            for(int key:{'S','U','3','2','8'})down(key);
+            require(store->text.starts_with(L"你")&&store->text!=L"你"&&compositions()==1,1164);
+            tapShift();
+            require(!chinese()&&store->text==L"你"&&compositions()==1,1165);
+            keyboard(VK_SHIFT);down('G');keyboard(0);
+            for(int key:{'I','T','H','U','B','2'})down(key);
+            keyboard(VK_SHIFT);down('1');keyboard(0);
+            require(store->text==L"你Github2!"&&compositions()==1,1166);
+            keyboard(VK_LCONTROL);
+            BOOL offered=TRUE;
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(),'A',flags('A',false),&offered))&&!offered,1167);
+            keyboard(0);tapShift();
+            require(chinese()&&store->text==L"你Github2!"&&compositions()==1,1168);
+            for(int key:{'C','L','3'})down(key);
+            require(store->text==L"你Github2!好"&&compositions()==1,1169);
+            down(VK_RETURN);
+            auto expected=scenario==L"shift-retain-shanjie"?L"你 Github2!好":L"你Github2!好";
+            require(store->text==expected&&compositions()==0,1170);
+
+            store->externalText(L"");
+            down('2');down('8');require(compositions()==1,1171);
+            tapShift();
+            require(!chinese()&&store->text.empty()&&compositions()==0,1172);
+            tapShift();
+            for(int key:{'S','U','3'})down(key);
+            tapShift();down('B');down(VK_RETURN);
+            expected=scenario==L"shift-retain-shanjie"?L"你 b":L"你b";
+            require(!chinese()&&store->text==expected&&compositions()==0,1173);
+            BOOL eaten=FALSE;
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(),'A',flags('A',false),&eaten))
+                &&!eaten&&store->text==expected&&compositions()==0,1174);
+        }
+    } else if (scenario==L"punctuation-mcbopomofo") {
+        keyboard(VK_SHIFT);
+        for (int key='2';key<='8';++key) down(key);
+        down(VK_OEM_7);
+        down('1');
+        keyboard(0);
+        down(VK_OEM_7);
+        down(VK_OEM_5);
+        constexpr auto expected=L"＠＃＄％︿＆＊；！、＼";
+        require(store->text==expected&&compositions()==1,1180);
+        down(VK_RETURN);
+        require(store->text==expected&&compositions()==0,1181);
+    } else if (scenario.starts_with(L"half-punctuation-")) {
+        keyboard(0);
+        if (scenario==L"half-punctuation-eten") {
+            down(VK_OEM_7); require(store->text==L"ㄘ"&&compositions()==1,1182);
+            down(VK_ESCAPE);
+            down(VK_OEM_PLUS); require(store->text==L"ㄦ"&&compositions()==1,1183);
+        } else {
+            for (int key:{'S','U','3'}) down(key);
+            keyboard(VK_SHIFT);
+            down(scenario==L"half-punctuation-pipe"?'2':'1');
+            down('9');
+            keyboard(0);
+            down(VK_OEM_PLUS);
+            const auto expected=scenario==L"half-punctuation-pipe"?L"你@（=":L"你!（=";
+            require(store->text==expected&&compositions()==1,1184);
+            down(VK_RETURN);
+            require(store->text==expected&&compositions()==0,1185);
+        }
+    } else if (scenario.starts_with(L"spacing-english")) {
+        v.lVal = 0;
+        require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1140);
+        store->externalText(L"漢");
+        store->privacyBoundary = 1;
+        keyboard(0);
+        BOOL offered = FALSE, eaten = FALSE;
+        require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'A', flags('A', false), &offered)), 1141);
+        require(bool(offered) == (scenario == L"spacing-english"), 1142);
+        require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'A', flags('A', false), &eaten)), 1143);
+        if (scenario == L"spacing-english") {
+            require(eaten && store->text == L"漢 a" && store->prefixReadsBeforeWrite > 0, 1144);
+            require(compositions() == 0 && store->selection.acpStart == 3, 1145);
+            auto reads = store->prefixReads;
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'B', flags('B', false), &offered)) && !offered, 1146);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'B', flags('B', false), &eaten)) && !eaten, 1147);
+            require(store->prefixReads == reads && store->text == L"漢 a", 1148);
+
+            // Simulate host insertion followed by movement back behind the Han character.
+            store->externalText(L"漢 ab");
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), VK_LEFT, flags(VK_LEFT, false), &offered)) && !offered, 1149);
+            store->externalCaret(1);
+            keyboard(VK_SHIFT);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'C', flags('C', false), &eaten)) && eaten, 1150);
+            require(store->text == L"漢 C ab" && compositions() == 0, 1151);
+
+            // Caps Lock toggled on in English mode still inserts the CJK space after a Han character.
+            store->externalCaret(1);
+            BYTE caps[256]{};
+            caps[VK_CAPITAL] = 0x01;
+            require(SetKeyboardState(caps), 1157);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'F', flags('F', false), &offered)) && offered, 1158);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'F', flags('F', false), &eaten)) && eaten, 1159);
+            require(store->text == L"漢 F C ab" && compositions() == 0, 1182);
+
+            // Direct host compartment switch to Chinese and back clears English continuation after Chinese commit.
+            keyboard(0);
+            v.lVal = 1;
+            require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && chinese(), 1183);
+            for (int key : {int('S'), int('U'), int('3'), VK_RETURN}) down(key);
+            require(store->text == L"漢 F 你 C ab" && compositions() == 0, 1184);
+            v.lVal = 0;
+            require(SUCCEEDED(mode->SetValue(serviceClient, &v)) && !chinese(), 1185);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'G', flags('G', false), &offered)) && offered, 1186);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'G', flags('G', false), &eaten)) && eaten, 1187);
+            require(store->text == L"漢 F 你 g C ab" && compositions() == 0, 1188);
+
+            // Modified keys still reach the host, including Ctrl+Alt and the next key in a private field.
+            keyboard(VK_CONTROL, VK_MENU);
+            require(SUCCEEDED(keys->OnTestKeyDown(context.Get(), 'D', flags('D', false), &offered)) && !offered, 1152);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'D', flags('D', false), &eaten)) && !eaten, 1153);
+            store->scopeChanged(IS_PASSWORD);
+            store->externalCaret(1);
+            pump();
+            reads = store->prefixReads;
+            keyboard(0);
+            require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'E', flags('E', false), &eaten)) && !eaten, 1154);
+            require(store->text == L"漢 F 你 g C ab" && store->prefixReads == reads, 1155);
+        } else {
+            require(!eaten && store->text == L"漢" && store->prefixReads == 0, 1156);
+        }
+    } else if(scenario==L"privacy-disabled") {
         ComPtr<ITfCompartmentMgr> cm;ComPtr<ITfCompartment> disabled;require(SUCCEEDED(context.As(&cm))&&SUCCEEDED(cm->GetCompartment(GUID_COMPARTMENT_KEYBOARD_DISABLED,&disabled)),1132);
         require(SUCCEEDED(disabled->SetValue(client,&v)),1133);
         keyboard(0);for(int key:{int('S'),VK_RETURN,VK_TAB,VK_DOWN}){
@@ -148,6 +287,14 @@ int wmain(int argc,wchar_t**argv) {
             require(store->text==L"你"&&compositions()==0,1007);
             keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(!chinese(),1008);
             keyboard(VK_RSHIFT);down(VK_RSHIFT);keyboard(0);up(VK_RSHIFT);require(chinese(),1009);
+            if (scenario == L"status-writable-disjoint") {
+                store->setReadOnly(true);
+                require(SUCCEEDED(context->GetStatus(&status)) && (status.dwDynamicFlags & TF_SD_READONLY), 1137);
+                // A host may deliver OnKeyDown without first probing the key.
+                BOOL eaten = TRUE;
+                require(SUCCEEDED(keys->OnKeyDown(context.Get(), 'S', flags('S', false), &eaten)) && !eaten, 1138);
+                require(store->text == L"你" && compositions() == 0, 1139);
+            }
         }
     } else if(scenario.starts_with(L"shift-")) {
         int side=scenario==L"shift-left"?VK_LSHIFT:VK_RSHIFT;

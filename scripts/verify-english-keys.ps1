@@ -43,11 +43,14 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
   foreach($case in $cases){
    if($Scenarios -and $case[1] -notin $Scenarios){continue}
    if($PSBoundParameters.ContainsKey('MixedModes') -and $case[0] -notin $MixedModes){continue}
-   $folder=Join-Path $out "mode$($case[0])-layout$($case[2])-$($case[1])";if(Test-Path $folder){throw 'Use a fresh result directory'}
+   $mixedWriting=if($case.Count -gt 4){$case[4]}else{1}
+   $suffix=if($case.Count -gt 4){if($mixedWriting){'-official-writing'}else{'-verbatim-writing'}}else{''}
+   $folder=Join-Path $out "mode$($case[0])-layout$($case[2])-$($case[1])$suffix";if(Test-Path $folder){throw 'Use a fresh result directory'}
    New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
    $preset=if($case[1] -eq 'mixed-words-shanjie'){'shanjie'}else{'windows'}
    $text=(Get-Content "$root/profiles/$preset.ini" -Raw) -replace '(?m)^learning=.*','learning=0' -replace '(?m)^keyboard=.*',"keyboard=$($case[2])"
    $text=$text -replace '(?m)^mixed_input=.*',"mixed_input=$([int](($case[0]-band 1)-ne 0))" -replace '(?m)^enter_to_cursor=.*',"enter_to_cursor=$($case[3])"
+   $text=$text -replace '(?m)^mixed_english_writing=.*',"mixed_english_writing=$mixedWriting"
    $text=$text -replace '(?m)^upstream_english=.*',"upstream_english=$([int](($case[0]-band 2)-ne 0))" -replace '(?m)^caps_lock_english=.*','caps_lock_english=0' -replace '(?m)^right_action=.*','right_action=none'
    $text=$text -replace '(?m)^standalone_tones=.*',"standalone_tones=$([int]($case[1] -in 'standalone-tones','standalone-tones-shanjie'))"
    if($case[1] -eq 'standalone-tones-shanjie'){$text=$text -replace '(?m)^interaction=.*','interaction=shanjie'}
@@ -66,7 +69,7 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
    catch{Complete-TestStage -Stage $start -Status 'failed' -Details @{architecture=$arch;profile="$folder/profile"} -ErrorMessage $_.Exception.Message;throw}
    try{
     Wait-TestCoreReady -CorePath "$payload/tools/shanjie-core.exe" -OutputDirectory $folder | Out-Null
-    Invoke-Timed -Name "English-key regression ($arch $($case[1]))" -Category 'english.keys' -Details @{architecture=$arch;scenario=$case[1];mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3]} -Action { & $exe "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"} }
+    Invoke-Timed -Name "English-key regression ($arch $($case[1]))" -Category 'english.keys' -Details @{architecture=$arch;scenario=$case[1];mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3];mixed_english_writing=$mixedWriting} -Action { & $exe "$payload/$arch/Shanjie.dll" $case[1] *> "$folder/result.log";if($LASTEXITCODE){throw "Feature failed: $arch $($case -join ',') ($folder/result.log)"} }
     Write-Output "PASS $arch $($case -join ',')"
    } finally {
     $stopStage=Start-TestStage -Name "Stop English-key core ($arch $($case[1]))" -Category 'core.lifecycle'

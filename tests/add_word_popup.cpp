@@ -89,10 +89,24 @@ int wmain(int argc,wchar_t** argv) {
     down(VK_RETURN);wait([&]{return controlText(GetDlgItem(popup,5)).find(L"內建詞庫：已有同詞同讀音")!=std::wstring::npos;},761);
     require(IsWindowVisible(popup),762);down(VK_RETURN);wait([&]{return !IsWindowVisible(popup);},745);
     require(store->text==L"回家"&&store->selection.acpStart==0&&store->selection.acpEnd==2,746);
-    wchar_t local[32768];GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);auto folder=std::filesystem::path(local)/L"Shanjie";
-    // Hiding the popup precedes the asynchronous dictionary write. Keep the
-    // content assertion, but wait for persistence rather than window state.
-    wait([&]{for(auto& file:std::filesystem::directory_iterator(folder)){if(file.path().filename().wstring().starts_with(L"dictionary-")){std::ifstream in(file.path(),std::ios::binary);std::string s((std::istreambuf_iterator<char>(in)),{});if(s.find("ㄏㄨㄟˊ-ㄐㄧㄚ\t回家")!=std::string::npos)return true;}}return false;},747);
+    wchar_t local[32768];
+    GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+    auto folder=(std::filesystem::path(local)/L"Shanjie").make_preferred();
+    // The isolated result directory plus a hashed dictionary name can exceed MAX_PATH.
+    const auto& path=folder.native();
+    if(!path.starts_with(LR"(\\?\)")){
+        folder=path.starts_with(LR"(\\)") ? LR"(\\?\UNC\)" + path.substr(2) : LR"(\\?\)" + path;
+    }
+    // Hiding the popup precedes the asynchronous dictionary write.
+    wait([&]{
+        for(const auto& file:std::filesystem::directory_iterator(folder)){
+            if(!file.path().filename().native().starts_with(L"dictionary-")) continue;
+            std::ifstream in(file.path(),std::ios::binary);
+            const std::string contents((std::istreambuf_iterator<char>(in)),{});
+            if(contents.find("ㄏㄨㄟˊ-ㄐㄧㄚ\t回家")!=std::string::npos) return true;
+        }
+        return false;
+    },747);
     doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel());},748);down(VK_ESCAPE);wait([&]{return !IsWindowVisible(panel());},749);
     store->text=L"龘龘龘龘龘龘龘龘";store->selection.acpStart=0;store->selection.acpEnd=8;
     doubleCtrl();wait([&]{return panel()&&IsWindowVisible(panel())&&controlText(GetDlgItem(panel(),5)).find(L"目前模型：無完整詞條")!=std::wstring::npos;},764);

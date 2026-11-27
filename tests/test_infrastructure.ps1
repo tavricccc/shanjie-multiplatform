@@ -55,7 +55,9 @@ foreach($badRows in @(@{rows=@($ciRows[0..3])},@{rows=@($ciRows)+@([pscustomobje
 }
 
 $english=Get-EnglishKeyCases
-Assert-Check ($english.Count -eq 35 -and @($english | Where-Object {$_[1] -eq 'shift'}).Count -eq 2) 'Preserve the existing English combinations and both mixed-word interaction cases'
+$verbatimWritingCases=@($english | Where-Object {$_.Count -gt 4 -and $_[4] -eq 0})
+Assert-Check ($english.Count -eq 37 -and @($english | Where-Object {$_[1] -eq 'shift' -and $_.Count -eq 4}).Count -eq 2) 'Preserve the existing English combinations'
+Assert-Check ($verbatimWritingCases.Count -eq 2 -and @($verbatimWritingCases | Where-Object {$_[0] -eq 1 -and $_[2] -eq 1}).Count -eq 2 -and @(Compare-Object @('shift','shift-caps-zh') @($verbatimWritingCases | ForEach-Object {$_[1]})).Count -eq 0) 'Exercise official-writing opt-out in both raw-key Shift regressions'
 foreach($keyboard in 1,2) {
     $submissionCases=Get-SubmissionCases $keyboard
     Assert-Check ($submissionCases.Count -eq $(if($keyboard -eq 1){66}else{30})) 'Preserve existing submission combinations and cover both interactions in the async lock regression'

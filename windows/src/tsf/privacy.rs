@@ -9,6 +9,16 @@ fn app_allows_learning(name: Option<&str>) -> bool {
         .iter().any(|excluded| name.eq_ignore_ascii_case(excluded))
 }
 
+pub(super) fn app_allows_ascii_spacing(name: Option<&str>) -> bool {
+    app_allows_learning(name) && ![
+        "cmd.exe", "powershell.exe", "pwsh.exe", "conhost.exe", "openconsole.exe",
+        "windowsterminal.exe", "windowsterminalpreview.exe", "mintty.exe",
+        "code.exe", "code - insiders.exe", "cursor.exe", "zed.exe", "gvim.exe",
+        "obsidian.exe", "idea64.exe", "clion64.exe", "pycharm64.exe", "webstorm64.exe",
+        "rider64.exe", "phpstorm64.exe", "goland64.exe", "rubymine64.exe", "datagrip64.exe",
+    ].iter().any(|excluded| name.is_some_and(|name| name.eq_ignore_ascii_case(excluded)))
+}
+
 impl Data {
     pub(super) fn update_privacy(&self, context: &ITfContext, cookie: u32) -> Result<()> {
         let app = std::env::current_exe().ok();
@@ -28,7 +38,10 @@ impl Data {
         };
         let mut s = self.state.borrow_mut();
         s.engine.set_privacy_allowed(allowed).ok_or(E_FAIL)?;
-        if !allowed { s.spacing_prev = None; }
+        if !allowed {
+            s.spacing_prev = None;
+            self.ascii_spacing_continuation.set(false);
+        }
         // The core closed its candidates with the pause; do not leave the old list on screen.
         if previous && !s.engine.privacy_allowed() && !s.snapshot.candidates.is_empty() {
             s.snapshot.candidates.clear();
@@ -42,7 +55,7 @@ impl Data {
     }
 }
 
-unsafe fn private_scope(context: &ITfContext, cookie: u32) -> Result<bool> {
+pub(super) unsafe fn private_scope(context: &ITfContext, cookie: u32) -> Result<bool> {
     let focus = GetFocus();
     let mut class = [0u16; 128];
     let length = GetClassNameW(focus, &mut class);
@@ -68,6 +81,14 @@ unsafe fn private_scope(context: &ITfContext, cookie: u32) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn command_and_password_hosts_pass_english_keys_through() {
+        for name in [None, Some("WindowsTerminal.exe"), Some("pwsh.exe"), Some("Code.exe"), Some("KeePassXC.exe")] {
+            assert!(!app_allows_ascii_spacing(name));
+        }
+        assert!(app_allows_ascii_spacing(Some("Notepad.exe")));
+    }
+
     #[test]
     fn unknown_identity_and_windows_password_managers_pause_learning() {
         for app in [None, Some(""), Some("1Password.exe"), Some("KeePassXC.exe"), Some("bitwarden.exe")] {

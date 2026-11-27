@@ -34,6 +34,8 @@ pub struct Client {
     outstanding: Option<Op>,
     pub pending: bool,
     pub failure: Option<Failure>,
+    #[cfg(feature = "rerank-timing")]
+    pub last_rerank_job_id: Option<u64>,
 }
 impl Client {
     pub fn open(data: &Path, config: Config, source: Option<String>) -> Option<Self> {
@@ -72,6 +74,8 @@ impl Client {
             outstanding: None,
             pending: false,
             failure: None,
+            #[cfg(feature = "rerank-timing")]
+            last_rerank_job_id: None,
         })
     }
     fn reconnect(&mut self, uncertain: bool, deadline: Instant) -> io::Result<()> {
@@ -174,8 +178,13 @@ impl Client {
         self.sequence = result.sequence;
         self.outstanding = None;
         self.pending = result.pending;
+        #[cfg(feature = "rerank-timing")]
+        {
+            self.last_rerank_job_id = result.rerank_job_id;
+        }
         match &op {
-            Op::Options(_) | Op::Mixed(_) | Op::English(_) | Op::Tolerance(_) | Op::Prediction(_) | Op::Demote(_) | Op::Privacy(_) => {
+            Op::Options(_) | Op::HalfPunct(_) | Op::Mixed(_) | Op::English(_) | Op::Tolerance(_)
+            | Op::MixedEnglishWriting(_) | Op::Prediction(_) | Op::Demote(_) | Op::Privacy(_) => {
                 self.settings
                     .retain(|old| std::mem::discriminant(old) != std::mem::discriminant(&op));
                 self.settings.push(op);
@@ -214,9 +223,74 @@ impl Client {
             return false;
         };
         let deadline = Instant::now() + Duration::from_millis(200);
+        #[cfg(feature = "rerank-timing")]
+        let (poll_seq, poll_job, poll_t0) = {
+            let seq = crate::rerank_timing::next_poll_seq();
+            let job = self.last_rerank_job_id.unwrap_or(0);
+            let t0 = crate::rerank_timing::qpc_now();
+            crate::rerank_timing::record_span(
+                crate::rerank_timing::ROLE_TIP,
+                crate::rerank_timing::EV_POLL_START,
+                t0,
+                0,
+                seq,
+                job,
+                0,
+                0,
+                0,
+                0,
+            );
+            (seq, job, t0)
+        };
         match pipe.send(&Request::RerankReady, deadline).and_then(|()| pipe.receive::<Reply>(deadline)) {
-            Ok(reply) => reply.rerank_ready,
+            Ok(reply) => {
+                #[cfg(feature = "rerank-timing")]
+                {
+                    let t1 = crate::rerank_timing::qpc_now();
+                    let dur_us = crate::rerank_timing::qpc_delta_us(poll_t0, t1);
+                    let code = if reply.rerank_ready {
+                        crate::rerank_timing::POLL_READY
+                    } else {
+                        crate::rerank_timing::POLL_NOT_READY
+                    };
+                    crate::rerank_timing::record_span(
+                        crate::rerank_timing::ROLE_TIP,
+                        crate::rerank_timing::EV_POLL_END,
+                        poll_t0,
+                        t1,
+                        poll_seq,
+                        poll_job,
+                        dur_us,
+                        0,
+                        reply.rerank_ready as u8,
+                        code,
+                    );
+                }
+                reply.rerank_ready
+            }
             Err(error) => {
+                #[cfg(feature = "rerank-timing")]
+                {
+                    let t1 = crate::rerank_timing::qpc_now();
+                    let dur_us = crate::rerank_timing::qpc_delta_us(poll_t0, t1);
+                    let code = if error.kind() == io::ErrorKind::TimedOut {
+                        crate::rerank_timing::POLL_TIMEOUT
+                    } else {
+                        crate::rerank_timing::POLL_IO_ERROR
+                    };
+                    crate::rerank_timing::record_span(
+                        crate::rerank_timing::ROLE_TIP,
+                        crate::rerank_timing::EV_POLL_END,
+                        poll_t0,
+                        t1,
+                        poll_seq,
+                        poll_job,
+                        dur_us,
+                        0,
+                        0,
+                        code,
+                    );
+                }
                 // A late answer would be read as the next request's; the next perform reconnects.
                 crate::runtime_log::io("client.rerank_ready", &error);
                 self.pipe = None;

@@ -13,12 +13,14 @@ use windows::{
         Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0},
         System::Threading::{
             CreateMutexW, GetCurrentThread, ReleaseMutex, SetThreadPriority, WaitForSingleObject,
-            THREAD_PRIORITY_BELOW_NORMAL,
+            THREAD_PRIORITY, THREAD_PRIORITY_NORMAL,
         },
     },
 };
 
 pub use shanjie_shell::protocol::{Failure, Snapshot};
+
+pub(crate) const DEFAULT_RERANK_WORKER_PRIORITY: THREAD_PRIORITY = THREAD_PRIORITY_NORMAL;
 
 #[derive(Clone, PartialEq, Eq)]
 struct ModelStamp {
@@ -69,6 +71,14 @@ struct Reranks {
     running: Option<u64>,
     finished: Option<(u64, Arc<Job>, i32)>,
     stop: bool,
+    #[cfg(feature = "rerank-timing")]
+    latest_tid: Option<u64>,
+    #[cfg(feature = "rerank-timing")]
+    waiting_tid: Option<u64>,
+    #[cfg(feature = "rerank-timing")]
+    running_tid: Option<u64>,
+    #[cfg(feature = "rerank-timing")]
+    finished_tid: Option<u64>,
 }
 impl Reranks {
     fn busy(&self) -> bool {
@@ -81,12 +91,26 @@ impl Reranks {
         self.latest += 1;
         self.waiting = None;
         self.finished = None;
+        #[cfg(feature = "rerank-timing")]
+        {
+            self.latest_tid = None;
+            self.waiting_tid = None;
+            self.finished_tid = None;
+        }
     }
 }
 type Runner = Arc<(Mutex<Reranks>, Condvar)>;
 fn rerank_worker(runner: Runner) {
+    #[cfg(feature = "rerank-timing")]
+    {
+        let (prio, req_code) =
+            crate::rerank_timing::configured_worker_priority(DEFAULT_RERANK_WORKER_PRIORITY.0);
+        let set_ok = unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY(prio)) }.is_ok();
+        crate::rerank_timing::capture_worker_init(req_code, set_ok);
+    }
+    #[cfg(not(feature = "rerank-timing"))]
     unsafe {
-        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+        let _ = SetThreadPriority(GetCurrentThread(), DEFAULT_RERANK_WORKER_PRIORITY);
     }
     let (slot, signal) = &*runner;
     let mut r = slot.lock().unwrap();
@@ -99,12 +123,96 @@ fn rerank_worker(runner: Runner) {
             continue;
         };
         r.running = Some(id);
+        #[cfg(feature = "rerank-timing")]
+        let tid = {
+            let tid = r.waiting_tid.take().unwrap_or(0);
+            r.running_tid = Some(tid);
+            tid
+        };
         drop(r);
+        #[cfg(feature = "rerank-timing")]
+        let (t0_qpc, u0, k0) = {
+            let (u, k) = crate::rerank_timing::thread_cpu_times_100ns();
+            let t0 = crate::rerank_timing::qpc_now();
+            crate::rerank_timing::record_span(
+                crate::rerank_timing::ROLE_CORE,
+                crate::rerank_timing::EV_WORKER_START,
+                t0,
+                0,
+                0,
+                tid,
+                u,
+                k,
+                0,
+                0,
+            );
+            (t0, u, k)
+        };
         let code = unsafe { shanjie_rerank_run(job.0) };
+        #[cfg(feature = "rerank-timing")]
+        {
+            let t1_qpc = crate::rerank_timing::qpc_now();
+            let (u1, k1) = crate::rerank_timing::thread_cpu_times_100ns();
+            crate::rerank_timing::record_span(
+                crate::rerank_timing::ROLE_CORE,
+                crate::rerank_timing::EV_WORKER_FINISH,
+                t0_qpc,
+                t1_qpc,
+                0,
+                tid,
+                u1.saturating_sub(u0),
+                k1.saturating_sub(k0),
+                0,
+                code as u16,
+            );
+        }
         r = slot.lock().unwrap();
         r.running = None;
+        #[cfg(feature = "rerank-timing")]
+        {
+            r.running_tid = None;
+        }
         if id == r.latest {
             r.finished = Some((id, job, code));
+            #[cfg(feature = "rerank-timing")]
+            {
+                r.finished_tid = Some(tid);
+                if code == 0 {
+                    crate::rerank_timing::record(
+                        crate::rerank_timing::ROLE_CORE,
+                        crate::rerank_timing::EV_RESULT_READY,
+                        0,
+                        tid,
+                        0,
+                        0,
+                        0,
+                        0,
+                    );
+                } else {
+                    crate::rerank_timing::record(
+                        crate::rerank_timing::ROLE_CORE,
+                        crate::rerank_timing::EV_RESULT_DROPPED,
+                        0,
+                        tid,
+                        code as u64,
+                        0,
+                        0,
+                        crate::rerank_timing::DROP_RUN_ERROR,
+                    );
+                }
+            }
+        } else {
+            #[cfg(feature = "rerank-timing")]
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_CORE,
+                crate::rerank_timing::EV_RESULT_DROPPED,
+                0,
+                tid,
+                code as u64,
+                0,
+                0,
+                crate::rerank_timing::DROP_STALE_AFTER_RUN,
+            );
         }
         signal.notify_all();
     }
@@ -295,11 +403,20 @@ impl Engine {
         }
         self.reranks.as_ref().is_none_or(|r| !r.0.lock().unwrap().busy())
     }
+    #[cfg(feature = "rerank-timing")]
+    pub fn current_rerank_job_id(&self) -> Option<u64> {
+        if let Some(remote) = self.remote.as_ref() {
+            return remote.last_rerank_job_id;
+        }
+        self.reranks.as_ref().and_then(|r| r.0.lock().unwrap().latest_tid)
+    }
     /// The core's generation guard drops a result whose composition has changed since the job was taken.
-    unsafe fn apply_rerank(&mut self, job: &Job, out: &mut Snapshot) {
+    unsafe fn apply_rerank(&mut self, job: &Job, out: &mut Snapshot) -> bool {
         let string = |p| CStr::from_ptr(p).to_str().unwrap().to_owned();
         let mut ranked = ptr::null_mut();
         if shanjie_engine_rerank_apply(self.handle, job.0, &mut ranked) == 0 && !ranked.is_null() {
+            #[cfg(feature = "rerank-timing")]
+            let old_preedit = out.preedit.clone();
             let r = &*ranked;
             out.preedit = string(r.preedit);
             out.cursor = r.cursor_utf16;
@@ -316,10 +433,22 @@ impl Engine {
             out.reading_hint = shanjie_windows_is_mixed_hint(self.handle) != 0;
             out.phonetic_pending = shanjie_windows_phonetic_pending(self.handle) != 0;
             shanjie_output_free(ranked);
+            #[cfg(feature = "rerank-timing")]
+            {
+                return out.preedit != old_preedit;
+            }
+            #[cfg(not(feature = "rerank-timing"))]
+            {
+                return false;
+            }
         }
+        false
     }
     fn rerank(&mut self, timeout: Option<Duration>) -> Option<Snapshot> {
-        let finished = if let Some(runner) = &self.reranks {
+        self.rerank_with_source(timeout, 3)
+    }
+    fn rerank_with_source(&mut self, timeout: Option<Duration>, _source: u16) -> Option<Snapshot> {
+        let (finished, _finished_tid) = if let Some(runner) = &self.reranks {
             let (slot, signal) = runner.as_ref();
             let mut r = slot.lock().unwrap();
             if let Some(timeout) = timeout {
@@ -331,15 +460,31 @@ impl Engine {
                 r = signal.wait_while(r, |state| state.busy()).unwrap();
             }
             let latest = r.latest;
-            r.finished.take().filter(|f| f.0 == latest)
+            let fin = r.finished.take().filter(|f| f.0 == latest);
+            #[cfg(feature = "rerank-timing")]
+            let fin_tid = if fin.is_some() { r.finished_tid.take() } else { r.finished_tid = None; None };
+            #[cfg(not(feature = "rerank-timing"))]
+            let fin_tid: Option<u64> = None;
+            (fin, fin_tid)
         } else {
-            None
+            (None, None)
         };
         // Only the candidates can change; what the last output committed was already sent.
         let mut out = Snapshot { commit: String::new(), rerank: false, ..self.last.clone() };
         if let Some((_, job, 0)) = finished {
             self.rerank_jobs_run = self.rerank_jobs_run.saturating_add(1);
-            unsafe { self.apply_rerank(&job, &mut out) };
+            let _changed = unsafe { self.apply_rerank(&job, &mut out) };
+            #[cfg(feature = "rerank-timing")]
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_CORE,
+                crate::rerank_timing::EV_RESULT_APPLIED,
+                0,
+                _finished_tid.unwrap_or(0),
+                0,
+                0,
+                _changed as u8,
+                _source,
+            );
         }
         self.last = out.clone();
         Some(out)
@@ -465,10 +610,90 @@ impl Engine {
                 let mut r=runner.0.lock().unwrap();
                 if let Some(job)=job {
                     r.latest+=1;
+                    #[cfg(feature = "rerank-timing")]
+                    let (tid, replaced_waiting, qlen) = {
+                        let tid = crate::rerank_timing::next_job_id();
+                        crate::rerank_timing::record(
+                            crate::rerank_timing::ROLE_CORE,
+                            crate::rerank_timing::EV_JOB_CREATED,
+                            0,
+                            tid,
+                            0,
+                            0,
+                            0,
+                            0,
+                        );
+                        if let Some(old_fin) = r.finished_tid.take() {
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_RESULT_DROPPED,
+                                0,
+                                old_fin,
+                                tid,
+                                0,
+                                0,
+                                crate::rerank_timing::DROP_SUPERSEDED_WAITING,
+                            );
+                        }
+                        let old_wait = r.waiting_tid.replace(tid);
+                        if let Some(old_w) = old_wait {
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_RESULT_DROPPED,
+                                0,
+                                old_w,
+                                tid,
+                                0,
+                                0,
+                                crate::rerank_timing::DROP_SUPERSEDED_WAITING,
+                            );
+                        }
+                        r.latest_tid = Some(tid);
+                        let qlen = (r.running.is_some() as u64) + 1;
+                        (tid, old_wait.unwrap_or(0), qlen)
+                    };
                     r.finished=None;
                     r.waiting=Some((r.latest,Arc::new(job)));
+                    #[cfg(feature = "rerank-timing")]
+                    crate::rerank_timing::record(
+                        crate::rerank_timing::ROLE_CORE,
+                        crate::rerank_timing::EV_JOB_ENQUEUED,
+                        0,
+                        tid,
+                        qlen,
+                        replaced_waiting,
+                        0,
+                        0,
+                    );
                     runner.1.notify_all();
                 } else if take_rc!=0||out.preedit.is_empty() {
+                    #[cfg(feature = "rerank-timing")]
+                    {
+                        if let Some(old_w) = r.waiting_tid {
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_RESULT_DROPPED,
+                                0,
+                                old_w,
+                                0,
+                                0,
+                                0,
+                                crate::rerank_timing::DROP_DISCARDED_RESET,
+                            );
+                        }
+                        if let Some(old_f) = r.finished_tid {
+                            crate::rerank_timing::record(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_RESULT_DROPPED,
+                                0,
+                                old_f,
+                                0,
+                                0,
+                                0,
+                                crate::rerank_timing::DROP_DISCARDED_RESET,
+                            );
+                        }
+                    }
                     r.discard();
                     runner.1.notify_all();
                 }
@@ -591,6 +816,19 @@ impl Engine {
         }
         use crate::broker::Op;
         let string = |s: String| CString::new(s).ok();
+        #[cfg(feature = "rerank-timing")]
+        if let Op::Reset(discard) = op {
+            crate::rerank_timing::record(
+                crate::rerank_timing::ROLE_CORE,
+                crate::rerank_timing::EV_ENGINE_RESET,
+                0,
+                self.current_rerank_job_id().unwrap_or(0),
+                0,
+                0,
+                discard as u8,
+                0,
+            );
+        }
         match op {
             Op::Key {
                 kind,
@@ -601,7 +839,61 @@ impl Engine {
                 if kind == 3 && modifiers == 0 && self.last.rerank && !self.last.preedit.is_empty()
                     && (self.last.candidates.is_empty() || self.last.prediction && self.last.selected.is_none())
                 {
-                    self.rerank(Some(Duration::from_millis(100)));
+                    #[cfg(feature = "rerank-timing")]
+                    {
+                        let job_id = self.current_rerank_job_id().unwrap_or(0);
+                        let was_busy = !self.rerank_ready();
+                        let t0 = crate::rerank_timing::qpc_now();
+                        crate::rerank_timing::record_span(
+                            crate::rerank_timing::ROLE_CORE,
+                            crate::rerank_timing::EV_ENTER_WAIT_START,
+                            t0,
+                            0,
+                            0,
+                            job_id,
+                            was_busy as u64,
+                            0,
+                            0,
+                            0,
+                        );
+                        let waited = self.rerank_with_source(
+                            Some(Duration::from_millis(100)),
+                            crate::rerank_timing::APPLY_ENTER_WAIT,
+                        );
+                        let t1 = crate::rerank_timing::qpc_now();
+                        let wait_us = crate::rerank_timing::qpc_delta_us(t0, t1);
+                        let timed_out = waited.is_none();
+                        crate::rerank_timing::record_span(
+                            crate::rerank_timing::ROLE_CORE,
+                            crate::rerank_timing::EV_ENTER_WAIT_END,
+                            t1,
+                            0,
+                            0,
+                            job_id,
+                            wait_us,
+                            was_busy as u64,
+                            timed_out as u8,
+                            waited.is_some() as u16,
+                        );
+                        if timed_out {
+                            crate::rerank_timing::record_span(
+                                crate::rerank_timing::ROLE_CORE,
+                                crate::rerank_timing::EV_ENTER_TIMEOUT,
+                                t1,
+                                0,
+                                0,
+                                job_id,
+                                wait_us,
+                                0,
+                                1,
+                                0,
+                            );
+                        }
+                    }
+                    #[cfg(not(feature = "rerank-timing"))]
+                    {
+                        self.rerank(Some(Duration::from_millis(100)));
+                    }
                 }
                 self.operation(|h, o| unsafe {
                 shanjie_windows_key_with_latin(
@@ -616,18 +908,24 @@ impl Engine {
                 )
                 })
             }
-            Op::Reset(discard) => {
-                if discard {
-                    self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) })
-                } else if self.begin(0) {
-                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+            Op::Reset(true) => self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 1, o) }),
+            Op::Reset(false) | Op::ShiftMode { .. } => {
+                let finish = |h: *mut ShanjieEngine, o: *mut *mut ShanjieOutput| unsafe {
+                    if let Op::ShiftMode { to_english } = op {
+                        windows_shift_mode(&mut *h, to_english, &mut *o)
+                    } else {
+                        shanjie_engine_reset(h, 0, o)
+                    }
+                };
+                if self.begin(0) {
+                    let out = self.invoke(finish);
                     self.end();
                     out
                 } else if self.failure == Some(Failure::Busy) {
-                    // Focus loss must send its text without waiting for another learning writer.
+                    // Focus loss and mode switches keep working while another process writes learning data.
                     self.failure = None;
                     unsafe { shanjie_engine_set_learning(self.handle, 0); }
-                    let out = self.invoke(|h, o| unsafe { shanjie_engine_reset(h, 0, o) });
+                    let out = self.invoke(finish);
                     unsafe { shanjie_engine_set_learning(self.handle, 1); }
                     out
                 } else {
@@ -661,7 +959,37 @@ impl Engine {
             Op::Privacy(allowed) => {
                 if !allowed {
                     unsafe { windows_pause_learning(&mut *self.handle); }
-                    if let Some(runner) = &self.reranks { runner.0.lock().unwrap().discard(); }
+                    if let Some(runner) = &self.reranks {
+                        let mut r = runner.0.lock().unwrap();
+                        #[cfg(feature = "rerank-timing")]
+                        {
+                            if let Some(old_w) = r.waiting_tid {
+                                crate::rerank_timing::record(
+                                    crate::rerank_timing::ROLE_CORE,
+                                    crate::rerank_timing::EV_RESULT_DROPPED,
+                                    0,
+                                    old_w,
+                                    0,
+                                    0,
+                                    0,
+                                    crate::rerank_timing::DROP_PRIVACY_PAUSED,
+                                );
+                            }
+                            if let Some(old_f) = r.finished_tid {
+                                crate::rerank_timing::record(
+                                    crate::rerank_timing::ROLE_CORE,
+                                    crate::rerank_timing::EV_RESULT_DROPPED,
+                                    0,
+                                    old_f,
+                                    0,
+                                    0,
+                                    0,
+                                    crate::rerank_timing::DROP_PRIVACY_PAUSED,
+                                );
+                            }
+                        }
+                        r.discard();
+                    }
                 } else {
                     self.learning_loaded = false;
                     unsafe { shanjie_engine_set_learning(self.handle, (self.mutex.is_some() && !self.replaying) as u32); }
@@ -673,10 +1001,16 @@ impl Engine {
                 (unsafe { shanjie_windows_set_input_options(self.handle, flags) } == 0)
                     .then(Snapshot::default)
             }
+            Op::HalfPunct(mask) => {
+                (unsafe { shanjie_windows_set_half_punct(self.handle, mask) } == 0)
+                    .then(Snapshot::default)
+            }
             Op::Mixed(on) => (unsafe { shanjie_windows_set_mixed_input(self.handle, on as u32) }
                 == 0)
                 .then(Snapshot::default),
             Op::Tolerance(on) => (unsafe { shanjie_windows_set_mixed_tolerance(self.handle, on as u32) }
+                == 0).then(Snapshot::default),
+            Op::MixedEnglishWriting(on) => (unsafe { shanjie_windows_set_mixed_english_writing(self.handle, on as u32) }
                 == 0).then(Snapshot::default),
             Op::English(on) => (unsafe { shanjie_windows_set_upstream_english(self.handle, on) }
                 == 0)
@@ -754,5 +1088,72 @@ mod tests {
         assert_eq!(state.latest, 2);
         assert!(!state.busy());
         assert!(!state.pending());
+    }
+
+    #[test]
+    fn rerank_worker_uses_normal_priority_without_altering_process_or_other_threads() {
+        use std::sync::mpsc;
+        use windows::Win32::System::Threading::{
+            GetCurrentProcess, GetPriorityClass, GetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+        };
+
+        assert_eq!(DEFAULT_RERANK_WORKER_PRIORITY, THREAD_PRIORITY_NORMAL);
+        assert_eq!(DEFAULT_RERANK_WORKER_PRIORITY.0, 0);
+
+        // The test runner can choose its own process and thread priorities.
+        let process_class_before = unsafe { GetPriorityClass(GetCurrentProcess()) };
+        let caller_prio_before = unsafe { GetThreadPriority(GetCurrentThread()) };
+
+        let (peer_ready_tx, peer_ready_rx) = mpsc::channel();
+        let (peer_go_tx, peer_go_rx) = mpsc::channel();
+        let peer = std::thread::Builder::new()
+            .name("Shanjie peer priority check".into())
+            .spawn(move || {
+                let before = unsafe { GetThreadPriority(GetCurrentThread()) };
+                peer_ready_tx.send(before).unwrap();
+                peer_go_rx.recv().unwrap();
+                unsafe { GetThreadPriority(GetCurrentThread()) }
+            })
+            .unwrap();
+        let peer_prio_before = peer_ready_rx.recv().unwrap();
+
+        let runner: Runner = Arc::new((
+            Mutex::new(Reranks { stop: true, ..Default::default() }),
+            Condvar::new(),
+        ));
+        let worker = runner.clone();
+        let worker_handle = std::thread::Builder::new()
+            .name("Shanjie rerank".into())
+            .spawn(move || {
+                unsafe {
+                    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL).unwrap();
+                    assert_eq!(
+                        GetThreadPriority(GetCurrentThread()),
+                        THREAD_PRIORITY_BELOW_NORMAL.0
+                    );
+                }
+                rerank_worker(worker);
+                unsafe { GetThreadPriority(GetCurrentThread()) }
+            })
+            .unwrap();
+
+        let worker_prio_after = worker_handle.join().unwrap();
+        assert_eq!(worker_prio_after, THREAD_PRIORITY_NORMAL.0);
+
+        peer_go_tx.send(()).unwrap();
+        assert_eq!(peer.join().unwrap(), peer_prio_before);
+        assert_eq!(unsafe { GetPriorityClass(GetCurrentProcess()) }, process_class_before);
+        assert_eq!(unsafe { GetThreadPriority(GetCurrentThread()) }, caller_prio_before);
+    }
+
+    #[test]
+    fn rerank_in_background_spawns_single_runner_and_stops_on_drop() {
+        let mut engine = Engine::default();
+        engine.rerank_in_background();
+        let runner = engine.reranks.clone().expect("rerank runner should spawn");
+        assert!(engine.rerank_ready());
+        assert!(!runner.0.lock().unwrap().stop);
+        drop(engine);
+        assert!(runner.0.lock().unwrap().stop);
     }
 }

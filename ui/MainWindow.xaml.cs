@@ -111,6 +111,7 @@ public sealed partial class MainWindow : UserControl
     private void ShiftAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(true, false);
     private void PlainAllOn(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, true);
     private void PlainAllOff(object sender, RoutedEventArgs args) => Vm.SetAllPunctuation(false, false);
+    private void ResetHalfPunctuation(object sender, RoutedEventArgs args) => Vm.ResetHalfPunctuation();
     private List<(string Name, string File)> savedPresets = [];
     private bool refreshingPresets;
     internal void RefreshPresets()

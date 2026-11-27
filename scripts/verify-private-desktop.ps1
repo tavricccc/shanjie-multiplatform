@@ -1,9 +1,9 @@
 #Requires -Version 7
-param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter',
+param([Parameter(Mandatory)][string]$Payload,[Parameter(Mandatory)][string]$Harness,[Parameter(Mandatory)][string]$Output,[string[]]$Cases=@('shift-right','shift-left','shift-unknown','shift-proxy-enter','shift-enter','shift-retain-windows','shift-retain-shanjie','shift-finish-eten',
  'handoff-same','handoff-timeout','handoff-generation','handoff-context','handoff-different','cmd-commit',
  'status-writable-disjoint','status-writable-regions','status-readonly','status-readonly-disjoint',
  'word-deferred','word-natural','word-disjoint','word-stale','word-readonly','word-password','word-invalid','word-empty',
- 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
+ 'modifiers-empty','modifiers-composing','modifiers-candidates','modifiers-english','spacing-english','spacing-english-off','punctuation-mcbopomofo','half-punctuation-local','half-punctuation-pipe','half-punctuation-eten','range-refresh','privacy-normal','privacy-private','privacy-password','privacy-pin','privacy-native-password','privacy-disabled','privacy-transition'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
@@ -22,10 +22,27 @@ try {
   try {
   $fixture=[IO.Path]::GetFullPath((Join-Path $Output $scenario))
   New-Item -ItemType Directory -Path "$fixture/Shanjie" -Force|Out-Null
-  $profile=Get-Content -LiteralPath "$root/profiles/windows.ini" -Raw -Encoding utf8
-  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=0','mixed_input=1' -replace '(?m)^upstream_english=.*','upstream_english=0'
+  $shiftCase=$scenario -in 'shift-retain-windows','shift-retain-shanjie','shift-finish-eten'
+  $preset=if($scenario -eq 'shift-retain-shanjie'){'shanjie'}else{'windows'}
+  $profile=Get-Content -LiteralPath "$root/profiles/$preset.ini" -Raw -Encoding utf8
+  $profile=$profile -replace '(?m)^learning=1','learning=0' -replace '(?m)^mixed_input=.*',"mixed_input=$([int](!$shiftCase))" -replace '(?m)^upstream_english=.*','upstream_english=0'
+  if($shiftCase){
+   $keyboard=if($scenario -eq 'shift-finish-eten'){2}else{1}
+   $profile=$profile -replace '(?m)^keyboard=.*',"keyboard=$keyboard"
+  }
+  if($scenario -eq 'shift-retain-shanjie'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1'}
+  if($scenario -eq 'punctuation-mcbopomofo'){
+   $profile=$profile -replace '(?m)^style=apple','style=mcbopomofo' -replace '(?m)^keyboard=.*','keyboard=1' -replace '(?m)^(shift_1|shift_quote|plain_quote|plain_backslash)=0','${1}=1'
+  }
+  if($scenario -like 'half-punctuation-*'){
+   $keyboard=if($scenario -eq 'half-punctuation-eten'){2}else{1}
+   $profile=$profile -replace '(?m)^half_punct=0','half_punct=1' -replace '(?m)^keyboard=.*',"keyboard=$keyboard" -replace '(?m)^mixed_input=.*','mixed_input=0' -replace '(?m)^(shift_1|shift_9|plain_equal)=0','${1}=1'
+   if($scenario -eq 'half-punctuation-pipe'){$profile=$profile -replace '(?m)^style=apple','style=mcbopomofo'}
+   if($scenario -eq 'half-punctuation-eten'){$profile=$profile -replace '(?m)^half_punct_mask=.*','half_punct_mask=134217727'}
+  }
   if($scenario -like 'privacy-*'){$profile=$profile -replace '(?m)^learning=0','learning=1'}
   if($scenario -eq 'privacy-control'){$profile=$profile -replace '(?m)^context=1','context=0'}
+  if($scenario -eq 'spacing-english'){$profile=$profile -replace '(?m)^cjk_spacing=0','cjk_spacing=1' -replace '(?m)^context=1','context=0'}
   if($scenario -eq 'modifiers-english'){$profile=$profile -replace '(?m)^upstream_english=0','upstream_english=1'}
   if($scenario -eq 'cancel-theme-dark'){$profile=$profile -replace '(?m)^theme=0','theme=2'}
   if($scenario -eq 'cancel-theme-light'){$profile=$profile -replace '(?m)^theme=0','theme=1'}
@@ -36,13 +53,14 @@ try {
   $start.Environment['LOCALAPPDATA']=$fixture
   New-Item -ItemType Directory -Path "$fixture/temp" -Force|Out-Null
   $start.Environment['TEMP']="$fixture/temp";$start.Environment['TMP']="$fixture/temp"
-  foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS','SHANJIE_CORE_LOCAL')){$start.Environment[$key]='1'}
+  foreach($key in @('SHANJIE_TEST_PROFILE','SHANJIE_HEADLESS')){$start.Environment[$key]='1'}
+  $residentCase=$scenario -in 'shift-retain-shanjie','punctuation-mcbopomofo','half-punctuation-pipe'
+  if($residentCase){[void]$start.Environment.Remove('SHANJIE_CORE_LOCAL')}else{$start.Environment['SHANJIE_CORE_LOCAL']='1'}
   $start.Environment['SHANJIE_TEST_ROOT']=$fixture
   $arch=if($Harness -match 'x86'){'x86'}else{'x64'}
   $start.ArgumentList.Add("$Payload/$arch/Shanjie.dll");$start.ArgumentList.Add($scenario)
   $server=$null;$child=$null
-   # Only scenarios that open the word popup use its broker-backed inspection.
-   if($scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
+   if($residentCase -or $scenario -in 'word-deferred','word-natural','word-disjoint' -or $scenario -like 'cancel-*'){
    $serverStart=[Diagnostics.ProcessStartInfo]::new("$Payload/tools/shanjie-core.exe")
    $serverStart.UseShellExecute=$false;$serverStart.CreateNoWindow=$true
    foreach($key in @('LOCALAPPDATA','SHANJIE_TEST_PROFILE','SHANJIE_TEST_ROOT','SHANJIE_HEADLESS')){$serverStart.Environment[$key]=$start.Environment[$key]}

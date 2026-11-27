@@ -57,10 +57,16 @@ public partial class SettingsViewModel : ObservableObject
     public bool SupportsFuzzyAdjacent => Keyboard is 0 or 1;
     [ObservableProperty] public partial bool EnglishKeyOrder { get; set; }
     [ObservableProperty] public partial bool PunctuationKeepsReading { get; set; }
+    [ObservableProperty] public partial int PunctuationLayout { get; set; }
+    partial void OnPunctuationLayoutChanged(int value)
+    {
+        foreach (var key in ShiftKeys.Concat(PlainKeys)) key.SetLayout(value == 1);
+    }
     [ObservableProperty] public partial bool CjkSpacing { get; set; }
     [ObservableProperty] public partial bool UseContext { get; set; }
     [ObservableProperty] public partial bool Alphanumeric { get; set; }
     [ObservableProperty] public partial bool MixedTolerance { get; set; }
+    [ObservableProperty] public partial bool MixedEnglishWriting { get; set; }
     [ObservableProperty] public partial bool AddWord { get; set; }
     [ObservableProperty] public partial int AddWordSide { get; set; }
     [ObservableProperty] public partial int AddWordShortcut { get; set; }
@@ -77,6 +83,7 @@ public partial class SettingsViewModel : ObservableObject
     public string RawKeyMixingLabel => RawKeyMixingName;
     public string MixedModeNote => $"{RawKeyMixingName}：按鍵排不成合法注音就當英文，組字區先顯示英文按鍵並提示注音，輸入聲調後轉成中文，Enter 保留英文；一定會開啟組字面板。上游判斷：注音不可能是想打的字時（重打同一個位置、按空白或聲調後音節不存在）整段變回原本的按鍵當英文，馬上按 Esc 可變回注音；ai、up 這類也是注音的字，按 ↓ 從候選最後兩項選英文。上游模式下 Shift＋字母可開始英文組字段；上游判斷僅支援標準注音。倚天可使用{RawKeyMixingName}；跟隨配置時依實際鍵盤生效。使用上游判斷時，數字列的鍵也會打出數字（例如 2026年、3.14），由前文判斷是數字還是注音。";
     public string MixedToleranceHelp => $"只修正{RawKeyMixingName}的相鄰重複鍵；上游英文段保持原樣。預設關閉，原始按鍵可由候選選回。";
+    public string MixedEnglishWritingHelp => $"只在{RawKeyMixingName}生效：套用上游正式拼寫表（如 ChatGPT、GitHub、macOS），保留{RawKeyMixingName}判斷、容錯與刻意輸入的大小寫。預設開啟。";
     /// The mode needs the panel for its Zhuyin hint (`Document::reading_panel`). The stored choice survives, so leaving the mode restores it.
     public bool UsesRawKeyMixing => IsZhuyin && MixedMode == 1;
     public bool CanChooseReadingPanel => !UsesRawKeyMixing;
@@ -89,8 +96,12 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(ReadingPanelShown)); OnPropertyChanged(nameof(ReadingPanelHelp));
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadingPanelShown))] public partial bool ReadingPanel { get; set; }
-    partial void OnKeyboardChanged(int value) => NotifyReadingPanel();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
+    partial void OnKeyboardChanged(int value)
+    {
+        NotifyReadingPanel();
+        RefreshHalfPunctKeys();
+    }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsZhuyin)), NotifyPropertyChangedFor(nameof(CanCustomizeHalfPunct)), NotifyPropertyChangedFor(nameof(SupportsUpstreamEnglish)), NotifyPropertyChangedFor(nameof(UsesUpstreamEnglish)), NotifyPropertyChangedFor(nameof(SupportsFuzzyAdjacent))] public partial int Keyboard { get; set; }
     public bool IsZhuyin => Keyboard < 3;
     [ObservableProperty] public partial bool StandardInstalled { get; set; } = true;
     [ObservableProperty] public partial bool EtenInstalled { get; set; } = true;
@@ -98,6 +109,16 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool SymbolKeyboard { get; set; }
     public Models.PunctuationKey[] ShiftKeys { get; } = Models.PunctuationKey.ShiftRow();
     public Models.PunctuationKey[] PlainKeys { get; } = Models.PunctuationKey.PlainRow();
+    internal const int HalfPunctDefaultMask = 0x006099FF;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanCustomizeHalfPunct))] public partial bool HalfPunct { get; set; }
+    public bool CanCustomizeHalfPunct => IsZhuyin && HalfPunct;
+    public Models.PunctuationKey[] HalfPunctKeys { get; } = Models.PunctuationKey.HalfWidthRow();
+    private void RefreshHalfPunctKeys()
+    {
+        var eten = Keyboard == 2 || (Keyboard == 0 && !StandardInstalled && EtenInstalled);
+        HalfPunctKeys[22].Available = !eten; // unshifted =
+        HalfPunctKeys[26].Available = !eten; // unshifted apostrophe
+    }
     public bool ShiftPunctuation => ShiftKeys.Any(k => k.IsOn);
     [ObservableProperty] public partial bool StandaloneTones { get; set; }
     [ObservableProperty] public partial bool CtrlBackslash { get; set; }

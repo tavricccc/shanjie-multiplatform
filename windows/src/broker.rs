@@ -222,6 +222,9 @@ pub struct Reply {
     pub rerank_ready: bool,
     #[serde(default)]
     pub learning_unavailable: bool,
+    #[cfg(feature = "rerank-timing")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rerank_job_id: Option<u64>,
 }
 fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply {
     Reply {
@@ -238,6 +241,8 @@ fn reply(engine: Option<&Engine>, snapshot: Option<Snapshot>, ok: bool) -> Reply
         word_result: None,
         rerank_ready: false,
         learning_unavailable: engine.is_some_and(Engine::learning_unavailable),
+        #[cfg(feature = "rerank-timing")]
+        rerank_job_id: engine.and_then(Engine::current_rerank_job_id),
     }
 }
 fn warming_name(endpoint: &str) -> Vec<u16> {

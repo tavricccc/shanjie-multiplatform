@@ -1,4 +1,4 @@
-use super::{service::Data, Count};
+use super::{service::{Data, ModeSwitch}, Count};
 use std::{
     cell::{Cell, RefCell},
     rc::Weak,
@@ -94,7 +94,7 @@ impl ITfLangBarItemButton_Impl for Button_Impl {
             if click == TF_LBI_CLK_RIGHT {
                 owner.settings();
             } else {
-                owner.toggle(None)?;
+                owner.toggle(None, ModeSwitch::Command)?;
             }
         }
         Ok(())

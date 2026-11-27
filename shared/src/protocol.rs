@@ -138,6 +138,8 @@ pub enum Op {
         latin: Option<char>,
     },
     Reset(bool),
+    /// A mode switch caused by tapping Shift, ordered with the composition's input.
+    ShiftMode { to_english: bool },
     Pick(u32),
     Associate(String),
     Reading,
@@ -150,8 +152,10 @@ pub enum Op {
     /// Per-document privacy gate. The user's learning preference remains unchanged.
     Privacy(bool),
     Options(u32),
+    HalfPunct(u32),
     Mixed(bool),
     Tolerance(bool),
+    MixedEnglishWriting(bool),
     English(u32),
     /// Applies the rerank of the last output, waiting for it if it is still running. The shell sends it only once the
     /// core says the job is done, so replaying it after a restart gives what was shown.

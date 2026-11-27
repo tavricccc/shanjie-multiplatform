@@ -6,3 +6,5 @@ pub mod words;
 pub mod models;
 pub mod catalog;
 pub mod spacing;
+#[path = "../../platform/half_punctuation.rs"]
+pub mod half_punctuation;

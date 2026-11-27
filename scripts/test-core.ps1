@@ -259,7 +259,7 @@ try {
     $resources = Join-Path $root "build/test-resources/$upstreamPin"
     # engine_mixed verifies the English collision table against the pinned spec.
     $resourceExports = @('data','eval','docs/spec/english-mixed.md')
-    $resourceKey = Get-ContentFingerprint -Root $root -Paths @('UPSTREAM.json','scripts/export-upstream.ps1') -Values (@($upstreamPin) + $resourceExports)
+    $resourceKey = Get-ContentFingerprint -Root $root -Paths (@('UPSTREAM.json','scripts/export-upstream.ps1') + $upstreamLexiconBackports) -Values (@($upstreamPin) + $resourceExports)
     $resourceManifest = Join-Path $resources '.source-cache.json'
     $resourcePaths = @('data','eval','docs')
     $resourceCheck = Start-TestStage -Name 'Validate upstream core fixture cache' -Category 'core.cache'
@@ -274,7 +274,7 @@ try {
         if (Test-Path -LiteralPath $resources) { Preserve-Output $resources }
         New-Item -ItemType Directory -Path $resources -Force | Out-Null
         Invoke-Timed -Name 'Export upstream core fixtures' -Category 'core.prepare' -Details @{ cache='miss'; upstream_commit=$upstreamPin } -Action {
-            Export-Upstream $resources $resourceExports
+            Export-Upstream $resources $resourceExports -WithLexiconBackport
         }
         Save-ContentCache -Root $resources -ManifestPath $resourceManifest -Key $resourceKey -Paths $resourcePaths
     } else { Write-Host "Core fixture cache hit: upstream $upstreamPin, contents verified." }

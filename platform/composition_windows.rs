@@ -28,6 +28,63 @@ mod windows_composition_tests {
         out
     }
     #[test]
+    fn mcbopomofo_punctuation_maps_new_keys_and_keeps_individual_switches() {
+        const MCBOPOMOFO: u32 = 1 << 26;
+        const ALL_PUNCTUATION: u32 = (1 << 20) - 2;
+        let mut e = engine(false, true);
+        for scheme in [0, 1] {
+            e.key_scheme = scheme;
+            e.set_windows_input_options(ALL_PUNCTUATION);
+            assert_eq!(e.key(Key::ch('\'', MOD_SHIFT)).unwrap().preedit, "“");
+            e.reset(ResetMode::Discard);
+            e.set_windows_input_options(MCBOPOMOFO | ALL_PUNCTUATION);
+            for (key, modifiers, expected) in [
+                ('2', MOD_SHIFT, "＠"), ('3', MOD_SHIFT, "＃"), ('4', MOD_SHIFT, "＄"),
+                ('5', MOD_SHIFT, "％"), ('6', MOD_SHIFT, "︿"), ('7', MOD_SHIFT, "＆"),
+                ('8', MOD_SHIFT, "＊"), ('\'', MOD_SHIFT, "；"), ('\'', 0, "、"),
+                ('\\', 0, "＼"), ('1', MOD_SHIFT, "！"),
+            ] {
+                assert_eq!(e.key(Key::ch(key, modifiers)).unwrap().preedit, expected, "scheme={scheme}, key={key}");
+                e.reset(ResetMode::Discard);
+            }
+            e.set_windows_input_options(MCBOPOMOFO);
+            assert_eq!(e.windows_shift_punct('\''), None);
+            assert_eq!(e.windows_plain_punct('\''), None);
+        }
+        e.layout = Layout::Eten;
+        e.key_scheme = 0;
+        e.set_windows_input_options(MCBOPOMOFO | ALL_PUNCTUATION);
+        assert_ne!(e.key(Key::ch('\'', 0)).unwrap().preedit, "、");
+        assert!(e.windows_phonetic_pending());
+    }
+    #[test]
+    fn partial_half_punctuation_keeps_width_alternatives_and_eten_readings() {
+        let mut e = engine(false, true);
+        e.set_windows_input_options((1 << 26) | (1 << 22));
+        e.set_windows_half_punct(1 << 2);
+        assert_eq!(type_keys(&mut e, "s").preedit, "ㄋ");
+        assert_eq!(e.key(Key::ch('2', MOD_SHIFT)).unwrap().preedit, "ㄋ@");
+        assert_eq!(type_keys(&mut e, "u3").preedit, "你@");
+
+        let row = e.key(Key::new(KeyKind::Down)).unwrap();
+        let index = row.candidates.iter().position(|word| word == "＠").unwrap();
+        assert_eq!(e.pick(index).unwrap().unwrap().preedit, "你＠");
+
+        e.reset(ResetMode::Discard);
+        e.key_scheme = 1;
+        assert_eq!(e.key(Key::ch('2', MOD_SHIFT)).unwrap().preedit, "@");
+
+        e.reset(ResetMode::Discard);
+        e.key_scheme = 0;
+        e.layout = Layout::Eten;
+        e.set_windows_half_punct(half_punctuation::ALL_MASK);
+        for (key, expected) in [('\'', "ㄘ"), ('=', "ㄦ")] {
+            assert_eq!(e.key(Key::ch(key, 0)).unwrap().preedit, expected);
+            e.reset(ResetMode::Discard);
+        }
+    }
+
+    #[test]
     fn shifted_english_stays_before_later_literals_and_spaces() {
         for layout in [Layout::Standard, Layout::Eten] {
             for (mixed, english) in [(false, true), (true, false)] {
@@ -279,6 +336,7 @@ impl Engine {
             self.windows_raw.clear();
         }
         let raw = std::mem::take(&mut self.mixed_raw);
+        let raw = if self.mixed_input { self.mixed_english_writing(&raw) } else { raw };
         self.mixed_latin = false;
         self.mixed_explicit_english = false;
         for ch in raw.chars().chain(text.chars()) {
@@ -302,13 +360,15 @@ impl Engine {
             self.pending_literal.clear();
         }
         if key.kind == KeyKind::Char && (plain || key.modifiers == MOD_SHIFT) {
-            let mapped = if plain && self.windows_plain_punct(key.ch) {
-                PLAIN_PUNCT.iter().find(|(ch,_)| *ch == key.ch).map(|(_,mark)| *mark)
-            } else if key.modifiers == MOD_SHIFT && self.windows_shift_punct(key.ch) {
-                SHIFT_PUNCT.iter().find(|(ch,_)| *ch == key.ch).map(|(_,mark)| *mark)
-            } else { None };
-            // Some ETEN symbol keys also have a punctuation mapping: phonetics win.
-            if let Some(mark) = mapped.filter(|_| !plain || self.layout.symbol_of(key.ch).is_none()) {
+            let mapped = self.windows_half_punct(key).or_else(|| {
+                if plain {
+                    // Some ETEN symbol keys also have a punctuation mapping: phonetics win.
+                    self.windows_plain_punct(key.ch).filter(|_| self.layout.symbol_of(key.ch).is_none())
+                } else {
+                    self.windows_shift_punct(key.ch)
+                }
+            });
+            if let Some(mark) = mapped {
                 return self.insert_windows_literal(&mark.to_string());
             }
             if plain && self.layout.symbol_of(key.ch).is_none()
@@ -327,6 +387,7 @@ impl Engine {
             self.clear_pend();
             self.mixed_raw.clear();
             let suffix = std::mem::take(&mut self.pending_literal);
+            let original = if self.mixed_input { self.mixed_english_writing(&original) } else { original };
             return self.insert_windows_literal(&(original + &suffix + " "));
         }
         if !self.mixed_input && self.cands.is_none() && self.pred_sel.is_none() && plain {

@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 input-diagnostics = []
+rerank-timing = []
 
 [[bin]]
 name = "shanjie-diagnostics"

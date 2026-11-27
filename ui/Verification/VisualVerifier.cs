@@ -100,6 +100,52 @@ internal static class VisualVerifier
             if (settings.Vm.ZhuyinOnly) throw new InvalidDataException("Pure Zhuyin opt-out was not saved");
         }
     }
+    private static async Task VerifyMixedEnglishWriting(MainWindow settings, string output)
+    {
+        var toggle = (Controls.SettingToggle)settings.FindName("MixedEnglishWritingToggle");
+        foreach (bool windows in new[] { true, false })
+        {
+            settings.LoadProfile(windows);
+            var installed = settings.InstalledOptionsForVerification;
+            settings.Vm.Keyboard = 0; settings.Vm.Save(); settings.Vm.Load();
+            settings.ShowSection(MainWindow.Pages.English); await Task.Delay(100);
+            if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn) throw new InvalidDataException("Raw-key mixing official writing is not enabled by default");
+            foreach (int mode in new[] { 0, 2, 1 })
+            {
+                settings.SetMixedModeForVerification(mode); await Task.Delay(60);
+                if (toggle.IsEnabled != (mode == 1)) throw new InvalidDataException($"Raw-key mixing official writing enabled state failed for mode {mode}");
+            }
+            settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+            var saved = File.ReadAllBytes(Models.ProfileStore.Path);
+            toggle.SetToggleForVerification(false); await Task.Delay(60);
+            if (settings.Vm.MixedEnglishWriting || toggle.IsOn || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved))
+                throw new InvalidDataException("Raw-key mixing official writing toggle did not remain an unsaved draft");
+            foreach (int keyboard in new[] { 0, 1, 2, 3, 4, 0 }.Where(k => (k != 1 || installed.standard) && (k != 2 || installed.eten)))
+            {
+                settings.Vm.Keyboard = keyboard; await Task.Delay(60);
+                if (toggle.IsEnabled != (keyboard < 3)) throw new InvalidDataException($"Raw-key mixing official writing availability failed for keyboard {keyboard}");
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+                if (settings.Vm.MixedEnglishWriting || toggle.IsOn || Models.ProfileStore.Load().Flag("input", "mixed_english_writing", true))
+                    throw new InvalidDataException("Reload lost raw-key mixing official writing opt-out preference");
+            }
+            string exported = settings.Vm.ExportPreset("原鍵混打保留原樣");
+            if (!exported.Contains("mixed_english_writing=0")) throw new InvalidDataException("Shared preset lost mixed_english_writing=0");
+            if (windows)
+            {
+                settings.LoadProfile(true);
+                if (!settings.Vm.MixedEnglishWriting) throw new InvalidDataException("Windows preset did not reset mixed_english_writing to default on");
+                settings.Vm.ImportPreset(exported, "mixed-writing-fallback");
+                if (settings.Vm.MixedEnglishWriting || settings.Vm.MixedMode != 1) throw new InvalidDataException("Shared preset import lost mixed_english_writing=0");
+                settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+            }
+            toggle.SetToggleForVerification(true); await Task.Delay(60);
+            settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
+            if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn || !Models.ProfileStore.Load().Flag("input", "mixed_english_writing", false))
+                throw new InvalidDataException("Raw-key mixing official writing re-enable was not saved");
+            settings.LoadProfile(windows); settings.Vm.Save(); settings.Vm.Load();
+        }
+        _ = output;
+    }
     private static async Task VerifyAboutModels(MainWindow settings, string output, string? feature = null)
     {
         // GitHub's account type alone does not exclude automation accounts using a regular User account.
@@ -251,6 +297,8 @@ internal static class VisualVerifier
         if (feature == "disabled-settings") { settings.Close(); return; }
         if (feature is null or "zhuyin-mode") await VerifyZhuyinMode(settings, output);
         if (feature == "zhuyin-mode") { settings.Close(); return; }
+        if (feature is null or "mixed-english-writing") await VerifyMixedEnglishWriting(settings, output);
+        if (feature == "mixed-english-writing") { settings.Close(); return; }
         if (feature is "about-models" or "contributors" or "model-picker")
         {
             settings.Vm.Save();
@@ -386,13 +434,32 @@ internal static class VisualVerifier
         }
         File.WriteAllText(Models.ProfileStore.Path, beforeRight); settings.Vm.Load();
         // 0.6.0: per-key punctuation and a shared preset round-trip that keeps personal data.
+        settings.Vm.PunctuationLayout = 1;
         settings.Vm.SetAllPunctuation(false, false); settings.Vm.PlainKeys[0].IsOn = true; settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.PunctuationLayout != 1 || !settings.Vm.PlainKeys.Single(key => key.Key == "plain_backslash").Label.StartsWith("＼"))
+            throw new InvalidDataException("McBopomofo punctuation setting or key label did not survive reload");
         if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn) throw new InvalidDataException("Per-key punctuation persistence failed");
+        settings.Vm.ResetHalfPunctuation();
+        if (settings.Vm.HalfPunct || !settings.Vm.HalfPunctKeys[2].IsOn || settings.Vm.HalfPunctKeys[9].IsOn)
+            throw new InvalidDataException("Half-width punctuation defaults differ");
+        settings.Vm.HalfPunct = true;
+        settings.Vm.HalfPunctKeys[9].IsOn = true;
+        settings.Vm.HalfPunctKeys[2].IsOn = false;
+        settings.Vm.Save(); settings.Vm.Load();
+        if (!settings.Vm.HalfPunct || !settings.Vm.HalfPunctKeys[9].IsOn || settings.Vm.HalfPunctKeys[2].IsOn)
+            throw new InvalidDataException("Half-width punctuation did not survive reload");
+        settings.Vm.HalfPunct = false;
+        settings.Vm.Save(); settings.Vm.Load();
+        if (settings.Vm.HalfPunct || !settings.Vm.HalfPunctKeys[9].IsOn || settings.Vm.HalfPunctKeys[2].IsOn)
+            throw new InvalidDataException("Disabling half-width punctuation lost the key choices");
+        settings.Vm.HalfPunct = true;
         string shared = settings.Vm.ExportPreset("驗證預設");
         if (shared.Contains("font_size") || shared.Contains("dictionary")) throw new InvalidDataException("Exported preset carries personal data");
         settings.LoadProfile(true); settings.Vm.ImportPreset(shared, "fallback"); settings.RefreshPresets();
-        if (!settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
+        if (settings.Vm.PunctuationLayout != 1 || !settings.Vm.PlainKeys[0].IsOn || settings.Vm.PlainKeys[2].IsOn || settings.Vm.FontSize != 22 || !File.Exists(Path.Combine(ViewModels.SettingsViewModel.PresetFolder, "驗證預設.ini")))
             throw new InvalidDataException("Shared preset import failed");
+        if (!settings.Vm.HalfPunct || !settings.Vm.HalfPunctKeys[9].IsOn || settings.Vm.HalfPunctKeys[2].IsOn)
+            throw new InvalidDataException("Shared preset lost half-width punctuation");
         bool rejected = false;
         try { settings.Vm.ImportPreset("[candidates]\nanchor=middle\n", "bad"); } catch (InvalidDataException) { rejected = true; }
         if (!rejected) throw new InvalidDataException("Invalid preset was accepted");

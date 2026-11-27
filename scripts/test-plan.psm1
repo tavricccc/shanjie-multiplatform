@@ -1,4 +1,4 @@
-# Resolve changes once for every architecture; --no-renames keeps both sides of
+﻿# Resolve changes once for every architecture; --no-renames keeps both sides of
 # moves, including source files moved under docs/.
 function Get-VerificationChanges([string]$ProjectRoot,[string]$Ref,[string]$Scope='Branch') {
     $base=if($Scope -eq 'Commit'){'HEAD^'}elseif($Scope -eq 'Worktree'){'HEAD'}else{$Ref}
@@ -197,6 +197,7 @@ function Get-EnglishKeyCases {
     $cases=@();foreach($mode in 1,2){foreach($scenario in 'caps','caps-zh','english-symbol-order','digit-navigation'){$cases+=,@($mode,$scenario,1,1)}}
     foreach($mode in 1,2){$cases+=,@($mode,'shift-caps-zh',1,1)}
     foreach($mode in 1,2){$cases+=,@($mode,'shift',1,1)}
+    $cases+=,@(1,'shift',1,1,0);$cases+=,@(1,'shift-caps-zh',1,1,0)
     $cases+=,@(2,'shift-caps',1,1)
     $cases+=,@(2,'mixed-words',1,1);$cases+=,@(2,'mixed-words-shanjie',1,0)
     $cases+=,@(1,'eten',2,1);$cases+=,@(0,'partial',1,1);$cases+=,@(0,'whole',1,0);$cases+=,@(0,'candidate',1,1)
@@ -242,10 +243,12 @@ function Get-HarnessCasePlan([object[]]$Rows) {
             $scenario=$Matches[1];$architecture=$Matches[2]
             foreach($case in (Get-EnglishKeyCases)) {
                 if($case[1] -ne $scenario){continue}
+                $mixedWriting=if($case.Count -gt 4){$case[4]}else{1}
+                $suffix=if($case.Count -gt 4){if($mixedWriting){'-official-writing'}else{'-verbatim-writing'}}else{''}
                 [pscustomobject]@{
-                    name="$($row.name)/mode$($case[0])-keyboard$($case[2])-enter$($case[3])"
+                    name="$($row.name)/mode$($case[0])-keyboard$($case[2])-enter$($case[3])$suffix"
                     parent=$row.name; preset=$row.preset; category='english.keys'
-                    parameters=@{architecture=$architecture;scenario=$scenario;mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3]}
+                    parameters=@{architecture=$architecture;scenario=$scenario;mode=$case[0];keyboard=$case[2];enter_to_cursor=$case[3];mixed_english_writing=$mixedWriting}
                     selected=$row.selected; reason=$row.reason; status='not-run'; attempts=@(); flaky=$false
                 }
             }
