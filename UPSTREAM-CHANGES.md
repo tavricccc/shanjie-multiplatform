@@ -28,6 +28,8 @@ Windows 外觀新增 `[appearance] accent=default|windows|custom`、`accent_colo
 
 Windows 詞庫匯出先套用 #123，恢復「系上」（ㄒㄧˋ ㄕㄤˋ）與「挨到」（ㄞ ㄉㄠˋ），再套用 #125 從疊加層移除 533 個會擠掉常見讀音的詞，共 549 筆讀音。出貨的 `overlay-add.tsv` 與原作者提交 `5ab7307ad11c` 逐位元相同，測試匯出同步採用相符的數字、解碼與預測基準。詞庫由 Windows 直接載入，生成工具與裁剪清單由上游維護。 [上游 PR #123](https://github.com/Nanako0129/shanjie/pull/123) · [上游 PR #125](https://github.com/Nanako0129/shanjie/pull/125)
 
+Windows 採用原作者提交 `dfbeb954bb63` 的 8,441 詞專名層與來源紀錄，包含新增的「浮洲站」、「善解輸入法」及「小檜溪」讀音。出貨授權檔與來源標示帶入 47 個政府開放資料集的資料集編號與機關，詞庫測試採用相符的數字、預測及解碼基準。專名層與原有疊加詞庫一起載入。 [上游 PR #131](https://github.com/Nanako0129/shanjie/pull/131)
+
 [上游 PR #102](https://github.com/Nanako0129/shanjie/pull/102) 的混合詞解碼、英文補全、`nopredict` 詞表欄位及 `^en:` 學習鍵隨固定核心與詞庫取得。Windows 上游判斷路徑保留實際 Shift 邊界與英文大小寫，已進入英文預測列時數字鍵用於選字。原鍵混打及倚天沿用既有路徑。兩套操作範本保留原預測預設。英文預測列出現時顯示 Tab，沒有候選時回到英文提示。右錨點的混合詞及還原英文字候選沿用完整 token 與後接音節的範圍。
 
 `^en:` 共用既有學習 TSV、Windows 原子替換與跨行程協調。舊版略過此鍵，完整改寫時會移除新鍵紀錄，其他紀錄沿用原格式。原上游 [#103](https://github.com/Nanako0129/shanjie/pull/103)、[#104](https://github.com/Nanako0129/shanjie/pull/104)、[#105](https://github.com/Nanako0129/shanjie/pull/105) 的 Swift timing、macOS 重排優先度及 Orca 前文只保留在子模組。
@@ -127,6 +129,7 @@ Windows 直接字面、標點與空白插入先結束較早的 Shift 英文暫�
 - Windows 單獨聲調關閉（`standalone_tones=0`）時，閒置按聲調鍵仍輸入字面數字，不開上游數字串。Windows 互動模式開啟時，空組字按聲調鍵一律輸入聲調符號，所以 `3`、`4`、`6`、`7` 不能作為數字串開頭；善解互動模式照上游，開啟英文時由數字串取代。
 - Windows 的「→ 右方向鍵」為 `[candidates] right_action=none|page|expand`：預設「無」保留原方向鍵，「下一頁」沿用舊開關，「展開」開啟三欄多列候選。舊 `right_pages=0/1` 分別遷移為 `none/page`；已有新選項時優先保留。兩種互動模式收合時 ↑↓ 逐項移動；展開時沿同一直排 ±3 移動，最上列 ↑ 收回，末列向下停在原位。核心未套用 Windows 選項時保留上游九欄；輸出視窗與數字仍依反白所在的九項群組選字。預測與聯想不展開。
 - 數字鍵盤的 0–9 與 `+ - * / .` 走字面插入，不當注音；組字仍可編輯，候選開啟時 1–9 保留選字。有未完成讀音時先提交讀音再輸入字面字元；內碼輸入中的九宮格數字視為內碼。全形模式下字面字元一併轉為全形。
+- 「部分符號使用半形」預設關閉，可在中文模式選擇 27 個符號鍵，啟用時預設採用上游的 14 鍵配置。勾選鍵優先以半形進入組字，沿用 Windows 的全／半形候選與待完成讀音設定。倚天保留單按 `'`／`=` 的注音，反引號快捷鍵仍有優先權。關閉後保留已儲存的勾選。 [原作者 #132](https://github.com/Nanako0129/shanjie/pull/132)
 - 「標點保留未完成讀音」是 Windows 選項（`[input] punctuation_keeps_reading`），新設定檔預設關、與上游相同；從舊版升級的設定檔設為開，維持原本打字結果。
 - 語意校正：上游在背景佇列跑完後回主執行緒套用；Windows 由常駐核心在每個會話的專用背景執行緒（`Shanjie rerank`，`THREAD_PRIORITY_NORMAL`）跑，與上游 macOS #104 採 `userInitiated` QoS 目標一致但維持與前景／Pipe 執行緒同級且不改程序優先序類別；不重新解碼的按鍵保留既有工作，TSF 每 15 ms 以不帶序號的非阻塞請求（200 ms 期限）查詢是否完成（最多 2 秒，候選窗開著時不提前消費），完成後才送出有序號的 `Op::Rerank` 套用。這個請求記在重建組字的紀錄裡，核心重啟後照樣重放，候選順序與重啟前相同。另保留預設關閉的 `rerank-timing` Cargo feature 供離線純數值時間線量測與隔離優先序實驗。
 - 依 App 自動：上游用 macOS bundle ID 與選單裡的「這個 App 用聊天設定」；Windows 用執行檔名稱，清單在設定頁直接編輯（`[engine] chat_apps`），沒有輸入法選單項目。
