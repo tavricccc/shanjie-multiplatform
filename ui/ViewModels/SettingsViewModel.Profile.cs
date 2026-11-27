@@ -71,7 +71,7 @@ public partial class SettingsViewModel
             AnimationMode = Math.Max(0,Array.IndexOf(new[] { "system", "on", "off" },profile.Read("appearance","animation","system")));
             Learning = profile.Flag("input", "learning", false); Associations = profile.Flag("input", "associations", false);
             Alphanumeric = profile.Flag("input", "alphanumeric", Interaction == 0); Keyboard = profile.Number("input", "keyboard", 0);
-            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); MixedEnglishWriting = profile.Flag("input", "mixed_english_writing", false); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
+            MixedTolerance = profile.Flag("input", "mixed_tolerance", false); MixedEnglishWriting = profile.Flag("input", "mixed_english_writing", true); ReadingPanel = profile.Flag("candidates", "reading_panel", false);
             AddWord = profile.Flag("shortcuts", "add_word", true);
             AddWordSide = profile.Number("shortcuts", "add_word_side", 0);
             AddWordShortcut = profile.Number("shortcuts", "add_word_shortcut", 0);

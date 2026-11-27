@@ -43,8 +43,8 @@ cl /nologo /std:c++20 /EHsc /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /DNOMINMAX /
   foreach($case in $cases){
    if($Scenarios -and $case[1] -notin $Scenarios){continue}
    if($PSBoundParameters.ContainsKey('MixedModes') -and $case[0] -notin $MixedModes){continue}
-   $mixedWriting=if($case.Count -gt 4){$case[4]}else{0}
-   $suffix=if($mixedWriting){'-official-writing'}else{''}
+   $mixedWriting=if($case.Count -gt 4){$case[4]}else{1}
+   $suffix=if($case.Count -gt 4){if($mixedWriting){'-official-writing'}else{'-verbatim-writing'}}else{''}
    $folder=Join-Path $out "mode$($case[0])-layout$($case[2])-$($case[1])$suffix";if(Test-Path $folder){throw 'Use a fresh result directory'}
    New-Item -ItemType Directory "$folder/profile/Shanjie" -Force|Out-Null
    $preset=if($case[1] -eq 'mixed-words-shanjie'){'shanjie'}else{'windows'}

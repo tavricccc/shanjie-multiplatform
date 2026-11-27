@@ -109,7 +109,7 @@ internal static class VisualVerifier
             var installed = settings.InstalledOptionsForVerification;
             settings.Vm.Keyboard = 0; settings.Vm.Save(); settings.Vm.Load();
             settings.ShowSection(MainWindow.Pages.English); await Task.Delay(100);
-            if (settings.Vm.MixedEnglishWriting || toggle.IsOn) throw new InvalidDataException("Raw-key mixing official writing is enabled by default");
+            if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn) throw new InvalidDataException("Raw-key mixing official writing is not enabled by default");
             foreach (int mode in new[] { 0, 2, 1 })
             {
                 settings.SetMixedModeForVerification(mode); await Task.Delay(60);
@@ -117,31 +117,31 @@ internal static class VisualVerifier
             }
             settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
             var saved = File.ReadAllBytes(Models.ProfileStore.Path);
-            toggle.SetToggleForVerification(true); await Task.Delay(60);
-            if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved))
+            toggle.SetToggleForVerification(false); await Task.Delay(60);
+            if (settings.Vm.MixedEnglishWriting || toggle.IsOn || !settings.Vm.HasChanges || !File.ReadAllBytes(Models.ProfileStore.Path).SequenceEqual(saved))
                 throw new InvalidDataException("Raw-key mixing official writing toggle did not remain an unsaved draft");
             foreach (int keyboard in new[] { 0, 1, 2, 3, 4, 0 }.Where(k => (k != 1 || installed.standard) && (k != 2 || installed.eten)))
             {
                 settings.Vm.Keyboard = keyboard; await Task.Delay(60);
                 if (toggle.IsEnabled != (keyboard < 3)) throw new InvalidDataException($"Raw-key mixing official writing availability failed for keyboard {keyboard}");
                 settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
-                if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn || !Models.ProfileStore.Load().Flag("input", "mixed_english_writing", false))
-                    throw new InvalidDataException("Reload lost raw-key mixing official writing preference");
+                if (settings.Vm.MixedEnglishWriting || toggle.IsOn || Models.ProfileStore.Load().Flag("input", "mixed_english_writing", true))
+                    throw new InvalidDataException("Reload lost raw-key mixing official writing opt-out preference");
             }
-            string exported = settings.Vm.ExportPreset("原鍵混打正式拼寫");
-            if (!exported.Contains("mixed_english_writing=1")) throw new InvalidDataException("Shared preset lost mixed_english_writing=1");
+            string exported = settings.Vm.ExportPreset("原鍵混打保留原樣");
+            if (!exported.Contains("mixed_english_writing=0")) throw new InvalidDataException("Shared preset lost mixed_english_writing=0");
             if (windows)
             {
                 settings.LoadProfile(true);
-                if (settings.Vm.MixedEnglishWriting) throw new InvalidDataException("Windows preset did not reset mixed_english_writing to default off");
+                if (!settings.Vm.MixedEnglishWriting) throw new InvalidDataException("Windows preset did not reset mixed_english_writing to default on");
                 settings.Vm.ImportPreset(exported, "mixed-writing-fallback");
-                if (!settings.Vm.MixedEnglishWriting || settings.Vm.MixedMode != 1) throw new InvalidDataException("Shared preset import lost mixed_english_writing=1");
+                if (settings.Vm.MixedEnglishWriting || settings.Vm.MixedMode != 1) throw new InvalidDataException("Shared preset import lost mixed_english_writing=0");
                 settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
             }
-            toggle.SetToggleForVerification(false); await Task.Delay(60);
+            toggle.SetToggleForVerification(true); await Task.Delay(60);
             settings.Vm.Save(); settings.Vm.Load(); await Task.Delay(60);
-            if (settings.Vm.MixedEnglishWriting || toggle.IsOn || Models.ProfileStore.Load().Flag("input", "mixed_english_writing", true))
-                throw new InvalidDataException("Raw-key mixing official writing opt-out was not saved");
+            if (!settings.Vm.MixedEnglishWriting || !toggle.IsOn || !Models.ProfileStore.Load().Flag("input", "mixed_english_writing", false))
+                throw new InvalidDataException("Raw-key mixing official writing re-enable was not saved");
             settings.LoadProfile(windows); settings.Vm.Save(); settings.Vm.Load();
         }
         _ = output;

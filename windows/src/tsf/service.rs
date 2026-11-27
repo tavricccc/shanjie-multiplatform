@@ -1096,7 +1096,7 @@ pub(super) fn option_operations(p:&Document) -> [crate::broker::Op;6] {
      crate::broker::Op::English(english),
      crate::broker::Op::Mixed(mixed),
      crate::broker::Op::Tolerance(zhuyin && p.flag("input","mixed_tolerance",false)),
-     crate::broker::Op::MixedEnglishWriting(mixed && p.flag("input","mixed_english_writing",false))]
+     crate::broker::Op::MixedEnglishWriting(mixed && p.flag("input","mixed_english_writing",true))]
 }
 unsafe extern "C" fn changed(context: *mut c_void, kind: u32) {
     let weak = &*(context as *const std::rc::Weak<Data>);

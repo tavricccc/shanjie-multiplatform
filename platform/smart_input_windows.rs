@@ -510,6 +510,14 @@ mod windows_smart_tests {
         assert_eq!(engine.key(Key::new(KeyKind::Enter)).unwrap().commit, "Chatgpt");
         engine.set_ascii(false).unwrap();
 
+        // Setting mixed_english_writing while raw-key mixing is off does not leak into non-mixed mode.
+        let mut plain = Engine::with_lexicon(lex.clone(), Layout::Standard);
+        plain.set_windows_input_options(0);
+        plain.set_mixed_input(false);
+        plain.set_mixed_english_writing(true);
+        assert_eq!(plain.mixed_english_writing("chatgpt"), "chatgpt");
+        assert!(!plain.windows_english_word("chatgpt"));
+
         // Eten raw-key mixing works with the switch too.
         let mut eten = Engine::with_lexicon(lex, Layout::Eten);
         eten.set_windows_input_options(0);
@@ -586,7 +594,7 @@ impl Engine {
     pub fn set_mixed_english_writing(&mut self, enabled: bool) { self.mixed_english_writing = enabled; }
 
     fn mixed_english_writing(&self, raw: &str) -> String {
-        if self.mixed_english_writing && !self.ascii {
+        if self.mixed_input && self.mixed_english_writing && !self.ascii {
             english_writing(raw)
         } else {
             raw.to_string()
@@ -595,7 +603,7 @@ impl Engine {
 
     fn windows_english_word(&self, lower: &str) -> bool {
         english_word(lower)
-            || ((self.english || self.mixed_english_writing) && english_table().contains_key(lower))
+            || ((self.english || (self.mixed_input && self.mixed_english_writing)) && english_table().contains_key(lower))
     }
 
     fn has_mixed_han_entry(&self, reading: &str, tone: usize) -> bool {
@@ -959,7 +967,7 @@ impl Engine {
     }
 
     fn windows_keep_run_writing(&self) -> bool {
-        !self.english && !self.mixed_english_writing && self.windows_shifted_boundaries && !self.run_rev
+        !self.english && !(self.mixed_input && self.mixed_english_writing) && self.windows_shifted_boundaries && !self.run_rev
             && self.run.bytes().zip(&self.run_shifted).find(|(_, shifted)| **shifted)
                 .is_some_and(|(letter, _)| letter.is_ascii_uppercase())
     }
