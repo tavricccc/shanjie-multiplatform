@@ -2,6 +2,15 @@
 
 各版詳細說明見 [docs/releases/](docs/releases/)。
 
+## 0.16.1-beta.2（Windows pre-release）
+
+詳見 [0.16.1-beta.2 版本說明](docs/releases/RELEASE-NOTES-0.16.1-beta.2.md)。
+
+- 同步善解 v0.9.1 與主線 `de7d69c5` 讀音補齊，並整合上游疊加詞庫裁剪、8,441 詞台灣專名層與授權標示。
+- 新增部分符號使用半形（27 鍵可自訂，預設關閉）、麥注音標點排列（預設善解／Apple）、單按 Shift 切英數保留組字，以及半形英數模式中英自動空格。
+- 修正上游判斷模式下 Shift 起頭英文未套用正式大小寫；新增原鍵混打套用英文正式拼寫開關（預設開啟）。
+- 語意校正專用背景執行緒改為 `THREAD_PRIORITY_NORMAL`，改善高 CPU 負載下的校正套用率。
+
 ## 0.16.1-beta.1（Windows pre-release）
 
 詳見 [0.16.1-beta.1 版本說明](docs/releases/RELEASE-NOTES-0.16.1-beta.1.md)。
