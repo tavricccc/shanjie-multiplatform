@@ -4,7 +4,6 @@ name: release
 on:
   push:
     branches: [main]
-    paths: [windows/Cargo.toml]
   workflow_dispatch:
     inputs:
       mode:
@@ -28,10 +27,18 @@ jobs:
   release:
     name: Plan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       build_linux: ${{ steps.release.outputs.build_linux }}
+      run_release: ${{ steps.release.outputs.run_release }}
+      run_full_tests: ${{ steps.release.outputs.run_full_tests }}
+      reuse_source_commit: ${{ steps.release.outputs.reuse_source_commit }}
       publish: ${{ steps.release.outputs.publish }}
+      reason: ${{ steps.release.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
         with:
@@ -41,24 +48,36 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'publish' }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+          TARGET_BRANCH: ${{ github.ref_name }}
         run: |
-          flags=()
-          if [ "$VERIFY_ONLY" = "true" ]; then flags=(--verify); fi
+          flags=(--event-name "$EVENT_NAME")
+          if [ -n "$EVENT_BEFORE" ]; then flags+=(--before "$EVENT_BEFORE"); fi
+          if [ -n "$TARGET_BRANCH" ]; then flags+=(--branch "$TARGET_BRANCH"); fi
+          if [ "$VERIFY_ONLY" = "true" ]; then flags+=(--verify); fi
           python3 scripts/release.py plan "${flags[@]}"
 
   windows:
     name: Windows Release
     needs: release
+    if: needs.release.outputs.run_release == 'true'
     uses: ./.github/workflows/release-windows.yml
+    permissions:
+      contents: read
+      actions: read
     with:
       cargo_diagnostics: ${{ github.event_name == 'workflow_dispatch' && inputs.cargo_diagnostics }}
+      run_release: ${{ needs.release.outputs.run_release == 'true' }}
+      run_full_tests: ${{ needs.release.outputs.run_full_tests == 'true' }}
+      reuse_source_commit: ${{ needs.release.outputs.reuse_source_commit }}
       build_linux: ${{ needs.release.outputs.build_linux == 'true' }}
       publish: ${{ needs.release.outputs.publish == 'true' }}
 
   z-linux:
     name: Linux Release
     needs: release
-    if: needs.release.outputs.build_linux == 'true'
+    if: needs.release.outputs.run_release == 'true' && needs.release.outputs.build_linux == 'true'
     uses: ./.github/workflows/release-linux.yml
     with:
       build_linux: ${{ needs.release.outputs.build_linux == 'true' }}
@@ -67,7 +86,8 @@ jobs:
     name: Publish
     needs: [windows, z-linux]
     if: >-
-      ${{ always() && needs.windows.outputs.publish == 'true' &&
+      ${{ always() && needs.windows.outputs.run_release == 'true' &&
+          needs.windows.outputs.publish == 'true' &&
           needs.windows.result == 'success' &&
           ((needs.windows.outputs.build_linux == 'true' && needs.z-linux.result == 'success') ||
            (needs.windows.outputs.build_linux == 'false' && needs.z-linux.result == 'skipped')) }}

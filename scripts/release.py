@@ -47,9 +47,13 @@ CI_TEST_CONTRACT_PATHS = (
     'scripts/prepare-smart-input.ps1',
     'scripts/prepare-test-payload.ps1',
     'scripts/preserve-output.ps1',
+    'scripts/release-ci.psm1',
+    'scripts/release-costs.json',
     'scripts/release-support.psm1',
     'scripts/release.py',
     'scripts/release_artifacts.py',
+    'scripts/release_ci.py',
+    'scripts/release_evidence.py',
     'scripts/release_linux.py',
     'scripts/runner-diagnostics.ps1',
     'scripts/sync-upstream.ps1',
@@ -137,7 +141,7 @@ class GitHub:
             with urllib.request.urlopen(request, timeout=300) as response:
                 return json.load(response)
 
-    def download_artifact(self, artifact_id):
+    def download_artifact(self, artifact_id, max_bytes=CI_CONTEXT_MAX_ZIP_BYTES):
         if type(artifact_id) is not int or artifact_id <= 0:
             raise ValueError('Invalid artifact ID')
         # Never send the GitHub token to an untrusted or redirected storage URL.
@@ -149,9 +153,9 @@ class GitHub:
         redirect_url = None
         try:
             with opener.open(request, timeout=60) as response:
-                data = response.read(CI_CONTEXT_MAX_ZIP_BYTES + 1)
-                if len(data) > CI_CONTEXT_MAX_ZIP_BYTES:
-                    raise ValueError('CI context artifact exceeds size limit')
+                data = response.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError('Artifact exceeds size limit')
                 return data
         except urllib.error.HTTPError as error:
             try:
@@ -168,9 +172,9 @@ class GitHub:
         download = urllib.request.Request(redirect_url, method='GET', headers={'User-Agent': 'Shanjie-Release'})
         try:
             with urllib.request.urlopen(download, timeout=60) as response:
-                data = response.read(CI_CONTEXT_MAX_ZIP_BYTES + 1)
-                if len(data) > CI_CONTEXT_MAX_ZIP_BYTES:
-                    raise ValueError('CI context artifact exceeds size limit')
+                data = response.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError('Artifact exceeds size limit')
                 return data
         except urllib.error.HTTPError as error:
             try:
@@ -180,20 +184,88 @@ class GitHub:
             finally:
                 error.close()
 
-def configuration(root, sha):
-    if not re.fullmatch('[0-9a-f]{40}', sha):
-        raise ValueError('A full source commit is required')
-    channel = json.loads((root / 'RELEASE-CHANNEL.json').read_text(encoding='utf-8-sig'))
-    match = re.search(r'^version = "([^"]+)"', (root / 'windows/Cargo.toml').read_text(), re.M)
-    if not match or channel['version'] != match[1] or type(channel['prerelease']) is not bool or type(channel['build_linux']) is not bool:
-        raise ValueError('Release channel does not match the source version')
-    version = match[1]
-    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-beta\.\d+)?', version):
+def validate_release_channel(channel, context='current commit'):
+    if not isinstance(channel, dict):
+        raise ValueError(f'release_channel_policy_conflict: invalid RELEASE-CHANNEL.json object in {context}')
+    unknown_keys = sorted(set(channel) - RELEASE_CHANNEL_KEYS)
+    if unknown_keys:
+        raise ValueError(
+            f'release_channel_policy_conflict: unknown RELEASE-CHANNEL.json field(s) in {context}: '
+            f'{", ".join(unknown_keys)}; update release policy handling or bump to a new version before releasing'
+        )
+    missing_keys = sorted(RELEASE_CHANNEL_KEYS - set(channel))
+    if missing_keys:
+        raise ValueError(
+            f'release_channel_policy_conflict: RELEASE-CHANNEL.json in {context} is missing required field(s): '
+            f'{", ".join(missing_keys)}'
+        )
+    version = channel.get('version')
+    if type(version) is not str or not VERSION_RE.fullmatch(version):
         raise ValueError('Invalid release version')
+    if type(channel.get('prerelease')) is not bool or type(channel.get('build_linux')) is not bool:
+        raise ValueError('Release channel does not match the source version')
+    recommended_stable = channel.get('recommended_stable')
+    if type(recommended_stable) is not str or not STABLE_VERSION_RE.fullmatch(recommended_stable):
+        raise ValueError(
+            f'release_channel_policy_conflict: invalid recommended_stable in RELEASE-CHANNEL.json ({context})'
+        )
     if channel['prerelease'] != ('-beta.' in version):
-        raise ValueError('Release channel does not match the version suffix')
+        raise ValueError(
+            'release_channel_policy_conflict: RELEASE-CHANNEL.json prerelease does not match the version suffix; '
+            'bump to a new version or use gh release edit for an already published release'
+        )
+    return dict(channel)
+
+def parse_release_version(channel_text, cargo_text, lock_text, csproj_text):
+    channel = json.loads(channel_text)
+    channel = validate_release_channel(channel)
+    cargo = tomllib.loads(cargo_text)
+    cargo_version = cargo.get('package', {}).get('version')
+    lock = tomllib.loads(lock_text)
+    lock_versions = [pkg.get('version') for pkg in lock.get('package', []) if pkg.get('name') == 'shanjie-windows']
+    if len(lock_versions) != 1:
+        raise ValueError('Cargo.lock must contain one shanjie-windows package')
+    ui_root = ET.fromstring(csproj_text)
+    ui_versions = [el.text.strip() for el in ui_root.findall('./PropertyGroup/Version') if el.text and el.text.strip()]
+    if len(ui_versions) != 1:
+        raise ValueError('Shanjie.UI.csproj must contain one Version element')
+    version = channel['version']
+    if cargo_version != version or lock_versions[0] != version or ui_versions[0] != version:
+        raise ValueError('Release versions in Cargo, Cargo.lock, WinUI and RELEASE-CHANNEL.json must match')
+    return channel
+
+def configuration(root, sha):
+    if not SHA_RE.fullmatch(sha):
+        raise ValueError('A full source commit is required')
+    channel = parse_release_version(
+        (root / 'RELEASE-CHANNEL.json').read_text(encoding='utf-8-sig'),
+        (root / 'windows/Cargo.toml').read_text(encoding='utf-8-sig'),
+        (root / 'windows/Cargo.lock').read_text(encoding='utf-8-sig'),
+        (root / 'ui/Shanjie.UI.csproj').read_text(encoding='utf-8-sig'),
+    )
+    version = channel['version']
     notes = root / f'docs/releases/RELEASE-NOTES-{version}.md'
-    return channel | {'tag': 'v' + version, 'sha': sha, 'notes': notes.read_text(encoding='utf-8-sig')}
+    return channel | {'channel': dict(channel), 'tag': 'v' + version, 'sha': sha, 'notes': notes.read_text(encoding='utf-8-sig')}
+
+def read_remote_file(api, sha, path):
+    raw = read_remote_blob_bytes(api, sha, path)
+    if raw is None:
+        raise ValueError(f'before_commit_unavailable: unable to read {path} at commit {sha}')
+    try:
+        return raw.decode('utf-8-sig')
+    except UnicodeDecodeError as error:
+        raise ValueError(f'before_commit_unavailable: invalid content for {path} at commit {sha}') from error
+
+def read_remote_blob_bytes(api, sha, path):
+    encoded_path = urllib.parse.quote(path, safe='/')
+    item = api.request('GET', f'/contents/{encoded_path}?ref={sha}')
+    if (not isinstance(item, dict) or item.get('type') != 'file'
+            or item.get('encoding') != 'base64' or not isinstance(item.get('content'), str)):
+        return None
+    try:
+        return base64.b64decode(item['content'])
+    except ValueError:
+        return None
 
 def compute_ci_test_contract_sha256(contract_blobs):
     missing = [path for path in CI_TEST_CONTRACT_PATHS if path not in contract_blobs]
@@ -443,6 +515,296 @@ def write_ci_context(root, output_path, env, report_path=None):
     output_path.write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
     return receipt
 
+def read_before_channel(api, before):
+    if not before or not SHA_RE.fullmatch(before) or before == ZERO_SHA:
+        raise ValueError('before_commit_unavailable: push event requires a valid non-zero before commit SHA')
+    channel_text = read_remote_file(api, before, 'RELEASE-CHANNEL.json')
+    cargo_text = read_remote_file(api, before, 'windows/Cargo.toml')
+    lock_text = read_remote_file(api, before, 'windows/Cargo.lock')
+    csproj_text = read_remote_file(api, before, 'ui/Shanjie.UI.csproj')
+    try:
+        return parse_release_version(channel_text, cargo_text, lock_text, csproj_text)
+    except (ValueError, ET.ParseError) as error:
+        if str(error).startswith('release_channel_policy_conflict:'):
+            raise ValueError(
+                f'release_channel_policy_conflict: before commit {before} has invalid RELEASE-CHANNEL.json policy: {error}'
+            ) from error
+        raise ValueError(f'before_commit_unavailable: invalid version metadata at commit {before}: {error}') from error
+
+def read_before_version(api, before):
+    return read_before_channel(api, before)['version']
+
+def channel_policy_from_config(config):
+    raw = config['channel'] if 'channel' in config else {
+        key: value for key, value in config.items() if key not in ('tag', 'sha', 'notes')
+    }
+    return validate_release_channel(raw, context='current commit')
+
+def compare_release_channel_policy(before_channel, current_channel, tag):
+    validated_current = validate_release_channel(current_channel, context='current commit')
+    validated_before = validate_release_channel(before_channel, context='before commit')
+    changed = sorted(
+        key for key in (set(validated_before) | set(validated_current))
+        if key != 'version' and (
+            key not in validated_before
+            or key not in validated_current
+            or type(validated_before[key]) is not type(validated_current[key])
+            or validated_before[key] != validated_current[key]
+        )
+    )
+    if changed:
+        raise ValueError(
+            f'release_channel_policy_conflict: RELEASE-CHANNEL.json non-version policy changed '
+            f'({", ".join(changed)}) while version stayed at already published release {tag}; '
+            'published releases cannot be updated in place — bump to a new version or handle channel policy '
+            'separately (for example with gh release edit)'
+        )
+
+def _parse_ci_context_zip(raw_zip):
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw_zip)) as archive:
+            entries = archive.infolist()
+            if len(entries) != 1:
+                return None
+            entry = entries[0]
+            if entry.is_dir() or entry.filename != CI_CONTEXT_FILENAME or entry.file_size > CI_CONTEXT_MAX_JSON_BYTES:
+                return None
+            raw = archive.read(entry)
+            if len(raw) > CI_CONTEXT_MAX_JSON_BYTES:
+                return None
+            data = json.loads(raw.decode('utf-8'))
+    except (zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or set(data) != CI_CONTEXT_KEYS:
+        return None
+    return data
+
+def verify_merged_pr_ci(api, sha, target_branch='main', before=None):
+    expected_repo = getattr(api, 'repository', None)
+    if not isinstance(expected_repo, str) or not REPO_RE.fullmatch(expected_repo):
+        return {'verified': False, 'detail': 'repository_identity_unavailable'}
+    pulls = api.request('GET', f'/commits/{sha}/pulls?per_page=100')
+    if not isinstance(pulls, list):
+        return {'verified': False, 'detail': 'commit_pulls_unavailable'}
+    matching_prs = [
+        pr for pr in pulls
+        if isinstance(pr, dict)
+        and bool(pr.get('merged_at'))
+        and isinstance(pr.get('base'), dict)
+        and pr['base'].get('ref') == target_branch
+        and pr.get('merge_commit_sha') == sha
+        and isinstance(pr.get('head'), dict)
+        and isinstance(pr['head'].get('sha'), str)
+        and bool(SHA_RE.fullmatch(pr['head']['sha']))
+    ]
+    if len(matching_prs) != 1:
+        return {'verified': False, 'detail': 'no_unique_merged_pr'}
+    pr = matching_prs[0]
+    pr_number = pr.get('number')
+    pr_base_sha = pr['base'].get('sha')
+    pr_head_ref = pr['head'].get('ref')
+    pr_head_repo_obj = pr['head'].get('repo')
+    pr_head_repo = pr_head_repo_obj.get('full_name') if isinstance(pr_head_repo_obj, dict) else None
+    head_sha = pr['head']['sha']
+    if type(pr_number) is not int or pr_number <= 0:
+        return {'verified': False, 'detail': 'pr_metadata_incomplete'}
+    if not isinstance(pr_base_sha, str) or not SHA_RE.fullmatch(pr_base_sha):
+        return {'verified': False, 'detail': 'pr_base_sha_unavailable', 'pr_number': pr_number}
+    if not isinstance(pr_head_ref, str) or not pr_head_ref:
+        return {'verified': False, 'detail': 'pr_head_ref_unavailable', 'pr_number': pr_number}
+    if not isinstance(pr_head_repo, str) or not REPO_RE.fullmatch(pr_head_repo):
+        return {'verified': False, 'detail': 'pr_head_repo_unavailable', 'pr_number': pr_number}
+    query = urllib.parse.urlencode({'head_sha': head_sha, 'event': 'pull_request', 'per_page': 100})
+    runs_payload = api.request('GET', f'/actions/workflows/ci.yml/runs?{query}')
+    if not isinstance(runs_payload, dict) or not isinstance(runs_payload.get('workflow_runs'), list):
+        return {'verified': False, 'detail': 'ci_workflow_runs_unavailable', 'pr_number': pr_number}
+    candidate_runs = [
+        run for run in runs_payload['workflow_runs']
+        if isinstance(run, dict)
+        and run.get('event') == 'pull_request'
+        and run.get('head_sha') == head_sha
+        and run.get('path') == REQUIRED_CI_WORKFLOW
+        and type(run.get('id')) is int
+    ]
+    if not candidate_runs:
+        return {'verified': False, 'detail': 'ci_run_missing', 'pr_number': pr_number}
+    latest_run = max(candidate_runs, key=lambda run: (str(run.get('created_at') or ''), run['id']))
+    run_id = latest_run['id']
+    run_attempt = latest_run.get('run_attempt')
+    if type(run_attempt) is not int or run_attempt <= 0:
+        return {'verified': False, 'detail': 'ci_run_attempt_invalid', 'pr_number': pr_number, 'ci_run_id': run_id}
+    run_repo = latest_run.get('repository')
+    run_repo_name = run_repo.get('full_name') if isinstance(run_repo, dict) else None
+    run_repo_id = run_repo.get('id') if isinstance(run_repo, dict) else None
+    if run_repo_name != expected_repo:
+        return {'verified': False, 'detail': 'ci_run_repository_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    run_head_repo_obj = latest_run.get('head_repository')
+    run_head_repo = run_head_repo_obj.get('full_name') if isinstance(run_head_repo_obj, dict) else None
+    if run_head_repo != pr_head_repo:
+        return {'verified': False, 'detail': 'ci_head_repository_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if latest_run.get('head_branch') != pr_head_ref:
+        return {'verified': False, 'detail': 'ci_head_ref_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if latest_run.get('status') != 'completed':
+        return {
+            'verified': False,
+            'detail': f'ci_run_not_completed:{latest_run.get("status")}',
+            'pr_number': pr_number,
+            'ci_run_id': run_id,
+        }
+    if latest_run.get('conclusion') != 'success':
+        return {
+            'verified': False,
+            'detail': f'ci_run_conclusion:{latest_run.get("conclusion")}',
+            'pr_number': pr_number,
+            'ci_run_id': run_id,
+        }
+    jobs_payload = api.request('GET', f'/actions/runs/{run_id}/jobs?filter=latest&per_page=100')
+    if not isinstance(jobs_payload, dict) or not isinstance(jobs_payload.get('jobs'), list):
+        return {
+            'verified': False,
+            'detail': 'ci_jobs_unavailable',
+            'pr_number': pr_number,
+            'ci_run_id': run_id,
+        }
+    required_jobs = [
+        job for job in jobs_payload['jobs']
+        if isinstance(job, dict) and job.get('name') == REQUIRED_CI_JOB
+    ]
+    if not required_jobs or any(
+        job.get('status') != 'completed'
+        or job.get('conclusion') != 'success'
+        or job.get('run_attempt') != run_attempt
+        for job in required_jobs
+    ):
+        return {
+            'verified': False,
+            'detail': 'ci_required_job_not_succeeded',
+            'pr_number': pr_number,
+            'ci_run_id': run_id,
+        }
+    if not before or not SHA_RE.fullmatch(before) or before == ZERO_SHA:
+        return {'verified': False, 'detail': 'ci_workflow_untrusted', 'pr_number': pr_number, 'ci_run_id': run_id}
+    before_ci_bytes = read_remote_blob_bytes(api, before, REQUIRED_CI_WORKFLOW)
+    current_ci_bytes = read_remote_blob_bytes(api, sha, REQUIRED_CI_WORKFLOW)
+    if before_ci_bytes is None or current_ci_bytes is None:
+        return {'verified': False, 'detail': 'ci_workflow_untrusted', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if before_ci_bytes != current_ci_bytes:
+        return {'verified': False, 'detail': 'ci_workflow_modified', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if CI_TEST_COMMAND_IDENTITY.encode('utf-8') not in current_ci_bytes:
+        return {'verified': False, 'detail': 'ci_workflow_untrusted', 'pr_number': pr_number, 'ci_run_id': run_id}
+    expected_ci_workflow_sha256 = hashlib.sha256(current_ci_bytes).hexdigest()
+    before_contract_blobs = {REQUIRED_CI_WORKFLOW: before_ci_bytes}
+    for rel_path in CI_TEST_CONTRACT_PATHS:
+        if rel_path == REQUIRED_CI_WORKFLOW:
+            continue
+        before_blob = read_remote_blob_bytes(api, before, rel_path)
+        current_blob = read_remote_blob_bytes(api, sha, rel_path)
+        if before_blob is None or current_blob is None:
+            return {'verified': False, 'detail': 'ci_test_contract_untrusted', 'pr_number': pr_number, 'ci_run_id': run_id}
+        if before_blob != current_blob:
+            return {'verified': False, 'detail': 'ci_test_contract_modified', 'pr_number': pr_number, 'ci_run_id': run_id}
+        before_contract_blobs[rel_path] = before_blob
+    expected_ci_test_contract_sha256 = compute_ci_test_contract_sha256(before_contract_blobs)
+    artifacts_payload = api.request('GET', f'/actions/runs/{run_id}/artifacts?per_page=100')
+    if not isinstance(artifacts_payload, dict) or not isinstance(artifacts_payload.get('artifacts'), list):
+        return {'verified': False, 'detail': 'ci_context_artifacts_unavailable', 'pr_number': pr_number, 'ci_run_id': run_id}
+    expected_artifact_name = f'{CI_CONTEXT_ARTIFACT_PREFIX}{run_id}-{run_attempt}'
+    matching_artifacts = [
+        item for item in artifacts_payload['artifacts']
+        if isinstance(item, dict) and item.get('name') == expected_artifact_name
+    ]
+    if len(matching_artifacts) != 1:
+        return {'verified': False, 'detail': 'ci_context_artifact_missing', 'pr_number': pr_number, 'ci_run_id': run_id}
+    artifact = matching_artifacts[0]
+    artifact_id = artifact.get('id')
+    if artifact.get('expired') is not False or type(artifact_id) is not int or artifact_id <= 0:
+        return {'verified': False, 'detail': 'ci_context_artifact_invalid', 'pr_number': pr_number, 'ci_run_id': run_id}
+    artifact_run = artifact.get('workflow_run')
+    if not isinstance(artifact_run, dict) or artifact_run.get('id') != run_id:
+        return {'verified': False, 'detail': 'ci_context_artifact_run_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if type(run_repo_id) is int and artifact_run.get('repository_id') != run_repo_id:
+        return {'verified': False, 'detail': 'ci_context_artifact_repo_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if artifact_run.get('head_sha') != head_sha or artifact_run.get('head_branch') != pr_head_ref:
+        return {'verified': False, 'detail': 'ci_context_artifact_head_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    download_url = artifact.get('archive_download_url')
+    expected_download_url = f'https://api.github.com/repos/{expected_repo}/actions/artifacts/{artifact_id}/zip'
+    if download_url is not None and download_url != expected_download_url:
+        return {'verified': False, 'detail': 'ci_context_artifact_repo_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    raw_zip = api.download_artifact(artifact_id)
+    if raw_zip is None:
+        return {'verified': False, 'detail': 'ci_context_artifact_missing', 'pr_number': pr_number, 'ci_run_id': run_id}
+    expected_digest = artifact.get('digest')
+    if expected_digest is not None:
+        actual_digest = 'sha256:' + hashlib.sha256(raw_zip).hexdigest()
+        if expected_digest != actual_digest:
+            return {'verified': False, 'detail': 'ci_context_artifact_digest_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    receipt = _parse_ci_context_zip(raw_zip)
+    if receipt is None:
+        return {'verified': False, 'detail': 'ci_context_invalid', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['repository'] != expected_repo:
+        return {'verified': False, 'detail': 'ci_context_repository_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if type(receipt['run_id']) is not int or receipt['run_id'] != run_id:
+        return {'verified': False, 'detail': 'ci_context_run_id_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if type(receipt['run_attempt']) is not int or receipt['run_attempt'] != run_attempt:
+        return {'verified': False, 'detail': 'ci_context_run_attempt_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if type(receipt['pull_request_number']) is not int or receipt['pull_request_number'] != pr_number:
+        return {'verified': False, 'detail': 'ci_context_pr_number_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['base_ref'] != target_branch:
+        return {'verified': False, 'detail': 'ci_context_base_ref_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if (not isinstance(receipt['base_sha'], str) or not SHA_RE.fullmatch(receipt['base_sha'])
+            or receipt['base_sha'] != pr_base_sha or receipt['base_sha'] != before):
+        return {'verified': False, 'detail': 'ci_context_base_sha_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['head_repository'] != pr_head_repo:
+        return {'verified': False, 'detail': 'ci_context_head_repository_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['head_ref'] != pr_head_ref:
+        return {'verified': False, 'detail': 'ci_context_head_ref_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['head_sha'] != head_sha:
+        return {'verified': False, 'detail': 'ci_context_head_sha_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if not isinstance(receipt['checkout_sha'], str) or not SHA_RE.fullmatch(receipt['checkout_sha']):
+        return {'verified': False, 'detail': 'ci_context_checkout_invalid', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if not isinstance(receipt['checkout_tree_sha'], str) or not SHA_RE.fullmatch(receipt['checkout_tree_sha']):
+        return {'verified': False, 'detail': 'ci_context_checkout_invalid', 'pr_number': pr_number, 'ci_run_id': run_id}
+    parents = receipt['checkout_parent_shas']
+    if (not isinstance(parents, list) or len(parents) < 2
+            or any(not isinstance(parent, str) or not SHA_RE.fullmatch(parent) for parent in parents)
+            or parents[0] != receipt['base_sha'] or parents[1] != receipt['head_sha']):
+        return {'verified': False, 'detail': 'ci_context_parents_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if (not isinstance(receipt['ci_workflow_sha256'], str)
+            or not SHA256_RE.fullmatch(receipt['ci_workflow_sha256'])
+            or receipt['ci_workflow_sha256'] != expected_ci_workflow_sha256):
+        return {'verified': False, 'detail': 'ci_workflow_hash_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if (not isinstance(receipt['ci_test_contract_sha256'], str)
+            or not SHA256_RE.fullmatch(receipt['ci_test_contract_sha256'])
+            or receipt['ci_test_contract_sha256'] != expected_ci_test_contract_sha256):
+        return {'verified': False, 'detail': 'ci_test_contract_hash_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['test_command_identity'] != CI_TEST_COMMAND_IDENTITY:
+        return {'verified': False, 'detail': 'ci_test_command_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    ctest_error = _validate_ci_ctest_evidence(
+        receipt['ctest_inventory'], receipt['ctest_results'], receipt['ctest_junit_sha256']
+    )
+    if ctest_error:
+        return {'verified': False, 'detail': ctest_error, 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['job_name'] != REQUIRED_CI_JOB:
+        return {'verified': False, 'detail': 'ci_context_job_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['test_result'] != 'success':
+        return {'verified': False, 'detail': 'ci_context_result_not_success', 'pr_number': pr_number, 'ci_run_id': run_id}
+    main_commit = api.request('GET', f'/git/commits/{sha}')
+    main_tree = main_commit.get('tree') if isinstance(main_commit, dict) else None
+    main_tree_sha = main_tree.get('sha') if isinstance(main_tree, dict) else None
+    if (not isinstance(main_commit, dict) or main_commit.get('sha') != sha
+            or not isinstance(main_tree_sha, str) or not SHA_RE.fullmatch(main_tree_sha)):
+        return {'verified': False, 'detail': 'main_commit_tree_unavailable', 'pr_number': pr_number, 'ci_run_id': run_id}
+    if receipt['checkout_tree_sha'] != main_tree_sha:
+        return {'verified': False, 'detail': 'ci_tree_sha_mismatch', 'pr_number': pr_number, 'ci_run_id': run_id}
+    return {
+        'verified': True,
+        'pr_number': pr_number,
+        'ci_run_id': run_id,
+        'ci_run_attempt': run_attempt,
+        'tree_sha': main_tree_sha,
+        'ci_test_contract_sha256': expected_ci_test_contract_sha256,
+    }
+
 def marker(config):
     return f'<!-- shanjie-release-source:{config["sha"]} -->'
 
@@ -472,17 +834,96 @@ def existing(api, config):
                 break
             obj = api.request('GET', '/git/tags/' + obj['sha'])['object']
         if obj['type'] != 'commit' or obj['sha'] != config['sha']:
-            raise ValueError('Tag belongs to another source commit')
+            raise ValueError('version_tag_conflict: Tag belongs to another source commit')
         if not release:
-            raise ValueError('Tag exists without a release; review it before publishing')
+            raise ValueError('version_tag_conflict: Tag exists without a release; review it before publishing')
     if release and (marker(config) not in (release.get('body') or '')
                     or release.get('target_commitish') != config['sha']
                     or release.get('tag_name') != config['tag']):
         raise ValueError('Draft source is missing or differs; refusing to modify it')
     return release
 
-def plan(api, config, verify):
-    return not verify and not ((release := existing(api, config)) and not release['draft'])
+def plan_release(api, config, verify=False, event_name='workflow_dispatch', before=None, target_branch='main'):
+    if verify:
+        return {'run_release': True, 'run_full_tests': True, 'publish': False, 'reason': 'verify_requested'}
+    import release_evidence as evidence
+    if event_name not in ('push', 'workflow_dispatch'):
+        raise ValueError(f'Unsupported release plan event: {event_name!r}')
+    if event_name == 'push' and before and not SHA_RE.fullmatch(before):
+        raise ValueError(f'before_commit_unavailable: invalid before commit SHA {before!r}')
+    current_channel = channel_policy_from_config(config)
+    release = existing(api, config)
+    if release and not release['draft']:
+        if event_name == 'push':
+            before_channel = read_before_channel(api, before)
+            before_version = before_channel['version']
+            if before_version != config['version']:
+                raise ValueError(
+                    f'version_tag_conflict: version changed from {before_version} to {config["version"]}, '
+                    f'but published release {config["tag"]} already exists'
+                )
+            compare_release_channel_policy(before_channel, current_channel, config['tag'])
+            trust = verify_merged_pr_ci(api, config['sha'], target_branch=target_branch, before=before)
+            if not trust['verified']:
+                result = {
+                    'run_release': True,
+                    'run_full_tests': True,
+                    'publish': False,
+                    'reason': 'pr_ci_unverified_release_required',
+                    'before_version': before_version,
+                    'ci_trust_detail': trust['detail'],
+                }
+                if trust.get('pr_number') is not None:
+                    result['pr_number'] = trust['pr_number']
+                if trust.get('ci_run_id') is not None:
+                    result['ci_run_id'] = trust['ci_run_id']
+                return result
+            try:
+                unchanged = evidence.remote_fingerprint(api, before) == evidence.remote_fingerprint(api, config['sha'])
+            except (ValueError, OSError, KeyError) as error:
+                return {'run_release': True, 'run_full_tests': True, 'publish': False,
+                        'reason': 'test_inputs_unverified_release_required', 'detail': str(error)}
+            if not unchanged:
+                return {'run_release': True, 'run_full_tests': True, 'publish': False,
+                        'reason': 'product_changes_require_full_release'}
+            return {
+                'run_release': False,
+                'run_full_tests': False,
+                'publish': False,
+                'reason': 'existing_published_tag_no_release_needed',
+                'before_version': before_version,
+                'pr_number': trust['pr_number'],
+                'ci_run_id': trust['ci_run_id'],
+                'ci_run_attempt': trust['ci_run_attempt'],
+                'tree_sha': trust['tree_sha'],
+                'ci_test_contract_sha256': trust['ci_test_contract_sha256'],
+            }
+        return {
+            'run_release': False,
+            'run_full_tests': False,
+            'publish': False,
+            'reason': 'existing_published_tag_no_release_needed',
+        }
+    if release and release['draft']:
+        return {'run_release': True, 'run_full_tests': True, 'publish': True, 'reason': 'draft_release_resume_required'}
+    # Until the new binaries and actual runner are available, Full is mandatory.
+    # A pure-version main push may subsequently prove a narrow Core reuse scope.
+    result = {'run_release': True, 'run_full_tests': True, 'publish': True, 'reason': 'new_release_required'}
+    if event_name == 'push':
+        before_channel = read_before_channel(api, before)
+        pulls = api.request('GET', f'/commits/{config["sha"]}/pulls?per_page=100')
+        merged = [pr for pr in pulls if isinstance(pr, dict) and pr.get('merged_at')
+                  and pr.get('merge_commit_sha') == config['sha'] and pr.get('base', {}).get('ref') == 'main'] if isinstance(pulls, list) else []
+        if target_branch != 'main' or len(merged) != 1:
+            result.update(publish=False, reason='unverified_main_push_full_release')
+        elif before_channel['version'] != config['version']:
+            result['reuse_source_commit'] = before
+    return result
+
+def plan(api, config, verify, event_name='workflow_dispatch', before=None, target_branch='main'):
+    return plan_release(
+        api, config, verify=verify, event_name=event_name, before=before, target_branch=target_branch
+    )['publish']
 
 def manifest(config, platform, folder):
     pattern = 'Shanjie-Windows-Setup.exe' if platform == 'windows' else 'shanjie-linux-*.tar.gz'
@@ -577,6 +1018,9 @@ def main():
     parser.add_argument('--report', type=pathlib.Path)
     parser.add_argument('--platform', choices=['windows', 'linux'])
     parser.add_argument('--verify', action='store_true')
+    parser.add_argument('--event-name', default=os.environ.get('GITHUB_EVENT_NAME', ''))
+    parser.add_argument('--before', default='')
+    parser.add_argument('--branch', default=os.environ.get('GITHUB_REF_NAME') or 'main')
     args = parser.parse_args()
     if args.mode == 'ci-context':
         if not args.output:
@@ -592,13 +1036,43 @@ def main():
         files = assets_for(config, args.folder, args.platform)
         print(f'Verified {len(files)} release assets from {args.platform or "the required platforms"}')
         return
-    api = GitHub(os.environ['GITHUB_REPOSITORY'], os.environ['GH_TOKEN'])
     if args.mode == 'plan':
-        outputs = {'tag': config['tag'], 'build_linux': config['build_linux'], 'publish': plan(api, config, args.verify)}
+        api = None if args.verify else GitHub(os.environ['GITHUB_REPOSITORY'], os.environ['GH_TOKEN'])
+        decision = plan_release(
+            api, config, verify=args.verify, event_name=args.event_name,
+            before=args.before, target_branch=args.branch,
+        )
+        outputs = {
+            'tag': config['tag'],
+            'build_linux': config['build_linux'],
+            'run_release': decision['run_release'],
+            'run_full_tests': decision['run_full_tests'],
+            'reuse_source_commit': decision.get('reuse_source_commit', ''),
+            'publish': decision['publish'],
+            'reason': decision['reason'],
+        }
+        summary = (f"Release plan: tag={outputs['tag']} run_release={str(outputs['run_release']).lower()} "
+                   f"run_full_tests={str(outputs['run_full_tests']).lower()} publish={str(outputs['publish']).lower()} reason={outputs['reason']}")
+        if 'before_version' in decision:
+            summary += f" before_version={decision['before_version']}"
+        if 'pr_number' in decision and decision['pr_number'] is not None:
+            summary += f" pr=#{decision['pr_number']}"
+        if 'ci_run_id' in decision and decision['ci_run_id'] is not None:
+            summary += f" ci_run={decision['ci_run_id']}"
+        if 'ci_run_attempt' in decision and decision['ci_run_attempt'] is not None:
+            summary += f" ci_attempt={decision['ci_run_attempt']}"
+        if 'tree_sha' in decision:
+            summary += f" tree={decision['tree_sha']}"
+        if 'ci_test_contract_sha256' in decision:
+            summary += f" contract={decision['ci_test_contract_sha256'][:12]}"
+        if 'ci_trust_detail' in decision:
+            summary += f" ci_trust_detail={decision['ci_trust_detail']}"
+        print(summary)
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
             for key, value in outputs.items():
                 print(f'{key}={str(value).lower() if isinstance(value, bool) else value}', file=stream)
     else:
+        api = GitHub(os.environ['GITHUB_REPOSITORY'], os.environ['GH_TOKEN'])
         publish(api, config, args.folder)
 
 if __name__ == '__main__':

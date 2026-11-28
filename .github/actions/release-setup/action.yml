@@ -2,7 +2,7 @@ name: Release Windows setup
 description: Pinned upstream and fingerprint-checked build caches for parallel RELEASE jobs
 inputs:
   role:
-    description: build, core or verify
+    description: build, core, verify, native or core-run
     required: true
   architecture:
     description: Windows target architecture
@@ -23,7 +23,13 @@ runs:
       env:
         SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/windows-release-x64.toml', 'windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'windows/*.rc', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'scripts/build.ps1', 'scripts/release-pipeline.ps1', 'scripts/cargo-input-cache.ps1', 'scripts/cargo-cache-key.ps1', 'scripts/test-support.psm1', 'assets/mode/**', 'ui/Assets/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
       run: pwsh -NoProfile -File scripts/cargo-cache-key.ps1 -Profile release
+    - name: Record compiler and SDK identity
+      shell: pwsh
+      env:
+        RELEASE_TOOLCHAIN: ${{ steps.key.outputs.x64_prefix }}
+      run: '"SHANJIE_RELEASE_TOOLCHAIN_IDENTITY=$env:RELEASE_TOOLCHAIN" >> $env:GITHUB_ENV'
     - name: Cache Cargo registry downloads
+      if: inputs.role == 'build' || inputs.role == 'core' || inputs.role == 'verify'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
@@ -33,7 +39,7 @@ runs:
         key: cargo-registry-v1-${{ runner.os }}-${{ hashFiles('windows/Cargo.lock', 'shared/Cargo.toml', 'upstream/shanjie/core/Cargo.toml') }}
         restore-keys: cargo-registry-v1-${{ runner.os }}-
     - name: Cache product compilation outputs
-      if: inputs.role != 'core'
+      if: inputs.role == 'build' || inputs.role == 'verify'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |

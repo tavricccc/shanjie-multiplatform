@@ -63,14 +63,14 @@ function Get-ReleaseSnapshot([string]$ProjectRoot,[string]$SnapshotId,[string]$M
     if($VerifyFiles){
         # Copy rejects links; checking again prevents replacement with a junction.
         foreach($item in Get-ChildItem -LiteralPath $path -Recurse -Force){if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw "Linked snapshot input: $($item.FullName)"}}
-        $paths=@('payload','packaging','native')+@(if($record.files.ContainsKey('core-tests/bundle.json')){'core-tests'})
+        $paths=@('payload','packaging','native')+@(if($record.files.ContainsKey('core-tests/bundle.json')){'core-tests'})+@(if($record.files.ContainsKey('ci-reuse/source.json')){'ci-reuse'})+@(if($record.files.ContainsKey('ci-plan.json')){'ci-plan.json'})
         $files=Get-RelativeFileEntries -Root $path -Paths $paths -RequirePaths
         Assert-ReleaseFileMap $record.files $files 'Release snapshot'
     }
     [pscustomobject]@{id=$SnapshotId;sha256=$ManifestHash;root=$path;runtime_root=(Join-Path $path 'payload');source=$record.source;files=$record.files}
 }
 
-function New-ReleaseSnapshot([string]$ProjectRoot,[string]$SnapshotId,$Identity,[string]$CoreBundleRoot) {
+function New-ReleaseSnapshot([string]$ProjectRoot,[string]$SnapshotId,$Identity,[string]$CoreBundleRoot,[string]$CiReuseRoot,[string]$CiPlanPath) {
     if($SnapshotId -notmatch '^[0-9a-f]{32}$'){throw 'Invalid release snapshot identifier.'}
     $path=Join-Path $ProjectRoot "build/release-snapshots/$SnapshotId"
     if(Test-Path -LiteralPath $path){throw 'Release snapshots cannot be overwritten or reused for another run.'}
@@ -103,11 +103,21 @@ function New-ReleaseSnapshot([string]$ProjectRoot,[string]$SnapshotId,$Identity,
             else{$key.Substring('payload/'.Length)}
         if(!$before.ContainsKey($source) -or $before[$source] -cne $entry.Value){throw "Snapshot copy differs from build input: $key"}
     }
+    $snapshotInputs=@('payload','packaging','native')
     if($CoreBundleRoot){
         $null=Assert-CoreTestBundle $ProjectRoot $CoreBundleRoot
         Copy-ReleaseFiles $CoreBundleRoot "$path/core-tests"
-        $files=Get-RelativeFileEntries -Root $path -Paths @('payload','packaging','native','core-tests') -RequirePaths
+        $snapshotInputs+='core-tests'
     }
+    if($CiReuseRoot){
+        Copy-ReleaseFiles $CiReuseRoot "$path/ci-reuse"
+        $snapshotInputs+='ci-reuse'
+    }
+    if($CiPlanPath){
+        Copy-ReleaseFiles $CiPlanPath "$path/ci-plan.json"
+        $snapshotInputs+='ci-plan.json'
+    }
+    $files=Get-RelativeFileEntries -Root $path -Paths $snapshotInputs -RequirePaths
     $current=Get-ReleaseIdentity $ProjectRoot
     if(!$current.clean -or $current.commit -cne $Identity.commit -or $current.version -cne $Identity.version){throw 'Release source changed while sealing its snapshot.'}
     $record=[ordered]@{schema=1;id=$SnapshotId;source=$Identity;files=$files}
@@ -150,6 +160,21 @@ function Get-ReleaseArtifacts([string]$ProjectRoot,[string]$CandidateId,[object[
 # Used before packing and again by promotion. The pre-package inventory excludes
 # only release.package; all x64/x86 tests and parameter assertions stay mandatory.
 function Assert-ReleaseTestCoverage([string]$ProjectRoot,$Record,[string]$EvidencePath,[switch]$CiArtifact,[switch]$BeforePackage) {
+    if($Record.schema -eq 6){
+        if(!$CiArtifact -or !$Record.ci_safe -or $env:GITHUB_ACTIONS -ne 'true'){throw 'CI schema 6 cannot authorize a local formal RELEASE.'}
+        $sealed=Get-ReleaseSnapshot $ProjectRoot $Record.release.candidate_id $Record.release.snapshot_sha256
+        $report=Join-Path (Split-Path -Parent $EvidencePath) 'ci-coverage-input.json'
+        try{
+            $Record|ConvertTo-Json -Depth 35|Set-Content -LiteralPath $report -Encoding utf8NoBOM
+            $flags=@(if($BeforePackage){'--before-package'})
+            & python "$PSScriptRoot/release_ci.py" coverage --root $ProjectRoot --snapshot-root $sealed.root --snapshot-hash $sealed.sha256 --input $report @flags | Out-Host
+            if($LASTEXITCODE){throw 'Partitioned CI Release coverage is incomplete.'}
+        }finally{
+            if(Test-Path -LiteralPath $report){Remove-Item -LiteralPath $report}
+        }
+        return
+    }
+    if($Record.schema -eq 4 -and $Record.evidence_mode -and $Record.evidence_mode -cne 'executed'){throw 'Local schema 4 requires executed test evidence.'}
     $snapshot=Get-ReleaseSnapshot $ProjectRoot $Record.release.candidate_id $Record.release.snapshot_sha256
     if($snapshot.files.ContainsKey('core-tests/bundle.json')){
         if(!$Record.parallel -or $Record.parallel.run_id -cne $env:GITHUB_RUN_ID){throw 'Parallel release requires same-run cross-job evidence.'}
@@ -214,7 +239,8 @@ function Assert-ReleaseAcceptance([string]$ProjectRoot,[string]$ReportPath,[swit
     $record=Get-Content -LiteralPath $ReportPath -Raw|ConvertFrom-Json -AsHashtable
     $identity=Get-ReleaseIdentity $ProjectRoot
     if(!$identity.clean){throw 'Formal release requires a clean Git worktree.'}
-    if($record.schema -ne 4 -or $record.level -ne 'RELEASE' -or $record.status -ne 'passed' -or !$record.release){throw 'A completed RELEASE receipt is required; status alone is insufficient.'}
+    $validSchema=$record.schema -eq 4 -or ($CiArtifact -and $record.schema -eq 6 -and $record.ci_safe -and $env:GITHUB_ACTIONS -eq 'true')
+    if(!$validSchema -or $record.level -ne 'RELEASE' -or $record.status -ne 'passed' -or !$record.release){throw 'A completed RELEASE receipt is required; status alone is insufficient.'}
     if(!$CiArtifact -and $record.ci_safe){throw 'CI-safe or skipped interactive acceptance cannot authorize a local formal release.'}
     foreach($source in @($record.release.source_start,$record.release.source_end)){
         if(!$source.clean -or $source.commit -ne $identity.commit -or $source.version -ne $identity.version){throw 'Release receipt is dirty, stale, or belongs to another commit/version.'}
@@ -261,7 +287,7 @@ function New-ReleasePackagingPermit([string]$ProjectRoot,[string]$Path,$Record) 
     $identity=Get-ReleaseIdentity $ProjectRoot
     if(!$identity.clean -or $snapshot.source.commit -cne $identity.commit -or $snapshot.source.version -cne $identity.version){throw 'Release source changed before packaging.'}
     if(Test-Path -LiteralPath $Path){throw 'Packaging permits cannot be overwritten.'}
-    [IO.File]::WriteAllText($Path,($Record|ConvertTo-Json -Depth 18),[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($Path,($Record|ConvertTo-Json -Depth 35),[Text.UTF8Encoding]::new($false))
     (Get-Item -LiteralPath $Path).IsReadOnly=$true
     Assert-ReleasePackagingPermit $ProjectRoot $Path $snapshot.id $snapshot.sha256
 }
@@ -272,7 +298,8 @@ function Assert-ReleasePackagingPermit([string]$ProjectRoot,[string]$Path,[strin
     $reportsRoot=[IO.Path]::GetFullPath((Join-Path $ProjectRoot 'build/reports'))+[IO.Path]::DirectorySeparatorChar
     if(!$Path.StartsWith($reportsRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'Packaging evidence must belong to this worktree.'}
     $record=Get-Content -LiteralPath $Path -Raw|ConvertFrom-Json -AsHashtable
-    if($record.schema -ne 4 -or $record.level -ne 'RELEASE' -or $record.status -ne 'tests-passed' -or $record.release.candidate_id -cne $SnapshotId -or $record.release.snapshot_sha256 -cne $ManifestHash){throw 'Packaging permit does not match the tested release snapshot.'}
+    $validSchema=$record.schema -eq 4 -or ($record.schema -eq 6 -and $record.ci_safe -and $env:GITHUB_ACTIONS -eq 'true')
+    if(!$validSchema -or $record.level -ne 'RELEASE' -or $record.status -ne 'tests-passed' -or $record.release.candidate_id -cne $SnapshotId -or $record.release.snapshot_sha256 -cne $ManifestHash){throw 'Packaging permit does not match the tested release snapshot.'}
     if(@(Compare-Object @('x64','x86') @($record.release.architectures)).Count){throw 'Packaging requires both architectures.'}
     $snapshot=Get-ReleaseSnapshot $ProjectRoot $SnapshotId $ManifestHash -VerifyFiles
     $identity=Get-ReleaseIdentity $ProjectRoot

@@ -152,6 +152,9 @@ Assert-Rejected 'missing architecture' {param($r) $r.release.architectures=@('x6
 Assert-Rejected 'missing result' {param($r) $r.results=@($r.results[0])}
 Assert-Rejected 'JUnit recorded against another snapshot' {param($r) $r.ctest[1].snapshot_id='0'*32}
 Assert-Rejected 'skipped result' {param($r) $r.results[0].status='not-run'}
+Assert-Rejected 'CI reuse schema cannot authorize local RELEASE' {param($r) $r.schema=5;$r.ci_safe=$true;$r.evidence_mode='mixed'}
+Assert-Rejected 'partitioned CI schema cannot authorize local RELEASE' {param($r) $r.schema=6;$r.ci_safe=$true;$r.evidence_mode='mixed'}
+Assert-Rejected 'local schema 4 cannot claim reused evidence' {param($r) $r.evidence_mode='mixed'}
 Assert-Rejected 'status without evidence' {param($r) $r.ctest=@();$r.results=@()}
 Assert-Rejected 'missing combination' {param($r) $r.subcases=@($r.subcases[0])}
 Assert-Rejected 'different combination parameters' {param($r) $r.subcases[0].parameters.keyboard=2}

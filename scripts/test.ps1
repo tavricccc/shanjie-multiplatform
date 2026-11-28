@@ -14,15 +14,21 @@ param(
     [switch]$ReleaseVerify,
     [string]$SnapshotId,
     [string]$SnapshotHash,
-    [string]$ReportDirectory
+    [string]$ReportDirectory,
+    [string]$CiPartition
 )
 $ErrorActionPreference='Stop'
 if($ReleaseVerify -and ($Level -ne 'RELEASE' -or !$SnapshotId -or !$SnapshotHash -or !$ReportDirectory)){throw 'ReleaseVerify requires RELEASE, a sealed snapshot and a separate report directory.'}
+if($CiPartition -and (!$ReleaseVerify -or !$CiSafe -or $env:GITHUB_ACTIONS -ne 'true' -or $RetryFailures -or $DiagnosticTests.Count)){
+    throw 'A CI partition requires GitHub Actions and CI-safe RELEASE verification without replays.'
+}
 if($Architecture -eq 'x86' -and $Level -notin 'AFFECTED','RELEASE'){throw '-Architecture x86 is supported by AFFECTED/RELEASE; CI, FAST and FULL use the x64 baseline.'}
 $root=Split-Path $PSScriptRoot -Parent
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/test-plan.psm1" -ErrorAction Stop
 Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+if($CiPartition){Import-Module "$PSScriptRoot/release-ci.psm1" -ErrorAction Stop}
+$ciSelection=$null
 $channel=Get-Content -LiteralPath "$root/RELEASE-CHANNEL.json" -Raw|ConvertFrom-Json
 $version=$channel.version
 $sourceStart=$null;$sourceEnd=$null;$releaseData=$null;$snapshot=$null;$packagingPermit=$null
@@ -653,6 +659,13 @@ try {
         if($ReleaseVerify){
             $selection.Selected=@($selection.Selected | Where-Object name -NotIn 'full.core-suite','release.package')
         }
+        if($CiPartition){
+            $ciSelection=Get-CiSelection $snapshot $CiPartition $reportRoot $inventory $preset
+            if(@($ciSelection.selected | Where-Object {$_ -notin $selection.Selected.name}).Count){
+                throw 'The CI partition includes tests outside the authorized RELEASE selection.'
+            }
+            $selection.Selected=@($selection.Selected | Where-Object name -In $ciSelection.selected)
+        }
         if($Level -eq 'CI'){Assert-FixedCiSelection $selection.Selected}
         $selectedByPreset[$preset]=$selection.Selected
         $unselectedByPreset[$preset]=$selection.Omitted
@@ -685,6 +698,7 @@ try {
     if(!$skipTests) {
         foreach($preset in $presets) {
             $selected=@($selectedByPreset[$preset]|Where-Object name -NE 'release.package')
+            if($CiPartition){$selected=@($selected|Where-Object name -NotIn @($ciSelection.reused.Keys))}
             if(!$selected.Count){continue}
             if($snapshot){$null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles}
             Invoke-CmakeBuild $preset $selected
@@ -712,7 +726,9 @@ try {
             $schedulingByPreset[$preset]['cost_data_exists_after']=(Test-Path -LiteralPath $costDataPath)
             if($snapshot){
                 $null=Get-ReleaseSnapshot $root $snapshot.id $snapshot.sha256 -VerifyFiles
-                Assert-ReleaseRuntimeFixture $snapshot (Join-Path $root "build/cmake/$preset/test-payload-$($snapshot.id)") $preset.Substring(8)
+                if(!$CiPartition -or 'RuntimePayload' -in $ciSelection.fixtures){
+                    Assert-ReleaseRuntimeFixture $snapshot (Join-Path $root "build/cmake/$preset/test-payload-$($snapshot.id)") $preset.Substring(8)
+                }
             }
         }
     }
@@ -760,6 +776,13 @@ try {
     $observed=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach($result in $testResults){[void]$observed.Add("$($result.preset)::$($result.name)")}
     $executedCount=$testResults.Count
+    if($CiPartition){
+        foreach($name in $ciSelection.reused.Keys){
+            $testResults+=,[pscustomobject]@{name=$name;preset="windows-$Architecture";status='passed';evidence_mode='reused';
+                duration_seconds=0;attempts=@();source=$ciSelection.reused[$name]}
+            [void]$observed.Add("windows-${Architecture}::$name")
+        }
+    }
     foreach($selected in @($selectedByPreset.Values | ForEach-Object { $_ })) {
         $key="$($selected.preset)::$($selected.name)"
         if(!$observed.Contains($key)){
@@ -812,7 +835,7 @@ try {
         }catch{$overallStatus='failed';$failureMessage=$_.Exception.Message}
     }
     $report=[ordered]@{
-        schema=if($Level -eq 'RELEASE'){4}else{3}
+        schema=if($CiPartition){6}elseif($Level -eq 'RELEASE'){4}else{3}
         version=$version
         commit=if($sourceEnd){$sourceEnd.commit}else{(& git -C $root rev-parse HEAD)}
         worktree_dirty=if($sourceEnd){!$sourceEnd.clean}else{[bool](@(& git -C $root status --porcelain --untracked-files=normal).Count)}
@@ -872,8 +895,13 @@ try {
     Write-Host "Selected CTest rows: $($allSelected.Count); not selected: $($allOmitted.Count); elapsed: $($whole.Elapsed.TotalSeconds.ToString('F3'))s"
     Stop-Transcript | Out-Null
     if($ReleaseVerify){
-        $receipt=@{schema=1;architecture=$Architecture;status=$overallStatus;commit=$sourceEnd.commit;snapshot_id=$snapshot.id;snapshot_sha256=$snapshot.sha256;
-            run_id=$env:GITHUB_RUN_ID;root=$reportRoot;files=(Get-RelativeFileEntries -Root $reportRoot -Paths @('.') -RequirePaths)}
+        if($CiPartition -and $overallStatus -eq 'passed'){
+            Complete-CiTestReport $snapshot $reportRoot $CiPartition
+        }
+        $receipt=@{schema=if($CiPartition){6}else{1};architecture=$Architecture;status=$overallStatus;commit=$sourceEnd.commit;
+            version=$sourceEnd.version;partition=$CiPartition;snapshot_id=$snapshot.id;snapshot_sha256=$snapshot.sha256;
+            run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;root=$reportRoot;
+            files=(Get-RelativeFileEntries -Root $reportRoot -Paths @('.') -RequirePaths)}
         $receipt | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $reportRoot 'evidence.json') -Encoding utf8NoBOM
     }
     $env:SHANJIE_TEST_RUN_ID=$previousRunId

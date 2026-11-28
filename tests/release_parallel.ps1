@@ -138,6 +138,7 @@ Reject-Core 'snapshot SHA-256 mismatch' {param($r) $r.snapshot_sha256='0'*64}
 Reject-Core 'old source' {param($r) $r.commit='0'*40}
 Reject-Core 'old Actions run' {param($r) $r.run_id='different-run'}
 Reject-Core 'test result reuse' {param($r) $r.results[0].reused=$true}
+Reject-Core 'CI schema is rejected by the strict executed-only verifier' {param($r) $r.schema=2;$r.results[0].executed=$false;$r.results[0].reused=$true;$r.results[0].evidence_mode='reused'}
 Reject-Core 'changed binary fingerprint' {param($r) $r.results[0].executable_sha256='0'*64}
 $firstReceipt=$original | ConvertFrom-Json
 $testLog=Join-Path $receipts[0].DirectoryName $firstReceipt.results[0].stdout

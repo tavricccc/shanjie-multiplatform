@@ -72,6 +72,7 @@ function New-CoreTestBundle([string]$ProjectRoot,[string]$Destination,[object[]]
     $names=Get-CoreTestNames $ProjectRoot
     if(@($rows).Count -ne $names.Count -or @(Compare-Object $names @($rows.name)).Count){throw 'Cargo did not prepare the complete upstream core inventory.'}
     $record=[ordered]@{schema=1;commit=(& git -C $ProjectRoot rev-parse HEAD);source_fingerprint=(Get-CoreSourceFingerprint $ProjectRoot);
+        toolchain=$env:SHANJIE_RELEASE_TOOLCHAIN_IDENTITY;
         source_key=$SourceKey;manifest_directory=$tree;skip_arguments=$SkipArguments;binaries=$rows;shards=@(Get-CoreShardPlan $names);
         files=(Get-RelativeFileEntries -Root $Destination -Paths @('test') -RequirePaths)}
     $record | ConvertTo-Json -Depth 12 | Set-Content "$Destination/bundle.json" -Encoding utf8NoBOM
@@ -91,17 +92,27 @@ function Assert-CoreTestBundle([string]$ProjectRoot,[string]$BundleRoot) {
     $record
 }
 
-function Invoke-CoreTestShard([string]$ProjectRoot,$Snapshot,[string]$Shard,[string]$OutputDirectory) {
+function Invoke-CoreTestShard([string]$ProjectRoot,$Snapshot,[string]$Shard,[string]$OutputDirectory,[string[]]$CiTests) {
     $bundleRoot=Join-Path $Snapshot.root 'core-tests'
     $bundle=Assert-CoreTestBundle $ProjectRoot $bundleRoot
     # Upstream uses compile-time env!(CARGO_MANIFEST_DIR). Actions checkouts have
     # the same path; refuse a relocated artifact rather than reading other data.
     $tree=Join-Path $ProjectRoot 'build/test/core'
     if([IO.Path]::GetFullPath($bundle.manifest_directory) -cne [IO.Path]::GetFullPath($tree)){throw 'Core binary compile-time fixture path differs from this checkout.'}
-    $plan=@($bundle.shards | Where-Object id -ceq $Shard)
+    $plan=if($CiTests){
+        if($env:GITHUB_ACTIONS -ne 'true' -or !$Snapshot.files.ContainsKey('ci-plan.json')){throw 'Dynamic Core shards require the sealed CI plan.'}
+        @(@{id=$Shard;tests=$CiTests})
+    }else{@($bundle.shards | Where-Object id -ceq $Shard)}
+    $plan=@($plan)
     if($plan.Count -ne 1 -or (Test-Path "$OutputDirectory/receipt.json")){throw 'Unknown shard or already executed shard receipt.'}
     Copy-ReleaseFiles "$bundleRoot/test" "$ProjectRoot/build/test"
     $null=New-Item -ItemType Directory -Path $OutputDirectory -Force
+    $environment=@{}
+    if($CiTests){
+        & python "$PSScriptRoot/release_evidence.py" environment --output "$OutputDirectory/environment.json"
+        if($LASTEXITCODE){throw 'Cannot identify the Core test execution environment.'}
+        $environment=Get-Content "$OutputDirectory/environment.json" -Raw | ConvertFrom-Json -AsHashtable
+    }
     $rows=[Collections.Generic.List[object]]::new()
     $status='failed'
     try {
@@ -125,6 +136,7 @@ function Invoke-CoreTestShard([string]$ProjectRoot,$Snapshot,[string]$Shard,[str
             $summary=[regex]::Match($log,'test result: ok\. (\d+) passed; 0 failed; (\d+) ignored;')
             $passed=($exit -eq 0 -and $summary.Success -and ([int]$summary.Groups[1].Value+[int]$summary.Groups[2].Value) -eq $binary.cases.Count)
             $rows.Add(@{name=$name;status=if($passed){'passed'}else{'failed'};exit_code=$exit;executed=$true;reused=$false;
+                evidence_mode='executed';
                 duration_seconds=$watch.Elapsed.TotalSeconds;threads=$threads;processes=1;arguments=$arguments;executable_sha256=$bundle.files[$binary.executable];
                 stdout=[IO.Path]::GetFileName($stdout);stderr=[IO.Path]::GetFileName($stderr);stdout_sha256=(Get-FileHash $stdout).Hash.ToLowerInvariant();stderr_sha256=(Get-FileHash $stderr).Hash.ToLowerInvariant()})
             Write-Host ("{0} {1} ({2:F1}s, {3} threads)" -f $rows[-1].status,$name,$watch.Elapsed.TotalSeconds,$threads)
@@ -132,8 +144,9 @@ function Invoke-CoreTestShard([string]$ProjectRoot,$Snapshot,[string]$Shard,[str
         }
         $status='passed'
     } finally {
-        @{schema=1;shard=$Shard;status=$status;commit=$Snapshot.source.commit;snapshot_id=$Snapshot.id;snapshot_sha256=$Snapshot.sha256;
-            bundle_sha256=(Get-FileHash "$bundleRoot/bundle.json").Hash.ToLowerInvariant();run_id=$env:GITHUB_RUN_ID;
+        @{schema=if($CiTests){6}else{1};shard=$Shard;status=$status;commit=$Snapshot.source.commit;snapshot_id=$Snapshot.id;snapshot_sha256=$Snapshot.sha256;
+            bundle_sha256=(Get-FileHash "$bundleRoot/bundle.json").Hash.ToLowerInvariant();run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;
+            environment=$environment;
             results=@($rows)} | ConvertTo-Json -Depth 10 | Set-Content "$OutputDirectory/receipt.json" -Encoding utf8NoBOM
     }
 }
