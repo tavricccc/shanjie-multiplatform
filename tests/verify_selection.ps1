@@ -20,7 +20,7 @@ Expect 'platform release workflows and composite actions' @('.github/workflows/r
 Expect 'parallel release dispatcher' @('scripts/release-pipeline.ps1','scripts/core-shards.psm1') $false @('fast','test-framework')
 Expect 'release artifact transport' @('scripts/release_artifacts.py') $false @('fast','test-framework')
 Expect 'Linux basic release gate' @('linux/scripts/test.sh','linux/scripts/package.sh','linux/tests/CMakeLists.txt','scripts/release_linux.py') $false @('fast','test-framework')
-Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.ps1') $false @('fast','test-framework')
+Expect 'Cargo cache keys and content-verified metadata are workflow-only changes' @('scripts/cargo-cache-key.ps1','scripts/cargo-input-cache.ps1') $false @('fast','test-framework')
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')

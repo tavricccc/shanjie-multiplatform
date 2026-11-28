@@ -31,6 +31,10 @@ Invoke-Timed -Name 'Release transaction self-tests (in-memory API)' -Category 't
     & python "$root/scripts/test_release.py"
     if($LASTEXITCODE){throw 'Release transaction self-tests failed.'}
 }
+Invoke-Timed -Name 'Model catalog contracts and matrix evidence (fake native checker)' -Category 'test.model-catalog' -Action {
+    & python -m unittest discover -s "$root/scripts/model_catalog" -p 'test_*.py' -q
+    if($LASTEXITCODE){throw 'Model catalog contract self-tests failed.'}
+}
 
 foreach($path in 'CMakeLists.txt','scripts/test-support.psm1','shared/Cargo.toml','shared/src/protocol.rs','windows/src/broker.rs') {
     Assert-Check (Get-VerificationImpact $path).Full "$path must expand AFFECTED to FULL"

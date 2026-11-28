@@ -26,6 +26,9 @@ if($Phase -eq 'Build'){
         ConvertTo-Json -Depth 10 | Set-Content "$parallel/build-$Architecture.json" -Encoding utf8NoBOM
     & python "$PSScriptRoot/release_artifacts.py" pack "$parallel/build-$Architecture.tar" --root $root --paths @paths "build/parallel/build-$Architecture.json"
     if($LASTEXITCODE){throw 'Cannot archive release build inputs.'}
+    if($env:SHANJIE_CARGO_CACHE_CONTEXT){
+        & "$PSScriptRoot/cargo-input-cache.ps1" -Operation Save -Architecture $Architecture -Context $env:SHANJIE_CARGO_CACHE_CONTEXT
+    }
     return
 }
 if($Phase -eq 'PrepareCore'){

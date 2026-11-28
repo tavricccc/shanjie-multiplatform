@@ -40,7 +40,10 @@ function Get-VerificationImpact([string]$Path) {
     $labels = @()
     switch -Regex ($Path) {
         '^scripts/verify-rowstats\.ps1$' { $labels=@('test-framework');$reason='G05 is a manual special test; automatic acceptance only checks its classification.';break }
-        '^(scripts/(release|release_artifacts|release_linux|test_release)\.py|\.github/workflows/(release(?:-(?:platforms|windows|linux))?|ci)\.yml|\.github/actions/release-(?:setup|snapshot)/action\.yml|scripts/(cargo-cache-key|runner-diagnostics|release-pipeline|verify-(changed|selection))\.ps1|scripts/core-shards\.psm1|tests/verify_selection\.ps1)$' {
+        '^(scripts/model_catalog/(catalog\.py|test_.*\.py|probe\.ps1)|\.github/workflows/model-catalog-maintenance\.yml)$' {
+            $labels=@('test-framework');$reason='Catalog contract, matrix evidence and cache regressions; actual native model probes run in the catalog workflow.';break
+        }
+        '^(scripts/(release|release_artifacts|release_linux|test_release)\.py|\.github/workflows/(release(?:-(?:platforms|windows|linux))?|ci)\.yml|\.github/actions/release-(?:setup|snapshot)/action\.yml|scripts/(cargo-cache-key|cargo-input-cache|runner-diagnostics|release-pipeline|verify-(changed|selection))\.ps1|scripts/core-shards\.psm1|tests/verify_selection\.ps1)$' {
             $labels=@('test-framework');$reason='Selection and release transaction self-tests; no product build.';break
         }
         '^linux/(scripts/(test|package)\.sh|tests/CMakeLists\.txt)$' {
