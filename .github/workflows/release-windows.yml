@@ -1,0 +1,357 @@
+name: Windows Release
+
+on:
+  workflow_call:
+    inputs:
+      cargo_diagnostics:
+        description: Collect detailed Cargo build and fingerprint diagnostics
+        type: boolean
+        default: false
+      build_linux:
+        description: Include the optional Linux package
+        type: boolean
+        required: true
+      publish:
+        description: Publication decision from the release plan
+        type: boolean
+        required: true
+    outputs:
+      artifact_name:
+        description: Verified Windows installer artifact
+        value: ${{ jobs.package.outputs.artifact_name }}
+      publish:
+        description: Publication decision from Plan
+        value: ${{ jobs.package.outputs.publish }}
+      build_linux:
+        description: Whether Linux assets are required
+        value: ${{ jobs.package.outputs.build_linux }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-x64:
+    name: x64
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact: release-build-x64-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/release-setup
+        with:
+          role: build
+          architecture: x64
+      - name: Build x64, WinUI and shared data
+        env:
+          CARGO_LOG: ${{ inputs.cargo_diagnostics && 'cargo::compiler::fingerprint=trace' || '' }}
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Build -Architecture x64 ${{ inputs.cargo_diagnostics && '-CargoVerbose' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-build-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/parallel/build-x64.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  build-x86:
+    name: x86
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact: release-build-x86-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/release-setup
+        with:
+          role: build
+          architecture: x86
+      - name: Build x86 product and recovery probe
+        env:
+          CARGO_LOG: ${{ inputs.cargo_diagnostics && 'cargo::compiler::fingerprint=trace' || '' }}
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Build -Architecture x86 ${{ inputs.cargo_diagnostics && '-CargoVerbose' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-build-x86-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/parallel/build-x86.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  prepare-core:
+    name: Core
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact: release-core-build-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/release-setup
+        with:
+          role: core
+      - name: Compile core tests
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase PrepareCore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-core-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/parallel/core-bundle.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  seal:
+    name: CTest
+    needs: [build-x64, build-x86, prepare-core]
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      snapshot_id: ${{ steps.seal.outputs.snapshot_id }}
+      snapshot_sha256: ${{ steps.seal.outputs.snapshot_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ needs.build-x64.outputs.artifact }}
+          path: build/parallel/transfer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ needs.build-x86.outputs.artifact }}
+          path: build/parallel/transfer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ needs.prepare-core.outputs.artifact }}
+          path: build/parallel/transfer
+      - name: Extract build artifacts
+        run: |
+          python scripts/release_artifacts.py unpack build/parallel/transfer/build-x64.tar --root .
+          if ($LASTEXITCODE) { throw 'x64 extraction failed.' }
+          python scripts/release_artifacts.py unpack build/parallel/transfer/build-x86.tar --root .
+          if ($LASTEXITCODE) { throw 'x86 extraction failed.' }
+          python scripts/release_artifacts.py unpack build/parallel/transfer/core-bundle.tar --root build/parallel
+          if ($LASTEXITCODE) { throw 'Core bundle extraction failed.' }
+      - name: Verify source receipts and seal common snapshot
+        id: seal
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Seal
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-snapshot-${{ steps.seal.outputs.snapshot_id }}
+          path: build/parallel/snapshot.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  CTest:
+    name: ${{ matrix.name }}
+    needs: seal
+    outputs:
+      snapshot_id: ${{ needs.seal.outputs.snapshot_id }}
+      snapshot_sha256: ${{ needs.seal.outputs.snapshot_sha256 }}
+    runs-on: windows-2025-vs2026
+    timeout-minutes: ${{ matrix.phase == 'Verify' && 45 || 30 }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+        - name: CTest x64
+          phase: Verify
+          architecture: x64
+          shard: ''
+        - name: CTest x86
+          phase: Verify
+          architecture: x86
+          shard: ''
+        - name: Core cap
+          phase: Shard
+          architecture: ''
+          shard: cap
+        - name: Core mixed
+          phase: Shard
+          architecture: ''
+          shard: mixed
+        - name: Core share
+          phase: Shard
+          architecture: ''
+          shard: share
+        - name: Core latency
+          phase: Shard
+          architecture: ''
+          shard: latency
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/release-setup
+        if: matrix.phase == 'Verify'
+        with:
+          role: verify
+          architecture: ${{ matrix.architecture }}
+      - name: Initialize pinned upstream (official, then mirror)
+        if: matrix.phase == 'Shard'
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - uses: ./.github/actions/release-snapshot
+        with:
+          id: ${{ needs.seal.outputs.snapshot_id }}
+      - name: Run CTest
+        if: matrix.phase == 'Verify'
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Verify -Architecture '${{ matrix.architecture }}' -SnapshotId '${{ needs.seal.outputs.snapshot_id }}' -SnapshotHash '${{ needs.seal.outputs.snapshot_sha256 }}'
+      - name: Run core shard
+        if: matrix.phase == 'Shard'
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Shard -Shard '${{ matrix.shard }}' -SnapshotId '${{ needs.seal.outputs.snapshot_id }}' -SnapshotHash '${{ needs.seal.outputs.snapshot_sha256 }}'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: matrix.phase == 'Verify'
+        with:
+          name: release-verify-${{ needs.seal.outputs.snapshot_id }}-${{ matrix.architecture }}
+          path: build/parallel/verify-${{ matrix.architecture }}.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: matrix.phase == 'Shard'
+        with:
+          name: release-core-${{ needs.seal.outputs.snapshot_id }}-${{ matrix.shard }}
+          path: build/parallel/core-${{ matrix.shard }}.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retain failed verification logs
+        if: failure() && matrix.phase == 'Verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: failed-verify-${{ matrix.architecture }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/reports
+          retention-days: 7
+      - name: Retain failed shard receipts and logs
+        if: failure() && matrix.phase == 'Shard'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: failed-core-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/reports
+          retention-days: 7
+
+  aggregate:
+    name: CTest Merge
+    needs: CTest
+    outputs:
+      snapshot_id: ${{ needs.CTest.outputs.snapshot_id }}
+      snapshot_sha256: ${{ needs.CTest.outputs.snapshot_sha256 }}
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - uses: ./.github/actions/release-snapshot
+        with:
+          id: ${{ needs.CTest.outputs.snapshot_id }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: release-verify-${{ needs.CTest.outputs.snapshot_id }}-*
+          merge-multiple: true
+          path: build/parallel/evidence-download
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: release-core-${{ needs.CTest.outputs.snapshot_id }}-*
+          merge-multiple: true
+          path: build/parallel/evidence-download
+      - name: Extract verification evidence
+        run: |
+          foreach ($file in Get-ChildItem build/parallel/evidence-download -Filter *.tar) {
+            python scripts/release_artifacts.py unpack $file.FullName --root .
+            if ($LASTEXITCODE) { throw 'Evidence extraction failed.' }
+          }
+      - name: Verify core receipts
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Aggregate -SnapshotId '${{ needs.CTest.outputs.snapshot_id }}' -SnapshotHash '${{ needs.CTest.outputs.snapshot_sha256 }}'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-evidence-${{ needs.CTest.outputs.snapshot_id }}
+          path: build/parallel/evidence.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retain failed aggregation logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: failed-aggregation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/reports
+          retention-days: 7
+
+  package:
+    name: Package
+    needs: aggregate
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact_name: windows-package-parallel-${{ github.run_attempt }}
+      status: ${{ job.status }}
+      publish: ${{ inputs.publish }}
+      build_linux: ${{ inputs.build_linux }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - uses: ./.github/actions/release-snapshot
+        with:
+          id: ${{ needs.aggregate.outputs.snapshot_id }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-evidence-${{ needs.aggregate.outputs.snapshot_id }}
+          path: build/parallel/evidence-download
+      - name: Extract accepted evidence
+        run: |
+          python scripts/release_artifacts.py unpack build/parallel/evidence-download/evidence.tar --root .
+          if ($LASTEXITCODE) { throw 'Evidence extraction failed.' }
+      - name: Package and verify
+        run: pwsh -NoProfile -File scripts/release-pipeline.ps1 -Phase Package -SnapshotId '${{ needs.aggregate.outputs.snapshot_id }}' -SnapshotHash '${{ needs.aggregate.outputs.snapshot_sha256 }}'
+      - name: Retain final acceptance reports and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-ctest-parallel-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/reports
+          retention-days: 14
+      - name: Build evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-package-parallel-${{ github.run_attempt }}
+          path: |
+            dist/Shanjie-Windows-Setup.exe
+            dist/Shanjie-Windows-Setup.exe.sha256
+            dist/release-source.json
+          if-no-files-found: error
+          retention-days: 7

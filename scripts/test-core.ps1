@@ -5,7 +5,8 @@
 # -UseExistingCore tests build/core as it is (verify.ps1 has just built it).
 # -UseExistingModels reuses the validated build output prepared by the parent verification run.
 # -MemoryLimit: no further test binary starts while physical memory use is above this percentage.
-param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot,[switch]$ReuseHeavyResults,[string]$CostHistoryPath,[switch]$StopOnFailure)
+param([string[]]$Tests, [switch]$NoUnitTests, [switch]$UseExistingCore, [switch]$UseExistingModels, [switch]$Rerun, [ValidateRange(10, 95)][int]$MemoryLimit = 80,[string]$RuntimeRoot,[switch]$ReuseHeavyResults,[string]$CostHistoryPath,[switch]$StopOnFailure,
+    [switch]$PrepareOnly,[string]$BundleRoot,[string]$SnapshotId,[string]$SnapshotHash,[string]$Shard,[string]$ReceiptRoot)
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot/test-support.psm1" -ErrorAction Stop
 function Get-MemoryUse {
@@ -175,6 +176,15 @@ function Sync-ChangedFiles([string]$Source, [string]$Destination) {
     $written
 }
 $root = Split-Path $PSScriptRoot -Parent
+if($Shard){
+    Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+    Import-Module "$PSScriptRoot/core-shards.psm1" -ErrorAction Stop
+    $snapshot=Get-ReleaseSnapshot $root $SnapshotId $SnapshotHash -VerifyFiles
+    Invoke-CoreTestShard $root $snapshot $Shard $ReceiptRoot
+    return
+}
+if($PrepareOnly -and ($Tests -or $NoUnitTests -or !$BundleRoot)){throw 'PrepareOnly requires a destination and the complete core suite, including library tests.'}
+if($env:SHANJIE_TEST_LEVEL -in 'FULL','RELEASE'){$Rerun=$true;$ReuseHeavyResults=$false}
 if(!$RuntimeRoot){$RuntimeRoot=Join-Path $root 'dist'}
 . "$PSScriptRoot/export-upstream.ps1"
 . "$PSScriptRoot/preserve-output.ps1"
@@ -410,6 +420,12 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     $binaries = $built | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.profile.test -and $_.executable } |
         ForEach-Object { [pscustomobject]@{ Name = $_.target.name + $(if ($_.target.kind -contains 'lib') { ' (lib)' } else { '' }); Path = $_.executable } }
     if(!@($binaries).Count){throw 'Cargo returned no upstream core test executables.'}
+    if($PrepareOnly){
+        Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+        Import-Module "$PSScriptRoot/core-shards.psm1" -ErrorAction Stop
+        New-CoreTestBundle $root $BundleRoot @($binaries) $resources $modelFixture $testKey @($skipArguments)
+        return
+    }
     $processors = [Environment]::ProcessorCount
     $jobs = [Math]::Clamp([int][Math]::Floor($processors / 2), 1, 4)
     $threads = [int][Math]::Floor($processors / $jobs)
@@ -431,7 +447,7 @@ pub fn windows_test_remove(path: impl AsRef<std::path::Path>) -> std::io::Result
     # These suites assert per-key latency. Isolate them from other binaries and
     # from each other's test cases; parallel decoding is not a latency baseline.
     $latency = @('engine_lm','engine_replay','engine_newword')
-    $heavy = @('engine_cap','engine_share') + $latency
+    $heavy = @('engine_cap','engine_mixed','engine_share') + $latency
     $heavyLogs = @(foreach($name in $heavy) { "target/test-logs/$name.txt"; "target/test-logs/$name.txt.err" })
     $heavyReceipt = Join-Path $base "passed-heavy/$key.json"
     $allHeavySelected = @($binaries | Where-Object Name -in $heavy).Count -eq $heavy.Count

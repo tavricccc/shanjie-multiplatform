@@ -68,6 +68,35 @@ try {
     Assert-PathCheck ((Get-Content -LiteralPath "$root/dist/x64/Shanjie.dll" -Raw) -ceq 'current:x86_64-pc-windows-msvc:shanjie_windows.dll') 'The x86 build did not overwrite the x64 DLL'
 } finally {$env:CARGO_TARGET_DIR=$previousTargetDir;Remove-Item Function:cargo}
 
+$verifyAst=Read-DriverAst "$project/scripts/verify.ps1"
+$runtimeAssignment=$verifyAst.Find({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$runtimeRoot'},$true)
+$modelGuard=$verifyAst.Find({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text.Contains("throw 'Run prepare-models.ps1 first to prepare the built-in model set.'")},$true)
+foreach($Architecture in 'x64','x86'){
+    $root=[IO.Path]::GetFullPath((Join-Path $ResultRoot "model-root-$Architecture"))
+    $PayloadRoot=Join-Path $root "build/test-payload-$Architecture"
+    $model=Join-Path $PayloadRoot 'data/models/builtin/bigram.winmap'
+    $null=New-Item -ItemType Directory -Path (Split-Path $model -Parent) -Force
+    [IO.File]::WriteAllText($model,'synthetic sealed model')
+    Push-Location $root
+    try {
+        . ([scriptblock]::Create($runtimeAssignment.Extent.Text))
+        . ([scriptblock]::Create($modelGuard.Extent.Text))
+        Assert-PathCheck (!(Test-Path "$root/dist")) "$Architecture smoke uses its payload model without a live dist tree"
+        $legacyModel=Join-Path $root 'dist/data/models/builtin/bigram.winmap'
+        $null=New-Item -ItemType Directory -Path (Split-Path $legacyModel -Parent) -Force
+        [IO.File]::WriteAllText($legacyModel,'unrelated live dist model')
+        Move-Item -LiteralPath $model -Destination "$model.missing"
+        $rejected=$false
+        try{. ([scriptblock]::Create($modelGuard.Extent.Text))}catch{$rejected=$true}
+        finally{Move-Item -LiteralPath "$model.missing" -Destination $model}
+        Assert-PathCheck $rejected "$Architecture smoke rejects a missing payload model even when live dist has one"
+        $PayloadRoot=$null
+        . ([scriptblock]::Create($runtimeAssignment.Extent.Text))
+        . ([scriptblock]::Create($modelGuard.Extent.Text))
+        Assert-PathCheck ($runtimeRoot -ceq [IO.Path]::GetFullPath("$root/dist")) "$Architecture legacy smoke retains the dist fallback"
+    } finally {Pop-Location}
+}
+
 $testAst=Read-DriverAst "$project/scripts/test.ps1"
 foreach($name in 'Get-ChangedPathList','Test-DocumentationOnly'){
     $definition=$testAst.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$false)
