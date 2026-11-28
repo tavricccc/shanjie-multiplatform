@@ -1,5 +1,5 @@
 """Release transactions against an in-memory GitHub API; never contacts GitHub."""
-import copy, io, json, os, pathlib, re, shutil, subprocess, sys, tarfile, tempfile, unittest
+import base64, copy, hashlib, io, json, os, pathlib, re, shutil, subprocess, sys, tarfile, tempfile, unittest, urllib.error, urllib.parse, zipfile
 from unittest import mock
 import release as r
 import release_artifacts as artifacts
@@ -235,6 +235,75 @@ class ReleaseArtifactTests(unittest.TestCase):
                 artifacts.main(['unpack', str(archive), '--root', str(root / 'output')])
             self.assertFalse((root / 'outside.txt').exists())
 
+DEFAULT_CI_WORKFLOW_TEXT = (
+    'name: ci\n'
+    'on:\n'
+    '  pull_request:\n'
+    '    branches: [main]\n'
+    'jobs:\n'
+    '  unit-tests:\n'
+    '    runs-on: windows-2025-vs2026\n'
+    '    steps:\n'
+    '      - run: pwsh -File scripts/test.ps1 -Level CI -CiSafe\n'
+)
+DEFAULT_CI_CONTRACT_FILES = {
+    path: (DEFAULT_CI_WORKFLOW_TEXT if path == r.REQUIRED_CI_WORKFLOW else f'# synthetic contract {path}\n')
+    for path in r.CI_TEST_CONTRACT_PATHS
+}
+DEFAULT_CI_CTEST_RESULTS = [
+    {'name': name, 'preset': 'windows-x64', 'status': 'passed', 'duration_seconds': round(1.0 + index, 3)}
+    for index, name in enumerate(r.REQUIRED_CI_CTEST_NAMES)
+]
+DEFAULT_CI_CTEST_JUNIT_SHA256 = {'junit-windows-x64.xml': 'a' * 64}
+
+def make_ci_context_zip(receipt, filename=r.CI_CONTEXT_FILENAME):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        payload = receipt if isinstance(receipt, (bytes, str)) else json.dumps(receipt, indent=2) + '\n'
+        archive.writestr(filename, payload)
+    return buffer.getvalue()
+
+def write_synthetic_ci_report(root, checkout_sha, test_names=r.REQUIRED_CI_CTEST_NAMES,
+                              status='passed', junit_cases=None, run_dir_name='ci-20261128-210000-12345678',
+                              level='CI', ci_safe=True, plan_only=False):
+    report_dir = pathlib.Path(root) / 'build/reports' / run_dir_name
+    report_dir.mkdir(parents=True, exist_ok=True)
+    junit_path = report_dir / 'junit-windows-x64.xml'
+    cases_for_xml = list(test_names) if junit_cases is None else list(junit_cases)
+    xml_lines = ['<testsuite name="windows-x64">']
+    for index, item in enumerate(cases_for_xml):
+        if isinstance(item, tuple):
+            name, extra = item
+        else:
+            name, extra = item, ''
+        xml_lines.append(f'  <testcase name="{name}" classname="{name}" time="{1.0 + index:.3f}" status="run">{extra}</testcase>')
+    xml_lines.append('</testsuite>\n')
+    junit_path.write_text('\n'.join(xml_lines), encoding='utf-8')
+    selected = [{'name': name, 'preset': 'windows-x64', 'labels': ['ci'], 'reason': 'Fixed CI baseline'} for name in test_names]
+    results = [
+        {'name': name, 'class': name, 'preset': 'windows-x64', 'status': status,
+         'duration_seconds': round(1.0 + index, 3), 'failure': None, 'reason': None}
+        for index, name in enumerate(test_names)
+    ]
+    report = {
+        'schema': 3,
+        'version': '0.16.1-beta.1',
+        'commit': checkout_sha,
+        'worktree_dirty': False,
+        'level': level,
+        'requested_level': level,
+        'architecture': 'x64',
+        'plan_only': plan_only,
+        'status': status,
+        'ci_safe': ci_safe,
+        'selection': {'selected': selected, 'not_selected': []},
+        'results': results,
+        'ctest': [{'preset': 'windows-x64', 'wave': '', 'attempt': 1, 'junit': str(junit_path), 'diagnostic': False}],
+    }
+    report_file = report_dir / 'report.json'
+    report_file.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+    return report_file, junit_path
+
 class FakeGitHub:
     def __init__(self):
         self.release = None
@@ -320,7 +389,10 @@ class ReleaseTests(unittest.TestCase):
         if any(error for _, error in getattr(self._outcome, 'errors', []) if error):
             print('Kept failed release test scratch:', self.folder)
         else:
-            shutil.rmtree(self.folder)
+            def make_writable(func, path, _exc):
+                os.chmod(path, 0o700)
+                func(path)
+            shutil.rmtree(self.folder, onexc=make_writable)
     def test_verify_does_not_contact_or_mutate_github(self):
         self.api.request = lambda *args: self.fail('verify mode contacted GitHub')
         self.assertFalse(r.plan(self.api, self.config, True))
@@ -564,6 +636,195 @@ class ReleaseTests(unittest.TestCase):
         self.config['prerelease'] = False
         r.publish(self.api, self.config, self.folder)
         self.assertEqual(self.api.writes[-1][2]['make_latest'], 'true')
+    def test_ci_workflow_records_and_uploads_ci_context_receipt(self):
+        workflow = (r.ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        jobs_section = workflow.split('\njobs:\n', 1)[1]
+        job_ids = re.findall(r'^  ([A-Za-z][A-Za-z0-9-]*):\n', jobs_section, flags=re.M)
+        self.assertEqual(job_ids, ['unit-tests'])
+        self.assertIn('Write CI context receipt', workflow)
+        self.assertIn('Upload CI context receipt', workflow)
+        self.assertIn("if: success() && github.event_name == 'pull_request'", workflow)
+        self.assertIn('python scripts/release.py ci-context --output build/ci-context/ci-context.json', workflow)
+        self.assertIn('name: ci-context-${{ github.run_id }}-${{ github.run_attempt }}', workflow)
+        self.assertIn('path: build/ci-context/ci-context.json', workflow)
+        self.assertIn('retention-days: 14', workflow)
+        self.assertLess(workflow.index('scripts/test.ps1 -Level CI -CiSafe'), workflow.index('Write CI context receipt'))
+        self.assertLess(workflow.index('Write CI context receipt'), workflow.index('Upload CI context receipt'))
+
+    def test_build_ci_context_in_shallow_merge_checkout_records_all_16_fields(self):
+        git_env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_CONFIG')}
+        git_env.update({
+            'GIT_AUTHOR_NAME': 'Test', 'GIT_AUTHOR_EMAIL': 'test@example.com',
+            'GIT_COMMITTER_NAME': 'Test', 'GIT_COMMITTER_EMAIL': 'test@example.com',
+        })
+        origin = self.folder / 'ci-origin'
+        origin.mkdir()
+        def git(repo_dir, *args):
+            return subprocess.check_output(['git', '-C', str(repo_dir), *args], env=git_env, text=True).strip()
+        git(origin, 'init', '-b', 'main')
+        git(origin, 'config', 'core.autocrlf', 'false')
+        for rel_path, content in DEFAULT_CI_CONTRACT_FILES.items():
+            target = origin / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content.encode('utf-8'))
+        (origin / 'app.txt').write_text('base\n', encoding='utf-8')
+        git(origin, 'add', '.')
+        git(origin, 'commit', '-m', 'base')
+        base_sha = git(origin, 'rev-parse', 'HEAD')
+        git(origin, 'checkout', '-b', 'pr-branch')
+        (origin / 'app.txt').write_text('feature\n', encoding='utf-8')
+        git(origin, 'add', 'app.txt')
+        git(origin, 'commit', '-m', 'pr change')
+        head_sha = git(origin, 'rev-parse', 'HEAD')
+        git(origin, 'checkout', 'main')
+        git(origin, 'merge', '--no-ff', 'pr-branch', '-m', 'synthetic pr merge')
+        merge_sha = git(origin, 'rev-parse', 'HEAD')
+        merge_tree_sha = git(origin, 'rev-parse', 'HEAD^{tree}')
+        shallow = self.folder / 'ci-shallow'
+        subprocess.check_call(
+            ['git', 'clone', '-c', 'core.autocrlf=false', '--depth', '1', origin.as_uri(), str(shallow)],
+            env=git_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        self.assertTrue((shallow / '.git/shallow').is_file())
+        report_file, junit_file = write_synthetic_ci_report(shallow, merge_sha)
+        output = shallow / 'build/ci-context/ci-context.json'
+        env = {
+            'CI_REPOSITORY': 'tavricccc/shanjie-multiplatform',
+            'CI_PULL_REQUEST_NUMBER': '138',
+            'CI_BASE_REF': 'main',
+            'CI_BASE_SHA': base_sha,
+            'CI_HEAD_REPOSITORY': 'HolyBearTW/shanjie-multiplatform',
+            'CI_HEAD_REF': 'feat/sync-upstream-reading-refills',
+            'CI_HEAD_SHA': head_sha,
+            'CI_RUN_ID': '46025531322',
+            'CI_RUN_ATTEMPT': '1',
+            'CI_JOB_NAME': 'unit-tests',
+        }
+        with mock.patch.dict(os.environ, git_env | env, clear=True):
+            with mock.patch.object(sys, 'argv', ['release.py', 'ci-context', '--root', str(shallow), '--output', str(output)]):
+                r.main()
+            receipt = json.loads(output.read_text(encoding='utf-8'))
+            self.assertEqual(set(receipt), r.CI_CONTEXT_KEYS)
+            expected_wf_sha = hashlib.sha256(DEFAULT_CI_WORKFLOW_TEXT.encode('utf-8')).hexdigest()
+            expected_contract_sha = r.compute_ci_test_contract_sha256(
+                {path: text.encode('utf-8') for path, text in DEFAULT_CI_CONTRACT_FILES.items()}
+            )
+            self.assertEqual(receipt, {
+                'repository': 'tavricccc/shanjie-multiplatform',
+                'pull_request_number': 138,
+                'base_ref': 'main',
+                'base_sha': base_sha,
+                'head_repository': 'HolyBearTW/shanjie-multiplatform',
+                'head_ref': 'feat/sync-upstream-reading-refills',
+                'head_sha': head_sha,
+                'checkout_sha': merge_sha,
+                'checkout_tree_sha': merge_tree_sha,
+                'checkout_parent_shas': [base_sha, head_sha],
+                'ci_workflow_sha256': expected_wf_sha,
+                'ci_test_contract_sha256': expected_contract_sha,
+                'test_command_identity': r.CI_TEST_COMMAND_IDENTITY,
+                'ctest_inventory': list(r.REQUIRED_CI_CTEST_NAMES),
+                'ctest_results': DEFAULT_CI_CTEST_RESULTS,
+                'ctest_junit_sha256': {'junit-windows-x64.xml': r.filehash(junit_file)},
+                'run_id': 46025531322,
+                'run_attempt': 1,
+                'job_name': 'unit-tests',
+                'test_result': 'success',
+            })
+            # CRLF working copy on Windows runners must still match the LF Git blob hash.
+            (shallow / '.github/workflows/ci.yml').write_bytes(DEFAULT_CI_WORKFLOW_TEXT.replace('\n', '\r\n').encode('utf-8'))
+            (shallow / 'scripts/test.ps1').write_bytes(DEFAULT_CI_CONTRACT_FILES['scripts/test.ps1'].replace('\n', '\r\n').encode('utf-8'))
+            crlf_receipt = r.build_ci_context(shallow, env)
+            self.assertEqual(crlf_receipt['ci_workflow_sha256'], expected_wf_sha)
+            self.assertEqual(crlf_receipt['ci_test_contract_sha256'], expected_contract_sha)
+            # Tampering with a test contract script before writing the receipt must be rejected.
+            (shallow / 'scripts/test.ps1').write_text('# tampered test driver\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Working tree CI test contract file differs'):
+                r.build_ci_context(shallow, env)
+            (shallow / 'scripts/test.ps1').write_bytes(DEFAULT_CI_CONTRACT_FILES['scripts/test.ps1'].encode('utf-8'))
+            # Missing CTest inventory or failed/skipped JUnit testcases must be rejected when generating a receipt.
+            bad_report, _ = write_synthetic_ci_report(
+                shallow, merge_sha, test_names=r.REQUIRED_CI_CTEST_NAMES[:-1],
+                run_dir_name='ci-20261128-210100-missing1',
+            )
+            with self.assertRaisesRegex(ValueError, 'incomplete or unexpected'):
+                r.build_ci_context(shallow, env, report_path=bad_report)
+            skipped_report, _ = write_synthetic_ci_report(
+                shallow, merge_sha,
+                junit_cases=[(name, '<skipped/>' if index == 0 else '') for index, name in enumerate(r.REQUIRED_CI_CTEST_NAMES)],
+                run_dir_name='ci-20261128-210200-skipped1',
+            )
+            with self.assertRaisesRegex(ValueError, 'failed or was skipped'):
+                r.build_ci_context(shallow, env, report_path=skipped_report)
+            # Tampering with the checked-out CI workflow before writing the receipt must be rejected.
+            (shallow / '.github/workflows/ci.yml').write_text('name: tampered\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Working tree CI workflow differs'):
+                r.build_ci_context(shallow, env)
+
+    def test_github_download_artifact_strips_authorization_on_redirect(self):
+        client = r.GitHub('tavricccc/shanjie-multiplatform', 'secret-token')
+        redirect_url = 'https://pipelines.actions.githubusercontent.com/signed-zip'
+        captured_requests = []
+        class FakeResponse(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+        class FakeOpener:
+            def open(self, req, timeout=60):
+                captured_requests.append(('api', req.full_url, dict(req.header_items())))
+                raise urllib.error.HTTPError(
+                    req.full_url, 302, 'Found', {'Location': redirect_url}, io.BytesIO(b'')
+                )
+        def fake_urlopen(req, timeout=60):
+            captured_requests.append(('blob', req.full_url, dict(req.header_items())))
+            return FakeResponse(b'PK-zip-bytes')
+        with mock.patch.object(r.urllib.request, 'build_opener', return_value=FakeOpener()), \
+             mock.patch.object(r.urllib.request, 'urlopen', side_effect=fake_urlopen):
+            data = client.download_artifact(15211522986)
+        self.assertEqual(data, b'PK-zip-bytes')
+        self.assertEqual(captured_requests[0][1], 'https://api.github.com/repos/tavricccc/shanjie-multiplatform/actions/artifacts/15211522986/zip')
+        self.assertIn('Authorization', captured_requests[0][2])
+        self.assertEqual(captured_requests[1][1], redirect_url)
+        self.assertNotIn('Authorization', captured_requests[1][2])
+        class MissingOpener:
+            def open(self, req, timeout=60):
+                raise urllib.error.HTTPError(req.full_url, 404, 'Not Found', {}, io.BytesIO(b''))
+        with mock.patch.object(r.urllib.request, 'build_opener', return_value=MissingOpener()):
+            self.assertIsNone(client.download_artifact(15211522986))
+        class ForbiddenOpener:
+            def open(self, req, timeout=60):
+                raise urllib.error.HTTPError(req.full_url, 403, 'Forbidden', {}, io.BytesIO(b''))
+        with mock.patch.object(r.urllib.request, 'build_opener', return_value=ForbiddenOpener()):
+            with self.assertRaises(urllib.error.HTTPError):
+                client.download_artifact(15211522986)
+
+    def test_ci_test_contract_paths_and_ctest_names_match_repository(self):
+        required_contract_files = {
+            '.github/workflows/ci.yml',
+            'CMakeLists.txt',
+            'CMakePresets.json',
+            'scripts/test.ps1',
+            'scripts/test-plan.psm1',
+            'scripts/test-support.psm1',
+            'scripts/ctest-case.ps1',
+            'scripts/release.py',
+        }
+        self.assertTrue(required_contract_files.issubset(set(r.CI_TEST_CONTRACT_PATHS)))
+        self.assertEqual(list(r.CI_TEST_CONTRACT_PATHS), sorted(set(r.CI_TEST_CONTRACT_PATHS)))
+        for rel_path in r.CI_TEST_CONTRACT_PATHS:
+            self.assertTrue((r.ROOT / rel_path).is_file(), f'Missing contract file: {rel_path}')
+        # The CI fixture executes these overlay generators before Cargo tests.
+        prepare_core = (r.ROOT / 'scripts/prepare-core.ps1').read_text(encoding='utf-8')
+        prepare_delegates = re.findall(r'& "\$PSScriptRoot/(prepare-[\w-]+\.ps1)"', prepare_core)
+        self.assertTrue(prepare_delegates)
+        self.assertTrue({f'scripts/{name}' for name in prepare_delegates}.issubset(r.CI_TEST_CONTRACT_PATHS))
+        cmake = (r.ROOT / 'CMakeLists.txt').read_text(encoding='utf-8')
+        cmake_ci_tests = sorted(re.findall(r'set_tests_properties\(([^\s\)]+) PROPERTIES LABELS "ci(?:;|")', cmake))
+        self.assertEqual(tuple(cmake_ci_tests), r.REQUIRED_CI_CTEST_NAMES)
+        plan_module = (r.ROOT / 'scripts/test-plan.psm1').read_text(encoding='utf-8')
+        fn_block = plan_module.split('function Assert-FixedCiSelection', 1)[1].split('\n}', 1)[0]
+        plan_ci_tests = sorted(re.findall(r"'([^']+)'", fn_block.split('\n', 2)[1]))
+        self.assertEqual(tuple(plan_ci_tests), r.REQUIRED_CI_CTEST_NAMES)
+
 
 if __name__ == '__main__':
     unittest.main()
