@@ -1,4 +1,4 @@
-# Windows 驗收流程
+# Windows 與 Linux 驗收流程
 
 `full.core.learning-status.x64`、`full.core.privacy.x64` 及對應的 x86 RELEASE 案例以隔離檔案驗證 local／pipe 學習失敗、恢復、明確關閉及隱私暫停。`private.tsf-compat` 的 `privacy-*` 用啟用前文的普通欄位做正向控制，確認前文查詢發生於第一次組字寫入前。同一階段在關閉前文、private、password 與 PIN 案例須為零讀取，隱私案例另驗證零學習寫入。組字後 TSF 自身的讀取次數另行記錄。`modifiers-*` 使用 `SetKeyboardState` 加真實 TSF callback；`range-refresh` 記錄未變文字重寫及最終組字結果。均不代表前景 App 或實體鍵盤已驗收。
 
@@ -40,9 +40,45 @@ pwsh -File scripts/verify-changed.ps1 -Base origin/main -ChangeScope Branch -Dry
 
 CI 與 Release 的子模組初始化共用 `scripts/sync-upstream.ps1`，官方讀取失敗才改用鏡像，固定 commit 不變。
 
-GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢。跨 Run 僅快取 Cargo registry 與 `shared/target`、`windows/target` 的單元測試編譯產物；Cargo 仍驗證自身 fingerprint 並實際執行測試，不快取模型、完整產品或測試成功結果。CI 不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
+Model Catalog 的 `Discover` 初始化 pinned upstream，執行原有 25 項 Contract Tests 及矩陣／快取回歸，再把 `plan.json` 與 SHA-256 命名的模型資產交給兩個獨立的 Windows Runner。`Windows x64/x86` 矩陣上限為 2，各自初始化 upstream、呼叫 `probe.ps1 -Architecture x64/x86` 建置全部原有 Rust 目標，並逐一執行所有候選模型的 native prepare 與 Chat／Formal 評估。`Assemble / Validate` 等待整個矩陣，拒絕缺漏、重複、錯誤架構或 source commit／profile／dataset／plan／資產雜湊不符的證據，完整通過後才提供原人工 publish 或 `MODEL_CATALOG_AUTOPUBLISH` 發布入口。準確率仍是選用模型的參考資訊，技術可用性判定不變。
 
-PR 指向 main 時，開啟、更新提交與重新開啟會跑輕量 CI；`workflow_dispatch` 也只跑相同集合。一般開發分支 push、本機編譯、commit 或 CTest 都不觸發 Actions。完整驗收在本機執行；未另加自動或手動 FULL workflow。既有 release workflow 仍只在 main 的版本檔變更或明確手動啟動時執行，手動預設僅驗證，發布仍受原本的版本、相依 job 與模式檢查約束。
+Catalog 的 Cargo 編譯快取依 Runner 映像、Rust／MSVC／SDK、架構 triple、Cargo manifests／lockfiles、features 與建置設定隔離，包含 `windows/target`、`shared/target`、原生資源、準備過的 core 來源與既有 Cargo input receipt；registry／Git dependencies 另行保存。每次仍呼叫正常建置，沿用來源與產物雜湊驗證後的 mtime 還原；遭拒的編譯快取移至 ignored 備份再重新建置，成功後才保存新收據。English 與內建模型準備快取仍由原腳本核對內容。各架構 accuracy cache 僅重用同模型、source commit、target、dataset SHA-256 的完整成績，native prepare 每次重跑，報告保留當次技術證據；`summary.json` 區分實跑與重用數，Cargo verbose／fingerprint 及原生探測日誌另存 diagnostics artifact。固定 CI 的 `fast.infrastructure` 也執行 Catalog 的離線合約與矩陣證據回歸，不把模擬原生 checker 的成功當成實際模型驗收。
+
+GitHub Actions 固定使用 `pwsh -File scripts/test.ps1 -Level CI -CiSafe`，不讀分支差異，即使修改 CMake、測試框架或 CI 也不擴大。它執行上游資料完整性、Windows core overlay、shared／windows Cargo 單元測試及測試框架自檢。在 `pull_request` 的 `unit-tests` 成功後，會於同一個 Job 內透過 `scripts/release.py ci-context` 讀取本次 CI 測試報告與原始 CTest JUnit XML，產生輕量 `ci-context.json` 收據（記錄 repository、PR 編號、base／head 資訊、實際 checkout commit／tree／parent SHAs、`.github/workflows/ci.yml` SHA-256、涵蓋所有控制 CI 選擇／執行與收據產生檔案的 `ci_test_contract_sha256`、測試指令身分、實際執行的 5 項固定 CI CTest 清冊 `ctest_inventory`、逐項結果 `ctest_results` 與 JUnit 雜湊 `ctest_junit_sha256`、run ID／attempt、job 名稱與成功結果），並上傳為 `ci-context-<run_id>-<run_attempt>` artifact（保存 14 天），不新增 Job 或 Runner。跨 Run 僅快取 Cargo registry 與 `shared/target`、`windows/target` 的單元測試編譯產物；Cargo 仍驗證自身 fingerprint 並實際執行測試，不快取模型、完整產品或測試成功結果。CI 不安裝 .NET、不編譯 WinUI、不下載完整 Git 歷史，也不做產品 release build、完整核心套件、TSF／UI 或封裝。保留既有 `ci` workflow 與 `unit-tests` job。
+
+PR 指向 main 時，開啟、更新提交與重新開啟會跑輕量 CI；`workflow_dispatch` 也只跑相同集合。一般開發分支 push、本機編譯、commit 或 CTest 都不觸發 Actions。完整驗收在本機執行；未另加自動或手動 FULL workflow。Release workflow 的每次 main push 都先執行輕量 Plan，另保留明確的手動入口，手動預設僅驗證，發布仍受原本的版本、相依 job 與模式檢查約束。
+
+Release Actions 由 `Plan` 平行呼叫 `Windows Release` 與 `Linux Release`，最後匯合至 `Publish`；兩個平台入口及 Publish 的相依關係維持原樣，Windows 的測試矩陣由同一次 Seal 產生。三個決策各自記錄：`run_release` 控制是否啟動平台流程，`run_full_tests` 表示完整回歸或有逐項重用，`publish` 控制新版本發布。人工 `verify` 固定為 `true / true / false`。功能、Cargo feature、依賴、核心、模型、測試或未知輸入改變，即使版本未變、舊 Tag 已發布、PR CI 成功且 Merge Tree 相同，仍為 `true / true / false`。新版本沒有可信任完整證據時為 `true / true / true`；無法確認 main 合併 PR 來源時不發布。既有同來源 Draft 續作與已公開 Release 不覆寫的契約保留。
+
+已公開 Tag 的 main push 只有在產品／測試輸入指紋完全相同、四處版本及完整 Channel 政策不變，且既有 CI Context 的同 Repository／PR／Run／Attempt／Merge Tree 與受管的 CI 執行契約檔驗證通過後，才能為 `false / false / false`。CI Context 僅支持「沒有產品影響變更」的判斷，不能替代功能第一次的完整 RELEASE。API、完整 Git Tree 或來源無法核實時保守執行 Full；版本改指已公開 Tag、未知 Channel 欄位、同版本的 `prerelease`／`recommended_stable`／`build_linux` 或其他政策改變，仍明確失敗關閉。
+
+純升版的 Plan 先保持 `run_full_tests=true`，只傳遞 `github.event.before` 的來源候選；它尚未看到新編譯產物及實際 Windows Runner，不能提前宣稱已符合重用條件。Seal 在完成當次 x64／x86、WinUI、資料與 Core 建置後才評估候選。來源必須是同 Repository 的 main push、最新 Run／Attempt 整體成功，必要 Build、FAST、CTest、實際排定的 Core 分片、Merge、Package 全數實跑成功，且具有新的 `release-test-attestation-<run>-<attempt>` artifact（90 天）。來源 Run、Attempt、Commit、Tree、Snapshot、原始收據、JUnit、子案例、37 支逐斷言日誌與 SHA-256、Artifact Digest 均須核實；不接受 PR／Fork 或舊格式 artifact，也不以 reused Run 建立下一輪完整基準。PR #138／#139 的既有歷史 Run 沒有這種 Attestation，不能認列為新格式證據。
+
+`scripts/release_evidence.py` 對完整 tracked Git Tree 的路徑、mode、blob／gitlink 內容身分計算 SHA-256 指紋，包含產品、測試、Workflow／Local Action、依賴、pin、模型與資料。只在四處版本檔正規化核准的版本值；保留所有其他原始內容，包括 Cargo features／dependencies 與 Channel 政策。文件排除僅限 `Changelog.md` 與 `docs/releases/RELEASE-NOTES-<合法版本>.md`。Core 編譯收據另核對 Rust／MSVC／SDK／Cargo 設定身分；實際 shard 逐項核對 ImageVersion、OS、CPU、程序環境與 workspace，缺少或不同就實跑。
+
+全部 37 支 Core 都是重用候選。Seal 依測試輸入指紋、各 executable SHA-256、整份 Core 共用來源與相依 DLL／模型／fixture 清冊、參數與執行緒、Rust／MSVC／SDK、Runner 映像、OS 與執行環境篩選。八支含時間檢查或量測的測試另需可比較的 CPU、負載、記憶體及專用效能 Runner 證據。GitHub 共用 Runner 無法從一次負載取樣提供這種證明，因此八支仍實跑；其他項目也只在完整證據相符時重用。Linux 啟用時兩平台維持 Full。
+
+Seal 以實際 CMake 清冊封存每項指令、參數、分片歸屬、模型鎖、處理器、fixture 與參數化子案例。CTest 中只有 `full.dist-data` 接入跨 Run 重用，須核對完整新舊出貨資料、Profiles、固定上游與腳本指紋、PowerShell／Git 和執行環境。FAST、Smoke、Windows Rust 單元測試及新版產物相關項目均實跑。其他原生案例記錄執行檔及依賴指紋；完整依賴尚無法證明等價時按 C 類實跑。出貨資料及安裝包的完整 SHA-256、候選包與新 Snapshot 一致性核對每輪照常執行。
+
+CI 專用 schema 6 分開保存本輪 JUnit／日誌、逐項 `executed` 或 `reused` 收據及完整 Core 結果。重用列保留來源 Run、Attempt、Commit、Snapshot、輸入指紋、Artifact Digest 及原始收據雜湊，沒有本輪 JUnit 或執行次數。舊 ZIP 保存在新 Snapshot 內供 Merge／Package 重驗。只有全數實跑的成功 main push 才留下新 Attestation；相同版本或找不到合格前次 Run 時回到完整分片。CI permit 只供 GitHub Actions 匯出。本機正式 RELEASE 繼續按 schema 4 核對完整當輪證據。
+
+`Linux Release / Package` 封裝後，以既有的 `scripts/release.py manifest --platform linux` 核對校驗檔並產生來源清冊，連同封裝內容上傳。`Linux Release / Package` 上傳後再重新下載這份 artifact，透過 `scripts/release.py check --platform linux` 核對來源 manifest 的同 commit／tag、Linux 平台、檔案大小、SHA-256 及校驗檔內容；不重新建置、封裝或修改 GitHub Release。Publish 等待兩個平台 Workflow，並保留原匯合條件：`run_release` 與 `publish` 必須皆為 `true`、整個 Windows Workflow 必須成功；Linux 啟用時整個 Linux Workflow 必須成功，停用時必須 skipped。任一平台失敗或取消均不能發布。verify 模式的 Publish 維持跳過；發布時仍由原本的 `release.py publish` 重新核對所有必要平台產物。Linux Release / Package 是 Linux 發布前的最後一站；不再另開 Linux Manifest、Linux Artifact Gate 或只輸出訊息的 Release Ready Job。
+
+Windows 的 x64、x86、Core 建置並行。Seal 封存本輪產物、分片計畫與來源證據，先完成五個原有 FAST 項目，再在同一 Runner 執行 x64 mixed regression，共用其 Cargo 測試編譯。FAST 通過後，x64、x86 各三個 CTest 分片與必要的 Core 分片同時展開。Core 最多六片，已完全覆蓋的分片不啟動；`engine_cap` 實跑時獨立，`engine_lm`、`engine_replay`、`engine_newword` 維持同一份分片、原順序和各一執行緒。其他分片按已保存的實測項目成本排程。
+
+各 Runner 都從同一新 Snapshot 建立自己的 RuntimePayload、Profile、TEMP、Registry／桌面與進程；CTest 鎖只約束單一 Runner。Fixture setup／cleanup 跟隨各自的使用者；額外準備有獨立收據，但同一 CTest 的正式覆蓋只認列指定分片一次。CTest Merge 擋下缺漏、重複、錯誤參數、架構、Snapshot、Run／Attempt 或雜湊，再簽發 CI permit。Package 重新核對 permit、產物和安裝包 SHA-256，成功後才可交給 Publish。原有 CI-safe 互動 UI 排除及本機實跑要求維持原樣。
+
+產品 Cargo 快取包含各架構的 `build/native-*` 與輸入時間戳清冊。`cargo-input-cache.ps1` 只在編譯情境、全部來源雜湊與全部快取產物雜湊吻合時還原來源 mtime，來源包含 crate 目錄、透過 `#[path]` 引入的 `platform/` 模組及內嵌資料，避免新 checkout 的時間戳使同內容程式碼失效；情境或來源不同時保留 Cargo 正常增量判斷，產物清冊或雜湊不符則拒絕使用。資源仍每次重新編譯到暫存檔，比對相同位元組才保留既有 `.res` 時間戳；不改 Cargo 指紋、不略過 build.rs 或測試。成功建置後才保存這份清冊，快取版本與編譯輸入綁定。GitHub Actions 的 Windows Release 預設關閉詳細 Cargo 診斷。從 Run workflow 手動勾選 `cargo_diagnostics`，可在 x64、x86 建置日誌取得 Cargo 詳細輸出、fingerprint trace 及輸入時間戳與 SHA-256。這個選項只作用於建置步驟的日誌，不進入快取鍵或變更編譯設定。
+
+### Linux 發布基本測試
+
+Linux 分支只在 `build_linux=true` 時執行。`Linux Release / Build` 在 Fedora 44 建置安裝樹，傳遞產物、產生的 core 來源與 Cargo 編譯產物；`Linux Release / CTest` 還原後透過 `linux/scripts/test.sh <安裝樹>` 實測，Cargo 仍重新驗證編譯指紋。通過後傳遞安裝樹、清冊、JUnit、日誌與收據；`Linux Release / Package` 使用 `linux/scripts/package.sh --tested <安裝樹> <收據>`，由 `scripts/release_linux.py` 核對同 commit／run、版本、完整清冊、JUnit 與安裝樹 SHA-256 後才建立 `.tar.gz` 與校驗檔，不重跑建置或測試。缺少、跳過、失敗或雜湊不一致的證據均不能封裝。
+
+直接呼叫 `linux/scripts/package.sh` 仍會先建置並執行基本 CTest，再驗證同一份收據封裝。跨 Job 只傳遞測試報告檔案，不傳遞私人 D-Bus／XDG fixture。Windows 的固定 CI 與 FULL／RELEASE 清冊不變。
+
+Linux 清冊由 `linux/tests/CMakeLists.txt` 管理，包含 shared、Linux common、IBus、settings 四組 Cargo 單元測試，以及 `linux/tests/scenarios/` 的八個既有 IBus 情境。Cargo 使用鎖定依賴與 release profile，不執行上游 37 支重型核心測試或標示為 ignored 的線上測試。CTest 依序執行並於失敗時停止；IBus 情境以安裝樹內的引擎與資料，在私人 D-Bus／IBus 與獨立 XDG profile 執行。
+
+報告保存在 `build/reports/linux-*/inventory.json`、`junit.xml` 與 `ctest.log`，Actions 無論測試成功或失敗都上傳已產生的報告。這是基本單元與隔離 IBus 驗收，不代表實際 GNOME 桌面、設定視窗操作或安裝／解除安裝已驗收。本機沒有 Linux 執行環境時，僅認列腳本語法、CTest 清冊及封裝失敗門控的合成測試。
 
 直接使用 CTest：
 
@@ -85,7 +121,7 @@ CTest 單獨執行時，先用 `scripts/build.ps1 -Architecture x64` 準備產�
 | 只有文件 | 不建置、不測試 | 0 項；規則文件更新只提示人工核對 |
 | CI workflow／交易選測規則 | 對應 Rust／交易或規則自檢 | 固定 FAST 基線 5 項；相較原本只跑 Python／選測的情境會多基線檢查，不聲稱每條路徑都更少 |
 
-`verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。本版沒有新增跨報告的全自動去重／收據合併系統；既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
+`verify-changed` 原本會自動執行 platform 的 `measure` 步驟；現在 AFFECTED 清楚列為 `required-extra`，由開發者／Codex 依 Markdown 完成並保留結果，**不自動執行、不把未量測列為 PASS**。一般 AFFECTED 不自動合併歷史報告；Release Actions 的跨 job 彙整只接受本次共同快照的證據。既有成功證據須按上述身分核對，已完成的相同驗證不額外啟動舊 wrapper。
 
 每次 JSON 都列出 CTest 選中／未選項目的理由，以及各架構英文鍵 37 組與提交流程的實際子案例。原鍵混打的 Shift 英文與 Caps Lock 後接注音各驗證正式拼寫關閉與開啟。WinUI 啟動三情境、停用控制項三種鍵盤各 initial／reopen，另有 9 個具參數的子案例。`results[].attempts` 和子案例的 `attempts` 保留每次執行，重試後通過會標示 `flaky`，首次失敗 JUnit／日誌不被覆寫。CTest fixture 會明列在計畫中；選中卻未執行的項目不能讓整輪通過。CI-safe 略過的互動項目有獨立原因，不列為 PASS。
 
@@ -204,7 +240,7 @@ CTest 與核心測試統一採用「上次失敗優先，其次耗時較長優�
 
 ## Runner 環境診斷與效能紀錄
 
-`.github/workflows/ci.yml` 與 `.github/workflows/release.yml` 在既有 Windows job 的建置測試前後呼叫 `scripts/runner-diagnostics.ps1`（不新增額外 job、不安裝診斷工具、不更動既有快取鍵與固定 CI 五項）：
+`.github/workflows/ci.yml` 在 Windows job 的建置測試前後呼叫 `scripts/runner-diagnostics.ps1`，固定 CI 五項不變。Release 的平台入口及 Windows 平行階段耗時由 Actions 顯示；雙架構 CTest 仍透過 `scripts/test.ps1` 保存取樣及階段計時，核心分片收據另存各 binary 耗時。
 
 - **執行前環境摘要（`-Phase pre`）**：於 Job Log 印出並寫入 `build/reports/runner-diagnostics.json`，涵蓋 Runner OS／Image 標籤與版本／Windows Build／架構、CPU 廠牌／型號／邏輯與實體核心數／時脈／虛擬化與 Hypervisor 狀態、實體記憶體與系統提交量、系統與工作磁碟容量與媒體類型、開發工具版本（Visual Studio、MSVC、CMake、Ninja、Rustc、Cargo、PowerShell）、Git 與 CTest 設定，以及各快取命中狀態與還原大小（MB）。任何因權限或環境無法可靠取得的欄位一律標示 `unavailable`，不填入推測值。
 - **執行期間效能彙整（`-Phase post`）**：`scripts/test.ps1` 執行期間透過低開銷 Windows kernel32 API（`GetSystemTimes`、`GlobalMemoryStatusEx`）取樣 CPU 平均／峰值與實體 RAM 峰值並寫入 `report.json` 的 `resource_usage`；測試結束（`if: always()`）由 `-Phase post` 合併整體 wall-clock、CTest 平行度、實際選取測試數、各階段建置與測試耗時與逐案耗時，隨既有 `build/reports/**` Actions Artifact 保存。
@@ -215,12 +251,12 @@ CTest 與核心測試統一採用「上次失敗優先，其次耗時較長優�
 
 - C++ harness 由 CMake 統一用 MSVC／Windows SDK 建置。CMake object 與 per-architecture 輸出支援增量編譯；舊 PowerShell 腳本接受 `-HarnessPath` 供新入口重用建好的 exe。直接呼叫舊腳本的編譯 fallback 保留上游 #100 的 `Invoke-HarnessBuild` 快取，不再反覆編譯相同內容。
 - Cargo target 保留既有增量 fingerprint；產品 build 明確指定工作樹的 `windows/target`，外部 `CARGO_TARGET_DIR` 不會讓複製 DLL／工具／staticlib 的路徑失配。上游 core 測試 source tree 依 upstream pin、輸入檔與 Rust 工具鏈驗證快取，失效時也只同步位元組有變的檔案，不破壞未修改來源的時間戳。
-- AFFECTED 和直接呼叫 `test-core.ps1` 可沿用 #100 的整套核心通過收據，報告會列 `core_result_reused`。Beta 的 `RELEASE -CiSafe` 每次執行一般核心回歸。`engine_cap`、`engine_share`、`engine_lm`、`engine_replay` 和 `engine_newword` 在來源、編譯器、runner 版本、執行檔、參數、模型、測試資料及日誌雜湊全數吻合時重用通過收據，報告會列 `core_reused_binaries`。FULL、正式版 RELEASE、本機完整 RELEASE、直接 CTest 和 benchmark 實跑所有核心斷言。`test-core.ps1 -Rerun` 可手動強制實跑。
+- AFFECTED 和直接呼叫 `test-core.ps1` 可沿用 #100 的整套核心通過收據，報告會列 `core_result_reused`。非正式 beta AFFECTED 的重型清單為 `engine_cap`、`engine_mixed`、`engine_share`、`engine_lm`、`engine_replay` 和 `engine_newword`；來源、編譯器、runner 版本、執行檔、參數、模型、測試資料及日誌雜湊全數吻合時才重用，報告會列 `core_reused_binaries`。FULL、所有 RELEASE、直接 CTest 和 benchmark 實跑所有必要核心斷言。`test-core.ps1 -Rerun` 可手動強制實跑。
 - Windows Rust 單元測試分別記錄 Cargo 編譯時間與測試執行時間。RELEASE 使用相同的最佳化 profile，可重用指紋相符的產品依賴。測試以 `--test-threads=1` 執行，避免 installer journal 與 progress 測試同時寫入程序全域的進度 sink。
 - 每個架構的 36 個 `input-digits` 案例依三種混打設定各啟動一次 submission harness。每案重新建立 TSF document、context 及 text store，清除候選和組字，並沿用該組已載入的引擎。報告保留每案的預期文字、通過結果、耗時與 harness PID。
 - core overlay、英文清單、upstream 資料 export、模型轉換與 WinUI publish 以來源、參數、架構、工具版本／upstream pin 及輸出內容 hash 驗證快取。失效時重新生成；只存在檔案不會命中快取。
 - 模型測試分配到兩個 CTest resource slots，最多同時載入兩組模型；core suite 與混打回歸會鎖住兩個 slots，避免與其他模型載入競爭。私人桌面案例另用共用鎖逐案執行，確保各案例的桌面與核心清理不互相干擾。Core suite 仍使用原本記憶體限制排程。不同 profile 的核心不共用生命週期；shared/windows Cargo 共用的目標目錄也有獨立鎖。
-- 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/`（RELEASE 時指向本次快照）的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
+- 測試 payload 僅建立在 `build/cmake/`，`data` 是指向 `dist/`（RELEASE 時指向本次快照）的唯讀 junction，`tools` 保留 #96 的私人執行檔副本，避免核心 IPC 使用正式工具路徑。TSF smoke 的模型前置檢查與執行都使用當輪 runtime payload。相同工具內容不重複複製；舊版已知 tools junction 僅搬移連結本身後替換，不走訪或刪除目標。測試不註冊輸入法、不碰正式使用者資料、不停止使用者核心。
 - 英文鍵、提交、加詞視窗與非視覺 TSF smoke 在不切換的私人測試桌面執行，隔離目前桌面的實際 Alt／Ctrl／Shift 與前景視窗變動；既有私人桌面案例也保持隔離。這不代表已驗證使用者正在操作的前景 App。
 - WinUI 子程序建立前即設定隔離 profile 與行程內核心，避免 XAML 初始化時啟動已安裝的常駐核心；不列舉或停止工作副本外的核心。各階段結果保留在本次報告目錄，停用設定重開前封存舊 PASS 輸出。截圖依 #100 預設不產生；需要視覺審查時明確使用 `verify-ui.ps1 -Visual`，必要斷言照常執行。
 
@@ -228,7 +264,8 @@ CTest 與核心測試統一採用「上次失敗優先，其次耗時較長優�
 
 | 環境 | 可驗證內容 |
 | --- | --- |
-| Codex Cloud Linux | PowerShell 語法解析、選測規則、檔案／mock 框架自檢、Python 發布交易單元測試與 JSON/YAML 靜態檢查；不執行產品建置或新增 Linux 驗收流程，不能宣稱 MSVC、WinUI、TSF、x64／x86 或 RELEASE 通過 |
+| Codex Cloud Linux | PowerShell 語法解析、選測規則、檔案／mock 框架自檢、Python 發布交易單元測試與 JSON/YAML 靜態檢查；缺少 Fedora 發布依賴時僅認列靜態及合成結果，不能宣稱 MSVC、WinUI、TSF、x64／x86 或 RELEASE 通過 |
+| Linux 發布環境（Fedora 44） | 四組 Cargo 單元測試、八個隔離 IBus 情境與封裝／雜湊檢查；由 `build_linux` 控制，不代表完整 GNOME 桌面或實際安裝驗收 |
 | GitHub Actions Windows | PR 與手動 ci 固定跑 CI 基線；不建置 WinUI 或產品。既有 Release job 才跑 RELEASE -CiSafe，略過的互動項目列為未執行，須本機補驗 |
 | Windows 本機 | FAST、AFFECTED、FULL、RELEASE 全部實際 Windows 測試；WinUI 驗收與候選 host 可使用本機 Windows／SDK |
 
@@ -252,7 +289,7 @@ RELEASE 收據 schema 4 保存驗收前後原始碼身分、固定快照、雙�
 
 GitHub Actions 的 Release job 跑 `RELEASE -CiSafe` 並匯出 CI artifact。x64 和 x86 的 Cargo 產物各有獨立的鍵與路徑，兩個架構共用 registry 與 host 套件。產物依 Rust、MSVC、Windows SDK、編譯設定及來源選擇快取，registry 可跨工具鏈版本還原。Cargo 指紋、core overlay 收據及模型雜湊會核對還原內容。NuGet 及內建模型轉換產物也有快取。x64 的發布建置與測試使用 Thin LTO 與 8 個 codegen units，x86 沿用 Fat LTO 與 1 個 codegen unit。Windows Rust 單元與混打回歸共用各自架構的測試執行檔，快取身分斷言仍在獨立程序執行。互動驗收另依本機 RELEASE 清冊執行。
 
-遠端發布保留上游 #86 的 `scripts/release.py`：先檢查平台產物、來源 manifest 與 SHA-256；只續作同來源草稿，發布過的 Release 不覆寫，artifact 名稱包含 run attempt。這套遠端發布交易與本機完整驗收收據各自保留原有防護，不用 CI-safe 產物冒充本機 RELEASE。既有 Linux 發布 job 原樣保留，本次未新增 Linux 工作。
+遠端發布保留上游 #86 的 `scripts/release.py`：先檢查平台產物、來源 manifest 與 SHA-256；只續作同來源草稿，發布過的 Release 不覆寫，artifact 名稱包含 run attempt。這套遠端發布交易與本機完整驗收收據各自保留原有防護，不用 CI-safe 產物冒充本機 RELEASE。Linux 發布沿用既有容器、產物與平台開關，封存前先跑基本 CTest。
 
 ## 新舊耗時比較
 
