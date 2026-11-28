@@ -40,7 +40,7 @@ try {
         }
     }
     if ($CoreOnly) { return }
-    if (!(Test-Path -LiteralPath 'dist/data/models/builtin/bigram.winmap')) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
+    if (!(Test-Path -LiteralPath "$runtimeRoot/data/models/builtin/bigram.winmap")) { throw 'Run prepare-models.ps1 first to prepare the built-in model set.' }
     if (!$SmokeOnly) {
         Invoke-Timed -Name 'Validate built upstream data' -Category 'data.validate' -Details @{ output='dist/data' } -Action { & "$PSScriptRoot/verify-upstream-data.ps1" -Dist }
         # Unit tests that read built data and models; plain cargo test --lib intentionally ignores these.

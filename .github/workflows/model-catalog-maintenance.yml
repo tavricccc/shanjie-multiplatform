@@ -21,7 +21,8 @@ concurrency:
   group: model-catalog-maintenance
   cancel-in-progress: false
 jobs:
-  verify:
+  discover:
+    name: Discover
     runs-on: windows-latest
     timeout-minutes: 75
     defaults:
@@ -40,18 +41,176 @@ jobs:
         with:
           path: |
             build/model-catalog/assets
-            build/model-catalog/probe-cache
-            build/english
-          key: catalog-${{ github.sha }}-${{ github.run_id }}
-          restore-keys: |
-            catalog-${{ github.sha }}-
-            catalog-
+          key: catalog-assets-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: catalog-assets-v2-
       - name: Contract and fault tests
         run: python -m unittest discover -s scripts/model_catalog -p "test_*.py" -v
-      - name: Discover, verify native x64 and x86, compare public data
+      - name: Discover source-verified models
+        id: discovery
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/model_catalog/probe.ps1
+        run: |
+          python scripts/model_catalog/catalog.py discover
+          if($LASTEXITCODE){throw 'Discovery failed.'}
+          $plan=Get-Content build/model-catalog/plan.json -Raw|ConvertFrom-Json
+          $assets=@($plan.candidates | ForEach-Object {$_.assets.sha256} | Sort-Object -Unique)
+          'paths<<CATALOG_INPUT_FILES' >> $env:GITHUB_OUTPUT
+          'build/model-catalog/plan.json' >> $env:GITHUB_OUTPUT
+          foreach($sha in $assets){"build/model-catalog/assets/$sha" >> $env:GITHUB_OUTPUT}
+          'CATALOG_INPUT_FILES' >> $env:GITHUB_OUTPUT
+      - name: Shared discovery inputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: model-catalog-inputs
+          path: ${{ steps.discovery.outputs.paths }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  probe:
+    name: Windows ${{ matrix.architecture }}
+    needs: discover
+    runs-on: windows-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        architecture: [x64, x86]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialize pinned upstream (original author, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: model-catalog-inputs
+          path: build/model-catalog
+      - name: Identify Rust and native toolchains
+        id: cargo
+        run: pwsh -NoProfile -File scripts/cargo-cache-key.ps1 -Profile release
+      - name: Identify architecture and compilation inputs
+        id: compilation
+        env:
+          CARGO_PREFIX: ${{ matrix.architecture == 'x64' && steps.cargo.outputs.x64_prefix || steps.cargo.outputs.prefix }}
+          CARGO_INPUTS: ${{ hashFiles('.cargo/*.toml', 'windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'windows/*.rc', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'scripts/build.ps1', 'scripts/model_catalog/probe.ps1', 'scripts/cargo-input-cache.ps1', 'scripts/cargo-cache-key.ps1', 'scripts/test-support.psm1', 'assets/mode/**', 'ui/Assets/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
+        run: |
+          $triple=if('${{ matrix.architecture }}' -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
+          $image="$env:ImageOS-$env:ImageVersion-$env:RUNNER_ARCH"
+          $prefix="$env:CARGO_PREFIX-catalog-v1-$image-$triple-default-features-all-bins"
+          "prefix=$prefix" >> $env:GITHUB_OUTPUT
+          "key=$prefix-$env:CARGO_INPUTS" >> $env:GITHUB_OUTPUT
+          "SHANJIE_CARGO_CACHE_CONTEXT=$prefix-$env:CARGO_INPUTS" >> $env:GITHUB_ENV
+      - name: Cache Cargo registry and Git dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/git/db
+            ~/.cargo/git/checkouts
+          key: catalog-dependencies-v1-${{ runner.os }}-${{ matrix.architecture }}-${{ steps.cargo.outputs.toolchain }}-${{ hashFiles('windows/Cargo.lock', 'shared/Cargo.lock') }}
+          restore-keys: catalog-dependencies-v1-${{ runner.os }}-${{ matrix.architecture }}-${{ steps.cargo.outputs.toolchain }}-
+      - name: Cache verified compilation inputs and outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            windows/target
+            shared/target
+            build/native-${{ matrix.architecture }}
+            build/cargo-inputs/${{ matrix.architecture }}.json
+            build/core/.prepare-cache.json
+            build/core/Cargo.toml
+            build/core/src
+          key: ${{ steps.compilation.outputs.key }}
+          restore-keys: ${{ steps.compilation.outputs.prefix }}-
+      - name: Cache verified English preparation
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            build/english
+            build/english-words.txt
+            build/english-words.cache.json
+          key: catalog-english-v1-${{ matrix.architecture }}-${{ hashFiles('UPSTREAM.json', 'scripts/prepare-english.ps1') }}
+          restore-keys: catalog-english-v1-${{ matrix.architecture }}-
+      - name: Cache verified built-in model preparation
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            build/model
+            dist/data/models/builtin
+          key: catalog-models-v1-${{ matrix.architecture }}-${{ steps.cargo.outputs.toolchain }}-${{ hashFiles('MODEL-SOURCES.json', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1') }}
+          restore-keys: catalog-models-v1-${{ matrix.architecture }}-${{ steps.cargo.outputs.toolchain }}-
+      - name: Cache architecture-specific accuracy results
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: build/model-catalog/probe-cache/windows-${{ matrix.architecture }}
+          key: catalog-accuracy-v2-${{ matrix.architecture }}-${{ github.sha }}-${{ hashFiles('scripts/model_catalog/evaluation.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: catalog-accuracy-v2-${{ matrix.architecture }}-${{ github.sha }}-${{ hashFiles('scripts/model_catalog/evaluation.txt') }}-
+      - name: Build, native prepare and Chat/Formal evaluation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CARGO_LOG: cargo::compiler::fingerprint=trace,cargo::core::compiler::fingerprint=trace
+        run: |
+          $folder='build/model-catalog/windows-${{ matrix.architecture }}'
+          New-Item -ItemType Directory -Path $folder -Force | Out-Null
+          ./scripts/model_catalog/probe.ps1 -Architecture '${{ matrix.architecture }}' *>&1 | Tee-Object -FilePath "$folder/probe.log"
+          if($LASTEXITCODE){throw 'Architecture probe failed.'}
+      - name: Architecture evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: model-catalog-windows-${{ matrix.architecture }}
+          path: |
+            build/model-catalog/windows-${{ matrix.architecture }}/results.json
+            build/model-catalog/windows-${{ matrix.architecture }}/summary.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build and probe diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: model-catalog-diagnostics-${{ matrix.architecture }}
+          path: |
+            build/model-catalog/windows-${{ matrix.architecture }}/probe.log
+            build/reports
+          retention-days: 7
+
+  assemble:
+    name: Assemble / Validate
+    needs: [discover, probe]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: model-catalog-inputs
+          path: build/model-catalog
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: model-catalog-windows-x64
+          path: build/model-catalog/windows-x64
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: model-catalog-windows-x86
+          path: build/model-catalog/windows-x86
+      - name: Assemble both architectures and validate the full contract
+        run: |
+          python scripts/model_catalog/catalog.py assemble
+          python scripts/model_catalog/catalog.py validate
       - name: Publishable data and evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
         with:
@@ -62,11 +221,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Summary
+        shell: pwsh
         run: |
           $c=Get-Content build/model-catalog/publication/MODEL-CATALOG-V2.json -Raw|ConvertFrom-Json
           "Verified $($c.models.Count) bundles. Revision: $($c.revision). Accuracy never gates availability. Last successful check: $([DateTime]::UtcNow.ToString('o'))" >> $env:GITHUB_STEP_SUMMARY
   publish:
-    needs: verify
+    needs: assemble
     if: (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish') || ((github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && vars.MODEL_CATALOG_AUTOPUBLISH == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15

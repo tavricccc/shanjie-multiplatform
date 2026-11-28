@@ -1,0 +1,110 @@
+name: Release Windows setup
+description: Pinned upstream and fingerprint-checked build caches for parallel RELEASE jobs
+inputs:
+  role:
+    description: build, core, verify, native or core-run
+    required: true
+  architecture:
+    description: Windows target architecture
+    default: x64
+runs:
+  using: composite
+  steps:
+    - name: Initialize pinned upstream (official, then mirror)
+      shell: pwsh
+      run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      if: inputs.role == 'build' && inputs.architecture == 'x64'
+      with:
+        dotnet-version: 10.0.x
+    - name: Identify compilation cache inputs
+      id: key
+      shell: pwsh
+      env:
+        SHANJIE_CARGO_CACHE_INPUTS: ${{ hashFiles('.cargo/windows-release-x64.toml', 'windows/Cargo.*', 'windows/src/**', 'windows/build.rs', 'windows/*.rc', 'shared/Cargo.*', 'shared/src/**', 'UPSTREAM.json', 'platform/**', 'scripts/prepare-*.ps1', 'scripts/build.ps1', 'scripts/release-pipeline.ps1', 'scripts/cargo-input-cache.ps1', 'scripts/cargo-cache-key.ps1', 'scripts/test-support.psm1', 'assets/mode/**', 'ui/Assets/**', 'ui/Themes/Sj.xaml', 'profiles/**', 'data/model-v6-classes-v4.json') }}
+      run: pwsh -NoProfile -File scripts/cargo-cache-key.ps1 -Profile release
+    - name: Record compiler and SDK identity
+      shell: pwsh
+      env:
+        RELEASE_TOOLCHAIN: ${{ steps.key.outputs.x64_prefix }}
+      run: '"SHANJIE_RELEASE_TOOLCHAIN_IDENTITY=$env:RELEASE_TOOLCHAIN" >> $env:GITHUB_ENV'
+    - name: Cache Cargo registry downloads
+      if: inputs.role == 'build' || inputs.role == 'core' || inputs.role == 'verify'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/src
+        key: cargo-registry-v1-${{ runner.os }}-${{ hashFiles('windows/Cargo.lock', 'shared/Cargo.toml', 'upstream/shanjie/core/Cargo.toml') }}
+        restore-keys: cargo-registry-v1-${{ runner.os }}-
+    - name: Cache product compilation outputs
+      if: inputs.role == 'build' || inputs.role == 'verify'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          build/core/.prepare-cache.json
+          build/core/Cargo.toml
+          build/core/src
+          shared/target
+          windows/target
+          build/native-${{ inputs.architecture }}
+          build/cargo-inputs/${{ inputs.architecture }}.json
+        key: ${{ steps.key.outputs.x64_prefix }}-parallel-v3-${{ inputs.role }}-${{ inputs.architecture }}-${{ steps.key.outputs.inputs }}
+        restore-keys: |
+          ${{ steps.key.outputs.x64_prefix }}-parallel-v3-${{ inputs.role }}-${{ inputs.architecture }}-
+    - name: Restore content-verified Cargo input timestamps
+      if: inputs.role == 'build'
+      shell: pwsh
+      env:
+        SHANJIE_CARGO_CACHE_CONTEXT: ${{ steps.key.outputs.x64_prefix }}-parallel-v3-${{ inputs.role }}-${{ inputs.architecture }}-${{ steps.key.outputs.inputs }}
+      run: |
+        "SHANJIE_CARGO_CACHE_CONTEXT=$env:SHANJIE_CARGO_CACHE_CONTEXT" >> $env:GITHUB_ENV
+        pwsh -NoProfile -File scripts/cargo-input-cache.ps1 -Operation Restore -Architecture '${{ inputs.architecture }}' -Context $env:SHANJIE_CARGO_CACHE_CONTEXT
+    - name: Cache model sources and verified conversion output
+      if: inputs.role == 'core' || (inputs.role == 'build' && inputs.architecture == 'x64')
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          build/model
+          dist/data/models/builtin
+        key: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-${{ steps.key.outputs.toolchain }}-${{ hashFiles('UPSTREAM.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/prepare-models.ps1') }}
+        restore-keys: windows-models-v1-${{ hashFiles('MODEL-SOURCES.json') }}-
+    - name: Cache core compilation and non-release heavy receipts
+      id: cache-core-suite
+      if: inputs.role == 'core'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          build/test/core/.source-cache.json
+          build/test/core/Cargo.lock
+          build/test/core/Cargo.toml
+          build/test/core/src
+          build/test/core/tests
+          build/test/core/target
+          build/test/passed-heavy
+        key: windows-core-suite-v2-${{ steps.key.outputs.toolchain }}-${{ steps.key.outputs.native }}-${{ hashFiles('UPSTREAM.json', 'MODEL-SOURCES.json', '.cargo/config.toml', 'platform/**/*', 'scripts/prepare-core.ps1', 'scripts/test-core.ps1', 'scripts/test-support.psm1', 'scripts/core-shards.psm1') }}
+        restore-keys: windows-core-suite-v2-${{ steps.key.outputs.toolchain }}-${{ steps.key.outputs.native }}-
+    - name: Cache NuGet packages
+      if: inputs.role == 'build' && inputs.architecture == 'x64'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.nuget/packages
+        key: windows-nuget-${{ hashFiles('NuGet.Config', 'ui/Shanjie.UI.csproj') }}
+        restore-keys: windows-nuget-
+    - name: Identify WinUI publish toolchain
+      id: ui-key
+      if: inputs.role == 'build' && inputs.architecture == 'x64'
+      shell: pwsh
+      run: '"sdk=$(& dotnet --version)" >> $env:GITHUB_OUTPUT'
+    - name: Cache verified WinUI publish
+      if: inputs.role == 'build' && inputs.architecture == 'x64'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # build.ps1 validates all source/SDK inputs and every published file hash,
+        # then always replaces the native DLL with this run's x64 build.
+        path: |
+          dist/ui
+          build/ui-publish-cache.json
+        key: windows-ui-v1-${{ steps.ui-key.outputs.sdk }}-${{ steps.key.outputs.native }}-${{ hashFiles('ui/**', 'profiles/*.ini', 'MODEL-CATALOG.json', 'MODEL-SOURCES.json', 'NuGet.Config', 'scripts/build.ps1') }}
+        restore-keys: windows-ui-v1-${{ steps.ui-key.outputs.sdk }}-${{ steps.key.outputs.native }}-

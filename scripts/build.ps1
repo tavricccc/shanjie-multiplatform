@@ -1,6 +1,7 @@
 #Requires -Version 7
-param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain, [switch]$CargoVerbose, [switch]$PackageTargetsOnly)
+param([ValidateSet('all','x64','x86')][string]$Architecture = 'all', [switch]$UseExistingCore, [switch]$SkipSettings, [switch]$UseCurrentToolchain, [switch]$CargoVerbose, [switch]$PackageTargetsOnly,[switch]$SkipSharedData)
 $ErrorActionPreference = 'Stop'
+if($SkipSharedData -and $Architecture -ne 'x86'){throw 'Only the separate x86 build may defer shared data to the x64 build.'}
 # Default builds both: x86 is the DLL that 32-bit apps on 64-bit Windows load.
 if ($Architecture -eq 'all') {
     & $PSCommandPath -Architecture x64 -UseExistingCore:$UseExistingCore -SkipSettings:$SkipSettings -UseCurrentToolchain:$UseCurrentToolchain -CargoVerbose:$CargoVerbose -PackageTargetsOnly:$PackageTargetsOnly
@@ -36,6 +37,14 @@ try {
     }
     $objects = Join-Path $root "build/native-$Architecture"
     $output = Join-Path $root "dist/$Architecture"
+    if($CargoVerbose){
+        foreach($inputPath in @("$objects/mode_icons.res","$objects/setup.res","$root/windows/build.rs","$root/windows/src/lib.rs","$root/shared/src/lib.rs")){
+            if(Test-Path -LiteralPath $inputPath){
+                $item=Get-Item -LiteralPath $inputPath
+                Write-Host "[CARGO INPUT] $inputPath mtime=$($item.LastWriteTimeUtc.ToString('O')) sha256=$((Get-FileHash -LiteralPath $inputPath).Hash)"
+            }else{Write-Host "[CARGO INPUT] $inputPath MISSING"}
+        }
+    }
     New-Item -ItemType Directory -Path $objects,$output -Force | Out-Null
     $toolchainSetup = if($UseCurrentToolchain){''}else{'call "'+(Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat')+'" '+$Architecture+' >nul'}
     $command = @"
@@ -124,7 +133,7 @@ rc /nologo /I"$root/ui/Assets" /fo "$objects/setup.res.tmp" "$root/windows/setup
         Copy-Item "$root/windows/target/$target/release/shanjie-pack.exe" "$root/dist/setup" -Force
     }
     # The data is the same for both architectures; the x64 pass (first in an 'all' build) prepares it.
-    if ($Architecture -eq 'x64' -or !(Test-Path "$root/dist/data/models/builtin/bigram.winmap")) {
+    if (!$SkipSharedData -and ($Architecture -eq 'x64' -or !(Test-Path "$root/dist/data/models/builtin/bigram.winmap"))) {
         Invoke-Timed -Name 'Prepare built-in models' -Category 'models.prepare' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/prepare-models.ps1" }
         Invoke-Timed -Name 'Prepare runtime data and licenses' -Category 'data.prepare' -Details @{ architecture=$Architecture } -Action { & "$PSScriptRoot/prepare-data.ps1" -Licenses 'dist/LICENSES' }
     }

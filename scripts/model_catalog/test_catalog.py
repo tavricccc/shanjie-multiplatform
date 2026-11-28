@@ -1,4 +1,4 @@
-import copy,unittest,uuid,pathlib,urllib.error,contextlib
+import copy,unittest,uuid,pathlib,urllib.error,contextlib,shutil,subprocess
 from unittest.mock import patch
 import catalog as c
 @contextlib.contextmanager
@@ -207,4 +207,96 @@ class Contract(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError):c.publish(p)
                 self.assertEqual(len(writes),attempts);self.assertEqual(prior.call_count,attempts)
                 self.assertTrue(all(x["force"] is False for x in writes))
+class MatrixContract(unittest.TestCase):
+    def setUp(self):
+        self.fixture=fixture();self.out=self.fixture.__enter__()
+        self.addCleanup(self.fixture.__exit__,None,None,None)
+        data=b"SJLM0001"+b"x"*120;sha=c.hashlib.sha256(data).hexdigest()
+        (self.out/"assets").mkdir();(self.out/"assets"/sha).write_bytes(data)
+        asset={"role":"bigram","repository":c.UPSTREAM,"release":"SJ-new-name","filename":"bigram.sjlm",
+               "format_magic":"SJLM0001","size":len(data),"sha256":sha,"requires_assets":[]}
+        self.model=c.model([asset],"Matrix fixture")
+        self.plan={"source_commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=c.ROOT,text=True).strip(),
+                   "profile":c.PROFILE,"candidates":[self.model],"dataset_sha256":c.filehash(c.ROOT/"scripts/model_catalog/evaluation.txt"),
+                   "baseline":self.model["id"],"previous":{},"pending":[],"prereleases":[],"sources":[],"head":None}
+        c.write(self.out/"plan.json",self.plan);self.calls=[]
+        def native(exe,args,env,timeout):
+            self.calls.append(args[0])
+            if args[0]=="prepare":return {"usable":True,"generation":len(self.calls)}
+            return {"state":"evaluated","sample_count":20,"chat":18,"formal":19}
+        patcher=patch.object(c,"run_child",side_effect=native)
+        self.native=patcher.start();self.addCleanup(patcher.stop)
+    def probe(self,target="windows-x64",out=None):
+        out=out or self.out;c.probe(out,pathlib.Path("native-checker.exe"),out/"data",target)
+        return c.read(out/target/"results.json")[0]
+    def cached(self):
+        return next((self.out/"probe-cache/windows-x64").glob("*.json"))
+    def test_independent_runners_assemble_both_architectures(self):
+        for target in ("windows-x64","windows-x86"):
+            runner=self.out/target.replace("windows","runner");runner.mkdir()
+            shutil.copy2(self.out/"plan.json",runner/"plan.json")
+            shutil.copytree(self.out/"assets",runner/"assets")
+            self.probe(target,runner)
+            shutil.copytree(runner/target,self.out/target)
+        c.assemble(self.out)
+        catalog=c.validate(c.read(self.out/"publication/MODEL-CATALOG-V2.json"))
+        self.assertEqual({r["target"] for r in catalog["models"][0]["compatibility"]},{"windows-x64","windows-x86"})
+        self.assertEqual(len(catalog["models"][0]["advisories"][0]["measurements"]),4)
+        self.assertEqual(self.calls,["prepare","evaluate","prepare","evaluate"])
+    def test_warm_accuracy_still_uses_fresh_native_prepare(self):
+        first=self.probe();second=self.probe()
+        self.assertEqual(self.calls,["prepare","evaluate","prepare"])
+        self.assertNotEqual(first["technical"],second["technical"])
+        self.assertEqual(first["evaluation"],second["evaluation"])
+        summary=c.read(self.out/"windows-x64/summary.json")
+        self.assertEqual((summary["native_prepared"],summary["accuracy_reused"],summary["accuracy_executed"]),(1,1,0))
+    def test_cached_accuracy_cannot_override_failed_native_prepare(self):
+        self.probe();self.native.side_effect=RuntimeError("native load rejected")
+        result=self.probe()
+        self.assertEqual(result["state"],"invalid");self.assertNotIn("evaluation",result)
+        self.assertEqual(c.read(self.out/"windows-x64/summary.json")["accuracy_reused"],0)
+    def test_accuracy_cache_checks_all_identity_fields(self):
+        valid=self.probe();path=self.cached()
+        for key,value in [("id","different"),("source_commit","0"*40),("target","windows-x86"),
+                          ("dataset_sha256","0"*64),("profile_id","other"),("asset_hashes",["0"*64]),("state","invalid")]:
+            with self.subTest(key=key):
+                c.write(path,dict(valid,**{key:value}));before=self.calls.count("evaluate")
+                self.probe();self.assertEqual(self.calls.count("evaluate"),before+1)
+    def test_malformed_or_incomplete_accuracy_is_a_miss(self):
+        valid=self.probe();path=self.cached()
+        for value in [[],{"state":"usable"},dict(valid,evaluation=[]),dict(valid,evaluation={"state":"not_evaluated"}),
+                      dict(valid,evaluation={"state":"evaluated","sample_count":20,"chat":21,"formal":19})]:
+            with self.subTest(value=value):
+                c.write(path,value);before=self.calls.count("evaluate")
+                self.probe();self.assertEqual(self.calls.count("evaluate"),before+1)
+        path.write_text("broken JSON",encoding="utf-8");before=self.calls.count("evaluate")
+        self.probe();self.assertEqual(self.calls.count("evaluate"),before+1)
+    def test_changed_asset_is_rejected_before_native_execution(self):
+        asset=next((self.out/"assets").iterdir());asset.write_bytes(b"z"*128)
+        with self.assertRaisesRegex(ValueError,"SHA-256"):self.probe()
+        self.native.assert_not_called()
+    def test_discovery_identity_and_dataset_are_bound_to_checkout(self):
+        for key,value in [("source_commit","0"*40),("profile","different"),("dataset_sha256","0"*64),
+                          ("candidates",[self.model,self.model])]:
+            with self.subTest(key=key):
+                c.write(self.out/"plan.json",dict(self.plan,**{key:value}))
+                with self.assertRaises(ValueError):self.probe()
+        self.native.assert_not_called()
+    def test_assembly_rejects_mixed_runner_evidence(self):
+        self.probe();valid=self.probe("windows-x86");path=self.out/"windows-x86/results.json"
+        for key,value in [("source_commit","0"*40),("profile_id","other"),("asset_hashes",["0"*64]),
+                          ("dataset_sha256","0"*64),("plan_sha256","0"*64),("target","windows-x64")]:
+            with self.subTest(key=key):
+                c.write(path,[dict(valid,**{key:value})])
+                with self.assertRaisesRegex(ValueError,"identity|architecture"):c.assemble(self.out)
+                self.assertFalse((self.out/"publication-plan.json").exists())
+    def test_missing_duplicate_and_wrong_architecture_prevent_publication(self):
+        self.probe()
+        with self.assertRaisesRegex(ValueError,"architecture"):c.assemble(self.out)
+        valid=self.probe("windows-x86");path=self.out/"windows-x86/results.json"
+        for rows in [[valid,valid],[]]:
+            c.write(path,rows)
+            with self.assertRaisesRegex(ValueError,"architecture"):c.assemble(self.out)
+        self.assertFalse((self.out/"publication-plan.json").exists())
+
 if __name__=="__main__":unittest.main()

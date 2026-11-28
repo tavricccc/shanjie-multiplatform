@@ -1,0 +1,138 @@
+name: Linux Release
+
+on:
+  workflow_call:
+    inputs:
+      build_linux:
+        description: Include the optional Linux package
+        type: boolean
+        required: true
+    outputs:
+      artifact_name:
+        description: Verified Linux package artifact
+        value: ${{ jobs.z-linux-package.outputs.artifact_name }}
+
+permissions:
+  contents: read
+
+jobs:
+  z-linux:
+    name: Build
+    if: inputs.build_linux
+    runs-on: ubuntu-latest
+    # Linux 版的目標是 Fedora 44 GNOME；在同版容器建置，GTK 4／libadwaita 與 glibc 和使用者一致。
+    container: fedora:44
+    outputs:
+      build_artifact: linux-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Install build tools
+        run: |
+          dnf install -y git gh rust cargo gcc cmake make pkgconf-pkg-config gtk4-devel libadwaita-devel ibus python3-gobject dbus-daemon \
+            https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-1.rh.x86_64.rpm
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node.js 24)
+        with:
+          persist-credentials: false
+      - name: Initialize pinned upstream (official, then mirror)
+        run: pwsh -NoProfile -File scripts/sync-upstream.ps1
+      - name: Cache upstream models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node.js 24)
+        with:
+          path: build/model
+          key: models-${{ hashFiles('MODEL-SOURCES.json') }}
+      - name: Build Linux payload
+        run: |
+          linux/scripts/build.sh build/linux/payload
+          install -m644 linux/package/README.txt build/linux/payload/
+          python3 scripts/release_artifacts.py pack build/linux/inputs.tar --root . --paths build/linux/payload build/core build/linux/target
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/linux/inputs.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  z-linux-ctest:
+    name: CTest
+    needs: z-linux
+    runs-on: ubuntu-latest
+    container: fedora:44
+    outputs:
+      tested_artifact: linux-tested-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Install test tools
+        run: |
+          dnf install -y git rust cargo gcc cmake make pkgconf-pkg-config gtk4-devel libadwaita-devel ibus python3-gobject dbus-daemon
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ needs.z-linux.outputs.build_artifact }}
+          path: build/linux/transfer
+      - name: Restore Linux inputs
+        run: python3 scripts/release_artifacts.py unpack build/linux/transfer/inputs.tar --root .
+      - name: Run Linux CTest
+        run: bash linux/scripts/test.sh build/linux/payload
+      - name: Upload Linux test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-ctest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/reports/linux-*/junit.xml
+            build/reports/linux-*/ctest.log
+            build/reports/linux-*/inventory.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Transfer accepted Linux payload
+        run: |
+          report=$(python3 -c 'import json; print(json.load(open("build/linux/tested.json"))["report"])')
+          python3 scripts/release_artifacts.py pack build/linux/tested.tar --root . --paths build/linux/payload build/linux/tested.json "$report/inventory.json" "$report/junit.xml" "$report/ctest.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: linux-tested-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/linux/tested.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
+
+  z-linux-package:
+    name: Package
+    needs: z-linux-ctest
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: linux-package-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ needs.z-linux-ctest.outputs.tested_artifact }}
+          path: build/linux/transfer
+      - name: Restore tested Linux payload
+        run: python3 scripts/release_artifacts.py unpack build/linux/transfer/tested.tar --root .
+      - name: Package accepted payload
+        run: bash linux/scripts/package.sh --tested build/linux/payload build/linux/tested.json
+      - name: Create source manifest from the packaged archive
+        run: python3 scripts/release.py manifest --platform linux --folder build/linux/dist
+      - name: Upload Linux release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (Node.js 24)
+        with:
+          name: linux-package-${{ github.run_attempt }}
+          path: |
+            build/linux/dist/shanjie-linux-*.tar.gz
+            build/linux/dist/shanjie-linux-*.tar.gz.sha256
+            build/linux/dist/release-source.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: linux-package-${{ github.run_attempt }}
+          path: build/linux-gate
+      - name: Verify Linux manifest and SHA-256
+        run: python3 scripts/release.py check --platform linux --folder build/linux-gate

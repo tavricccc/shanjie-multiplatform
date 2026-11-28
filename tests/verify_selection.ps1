@@ -16,7 +16,12 @@ Expect 'docs only' @('docs/DESIGN.md','Changelog.md','README.md') $false @() $tr
 Expect 'windows-style separators' @('docs\ARCHITECTURE.md') $false @() $true
 Expect 'release script' @('scripts/release.py') $false @('fast','test-framework')
 Expect 'release workflow' @('.github/workflows/release.yml') $false @('fast','test-framework')
-Expect 'Cargo cache keys are a workflow-only change' @('scripts/cargo-cache-key.ps1') $false @('fast','test-framework')
+Expect 'platform release workflows and composite actions' @('.github/workflows/release-platforms.yml','.github/workflows/release-windows.yml','.github/workflows/release-linux.yml','.github/actions/release-setup/action.yml','.github/actions/release-snapshot/action.yml') $false @('fast','test-framework')
+Expect 'parallel release dispatcher' @('scripts/release-pipeline.ps1','scripts/core-shards.psm1') $false @('fast','test-framework')
+Expect 'release artifact transport' @('scripts/release_artifacts.py') $false @('fast','test-framework')
+Expect 'CI-only full Release evidence and sharding' @('scripts/release_evidence.py','scripts/release_ci.py','scripts/release-ci.psm1','scripts/release-costs.json') $false @('fast','test-framework')
+Expect 'Linux basic release gate' @('linux/scripts/test.sh','linux/scripts/package.sh','linux/tests/CMakeLists.txt','scripts/release_linux.py') $false @('fast','test-framework')
+Expect 'Cargo cache keys and content-verified metadata are workflow-only changes' @('scripts/cargo-cache-key.ps1','scripts/cargo-input-cache.ps1') $false @('fast','test-framework')
 Expect 'ui' @('ui/Controls/Switch.cs') $false @('fast','settings-ui','candidate-host')
 Expect 'add-word' @('windows/src/word_helper.rs') $false @('fast','windows','word','popup-lifecycle')
 Expect 'candidate' @('windows/src/candidate.rs') $false @('fast','windows','candidate-host','tsf-compat')
@@ -47,7 +52,8 @@ Write-Host "PASS verification selection: $selectionCases cases, one CTest policy
 
 $checks=0
 function Check-Rule([bool]$Condition,[string]$Name){$script:checks++;if(!$Condition){throw "FAIL $Name"};Write-Host "ok   $Name"}
-Check-Rule (Test-BetaCoreResultReuse RELEASE $true $true) 'CI-safe beta RELEASE may reuse the long-running core results'
+Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $true)) 'CI-safe beta RELEASE executes every core assertion'
+Check-Rule (Test-BetaCoreResultReuse AFFECTED $true $true) 'Non-release affected verification may reuse exact heavy receipts'
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $true $false)) 'Stable RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse RELEASE $false $true)) 'Local beta RELEASE executes all core assertions'
 Check-Rule (!(Test-BetaCoreResultReuse FULL $true $true)) 'FULL executes all core assertions even with a beta channel'
@@ -110,7 +116,7 @@ Check-Rule (!(& $skipCase)) 'Omitting the feature filter preserves the original 
 # Real Git + PlanOnly fixture: no SDK, product build, model, core or UI process.
 $fixture=Join-Path $project ('build/conditional-plan-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path "$fixture/scripts","$fixture/windows/src","$fixture/build" -Force
-foreach($name in 'test.ps1','test-plan.psm1','test-support.psm1','release-support.psm1','preserve-output.ps1','verify-changed.ps1'){Copy-Item "$project/scripts/$name" "$fixture/scripts/$name"}
+foreach($name in 'test.ps1','test-plan.psm1','test-support.psm1','release-support.psm1','core-shards.psm1','preserve-output.ps1','verify-changed.ps1'){Copy-Item "$project/scripts/$name" "$fixture/scripts/$name"}
 [IO.File]::WriteAllText("$fixture/RELEASE-CHANNEL.json",'{"version":"fixture"}')
 [IO.File]::WriteAllText("$fixture/.gitignore",'build/')
 & git -C $fixture init -q -b fixture

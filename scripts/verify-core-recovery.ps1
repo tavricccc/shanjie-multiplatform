@@ -20,6 +20,12 @@ try {
  foreach($arch in $Architectures) {
   $target=if($arch -eq 'x64'){'x86_64-pc-windows-msvc'}else{'i686-pc-windows-msvc'}
   $exe="$root/windows/target/$target/release/shanjie-reliability-check.exe"
+  if($env:SHANJIE_RELEASE_SNAPSHOT_ID){
+   Import-Module "$PSScriptRoot/release-support.psm1" -ErrorAction Stop
+   $seal=Get-ReleaseSnapshot $root $env:SHANJIE_RELEASE_SNAPSHOT_ID $env:SHANJIE_RELEASE_SNAPSHOT_SHA256
+   $sealedProbe=Join-Path $seal.root "native/$arch/shanjie-reliability-check.exe"
+   if(Test-Path -LiteralPath $sealedProbe){$exe=$sealedProbe}
+  }
   $checks=@(@('pipe',''),@('fault','drop-reply'),@('fault','before-apply'),@('fault','after-apply'),@('busy',''),@('restart',''),@('ambiguous','drop-reply'),@('rerank','drop-reply'),@('rerank','before-apply'),@('rerank','after-apply'),@('rerank-unknown','drop-reply'),@('outstanding','drop-reply'),@('privacy-lost','drop-reply'),@('privacy-lost','before-apply'),@('capacity',''))
   foreach($check in 'learning-status','privacy'){if($check -in $Cases){$checks+=@(@($check,'local'),@($check,'pipe'))}}
   if('learning-status-ui' -in $Cases){$checks+=,@('learning-status-ui','')}

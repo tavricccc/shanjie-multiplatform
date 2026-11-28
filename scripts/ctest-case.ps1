@@ -83,9 +83,19 @@ try {
                 }
             }
             'core-suite' {
-                $reuseHeavy=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS -eq '1'
-                $stopOnFailure=$env:SHANJIE_TEST_STOP_ON_FAILURE -eq '1'
-                & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy -StopOnFailure:$stopOnFailure
+                if($env:SHANJIE_CORE_SHARD_EVIDENCE){
+                    if(!$snapshot){throw 'Core shard aggregation requires a sealed release snapshot.'}
+                    Import-Module "$PSScriptRoot/core-shards.psm1" -ErrorAction Stop
+                    if($snapshot.files.ContainsKey('ci-plan.json')){
+                        if($env:GITHUB_ACTIONS -ne 'true'){throw 'The partitioned CI Core delegate requires GitHub Actions.'}
+                        & python "$PSScriptRoot/release_ci.py" core-check --snapshot-root $snapshot.root --snapshot-hash $snapshot.sha256 --evidence-root $env:SHANJIE_CORE_SHARD_EVIDENCE
+                        if($LASTEXITCODE){throw 'CI Core coverage is incomplete.'}
+                    }else{Assert-CoreShardEvidence $root $snapshot $env:SHANJIE_CORE_SHARD_EVIDENCE}
+                }else{
+                    $reuseHeavy=$env:SHANJIE_REUSE_HEAVY_CORE_RESULTS -eq '1'
+                    $stopOnFailure=$env:SHANJIE_TEST_STOP_ON_FAILURE -eq '1'
+                    & "$PSScriptRoot/test-core.ps1" -UseExistingCore -UseExistingModels -RuntimeRoot $runtimeRoot -Rerun:($env:SHANJIE_TEST_LEVEL -ne 'AFFECTED' -and !$reuseHeavy) -ReuseHeavyResults:$reuseHeavy -StopOnFailure:$stopOnFailure
+                }
             }
             'mixed-regression' { & "$PSScriptRoot/test-mixed.ps1" -Architecture $Architecture -DataRoot "$runtimeRoot/data" -Release:($env:SHANJIE_TEST_LEVEL -eq 'RELEASE') }
             'core-rowstats' { & "$PSScriptRoot/verify-rowstats.ps1" -ResultRoot (Join-Path $resultRoot 'fixture') }

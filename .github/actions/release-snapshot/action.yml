@@ -1,0 +1,20 @@
+name: Restore sealed release snapshot
+description: Download the single snapshot sealed before all release verification jobs
+inputs:
+  id:
+    description: Sealed snapshot ID
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      with:
+        name: release-snapshot-${{ inputs.id }}
+        path: build/parallel/snapshot-download
+    - name: Extract immutable release inputs
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path build/release-snapshots -Force | Out-Null
+        python scripts/release_artifacts.py unpack build/parallel/snapshot-download/snapshot.tar --root build/release-snapshots
+        if ($LASTEXITCODE) { throw 'Snapshot extraction failed.' }
+        Get-ChildItem build/release-snapshots -File -Recurse | ForEach-Object { $_.IsReadOnly = $true }

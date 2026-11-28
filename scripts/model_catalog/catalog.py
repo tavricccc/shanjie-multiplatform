@@ -198,12 +198,41 @@ def run_child(exe,args,env,timeout):
     p=subprocess.run([str(exe),*map(str,args)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout)
     if p.returncode:raise RuntimeError(f"Native checker exited {p.returncode}: "+p.stderr.decode("utf-8","replace")[:800])
     return json.loads(p.stdout.decode("utf-8-sig"))
+def input_plan(out):
+    """Validate the discovery artifact once on each consuming runner."""
+    plan=read(out/"plan.json")
+    commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
+    if plan["source_commit"]!=commit or plan["profile"]!=PROFILE:
+        raise ValueError("Discovery source commit/profile mismatch")
+    if plan["dataset_sha256"]!=filehash(ROOT/"scripts/model_catalog/evaluation.txt"):
+        raise ValueError("Discovery evaluation dataset mismatch")
+    ids=set();assets={}
+    for m in plan["candidates"]:
+        expected=model(m["assets"],m["name"])
+        if m["id"] in ids or m["id"]!=expected["id"] or m["required_capabilities"]!=expected["required_capabilities"]:
+            raise ValueError("Duplicate or changed discovery candidate")
+        ids.add(m["id"])
+        for a in m["assets"]:
+            if not re.fullmatch("[a-f0-9]{64}",a["sha256"]) or not safe(a["filename"]):
+                raise ValueError("Unsafe discovery asset")
+            if a["sha256"] in assets and assets[a["sha256"]]!=a["size"]:
+                raise ValueError("Inconsistent discovery asset size")
+            assets[a["sha256"]]=a["size"]
+    if not ids:raise ValueError("No discovery candidates")
+    for sha,size in assets.items():
+        path=out/"assets"/sha
+        if path.stat().st_size!=size or filehash(path)!=sha:
+            raise ValueError("Discovery asset SHA-256/size mismatch")
+    return plan
+
 def probe(out,exe,data,target):
-    plan=read(out/"plan.json");work=out/target;work.mkdir(parents=True,exist_ok=True)
+    plan=input_plan(out);work=out/target;work.mkdir(parents=True,exist_ok=True)
     allowed={"SYSTEMROOT","WINDIR","COMSPEC","TEMP","TMP","PATH","PATHEXT","USERPROFILE","HOMEDRIVE","HOMEPATH","PROGRAMDATA","PROGRAMFILES","PROGRAMFILES(X86)","PROCESSOR_ARCHITECTURE","NUMBER_OF_PROCESSORS"}
     env={k:v for k,v in os.environ.items() if k.upper() in allowed}
     env.update(LOCALAPPDATA=str(work/"userdata"),SHANJIE_CORE_LOCAL="1",SHANJIE_TEST_PROFILE="1",SHANJIE_NO_WORD_HELPER="1")
-    models=work/"userdata/Shanjie/Models";reports=[];cache=out/"probe-cache";cache.mkdir(exist_ok=True)
+    models=work/"userdata/Shanjie/Models";reports=[];cache=out/"probe-cache"/target;cache.mkdir(parents=True,exist_ok=True)
+    started=time.monotonic();reused=0;prepared=0
+    sample_count=sum(bool(line) and not line.startswith('#') for line in (ROOT/"scripts/model_catalog/evaluation.txt").read_text(encoding="utf-8").splitlines())
     for original in plan["candidates"]:
         m=copy.deepcopy(original)
         m["compatibility"]=[{"target":target,"profile_id":PROFILE,"source_commit":plan["source_commit"],"state":"usable","checked_at":now(),"report":"reports/provisional.json"}]
@@ -217,20 +246,29 @@ def probe(out,exe,data,target):
         write(stage/"model.json",spec(m))
         key=digest({"id":m["id"],"commit":plan["source_commit"],"target":target,"dataset":plan["dataset_sha256"]})
         stored=cache/(key+".json")
+        result={"id":m["id"],"target":target,"profile_id":PROFILE,"source_commit":plan["source_commit"],
+                "dataset_sha256":plan["dataset_sha256"],"plan_sha256":digest(plan),
+                "asset_hashes":[a["sha256"] for a in m["assets"]],"checked_at":now()}
         try:
-            # Still prepare this run's immutable local bundle; cached technical evidence
-            # is reused only for the same code, target, data and exact source assets.
+            # Every run prepares every candidate. Only accuracy is reusable; the
+            # technical evidence and its timestamp always belong to this run.
+            prepared+=1
             technical=run_child(exe,["prepare",models,m["id"],data],env,180)
             if not technical.get("usable"):raise ValueError("Native loader did not confirm usability")
-            result={"id":m["id"],"target":target,"profile_id":PROFILE,"source_commit":plan["source_commit"],
-                    "state":"usable","asset_hashes":[a["sha256"] for a in m["assets"]],"checked_at":now(),"technical":technical}
-            if stored.exists():
-                prior=read(stored)
-                if prior["state"]=="usable":result=prior
+            result.update(state="usable",technical=technical)
         except Exception as e:
-            result={"id":m["id"],"target":target,"profile_id":PROFILE,"source_commit":plan["source_commit"],
-                    "state":"unverified" if isinstance(e,subprocess.TimeoutExpired) else "invalid","asset_hashes":[a["sha256"] for a in m["assets"]],
-                    "checked_at":now(),"reason":str(e)[:1000]}
+            result.update(state="unverified" if isinstance(e,subprocess.TimeoutExpired) else "invalid",reason=str(e)[:1000])
+        if result["state"]=="usable" and stored.exists():
+            try:prior=read(stored)
+            except (OSError,ValueError):prior={}
+            if not isinstance(prior,dict):prior={}
+            identity=("id","target","profile_id","source_commit","dataset_sha256","asset_hashes")
+            evaluation=prior.get("evaluation",{})
+            if (isinstance(evaluation,dict) and all(prior.get(k)==result[k] for k in identity) and prior.get("state")=="usable"
+                    and evaluation.get("state")=="evaluated" and isinstance(evaluation.get("sample_count"),int)
+                    and evaluation["sample_count"]==sample_count
+                    and all(isinstance(evaluation.get(k),int) and 0<=evaluation[k]<=evaluation["sample_count"] for k in ("chat","formal"))):
+                result["evaluation"]=evaluation;reused+=1
         reports.append(result);print(target,m["name"],result["state"],flush=True)
     for r in reports:
         if r["state"]!="usable" or "evaluation" in r:continue
@@ -241,6 +279,12 @@ def probe(out,exe,data,target):
         key=digest({"id":r["id"],"commit":plan["source_commit"],"target":target,"dataset":plan["dataset_sha256"]})
         write(cache/(key+".json"),r)
     write(work/"results.json",reports)
+    summary={"target":target,"source_commit":plan["source_commit"],"candidates":len(reports),"native_prepared":prepared,
+             "usable":sum(r["state"]=="usable" for r in reports),"accuracy_reused":reused,
+             "accuracy_executed":sum(r["state"]=="usable" for r in reports)-reused,
+             "accuracy_evaluated":sum(r.get("evaluation",{}).get("state")=="evaluated" for r in reports),
+             "duration_seconds":round(time.monotonic()-started,3)}
+    write(work/"summary.json",summary);print(json.dumps(summary),flush=True)
 def validate_model(m):
     """One bundle against the loader contract; the whole list adds identity, size and revision checks."""
     expected=model(m["assets"],m["name"])
@@ -286,11 +330,15 @@ def validate(c):
     return c
 def assemble(out):
     plan=read(out/"plan.json");all_results=[]
-    for p in out.glob("windows-*/results.json"):all_results+=read(p)
+    for p in out.glob("windows-*/results.json"):
+        rows=read(p)
+        if any(r["target"]!=p.parent.name for r in rows):raise ValueError("Wrong architecture result artifact")
+        all_results+=rows
     if not all_results:raise ValueError("No native probe results")
     expected={(m["id"],t) for m in plan["candidates"] for t in ("windows-x64","windows-x86")}
     actual=[(r["id"],r["target"]) for r in all_results]
     if len(actual)!=len(set(actual)) or set(actual)!=expected:raise ValueError("Incomplete or duplicate architecture probe results")
+    plan=input_plan(out)
     # Earlier entries are kept only while they still meet the current contract (an older generator wrote some it now refuses).
     by_id={m["id"]:copy.deepcopy(m) for m in plan["previous"].get("models",[]) if valid_model(m)}
     published=out/"publication";published.mkdir(exist_ok=True);pending=list(plan["pending"])
@@ -298,7 +346,10 @@ def assemble(out):
     for m in copy.deepcopy(plan["candidates"]):
         matches=[r for r in all_results if r["id"]==m["id"]]
         for r in matches:
-            if r["source_commit"]!=plan["source_commit"] or r["asset_hashes"]!=[a["sha256"] for a in m["assets"]]:raise ValueError("Probe evidence identity mismatch")
+            if (r["source_commit"]!=plan["source_commit"] or r["profile_id"]!=PROFILE
+                    or r["dataset_sha256"]!=plan["dataset_sha256"] or r["plan_sha256"]!=digest(plan)
+                    or r["asset_hashes"]!=[a["sha256"] for a in m["assets"]]):
+                raise ValueError("Probe evidence identity mismatch")
         usable=[r for r in matches if r["state"]=="usable"]
         if not usable:
             pending.extend(matches);continue
